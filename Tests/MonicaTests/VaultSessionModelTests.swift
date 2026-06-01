@@ -1750,6 +1750,8 @@ final class VaultSessionModelTests: XCTestCase {
 
         let created = try XCTUnwrap(model.wifiEntries.first)
         model.selectWifiEntryForEditing(created)
+        XCTAssertEqual(model.editingWifiQRCodePayload, "WIFI:T:WPA;S:Monica Studio;P:wifi-secret;H:true;;")
+
         model.editingWifiTitle = "Studio Wi-Fi 6"
         model.editingWifiSSID = "Monica Studio 6"
         model.editingWifiSecurityType = "WPA3"

@@ -1416,6 +1416,14 @@ struct AddEditVaultItemView: View {
                 .font(.subheadline.weight(.semibold))
                 .tint(AndroidParityPalette.primary)
             field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.wifiNotes : $session.editingWifiNotes)
+            if !mode.isAdding, !session.editingWifiQRCodePayload.isEmpty {
+                AndroidParityInfoRow(title: "二维码内容", value: session.editingWifiQRCodePayload)
+                ShareLink(item: session.editingWifiQRCodePayload) {
+                    Label("分享 Wi-Fi", systemImage: "square.and.arrow.up")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            }
         }
     }
 

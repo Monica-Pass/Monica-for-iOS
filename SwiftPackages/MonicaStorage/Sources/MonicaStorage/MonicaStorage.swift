@@ -3084,6 +3084,34 @@ public struct LocalWifiEntry: Sendable, Equatable, Identifiable {
     }
 }
 
+public extension LocalWifiEntry {
+    var qrCodePayload: String {
+        let type = normalizedQRCodeSecurityType
+        let passwordSegment = type == "nopass" ? "" : "P:\(Self.qrEscaped(password));"
+        return "WIFI:T:\(type);S:\(Self.qrEscaped(ssid));\(passwordSegment)H:\(hidden ? "true" : "false");;"
+    }
+
+    private var normalizedQRCodeSecurityType: String {
+        let normalized = securityType.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+        if normalized.isEmpty || normalized == "OPEN" || normalized == "NONE" || normalized == "NOPASS" {
+            return "nopass"
+        }
+        if normalized.contains("WEP") {
+            return "WEP"
+        }
+        return "WPA"
+    }
+
+    private static func qrEscaped(_ value: String) -> String {
+        value.reduce(into: "") { result, character in
+            if "\\;,:\"".contains(character) {
+                result.append("\\")
+            }
+            result.append(character)
+        }
+    }
+}
+
 public struct LocalSendEntryDraft: Sendable, Equatable {
     public let title: String
     public let body: String

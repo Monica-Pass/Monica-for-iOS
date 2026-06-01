@@ -134,6 +134,32 @@ import MonicaStorage
     #expect(attachment.storageMode == "embedded-inline")
 }
 
+@Test func localWifiEntriesExposeStandardQRCodePayload() {
+    let secured = LocalWifiEntry(
+        id: "wifi-1",
+        projectID: "project-1",
+        title: "Studio",
+        ssid: "Monica;Lab",
+        securityType: "WPA3",
+        password: #"pa:ss\word"#,
+        hidden: true,
+        notes: ""
+    )
+    let open = LocalWifiEntry(
+        id: "wifi-2",
+        projectID: "project-1",
+        title: "Guest",
+        ssid: "Guest, Network",
+        securityType: "open",
+        password: "",
+        hidden: false,
+        notes: ""
+    )
+
+    #expect(secured.qrCodePayload == #"WIFI:T:WPA;S:Monica\;Lab;P:pa\:ss\\word;H:true;;"#)
+    #expect(open.qrCodePayload == #"WIFI:T:nopass;S:Guest\, Network;H:false;;"#)
+}
+
 @Test func csvMigrationCodecImportsCoreAndExtendedVaultItems() {
     let csv = #"""
     kind,title,username,password,url,body,secret,issuer,accountName,period,digits,algorithm,otpType,counter,cardholderName,number,expiryMonth,expiryYear,cvv,network,documentType,fullName,documentNumber,country,issueDate,expiryDate,relyingPartyID,userHandle,credentialID,publicKeyCOSE,privateKeyReference,host,publicKey,passphraseHint,token,scopes,expiresAt,ssid,securityType,hidden,maxViews,notes

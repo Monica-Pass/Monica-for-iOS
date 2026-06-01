@@ -895,6 +895,23 @@ final class AppSessionModel {
         }
     }
 
+    var editingWifiQRCodePayload: String {
+        guard let entryID = editingWifiEntryID else {
+            return ""
+        }
+        return LocalWifiEntry(
+            id: entryID,
+            projectID: activeProject?.id ?? "",
+            title: editingWifiTitle,
+            ssid: editingWifiSSID,
+            securityType: editingWifiSecurityType,
+            password: editingWifiPassword,
+            hidden: editingWifiHidden,
+            notes: editingWifiNotes,
+            favorite: editingWifiFavorite
+        ).qrCodePayload
+    }
+
     var filteredSendEntries: [LocalSendEntry] {
         let query = sendSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
