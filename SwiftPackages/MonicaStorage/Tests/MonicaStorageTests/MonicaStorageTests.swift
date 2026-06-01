@@ -321,6 +321,83 @@ import MonicaStorage
     #expect(report.items == items)
 }
 
+@Test func androidBackupCodecImportsLegacyZipCsvFallbackEntries() throws {
+    let passwordCSV = """
+    \u{FEFF}name,url,username,password,note,email,phone,custom_fields
+    GitHub,https://github.com,alice,"p,ass","primary login
+
+    [MonicaMeta]isFavorite=true|createdAt=1710000000000|updatedAt=1710000000000",alice@example.com,+15551234567,
+    """
+    let totpCSV = """
+    ID,Type,Title,Data,Notes,IsFavorite,ImagePaths,CreatedAt,UpdatedAt
+    10,TOTP,GitHub 2FA,"{""secret"":""JBSWY3DPEHPK3PXP"",""issuer"":""GitHub"",""accountName"":""alice"",""period"":30,""digits"":6,""algorithm"":""SHA1"",""otpType"":""TOTP"",""counter"":0}",primary,false,,1710000000000,1710000000000
+    """
+    let cardsDocsCSV = """
+    ID,Type,Title,Data,Notes,IsFavorite,ImagePaths,CreatedAt,UpdatedAt
+    11,BANK_CARD,Everyday Visa,"{""cardNumber"":""4111111111111111"",""cardholderName"":""Alice Example"",""expiryMonth"":""12"",""expiryYear"":""2031"",""cvv"":""123"",""bankName"":""Monica Bank"",""brand"":""Visa""}",main card,false,,1710000000000,1710000000000
+    12,DOCUMENT,Passport,"{""documentType"":""PASSPORT"",""documentNumber"":""P1234567"",""fullName"":""Alice Example"",""issuedDate"":""2024-01-01"",""expiryDate"":""2034-01-01"",""issuedBy"":""Monica Authority"",""country"":""US""}",travel,false,,1710000000000,1710000000000
+    """
+    let notesCSV = """
+    ID,Type,Title,Data,Notes,IsFavorite,ImagePaths,CreatedAt,UpdatedAt
+    13,NOTE,Recovery,backup codes,legacy note,false,,1710000000000,1710000000000
+    """
+    let backup = try AndroidBackupCodec.exportZip(entries: [
+        "Monica_20260601_120000_password.csv": passwordCSV,
+        "Monica_20260601_120000_totp.csv": totpCSV,
+        "Monica_20260601_120000_cards_docs.csv": cardsDocsCSV,
+        "Monica_20260601_120000_notes.csv": notesCSV
+    ])
+
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(report.issues.isEmpty)
+    #expect(report.items.map(\.kind) == [.login, .totp, .note, .card, .identity])
+    guard report.items.count == 5 else {
+        return
+    }
+
+    guard case .login(let login) = report.items[0] else {
+        Issue.record("Expected legacy login")
+        return
+    }
+    #expect(login.title == "GitHub")
+    #expect(login.username == "alice")
+    #expect(login.password == "p,ass")
+    #expect(login.url == "https://github.com")
+
+    guard case .totp(let totp) = report.items[1] else {
+        Issue.record("Expected legacy TOTP")
+        return
+    }
+    #expect(totp.title == "GitHub 2FA")
+    #expect(totp.secret == "JBSWY3DPEHPK3PXP")
+    #expect(totp.issuer == "GitHub")
+    #expect(totp.accountName == "alice")
+
+    guard case .note(let note) = report.items[2] else {
+        Issue.record("Expected legacy note")
+        return
+    }
+    #expect(note.title == "Recovery")
+    #expect(note.body == "backup codes")
+
+    guard case .card(let card) = report.items[3] else {
+        Issue.record("Expected legacy card")
+        return
+    }
+    #expect(card.number == "4111111111111111")
+    #expect(card.cardholderName == "Alice Example")
+    #expect(card.issuer == "Monica Bank")
+
+    guard case .identity(let identity) = report.items[4] else {
+        Issue.record("Expected legacy identity")
+        return
+    }
+    #expect(identity.documentType == "PASSPORT")
+    #expect(identity.documentNumber == "P1234567")
+    #expect(identity.issuer == "Monica Authority")
+}
+
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])

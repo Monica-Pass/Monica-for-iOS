@@ -240,6 +240,8 @@ public enum AndroidBackupCodec {
         let archive = try Archive(data: zipData, accessMode: .read)
         var orderedItems: [(order: Int, index: Int, item: VaultCSVItemDraft)] = []
         var issues: [AndroidBackupImportIssue] = []
+        var legacyCSVFiles: [(path: String, data: Data, index: Int)] = []
+        var jsonBackedKinds = Set<BackupKind>()
         var index = 0
 
         for entry in archive where entry.type == .file {
@@ -248,7 +250,7 @@ public enum AndroidBackupCodec {
                 issues.append(issue(entryPath: entry.path, code: .unsafeEntryPath, detail: "ZIP 条目路径不安全"))
                 continue
             }
-            guard path.hasSuffix(".json"), let kind = kind(for: path) else {
+            guard path.hasSuffix(".json") || path.hasSuffix(".csv") else {
                 continue
             }
 
@@ -256,11 +258,36 @@ public enum AndroidBackupCodec {
             _ = try archive.extract(entry) { chunk in
                 data.append(chunk)
             }
+
+            if path.hasSuffix(".csv") {
+                legacyCSVFiles.append((path: path, data: data, index: index))
+                index += 1
+                continue
+            }
+
+            guard let kind = kind(for: path) else {
+                continue
+            }
             guard let item = parseItem(kind: kind, data: data, path: path, issues: &issues) else {
                 continue
             }
+            jsonBackedKinds.insert(kind)
             orderedItems.append((order: order(for: path, kind: kind), index: index, item: item))
             index += 1
+        }
+
+        for csvFile in legacyCSVFiles {
+            let parsedItems = parseLegacyCSVItems(
+                path: csvFile.path,
+                data: csvFile.data,
+                jsonBackedKinds: jsonBackedKinds,
+                issues: &issues
+            )
+            for item in parsedItems {
+                let kind = backupKind(for: item)
+                orderedItems.append((order: kindPriority(kind), index: index, item: item))
+                index += 1
+            }
         }
 
         let items = orderedItems
@@ -310,7 +337,7 @@ public enum AndroidBackupCodec {
         return archive.map(\.path)
     }
 
-    private enum BackupKind {
+    private enum BackupKind: Hashable {
         case password
         case totp
         case note
@@ -338,6 +365,13 @@ public enum AndroidBackupCodec {
         }
     }
 
+    private enum LegacySecureCSVRole {
+        case generic
+        case notesOnly
+        case totpOnly
+        case cardsAndDocumentsOnly
+    }
+
     private static func order(for path: String, kind: BackupKind) -> Int {
         let fileName = path.split(separator: "/").last.map(String.init) ?? path
         if let firstNumber = fileName.split(whereSeparator: { !$0.isNumber }).compactMap({ Int($0) }).first {
@@ -354,6 +388,254 @@ public enum AndroidBackupCodec {
         case .card: return 3
         case .identity: return 4
         case .passkey: return 5
+        }
+    }
+
+    private static func backupKind(for item: VaultCSVItemDraft) -> BackupKind {
+        switch item {
+        case .login, .sshKey, .apiToken, .wifi:
+            return .password
+        case .totp:
+            return .totp
+        case .note, .send:
+            return .note
+        case .card:
+            return .card
+        case .identity:
+            return .identity
+        case .passkey:
+            return .passkey
+        }
+    }
+
+    private static func parseLegacyCSVItems(
+        path: String,
+        data: Data,
+        jsonBackedKinds: Set<BackupKind>,
+        issues: inout [AndroidBackupImportIssue]
+    ) -> [VaultCSVItemDraft] {
+        guard let csv = String(data: data, encoding: .utf8) else {
+            issues.append(issue(entryPath: path, code: .unsupportedEntry, detail: "旧版 CSV 不是 UTF-8 编码"))
+            return []
+        }
+        do {
+            let rows = try parseCSVRows(csv)
+            guard let header = rows.first else { return [] }
+            let normalizedHeader = header.map { normalizedCSVHeader($0) }
+            if isLegacyPasswordCSV(path: path, header: normalizedHeader) {
+                guard !jsonBackedKinds.contains(.password) else { return [] }
+                return parseLegacyPasswordCSVRows(rows: rows, header: normalizedHeader)
+            }
+            guard let role = legacySecureCSVRole(path: path, header: normalizedHeader) else {
+                return []
+            }
+            return parseLegacySecureCSVRows(rows: rows, role: role, jsonBackedKinds: jsonBackedKinds, path: path, issues: &issues)
+        } catch {
+            issues.append(issue(entryPath: path, code: .unsupportedEntry, detail: "旧版 CSV 格式无法解析"))
+            return []
+        }
+    }
+
+    private static func isLegacyPasswordCSV(path: String, header: [String]) -> Bool {
+        let fileName = path.split(separator: "/").last.map(String.init) ?? path
+        let lowerFileName = fileName.lowercased()
+        let headerSet = Set(header)
+        return lowerFileName == "passwords.csv"
+            || lowerFileName.hasSuffix("_password.csv")
+            || (headerSet.contains("name") && headerSet.contains("url") && headerSet.contains("username") && headerSet.contains("password"))
+            || (headerSet.contains("title") && headerSet.contains("password"))
+    }
+
+    private static func legacySecureCSVRole(path: String, header: [String]) -> LegacySecureCSVRole? {
+        let headerSet = Set(header)
+        guard headerSet.contains("id"),
+              headerSet.contains("type"),
+              headerSet.contains("title"),
+              headerSet.contains("data")
+        else { return nil }
+
+        let fileName = (path.split(separator: "/").last.map(String.init) ?? path).lowercased()
+        if fileName.hasSuffix("_notes.csv") {
+            return .notesOnly
+        }
+        if fileName.hasSuffix("_totp.csv") {
+            return .totpOnly
+        }
+        if fileName.hasSuffix("_cards_docs.csv") {
+            return .cardsAndDocumentsOnly
+        }
+        return .generic
+    }
+
+    private static func parseLegacyPasswordCSVRows(rows: [[String]], header: [String]) -> [VaultCSVItemDraft] {
+        let headerIndex = Dictionary(uniqueKeysWithValues: header.enumerated().map { ($0.element, $0.offset) })
+        return rows.dropFirst().compactMap { row in
+            if row.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                return nil
+            }
+            let title = csvValue("name", row: row, headerIndex: headerIndex, fallback: csvValue("title", row: row, headerIndex: headerIndex))
+            let url = csvValue("url", row: row, headerIndex: headerIndex, fallback: csvValue("website", row: row, headerIndex: headerIndex))
+            let username = csvValue("username", row: row, headerIndex: headerIndex, fallback: csvValue("user name", row: row, headerIndex: headerIndex))
+            let password = csvValue("password", row: row, headerIndex: headerIndex)
+
+            guard !title.isEmpty || !url.isEmpty || !username.isEmpty else {
+                return nil
+            }
+
+            return .login(LocalLoginEntryDraft(
+                title: title.isEmpty ? url.isEmpty ? username : url : title,
+                username: username,
+                password: password,
+                url: url
+            ))
+        }
+    }
+
+    private static func parseLegacySecureCSVRows(
+        rows: [[String]],
+        role: LegacySecureCSVRole,
+        jsonBackedKinds: Set<BackupKind>,
+        path: String,
+        issues: inout [AndroidBackupImportIssue]
+    ) -> [VaultCSVItemDraft] {
+        guard let header = rows.first else { return [] }
+        let headerIndex = Dictionary(uniqueKeysWithValues: header.map(normalizedCSVHeader).enumerated().map { ($0.element, $0.offset) })
+        var items: [VaultCSVItemDraft] = []
+
+        for (rowOffset, row) in rows.dropFirst().enumerated() {
+            if row.allSatisfy({ $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) {
+                continue
+            }
+            let rawType = csvValue("type", row: row, headerIndex: headerIndex)
+            let title = csvValue("title", row: row, headerIndex: headerIndex)
+            let itemData = csvValue("data", row: row, headerIndex: headerIndex)
+            let notes = csvValue("notes", row: row, headerIndex: headerIndex)
+
+            guard let kind = resolveLegacySecureKind(rawType: rawType, itemData: itemData, role: role) else {
+                if role == .cardsAndDocumentsOnly {
+                    issues.append(issue(entryPath: path, code: .unsupportedEntry, detail: "第 \(rowOffset + 2) 行无法识别为卡片或证件"))
+                }
+                continue
+            }
+            guard !jsonBackedKinds.contains(kind) else {
+                continue
+            }
+            guard let item = parseLegacySecureItem(kind: kind, title: title, itemData: itemData, notes: notes) else {
+                issues.append(issue(entryPath: path, code: .unsupportedEntry, detail: "第 \(rowOffset + 2) 行旧版安全项无法解析"))
+                continue
+            }
+            items.append(item)
+        }
+        return items
+    }
+
+    private static func resolveLegacySecureKind(
+        rawType: String,
+        itemData: String,
+        role: LegacySecureCSVRole
+    ) -> BackupKind? {
+        switch role {
+        case .notesOnly:
+            return .note
+        case .totpOnly:
+            return .totp
+        case .cardsAndDocumentsOnly:
+            guard let kind = backupKindAlias(rawType) ?? inferSecureKind(from: itemData),
+                  kind == .card || kind == .identity
+            else { return nil }
+            return kind
+        case .generic:
+            return backupKindAlias(rawType) ?? inferSecureKind(from: itemData)
+        }
+    }
+
+    private static func backupKindAlias(_ rawType: String) -> BackupKind? {
+        let normalized = rawType.trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+            .replacingOccurrences(of: "-", with: "_")
+        switch normalized {
+        case "TOTP", "AUTHENTICATOR", "AUTHENTICATORS", "验证器":
+            return .totp
+        case "BANK_CARD", "BANKCARD", "BANK_CARDS", "BANKCARDS", "CARD", "CARDS", "CREDIT_CARD", "DEBIT_CARD", "卡片", "银行卡":
+            return .card
+        case "DOCUMENT", "DOCUMENTS", "DOC", "DOCS", "IDENTITY", "ID_CARD", "IDCARD", "PASSPORT", "DRIVER_LICENSE", "证件", "身份":
+            return .identity
+        case "NOTE", "NOTES", "SECURE_NOTE", "笔记":
+            return .note
+        default:
+            return nil
+        }
+    }
+
+    private static func inferSecureKind(from itemData: String) -> BackupKind? {
+        guard let object = try? JSONObject(jsonString: itemData) else {
+            return nil
+        }
+        if object.contains("secret") || object.contains("otpType") || (object.contains("issuer") && object.contains("accountName")) {
+            return .totp
+        }
+        if object.contains("cardNumber") || object.contains("cardholderName") || object.contains("cvv") || (object.contains("number") && object.contains("expMonth")) {
+            return .card
+        }
+        if object.contains("documentNumber") || object.contains("documentType") || object.contains("passportNumber") || object.contains("licenseNumber") || object.contains("issuedBy") || object.contains("issuingAuthority") {
+            return .identity
+        }
+        if object.contains("content") || object.contains("markdown") || object.contains("tags") {
+            return .note
+        }
+        return nil
+    }
+
+    private static func parseLegacySecureItem(
+        kind: BackupKind,
+        title: String,
+        itemData: String,
+        notes: String
+    ) -> VaultCSVItemDraft? {
+        switch kind {
+        case .totp:
+            let object = (try? JSONObject(jsonString: itemData)) ?? JSONObject.empty()
+            return .totp(LocalTotpEntryDraft(
+                title: title,
+                secret: object.string("secret"),
+                issuer: object.string("issuer"),
+                accountName: object.string("accountName"),
+                period: UInt32(object.int("period", defaultValue: 30)),
+                digits: UInt32(object.int("digits", defaultValue: 6)),
+                algorithm: object.string("algorithm", defaultValue: "SHA1"),
+                otpType: object.string("otpType", defaultValue: "TOTP"),
+                counter: UInt64(object.int("counter", defaultValue: 0))
+            ))
+        case .note:
+            return .note(LocalNoteEntryDraft(title: title, body: itemData.isEmpty ? notes : itemData))
+        case .card:
+            let object = (try? JSONObject(jsonString: itemData)) ?? JSONObject.empty()
+            return .card(LocalCardEntryDraft(
+                title: title,
+                cardholderName: object.string("cardholderName"),
+                number: object.string("cardNumber", defaultValue: object.string("number")),
+                expiryMonth: object.string("expiryMonth", defaultValue: object.string("expMonth")),
+                expiryYear: object.string("expiryYear", defaultValue: object.string("expYear")),
+                cvv: object.string("cvv", defaultValue: object.string("code")),
+                issuer: object.string("bankName"),
+                network: object.string("brand"),
+                notes: notes
+            ))
+        case .identity:
+            let object = (try? JSONObject(jsonString: itemData)) ?? JSONObject.empty()
+            return .identity(LocalIdentityEntryDraft(
+                title: title,
+                documentType: object.string("documentType"),
+                fullName: object.string("fullName"),
+                documentNumber: object.string("documentNumber", defaultValue: object.string("passportNumber", defaultValue: object.string("licenseNumber"))),
+                issuer: object.string("issuedBy", defaultValue: object.string("issuingAuthority")),
+                country: object.string("country", defaultValue: object.string("nationality")),
+                issueDate: object.string("issuedDate", defaultValue: object.string("issueDate")),
+                expiryDate: object.string("expiryDate"),
+                notes: notes
+            ))
+        case .password, .passkey:
+            return nil
         }
     }
 
@@ -620,6 +902,79 @@ public enum AndroidBackupCodec {
         return data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
     }
 
+    private static func parseCSVRows(_ csv: String) throws -> [[String]] {
+        let input = csv.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !input.isEmpty else { return [] }
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var isQuoted = false
+        var index = input.startIndex
+
+        while index < input.endIndex {
+            let character = input[index]
+            if isQuoted {
+                if character == "\"" {
+                    let next = input.index(after: index)
+                    if next < input.endIndex, input[next] == "\"" {
+                        field.append("\"")
+                        index = input.index(after: next)
+                    } else {
+                        isQuoted = false
+                        index = next
+                    }
+                } else {
+                    field.append(character)
+                    index = input.index(after: index)
+                }
+            } else {
+                switch character {
+                case "\"":
+                    isQuoted = true
+                    index = input.index(after: index)
+                case ",":
+                    row.append(normalizedCSVField(field))
+                    field = ""
+                    index = input.index(after: index)
+                case "\n":
+                    row.append(normalizedCSVField(field))
+                    rows.append(row)
+                    row = []
+                    field = ""
+                    index = input.index(after: index)
+                case "\r":
+                    index = input.index(after: index)
+                default:
+                    field.append(character)
+                    index = input.index(after: index)
+                }
+            }
+        }
+        if isQuoted {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        row.append(normalizedCSVField(field))
+        rows.append(row)
+        return rows
+    }
+
+    private static func normalizedCSVField(_ field: String) -> String {
+        let trimmed = field.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("\u{FEFF}") ? String(trimmed.dropFirst()) : trimmed
+    }
+
+    private static func normalizedCSVHeader(_ field: String) -> String {
+        normalizedCSVField(field).lowercased()
+    }
+
+    private static func csvValue(_ field: String, row: [String], headerIndex: [String: Int], fallback: String = "") -> String {
+        guard let index = headerIndex[field], index < row.count else {
+            return fallback
+        }
+        let value = row[index]
+        return value.isEmpty ? fallback : value
+    }
+
     private static func normalizedPath(_ path: String) -> String {
         path.replacingOccurrences(of: "\\", with: "/")
     }
@@ -644,6 +999,9 @@ public enum AndroidBackupCodec {
 
 private struct JSONObject {
     private let values: [String: Any]
+    static func empty() -> JSONObject {
+        JSONObject(values: [:])
+    }
 
     init(data: Data) throws {
         let decoded = try JSONSerialization.jsonObject(with: data)
@@ -679,6 +1037,10 @@ private struct JSONObject {
         default:
             return defaultValue
         }
+    }
+
+    func contains(_ key: String) -> Bool {
+        values[key] != nil
     }
 
     func nestedObject(_ key: String) throws -> JSONObject {
