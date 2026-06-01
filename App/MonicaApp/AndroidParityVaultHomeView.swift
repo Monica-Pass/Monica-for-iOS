@@ -1,0 +1,1100 @@
+import MonicaStorage
+import Observation
+import SwiftUI
+import UniformTypeIdentifiers
+
+struct AndroidParityVaultHomeView: View {
+    @Bindable var session: AppSessionModel
+    let tab: MonicaAppTab
+    let moduleTitle: String
+    let itemKind: UnifiedVaultItemKind
+    let storageStrategy: String
+    let mdbxBridge: String
+    let createVault: () -> Void
+    let openVault: (URL) -> Void
+    let lockVault: () -> Void
+    let createLoginEntry: () -> Void
+    let generateLoginPassword: () -> Void
+    let updateLoginEntry: () -> Void
+    let generateSelectedLoginPassword: () -> Void
+    let setSelectedLoginFavorite: (Bool) -> Void
+    let deleteLoginEntry: () -> Void
+    let restoreLoginEntry: (LocalLoginEntry) -> Void
+    let createNoteEntry: () -> Void
+    let updateNoteEntry: () -> Void
+    let setSelectedNoteFavorite: (Bool) -> Void
+    let deleteNoteEntry: () -> Void
+    let restoreNoteEntry: (LocalNoteEntry) -> Void
+    let createTotpEntry: () -> Void
+    let importTotpURI: () -> Void
+    let scanTotpQRCode: (String) -> Bool
+    let updateTotpEntry: () -> Void
+    let setSelectedTotpFavorite: (Bool) -> Void
+    let deleteTotpEntry: () -> Void
+    let restoreTotpEntry: (LocalTotpEntry) -> Void
+    let createCardEntry: () -> Void
+    let updateCardEntry: () -> Void
+    let setSelectedCardFavorite: (Bool) -> Void
+    let deleteCardEntry: () -> Void
+    let restoreCardEntry: (LocalCardEntry) -> Void
+    let createIdentityEntry: () -> Void
+    let updateIdentityEntry: () -> Void
+    let setSelectedIdentityFavorite: (Bool) -> Void
+    let deleteIdentityEntry: () -> Void
+    let restoreIdentityEntry: (LocalIdentityEntry) -> Void
+    let createPasskeyEntry: () -> Void
+    let updatePasskeyEntry: () -> Void
+    let setSelectedPasskeyFavorite: (Bool) -> Void
+    let deletePasskeyEntry: () -> Void
+    let restorePasskeyEntry: (LocalPasskeyEntry) -> Void
+    let refreshExtendedParityEntries: () -> Void
+
+    @State private var isVaultImporterPresented = false
+    @State private var isTotpScannerPresented = false
+    @State private var now = Date()
+
+    private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
+    var body: some View {
+        AndroidParityModuleChrome(
+            title: largeTitle,
+            tab: tab,
+            selectedAction: $session.expandedToolbarAction,
+            searchText: searchBinding,
+            favoritesOnly: favoritesBinding,
+            onOpenVault: { isVaultImporterPresented = true },
+            onAdd: { session.presentAddEditor(for: tab) }
+        ) {
+            if session.vaultState == .unlocked {
+                unlockedContent
+            } else {
+                lockedSummary
+            }
+        }
+        .navigationTitle("")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
+        .fileImporter(
+            isPresented: $isVaultImporterPresented,
+            allowedContentTypes: [vaultFileType],
+            allowsMultipleSelection: false
+        ) { result in
+            guard case .success(let urls) = result, let fileURL = urls.first else {
+                return
+            }
+            openVault(fileURL)
+        }
+        .sheet(isPresented: presentedEditorBinding) {
+            if let mode = session.presentedEditorMode {
+                AddEditVaultItemView(
+                    session: session,
+                    mode: mode,
+                    activeVaultName: session.activeVaultName ?? "Monica",
+                    generateLoginPassword: generateLoginPassword,
+                    generateSelectedLoginPassword: generateSelectedLoginPassword,
+                    importTotpURI: importTotpURI,
+                    scanTotpQRCode: scanTotpQRCode,
+                    setFavorite: setFavorite,
+                    deleteEntry: deletePresentedEntry,
+                    save: savePresentedEditor,
+                    dismiss: session.dismissPresentedEditor
+                )
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
+        }
+        .sheet(isPresented: $isTotpScannerPresented) {
+            TotpQRCodeScannerSheet(
+                session: session,
+                onCode: { payload in
+                    if scanTotpQRCode(payload) {
+                        isTotpScannerPresented = false
+                        return true
+                    }
+                    return false
+                },
+                onCancel: { isTotpScannerPresented = false }
+            )
+        }
+        .onReceive(timer) { value in
+            now = value
+        }
+    }
+
+    @ViewBuilder
+    private var unlockedContent: some View {
+        switch itemKind {
+        case .login:
+            passwordList
+        case .totp:
+            totpList
+        case .note:
+            noteList
+        case .card:
+            walletList
+        case .passkey:
+            passkeyList
+        case .identity:
+            identityList
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+            AndroidParityEmptyCard(title: "\(itemKind.displayName) 已进入存储接口，界面将在后续批次接入。", systemImage: "shippingbox")
+        }
+    }
+
+    private var lockedSummary: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.7), cornerRadius: 24) {
+            HStack(spacing: 16) {
+                AndroidParityIconTile(systemImage: "lock.shield.fill", fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("保险库已锁定")
+                        .font(.subheadline.weight(.semibold))
+                    Text("返回锁屏输入主密码，或使用生物识别认证。")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+            }
+        }
+    }
+
+    private var passwordList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredLoginEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidPasswordListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredLoginEntries.isEmpty {
+                emptyList("没有匹配的密码", icon: "lock.fill")
+            }
+            deletedLoginRows
+        }
+    }
+
+    private var totpList: some View {
+        VStack(spacing: 14) {
+            AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.52), cornerRadius: 22) {
+                HStack(spacing: 12) {
+                    SecureField("粘贴 otpauth:// URI", text: $session.totpImportURI)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    Button { isTotpScannerPresented = true } label: {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 46, height: 46)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.primary)
+                }
+                Button(action: importTotpURI) {
+                    Label("导入验证器", systemImage: "qrcode.viewfinder")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            }
+            ForEach(session.filteredTotpEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidTotpListCard(entry: entry, code: totpCode(for: entry), remaining: session.totpTimeRemaining(for: entry, at: now))
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredTotpEntries.isEmpty {
+                emptyList("没有匹配的验证码", icon: "shield.lefthalf.filled")
+            }
+            deletedTotpRows
+        }
+    }
+
+    private var walletList: some View {
+        VStack(spacing: 16) {
+            ForEach(session.filteredCardEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidBankCardListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            ForEach(session.filteredIdentityEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidIdentityListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredCardEntries.isEmpty && session.filteredIdentityEntries.isEmpty {
+                emptyList("没有匹配的卡片或证件", icon: "creditcard")
+            }
+            deletedCardRows
+            deletedIdentityRows
+        }
+    }
+
+    private var noteList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredNoteEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidNoteListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredNoteEntries.isEmpty {
+                emptyList("没有匹配的笔记", icon: "note.text")
+            }
+            deletedNoteRows
+        }
+    }
+
+    private var passkeyList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredPasskeyEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidPasskeyListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredPasskeyEntries.isEmpty {
+                emptyList("没有匹配的通行密钥", icon: "key.horizontal.fill")
+            }
+            AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.52), cornerRadius: 22) {
+                AndroidParityInfoRow(title: "SSH 密钥", value: "\(session.sshKeyEntries.count) 条")
+                AndroidParityInfoRow(title: "API Token", value: "\(session.apiTokenEntries.count) 条")
+                AndroidParityInfoRow(title: "Wi-Fi", value: "\(session.wifiEntries.count) 条")
+                Button(action: refreshExtendedParityEntries) {
+                    Label("刷新扩展条目", systemImage: "arrow.clockwise")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            }
+            deletedPasskeyRows
+        }
+    }
+
+    private var identityList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredIdentityEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidIdentityListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredIdentityEntries.isEmpty {
+                emptyList("没有匹配的证件", icon: "person.text.rectangle")
+            }
+            deletedIdentityRows
+        }
+    }
+
+    @ViewBuilder private var deletedLoginRows: some View {
+        if !session.deletedLoginEntries.isEmpty {
+            restoreSection("最近删除") {
+                ForEach(session.deletedLoginEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.username) { restoreLoginEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedNoteRows: some View {
+        if !session.deletedNoteEntries.isEmpty {
+            restoreSection("已删除笔记") {
+                ForEach(session.deletedNoteEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.body) { restoreNoteEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedTotpRows: some View {
+        if !session.deletedTotpEntries.isEmpty {
+            restoreSection("已删除验证器") {
+                ForEach(session.deletedTotpEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.issuer) { restoreTotpEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedCardRows: some View {
+        if !session.deletedCardEntries.isEmpty {
+            restoreSection("已删除银行卡") {
+                ForEach(session.deletedCardEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: cardSummary(for: entry)) { restoreCardEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedIdentityRows: some View {
+        if !session.deletedIdentityEntries.isEmpty {
+            restoreSection("已删除证件") {
+                ForEach(session.deletedIdentityEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: identitySummary(for: entry)) { restoreIdentityEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedPasskeyRows: some View {
+        if !session.deletedPasskeyEntries.isEmpty {
+            restoreSection("已删除通行密钥") {
+                ForEach(session.deletedPasskeyEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.relyingPartyID) { restorePasskeyEntry(entry) }
+                }
+            }
+        }
+    }
+
+    private var largeTitle: String {
+        itemKind == .passkey ? "通行密钥" : (session.activeVaultName ?? "Monica")
+    }
+
+    private var presentedEditorBinding: Binding<Bool> {
+        Binding(
+            get: { session.presentedEditorMode != nil },
+            set: { isPresented in
+                if !isPresented { session.dismissPresentedEditor() }
+            }
+        )
+    }
+
+    private var searchBinding: Binding<String> {
+        Binding(
+            get: {
+                switch itemKind {
+                case .login: return session.loginSearchQuery
+                case .note: return session.noteSearchQuery
+                case .totp: return session.totpSearchQuery
+                case .card: return session.cardSearchQuery
+                case .identity: return session.identitySearchQuery
+                case .passkey: return session.passkeySearchQuery
+                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return ""
+                }
+            },
+            set: { value in
+                switch itemKind {
+                case .login: session.loginSearchQuery = value
+                case .note: session.noteSearchQuery = value
+                case .totp: session.totpSearchQuery = value
+                case .card:
+                    session.cardSearchQuery = value
+                    session.identitySearchQuery = value
+                case .identity: session.identitySearchQuery = value
+                case .passkey: session.passkeySearchQuery = value
+                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+                }
+            }
+        )
+    }
+
+    private var favoritesBinding: Binding<Bool> {
+        Binding(
+            get: {
+                switch itemKind {
+                case .login: return session.showFavoriteLoginEntriesOnly
+                case .note: return session.showFavoriteNoteEntriesOnly
+                case .totp: return session.showFavoriteTotpEntriesOnly
+                case .card: return session.showFavoriteCardEntriesOnly || session.showFavoriteIdentityEntriesOnly
+                case .identity: return session.showFavoriteIdentityEntriesOnly
+                case .passkey: return session.showFavoritePasskeyEntriesOnly
+                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return false
+                }
+            },
+            set: { value in
+                switch itemKind {
+                case .login: session.showFavoriteLoginEntriesOnly = value
+                case .note: session.showFavoriteNoteEntriesOnly = value
+                case .totp: session.showFavoriteTotpEntriesOnly = value
+                case .card:
+                    session.showFavoriteCardEntriesOnly = value
+                    session.showFavoriteIdentityEntriesOnly = value
+                case .identity: session.showFavoriteIdentityEntriesOnly = value
+                case .passkey: session.showFavoritePasskeyEntriesOnly = value
+                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+                }
+            }
+        )
+    }
+
+    private func savePresentedEditor() {
+        do { try session.savePresentedEditor(projectTitle: session.activeVaultName ?? "个人") } catch {}
+    }
+
+    private func setFavorite(_ favorite: Bool) {
+        guard let mode = session.presentedEditorMode else { return }
+        switch mode.kind {
+        case .login: setSelectedLoginFavorite(favorite)
+        case .note: setSelectedNoteFavorite(favorite)
+        case .totp: setSelectedTotpFavorite(favorite)
+        case .card: setSelectedCardFavorite(favorite)
+        case .identity: setSelectedIdentityFavorite(favorite)
+        case .passkey: setSelectedPasskeyFavorite(favorite)
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+        }
+    }
+
+    private func deletePresentedEntry() {
+        guard let mode = session.presentedEditorMode, !mode.isAdding else { return }
+        switch mode.kind {
+        case .login: deleteLoginEntry()
+        case .note: deleteNoteEntry()
+        case .totp: deleteTotpEntry()
+        case .card: deleteCardEntry()
+        case .identity: deleteIdentityEntry()
+        case .passkey: deletePasskeyEntry()
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+        }
+        session.dismissPresentedEditor()
+    }
+
+    private func totpCode(for entry: LocalTotpEntry) -> String {
+        (try? session.totpCode(for: entry, at: now)) ?? "------"
+    }
+
+    private func cardSummary(for entry: LocalCardEntry) -> String {
+        let lastFour = String(entry.number.suffix(4))
+        return [entry.issuer, entry.network, lastFour.isEmpty ? "" : "**** \(lastFour)"].filter { !$0.isEmpty }.joined(separator: " / ")
+    }
+
+    private func identitySummary(for entry: LocalIdentityEntry) -> String {
+        [entry.documentType, entry.fullName, entry.country].filter { !$0.isEmpty }.joined(separator: " / ")
+    }
+
+    private func emptyList(_ title: String, icon: String) -> some View {
+        AndroidParityEmptyCard(title: title, systemImage: icon)
+    }
+
+    private func restoreSection<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+            content()
+        }
+    }
+
+    private func restoreButton(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
+        AndroidParityEntryCard(icon: "arrow.uturn.backward", title: title, subtitle: subtitle) {
+            Button(action: action) {
+                Image(systemName: "arrow.uturn.backward.circle.fill")
+                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(AndroidParityPalette.primary)
+        }
+    }
+}
+
+struct AndroidParityModuleChrome<Content: View>: View {
+    let title: String
+    let tab: MonicaAppTab
+    @Binding var selectedAction: AndroidParityToolbarAction?
+    @Binding var searchText: String
+    @Binding var favoritesOnly: Bool
+    let onOpenVault: () -> Void
+    let onAdd: () -> Void
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    header
+                    if selectedAction == .search { searchPanel }
+                    content
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 44)
+                .padding(.bottom, 132)
+            }
+            .background(AndroidParityPalette.background.ignoresSafeArea())
+            .foregroundStyle(AndroidParityPalette.textPrimary)
+
+            Button(action: onAdd) {
+                Image(systemName: tab == .generator ? "arrow.clockwise" : "plus")
+                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .medium))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                    .frame(width: 54, height: 54)
+                    .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(.trailing, 18)
+            .padding(.bottom, 26)
+        }
+    }
+
+    private var header: some View {
+        HStack(alignment: .top, spacing: 16) {
+            Text(title)
+                .font(.system(size: AndroidParityTypography.screenTitleSize, weight: .heavy, design: .rounded))
+                .foregroundStyle(AndroidParityPalette.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.64)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 22) {
+                toolbarButton(.folder, icon: "folder.fill", action: onOpenVault)
+                toolbarButton(.search, icon: "magnifyingglass")
+                toolbarButton(.more, icon: "ellipsis")
+            }
+            .padding(.horizontal, 24)
+            .frame(height: 64)
+            .background(AndroidParityPalette.surfaceVariant, in: Capsule(style: .continuous))
+        }
+    }
+
+    private var searchPanel: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.56), cornerRadius: 22) {
+            TextField("搜索", text: $searchText)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .textFieldStyle(AndroidParityTextFieldStyle())
+            Toggle("仅显示收藏", isOn: $favoritesOnly)
+                .font(.headline.weight(.heavy))
+                .tint(AndroidParityPalette.primary)
+        }
+    }
+
+    private func toolbarButton(_ action: AndroidParityToolbarAction, icon: String, action directAction: (() -> Void)? = nil) -> some View {
+        Button {
+            if let directAction { directAction() } else { selectedAction = selectedAction == action ? nil : action }
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                .foregroundStyle(AndroidParityPalette.textPrimary.opacity(selectedAction == action ? 1 : 0.82))
+                .frame(width: 34, height: 50)
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct AndroidPasswordListCard: View {
+    let entry: LocalLoginEntry
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
+            HStack(alignment: .top, spacing: 18) {
+                AndroidParityIconTile(systemImage: "lock.fill", fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(entry.title.isEmpty ? "未命名" : entry.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(entry.username)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    Text(entry.url)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+        }
+    }
+}
+
+private struct AndroidTotpListCard: View {
+    let entry: LocalTotpEntry
+    let code: String
+    let remaining: Int
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
+            HStack(alignment: .center, spacing: 18) {
+                AndroidParityIconTile(systemImage: "shield.lefthalf.filled", fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(entry.title.isEmpty ? entry.issuer : entry.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text([entry.issuer, entry.accountName].filter { !$0.isEmpty }.joined(separator: " / "))
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    GeometryReader { proxy in
+                        Capsule()
+                            .fill(AndroidParityPalette.outline)
+                            .overlay(alignment: .leading) {
+                                Capsule()
+                                    .fill(AndroidParityPalette.primary)
+                                    .frame(width: max(0, proxy.size.width * CGFloat(remaining) / CGFloat(max(Int(entry.period), 1))))
+                            }
+                    }
+                    .frame(height: 10)
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(code)
+                        .font(.system(size: AndroidParityTypography.prominentValueSize, weight: .heavy, design: .rounded))
+                        .foregroundStyle(AndroidParityPalette.primary)
+                    Text("\(remaining)s")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.primary)
+                }
+            }
+        }
+    }
+}
+
+private struct AndroidBankCardListCard: View {
+    let entry: LocalCardEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(entry.title.isEmpty ? entry.issuer : entry.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(entry.issuer)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.primary.opacity(0.88))
+                }
+                Spacer()
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.semibold))
+            }
+            Text(maskedCardNumber(entry.number))
+                .font(.system(size: AndroidParityTypography.prominentValueSize, weight: .heavy, design: .rounded))
+                .minimumScaleFactor(0.62)
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("持卡人")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.primary.opacity(0.8))
+                    Text(entry.cardholderName.isEmpty ? "-" : entry.cardholderName)
+                        .font(.subheadline.weight(.semibold))
+                }
+                Spacer()
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text("有效期")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.primary.opacity(0.8))
+                    Text("\(entry.expiryMonth)/\(entry.expiryYear)")
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+        }
+        .padding(22)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(AndroidParityPalette.primaryDeep, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .foregroundStyle(AndroidParityPalette.primary)
+    }
+
+    private func maskedCardNumber(_ value: String) -> String {
+        let suffix = value.suffix(4)
+        return suffix.isEmpty ? "**** **** ****" : "****  ****  ****  \(suffix)"
+    }
+}
+
+private struct AndroidIdentityListCard: View {
+    let entry: LocalIdentityEntry
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.tertiaryContainer.opacity(0.95), cornerRadius: 22) {
+            HStack(alignment: .top, spacing: 18) {
+                AndroidParityIconTile(systemImage: "person.text.rectangle.fill", fill: AndroidParityPalette.surfaceVariant, tint: AndroidParityPalette.primary)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(entry.title.isEmpty ? entry.documentType : entry.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(entry.fullName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    Text("证件号码\n****\(entry.documentNumber.suffix(4))")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.86))
+                }
+                Spacer()
+                Image(systemName: "ellipsis")
+                    .font(.subheadline.weight(.semibold))
+            }
+        }
+    }
+}
+
+private struct AndroidNoteListCard: View {
+    let entry: LocalNoteEntry
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
+            HStack(alignment: .top, spacing: 18) {
+                AndroidParityIconTile(systemImage: "doc.text.fill", fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 12) {
+                    Text(entry.title.isEmpty ? "未命名" : entry.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(entry.body)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .lineLimit(3)
+                    HStack(spacing: 12) {
+                        Text("#123")
+                        Text("#joccc")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.5))
+                    Text("2026-03-11")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+                Spacer()
+            }
+        }
+    }
+}
+
+private struct AndroidPasskeyListCard: View {
+    let entry: LocalPasskeyEntry
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surface.opacity(0.92), cornerRadius: 22) {
+            HStack(spacing: 20) {
+                AndroidParityIconTile(systemImage: providerIcon, fill: providerFill, tint: providerTint)
+                    .frame(width: 54, height: 54)
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(entry.title.isEmpty ? entry.username : entry.title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(providerName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    if entry.notes.localizedCaseInsensitiveContains("keepass") {
+                        Text("KeePass format")
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 6)
+                            .background(Color.purple.opacity(0.72), in: Capsule())
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.down")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+        }
+    }
+
+    private var providerName: String {
+        if entry.relyingPartyID.localizedCaseInsensitiveContains("github") { return "GitHub" }
+        if entry.relyingPartyID.localizedCaseInsensitiveContains("google") { return "Google" }
+        if entry.relyingPartyID.localizedCaseInsensitiveContains("openai") { return "OpenAI" }
+        return entry.relyingPartyID
+    }
+
+    private var providerIcon: String {
+        if entry.relyingPartyID.localizedCaseInsensitiveContains("github") { return "chevron.left.forwardslash.chevron.right" }
+        if entry.relyingPartyID.localizedCaseInsensitiveContains("google") { return "g.circle.fill" }
+        return "key.horizontal.fill"
+    }
+
+    private var providerFill: Color { providerName == "GitHub" ? .white : AndroidParityPalette.primaryContainer }
+    private var providerTint: Color { providerName == "GitHub" ? .black : AndroidParityPalette.primary }
+}
+
+struct AddEditVaultItemView: View {
+    @Bindable var session: AppSessionModel
+    let mode: VaultItemEditorMode
+    let activeVaultName: String
+    let generateLoginPassword: () -> Void
+    let generateSelectedLoginPassword: () -> Void
+    let importTotpURI: () -> Void
+    let scanTotpQRCode: (String) -> Bool
+    let setFavorite: (Bool) -> Void
+    let deleteEntry: () -> Void
+    let save: () -> Void
+    let dismiss: () -> Void
+
+    @State private var isTotpScannerPresented = false
+
+    var body: some View {
+        ZStack(alignment: .bottomTrailing) {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    header
+                    storageBanner
+                    formCard
+                }
+                .padding(.horizontal, 18)
+                .padding(.top, 18)
+                .padding(.bottom, 120)
+            }
+            .background(AndroidParityPalette.background.ignoresSafeArea())
+            Button(action: save) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                    .frame(width: 54, height: 54)
+                    .background(AndroidParityPalette.tertiaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .padding(18)
+        }
+        .sheet(isPresented: $isTotpScannerPresented) {
+            TotpQRCodeScannerSheet(
+                session: session,
+                onCode: { payload in
+                    if scanTotpQRCode(payload) {
+                        isTotpScannerPresented = false
+                        return true
+                    }
+                    return false
+                },
+                onCancel: { isTotpScannerPresented = false }
+            )
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 18) {
+            Button(action: dismiss) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(AndroidParityPalette.textPrimary)
+            Text(mode.isAdding ? "添加\(mode.kind.displayName)" : "编辑\(mode.kind.displayName)")
+                .font(.system(size: AndroidParityTypography.editorTitleSize, weight: .heavy, design: .rounded))
+                .foregroundStyle(AndroidParityPalette.textPrimary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+            Spacer()
+            typeChip
+            favoriteButton
+        }
+    }
+
+    private var typeChip: some View {
+        HStack(spacing: 8) {
+            Text(typeChipTitle)
+                .font(.subheadline.weight(.semibold))
+            Image(systemName: "chevron.down")
+                .font(.subheadline.weight(.semibold))
+        }
+        .foregroundStyle(AndroidParityPalette.textPrimary)
+        .padding(.horizontal, 18)
+        .frame(height: 56)
+        .background(AndroidParityPalette.primaryContainer, in: Capsule(style: .continuous))
+    }
+
+    @ViewBuilder
+    private var favoriteButton: some View {
+        Button { setFavorite(!currentFavorite) } label: {
+            Image(systemName: currentFavorite ? "heart.fill" : "heart")
+                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                .frame(width: 50, height: 50)
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(currentFavorite ? AndroidParityPalette.primary : AndroidParityPalette.textPrimary)
+        .disabled(mode.isAdding)
+    }
+
+    private var storageBanner: some View {
+        HStack(spacing: 18) {
+            AndroidParityIconTile(systemImage: mode.kind.systemImage, fill: AndroidParityPalette.primary, tint: AndroidParityPalette.background)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("多数据库存储")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(activeVaultName) · 未分类")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.primary.opacity(0.86))
+            }
+            Spacer()
+            Image(systemName: "chevron.up.chevron.down")
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .foregroundStyle(AndroidParityPalette.primary)
+        .background(AndroidParityPalette.primaryDeep, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+    }
+
+    private var formCard: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surface.opacity(0.92), cornerRadius: 22) {
+            Text(formTitle)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+            switch mode.kind {
+            case .login: loginFields
+            case .note: noteFields
+            case .totp: totpFields
+            case .card: cardFields
+            case .identity: identityFields
+            case .passkey: passkeyFields
+            case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+                Text("该类型当前只支持列表展示。")
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+            AndroidParityInfoRow(title: "状态", value: session.entryOperationState.label)
+            if !mode.isAdding {
+                Button(role: .destructive, action: deleteEntry) {
+                    Label("删除", systemImage: "trash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+            }
+        }
+    }
+
+    private var loginFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.loginTitle : $session.editingLoginTitle)
+            field(icon: "globe", title: "网站/网址", text: mode.isAdding ? $session.loginURL : $session.editingLoginURL)
+            HStack(spacing: 14) {
+                Button("+ 添加 URL") {}
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                Button("绑定应用") {}
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            }
+            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername)
+            Picker("登录方式", selection: .constant(0)) {
+                Text("密码登录").tag(0)
+                Text("第三方登录").tag(1)
+            }
+            .pickerStyle(.segmented)
+            secureField(icon: "lock.fill", title: "密码", text: mode.isAdding ? $session.loginPassword : $session.editingLoginPassword)
+            Button(action: mode.isAdding ? generateLoginPassword : generateSelectedLoginPassword) {
+                Label("添加密码", systemImage: "plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+        }
+    }
+
+    private var noteFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.noteTitle : $session.editingNoteTitle)
+            TextEditor(text: mode.isAdding ? $session.noteBody : $session.editingNoteBody)
+                .frame(minHeight: 190)
+                .padding(12)
+                .scrollContentBackground(.hidden)
+                .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1) }
+        }
+    }
+
+    private var totpFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.totpTitle : $session.editingTotpTitle)
+            secureField(icon: "key.fill", title: "密钥", text: mode.isAdding ? $session.totpSecret : $session.editingTotpSecret)
+            field(icon: "building.2.fill", title: "签发方", text: mode.isAdding ? $session.totpIssuer : $session.editingTotpIssuer)
+            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.totpAccountName : $session.editingTotpAccountName)
+            Button { isTotpScannerPresented = true } label: {
+                Label("扫描二维码", systemImage: "qrcode.viewfinder")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+        }
+    }
+
+    private var cardFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.cardTitle : $session.editingCardTitle)
+            field(icon: "person.fill", title: "持卡人", text: mode.isAdding ? $session.cardholderName : $session.editingCardholderName)
+            secureField(icon: "creditcard.fill", title: "卡号", text: mode.isAdding ? $session.cardNumber : $session.editingCardNumber)
+            HStack(spacing: 14) {
+                field(icon: "calendar", title: "月", text: mode.isAdding ? $session.cardExpiryMonth : $session.editingCardExpiryMonth)
+                field(icon: "calendar", title: "年", text: mode.isAdding ? $session.cardExpiryYear : $session.editingCardExpiryYear)
+            }
+            secureField(icon: "lock.fill", title: "CVV", text: mode.isAdding ? $session.cardCVV : $session.editingCardCVV)
+            field(icon: "building.columns.fill", title: "银行", text: mode.isAdding ? $session.cardIssuer : $session.editingCardIssuer)
+            field(icon: "network", title: "卡组织", text: mode.isAdding ? $session.cardNetwork : $session.editingCardNetwork)
+        }
+    }
+
+    private var identityFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.identityTitle : $session.editingIdentityTitle)
+            field(icon: "doc.text.fill", title: "类型", text: mode.isAdding ? $session.identityDocumentType : $session.editingIdentityDocumentType)
+            field(icon: "person.fill", title: "姓名", text: mode.isAdding ? $session.identityFullName : $session.editingIdentityFullName)
+            secureField(icon: "number", title: "证件号", text: mode.isAdding ? $session.identityDocumentNumber : $session.editingIdentityDocumentNumber)
+            field(icon: "building.2.fill", title: "签发方", text: mode.isAdding ? $session.identityIssuer : $session.editingIdentityIssuer)
+            field(icon: "globe", title: "国家/地区", text: mode.isAdding ? $session.identityCountry : $session.editingIdentityCountry)
+        }
+    }
+
+    private var passkeyFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.passkeyTitle : $session.editingPasskeyTitle)
+            field(icon: "globe", title: "RP ID", text: mode.isAdding ? $session.passkeyRelyingPartyID : $session.editingPasskeyRelyingPartyID)
+            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.passkeyUsername : $session.editingPasskeyUsername)
+            field(icon: "key.horizontal.fill", title: "Credential ID", text: mode.isAdding ? $session.passkeyCredentialID : $session.editingPasskeyCredentialID)
+            field(icon: "curlybraces", title: "Public Key COSE", text: mode.isAdding ? $session.passkeyPublicKeyCOSE : $session.editingPasskeyPublicKeyCOSE)
+            secureField(icon: "lock.shield.fill", title: "Keychain 引用", text: mode.isAdding ? $session.passkeyPrivateKeyReference : $session.editingPasskeyPrivateKeyReference)
+        }
+    }
+
+    private func field(icon: String, title: String, text: Binding<String>) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AndroidParityPalette.textSecondary)
+                .frame(width: 34)
+            TextField(title, text: text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.horizontal, 18)
+        .frame(minHeight: 58)
+        .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1.2) }
+    }
+
+    private func secureField(icon: String, title: String, text: Binding<String>) -> some View {
+        HStack(spacing: 16) {
+            Image(systemName: icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AndroidParityPalette.textSecondary)
+                .frame(width: 34)
+            SecureField(title, text: text)
+                .textInputAutocapitalization(.never)
+                .autocorrectionDisabled()
+                .font(.subheadline.weight(.semibold))
+        }
+        .padding(.horizontal, 18)
+        .frame(minHeight: 58)
+        .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1.2) }
+    }
+
+    private var typeChipTitle: String {
+        mode.kind == .login ? "*** 密码" : mode.kind.displayName
+    }
+
+    private var formTitle: String {
+        switch mode.kind {
+        case .login: return "凭据"
+        case .note: return "笔记"
+        case .totp: return "验证器"
+        case .card: return "银行卡"
+        case .identity: return "证件"
+        case .passkey: return "通行密钥"
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return mode.kind.displayName
+        }
+    }
+
+    private var currentFavorite: Bool {
+        switch mode.kind {
+        case .login: return session.editingLoginFavorite
+        case .note: return session.editingNoteFavorite
+        case .totp: return session.editingTotpFavorite
+        case .card: return session.editingCardFavorite
+        case .identity: return session.editingIdentityFavorite
+        case .passkey: return session.editingPasskeyFavorite
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return false
+        }
+    }
+}
+
+private extension UnifiedVaultItemKind {
+    var systemImage: String {
+        switch self {
+        case .login: return "lock.fill"
+        case .note: return "doc.text.fill"
+        case .totp: return "shield.fill"
+        case .card: return "creditcard.fill"
+        case .identity: return "person.text.rectangle.fill"
+        case .passkey: return "key.horizontal.fill"
+        case .sshKey: return "key.fill"
+        case .apiToken: return "text.badge.key"
+        case .wifi: return "wifi"
+        case .send: return "paperplane.fill"
+        case .attachmentRef: return "paperclip"
+        }
+    }
+}

@@ -1,0 +1,14 @@
+SwiftPackages/**/.build/
+Build/
+DerivedData/
+
+*.xcuserstate
+xcuserdata/
+**/xcuserdata/
+SwiftPackages/**/.swiftpm/xcode/xcuserdata/
+
+Generated/MDBXUniFFI/*
+!Generated/MDBXUniFFI/README.md
+
+Artifacts/MDBX/*
+!Artifacts/MDBX/README.md

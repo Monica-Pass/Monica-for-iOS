@@ -1,0 +1,215 @@
+import Testing
+import MonicaSync
+import Foundation
+
+@Test func syncBaselineDocumentsWebDAVAsFirstBackupProvider() {
+    #expect(MonicaSyncBaseline.firstBackupProvider == "WebDAV")
+}
+
+@Test func webDAVClientUploadsBackupWithBasicAuthAndIntegrityHeader() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 201, body: Data()),
+            WebDAVTransportResponse(statusCode: 201, body: Data())
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+    let package = WebDAVBackupPackage(
+        fileName: "mobile.mdbx",
+        data: Data("vault-bytes".utf8)
+    )
+
+    let receipt = try await client.upload(package)
+
+    let vaultRequest = try #require(transport.requests.first)
+    #expect(vaultRequest.method == "PUT")
+    #expect(vaultRequest.url.absoluteString == "https://dav.example.com/backups/mobile.mdbx")
+    #expect(vaultRequest.headers["Authorization"] == "Basic YWxpY2U6c2VjcmV0")
+    #expect(vaultRequest.headers["Content-Type"] == "application/octet-stream")
+    #expect(vaultRequest.headers["X-Monica-Backup-SHA256"] == "66598ecd7f81b8ccc3720ae7befedfb296a9caf47e1af3627ed8e0fe9346e4f4")
+    #expect(vaultRequest.body == Data("vault-bytes".utf8))
+    let sidecarRequest = try #require(transport.requests.dropFirst().first)
+    #expect(sidecarRequest.method == "PUT")
+    #expect(sidecarRequest.url.absoluteString == "https://dav.example.com/backups/mobile.mdbx.sha256")
+    #expect(sidecarRequest.headers["Authorization"] == "Basic YWxpY2U6c2VjcmV0")
+    #expect(sidecarRequest.headers["Content-Type"] == "text/plain; charset=utf-8")
+    #expect(sidecarRequest.body == Data("66598ecd7f81b8ccc3720ae7befedfb296a9caf47e1af3627ed8e0fe9346e4f4\n".utf8))
+    #expect(receipt.remoteURL.absoluteString == "https://dav.example.com/backups/mobile.mdbx")
+    #expect(receipt.byteCount == 11)
+    #expect(receipt.sha256 == "66598ecd7f81b8ccc3720ae7befedfb296a9caf47e1af3627ed8e0fe9346e4f4")
+}
+
+@Test func webDAVClientRejectsUnexpectedSidecarUploadStatus() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 201, body: Data()),
+            WebDAVTransportResponse(statusCode: 500, body: Data("Server error".utf8))
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    await #expect(throws: WebDAVError.unexpectedStatus(operation: "upload checksum", statusCode: 500)) {
+        try await client.upload(
+            WebDAVBackupPackage(fileName: "mobile.mdbx", data: Data("vault-bytes".utf8))
+        )
+    }
+}
+
+@Test func webDAVClientRejectsUnexpectedUploadStatusWithReadableError() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 401, body: Data("Unauthorized".utf8))
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "wrong"
+        ),
+        transport: transport
+    )
+
+    await #expect(throws: WebDAVError.unexpectedStatus(operation: "upload", statusCode: 401)) {
+        try await client.upload(
+            WebDAVBackupPackage(fileName: "mobile.mdbx", data: Data("vault-bytes".utf8))
+        )
+    }
+}
+
+@Test func webDAVClientDownloadsBackupAndBuildsRestorePreview() async throws {
+    let data = Data("restored-vault".utf8)
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(
+                statusCode: 200,
+                headers: ["X-Monica-Backup-SHA256": "4792d85ee2580d20b09571d13647f616d487b2bb885e4a61c70480bb7ab032fe"],
+                body: data
+            )
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    let downloaded = try await client.download(fileName: "mobile.mdbx")
+    let preview = try WebDAVRestorePreview(downloaded)
+
+    let request = try #require(transport.requests.first)
+    #expect(request.method == "GET")
+    #expect(request.url.absoluteString == "https://dav.example.com/backups/mobile.mdbx")
+    #expect(downloaded.data == data)
+    #expect(downloaded.sha256 == "4792d85ee2580d20b09571d13647f616d487b2bb885e4a61c70480bb7ab032fe")
+    #expect(preview.fileName == "mobile.mdbx")
+    #expect(preview.byteCount == 14)
+    #expect(preview.sha256 == "4792d85ee2580d20b09571d13647f616d487b2bb885e4a61c70480bb7ab032fe")
+}
+
+@Test func webDAVClientDownloadsSidecarChecksumWhenIntegrityHeaderIsMissing() async throws {
+    let data = Data("restored-vault".utf8)
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 200, body: data),
+            WebDAVTransportResponse(
+                statusCode: 200,
+                headers: ["Content-Type": "text/plain"],
+                body: Data("4792d85ee2580d20b09571d13647f616d487b2bb885e4a61c70480bb7ab032fe\n".utf8)
+            )
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    let downloaded = try await client.download(fileName: "mobile.mdbx")
+
+    #expect(transport.requests.map(\.url.absoluteString) == [
+        "https://dav.example.com/backups/mobile.mdbx",
+        "https://dav.example.com/backups/mobile.mdbx.sha256"
+    ])
+    #expect(downloaded.data == data)
+    #expect(downloaded.sha256 == "4792d85ee2580d20b09571d13647f616d487b2bb885e4a61c70480bb7ab032fe")
+}
+
+@Test func webDAVClientRejectsDownloadWhenSidecarChecksumDoesNotMatch() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 200, body: Data("restored-vault".utf8)),
+            WebDAVTransportResponse(statusCode: 200, body: Data("0000\n".utf8))
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    await #expect(throws: WebDAVError.integrityCheckFailed) {
+        try await client.download(fileName: "mobile.mdbx")
+    }
+}
+
+@Test func webDAVClientRejectsDownloadWhenIntegrityHeaderDoesNotMatch() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(
+                statusCode: 200,
+                headers: ["X-Monica-Backup-SHA256": "0000"],
+                body: Data("restored-vault".utf8)
+            )
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    await #expect(throws: WebDAVError.integrityCheckFailed) {
+        try await client.download(fileName: "mobile.mdbx")
+    }
+}
+
+private final class RecordingWebDAVTransport: WebDAVTransport {
+    private var responses: [WebDAVTransportResponse]
+    private(set) var requests: [WebDAVTransportRequest] = []
+
+    init(responses: [WebDAVTransportResponse]) {
+        self.responses = responses
+    }
+
+    func send(_ request: WebDAVTransportRequest) async throws -> WebDAVTransportResponse {
+        requests.append(request)
+        return responses.removeFirst()
+    }
+}

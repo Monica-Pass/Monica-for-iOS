@@ -1,0 +1,2550 @@
+import Testing
+import Foundation
+import MonicaStorage
+
+@Test func storageBaselineDocumentsMdbxAsPrimaryStore() {
+    #expect(MonicaStorageBaseline.primaryStore == "MDBX")
+}
+
+@Test func paritySourcesDescribeMultiSourceCompatibilityTargets() {
+    #expect(VaultSource.mdbx.displayName == "MDBX")
+    #expect(VaultSource.keepass.displayName == "KeePass")
+    #expect(VaultSource.bitwarden.displayName == "Bitwarden")
+    #expect(VaultSource.androidBackup.displayName == "Android 备份")
+    #expect(VaultSource.csvImport.displayName == "CSV 导入")
+    #expect(VaultSource.phaseOneSources == [.mdbx])
+    #expect(VaultSource.longTermSources == [.mdbx, .keepass, .bitwarden, .androidBackup, .csvImport])
+}
+
+@Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
+    let login = UnifiedVaultItem(
+        id: "login-1",
+        source: .mdbx,
+        kind: .login,
+        title: "GitHub",
+        subtitle: "alice",
+        searchableText: "GitHub alice github.com",
+        isFavorite: true,
+        isDeleted: false
+    )
+    let card = UnifiedVaultItem(
+        id: "card-1",
+        source: .mdbx,
+        kind: .card,
+        title: "Everyday Visa",
+        subtitle: "Visa / **** 1111",
+        searchableText: "Everyday Visa Monica Bank",
+        isFavorite: false,
+        isDeleted: false
+    )
+
+    #expect(UnifiedVaultItemKind.phaseOneKinds == [.login, .totp, .note, .card, .identity])
+    #expect(login.listTitle == "GitHub")
+    #expect(login.listSubtitle == "alice")
+    #expect(login.matches("github"))
+    #expect(login.matches("ALICE"))
+    #expect(!login.matches("apple"))
+    #expect(card.kind.displayName == "银行卡")
+}
+
+@Test func unifiedVaultItemKindsExposeFullAndroidParitySurface() {
+    #expect(UnifiedVaultItemKind.fullAndroidParityKinds == [
+        .login,
+        .card,
+        .identity,
+        .totp,
+        .passkey,
+        .note,
+        .sshKey,
+        .apiToken,
+        .wifi,
+        .send,
+        .attachmentRef
+    ])
+    #expect(UnifiedVaultItemKind.passkey.displayName == "通行密钥")
+    #expect(UnifiedVaultItemKind.sshKey.displayName == "SSH 密钥")
+    #expect(UnifiedVaultItemKind.apiToken.displayName == "API Token")
+    #expect(UnifiedVaultItemKind.wifi.displayName == "Wi-Fi")
+    #expect(UnifiedVaultItemKind.send.displayName == "安全发送")
+    #expect(UnifiedVaultItemKind.attachmentRef.displayName == "附件")
+}
+
+@Test func androidParityDraftTypesCarrySensitiveFieldsInsidePayloadModels() {
+    let passkey = LocalPasskeyEntryDraft(
+        title: "GitHub passkey",
+        relyingPartyID: "github.com",
+        username: "alice",
+        userHandle: "user-handle",
+        credentialID: "credential-id",
+        publicKeyCOSE: "public-key",
+        privateKeyReference: "keychain-ref",
+        notes: "synced metadata"
+    )
+    let sshKey = LocalSshKeyEntryDraft(
+        title: "Production deploy",
+        username: "deploy",
+        host: "prod.example.com",
+        publicKey: "ssh-ed25519 AAAA...",
+        privateKeyReference: "keychain-ref",
+        passphraseHint: "stored in vault payload",
+        notes: "rotate quarterly"
+    )
+    let apiToken = LocalApiTokenEntryDraft(
+        title: "OpenAI",
+        issuer: "OpenAI",
+        accountName: "alice@example.com",
+        token: "sk-secret",
+        scopes: "responses.read",
+        expiresAt: "2026-12-31",
+        notes: "agent denied by default"
+    )
+    let wifi = LocalWifiEntryDraft(
+        title: "Studio Wi-Fi",
+        ssid: "MonicaLab",
+        securityType: "WPA2",
+        password: "wifi-secret",
+        hidden: false,
+        notes: "office network"
+    )
+    let send = LocalSendEntryDraft(
+        title: "One-time secret",
+        body: "share this once",
+        expiresAt: "2026-06-02T00:00:00Z",
+        maxViews: 1,
+        notes: "local-first metadata"
+    )
+    let attachment = LocalAttachmentMetadata(
+        id: "attachment-1",
+        projectID: "project-1",
+        entryID: "entry-1",
+        fileName: "photo.png",
+        mediaType: "image/png",
+        originalSize: 128,
+        storedSize: 96,
+        contentHash: "sha256:test",
+        storageMode: "embedded-inline",
+        deleted: false
+    )
+
+    #expect(passkey.relyingPartyID == "github.com")
+    #expect(sshKey.privateKeyReference == "keychain-ref")
+    #expect(apiToken.token == "sk-secret")
+    #expect(wifi.hidden == false)
+    #expect(send.maxViews == 1)
+    #expect(attachment.storageMode == "embedded-inline")
+}
+
+@Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
+    #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
+    #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])
+    #expect(ParityFeatureFlag.autofill.isEnabledInPhaseTwo)
+    #expect(ParityFeatureFlag.backup.disabledReason == "第三阶段接入 Android 备份兼容。")
+    #expect(!ParityFeatureFlag.bitwarden.isEnabledInPhaseOne)
+    #expect(!ParityFeatureFlag.passkeys.isEnabledInPhaseOne)
+    #expect(ParityFeatureFlag.passkeys.disabledReason == "后续阶段接入 iOS AuthenticationServices。")
+}
+
+@Test func createVaultBuildsMDBXDescriptorAndDelegatesToEngine() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let directory = URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true)
+
+    let session = try repository.createVault(
+        named: "Personal Vault",
+        in: directory,
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+
+    #expect(session.state == .unlocked)
+    #expect(session.descriptor.displayName == "Personal Vault")
+    #expect(session.descriptor.fileURL.lastPathComponent == "Personal Vault.mdbx")
+    #expect(engine.createdVaults == [
+        .init(
+            fileURL: directory.appendingPathComponent("Personal Vault.mdbx"),
+            password: "中文 password 12345!",
+            deviceID: "ios-storage-test"
+        )
+    ])
+}
+
+@Test func createVaultRejectsEmptyNameBeforeCallingEngine() {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+
+    #expect(throws: LocalVaultRepositoryError.emptyVaultName) {
+        try repository.createVault(
+            named: "  ",
+            in: URL(fileURLWithPath: "/tmp", isDirectory: true),
+            password: "secret",
+            deviceID: "ios-storage-test"
+        )
+    }
+    #expect(engine.createdVaults.isEmpty)
+}
+
+@Test func openVaultReturnsUnlockedSession() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let vaultURL = URL(fileURLWithPath: "/tmp/work.mdbx")
+
+    let session = try repository.openVault(
+        at: vaultURL,
+        password: "secret",
+        deviceID: "ios-storage-test"
+    )
+
+    #expect(session.state == .unlocked)
+    #expect(session.descriptor.fileURL == vaultURL)
+    #expect(session.descriptor.displayName == "work")
+    #expect(engine.openedVaults == [
+        .init(
+            fileURL: vaultURL,
+            password: "secret",
+            deviceID: "ios-storage-test"
+        )
+    ])
+}
+
+@Test func setupAndOpenVaultWithSecurityKeyMaterialDelegateToEngine() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let vaultURL = URL(fileURLWithPath: "/tmp/mobile.mdbx")
+    let keyMaterial = Data(repeating: 0x2A, count: 32)
+
+    let created = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    try repository.setupLocalSecurityKeyUnlock(
+        for: created,
+        securityKeyMaterial: keyMaterial
+    )
+    let reopened = try repository.openVaultWithSecurityKey(
+        at: vaultURL,
+        securityKeyMaterial: keyMaterial,
+        deviceID: "ios-storage-test"
+    )
+
+    #expect(reopened.state == .unlocked)
+    #expect(engine.securityKeySetups == [
+        .init(vaultID: "created-vault", keyMaterial: keyMaterial)
+    ])
+    #expect(engine.securityKeyOpenedVaults == [
+        .init(fileURL: vaultURL, keyMaterial: keyMaterial, deviceID: "ios-storage-test")
+    ])
+}
+
+@Test func resetMasterPasswordDelegatesToUnlockedVaultEngine() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let session = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp", isDirectory: true),
+        password: "old password",
+        deviceID: "ios-storage-test"
+    )
+
+    try repository.resetMasterPassword(
+        for: session,
+        newPassword: "new password"
+    )
+
+    #expect(engine.resetMasterPasswordCalls == [
+        .init(vaultID: "created-vault", newPassword: "new password")
+    ])
+}
+
+@Test func loginEntryRepositoryCreatesProjectScopedLoginAndListsIt() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+
+    let project = try entryRepository.createProject(title: "Personal")
+    let entry = try entryRepository.createLoginEntry(
+        projectID: project.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub",
+            username: "alice",
+            password: "correct horse battery staple",
+            url: "https://github.com"
+        )
+    )
+    let entries = try entryRepository.listLoginEntries(projectID: project.id)
+
+    #expect(project.title == "Personal")
+    #expect(entry.title == "GitHub")
+    #expect(entry.username == "alice")
+    #expect(entry.password == "correct horse battery staple")
+    #expect(entry.url == "https://github.com")
+    #expect(entries == [entry])
+    #expect(engine.createdProjects == [
+        .init(vaultID: session.handle.vaultID, title: "Personal")
+    ])
+    #expect(engine.createdLoginEntries.first?.projectID == project.id)
+}
+
+@Test func loginEntryRepositoryUpdatesProjectScopedLoginAndListsUpdatedEntry() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+
+    let project = try entryRepository.createProject(title: "Personal")
+    let created = try entryRepository.createLoginEntry(
+        projectID: project.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub",
+            username: "alice",
+            password: "old-password",
+            url: "https://github.com"
+        )
+    )
+
+    let updated = try entryRepository.updateLoginEntry(
+        projectID: project.id,
+        entryID: created.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub Work",
+            username: "alice@example.com",
+            password: "new-password",
+            url: "https://github.com/settings/profile"
+        )
+    )
+    let entries = try entryRepository.listLoginEntries(projectID: project.id)
+
+    #expect(updated.id == created.id)
+    #expect(updated.title == "GitHub Work")
+    #expect(updated.username == "alice@example.com")
+    #expect(updated.password == "new-password")
+    #expect(updated.url == "https://github.com/settings/profile")
+    #expect(entries == [updated])
+    #expect(engine.updatedLoginEntries == [
+        .init(
+            vaultID: session.handle.vaultID,
+            projectID: project.id,
+            entryID: created.id,
+            draft: LocalLoginEntryDraft(
+                title: "GitHub Work",
+                username: "alice@example.com",
+                password: "new-password",
+                url: "https://github.com/settings/profile"
+            )
+        )
+    ])
+}
+
+@Test func loginEntryRepositorySetsFavoriteWithoutChangingPayloadFields() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+
+    let project = try entryRepository.createProject(title: "Personal")
+    let created = try entryRepository.createLoginEntry(
+        projectID: project.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub",
+            username: "alice",
+            password: "correct horse battery staple",
+            url: "https://github.com"
+        )
+    )
+
+    let favorited = try entryRepository.setLoginEntryFavorite(
+        projectID: project.id,
+        entryID: created.id,
+        favorite: true
+    )
+    let entries = try entryRepository.listLoginEntries(projectID: project.id)
+
+    #expect(!created.favorite)
+    #expect(favorited.favorite)
+    #expect(favorited.title == "GitHub")
+    #expect(favorited.password == "correct horse battery staple")
+    #expect(entries == [favorited])
+    #expect(engine.favoritedLoginEntries == [
+        .init(
+            vaultID: session.handle.vaultID,
+            projectID: project.id,
+            entryID: created.id,
+            favorite: true
+        )
+    ])
+}
+
+@Test func typedEntryRepositoriesSetFavoriteWithoutChangingPayloadFields() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+
+    let project = try entryRepository.createProject(title: "Personal")
+    let note = try entryRepository.createNoteEntry(
+        projectID: project.id,
+        draft: LocalNoteEntryDraft(title: "Recovery", body: "code-1")
+    )
+    let totp = try entryRepository.createTotpEntry(
+        projectID: project.id,
+        draft: LocalTotpEntryDraft(
+            title: "GitHub TOTP",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "GitHub",
+            accountName: "alice",
+            period: 30,
+            digits: 6,
+            algorithm: "SHA1",
+            otpType: "TOTP",
+            counter: 0
+        )
+    )
+    let card = try entryRepository.createCardEntry(
+        projectID: project.id,
+        draft: LocalCardEntryDraft(
+            title: "Everyday Visa",
+            cardholderName: "Alice Example",
+            number: "4111111111111111",
+            expiryMonth: "12",
+            expiryYear: "2031",
+            cvv: "123",
+            issuer: "Monica Bank",
+            network: "Visa",
+            notes: "Primary checking card"
+        )
+    )
+    let identity = try entryRepository.createIdentityEntry(
+        projectID: project.id,
+        draft: LocalIdentityEntryDraft(
+            title: "Passport",
+            documentType: "passport",
+            fullName: "Alice Example",
+            documentNumber: "P1234567",
+            issuer: "Monica Authority",
+            country: "US",
+            issueDate: "2026-01-02",
+            expiryDate: "2036-01-01",
+            notes: "Primary travel document"
+        )
+    )
+
+    let favoritedNote = try entryRepository.setNoteEntryFavorite(
+        projectID: project.id,
+        entryID: note.id,
+        favorite: true
+    )
+    let favoritedTotp = try entryRepository.setTotpEntryFavorite(
+        projectID: project.id,
+        entryID: totp.id,
+        favorite: true
+    )
+    let favoritedCard = try entryRepository.setCardEntryFavorite(
+        projectID: project.id,
+        entryID: card.id,
+        favorite: true
+    )
+    let favoritedIdentity = try entryRepository.setIdentityEntryFavorite(
+        projectID: project.id,
+        entryID: identity.id,
+        favorite: true
+    )
+
+    #expect(!note.favorite)
+    #expect(!totp.favorite)
+    #expect(!card.favorite)
+    #expect(!identity.favorite)
+    #expect(favoritedNote.favorite)
+    #expect(favoritedNote.body == "code-1")
+    #expect(favoritedTotp.favorite)
+    #expect(favoritedTotp.secret == "JBSWY3DPEHPK3PXP")
+    #expect(favoritedCard.favorite)
+    #expect(favoritedCard.number == "4111111111111111")
+    #expect(favoritedIdentity.favorite)
+    #expect(favoritedIdentity.documentNumber == "P1234567")
+    #expect(engine.favoritedNoteEntries == [
+        .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: note.id, favorite: true)
+    ])
+    #expect(engine.favoritedTotpEntries == [
+        .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: totp.id, favorite: true)
+    ])
+    #expect(engine.favoritedCardEntries == [
+        .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: card.id, favorite: true)
+    ])
+    #expect(engine.favoritedIdentityEntries == [
+        .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: identity.id, favorite: true)
+    ])
+}
+
+@Test func noteEntryRepositoryCreatesUpdatesDeletesAndRestoresProjectScopedNote() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Personal")
+
+    let created = try entryRepository.createNoteEntry(
+        projectID: project.id,
+        draft: LocalNoteEntryDraft(title: "Recovery codes", body: "code-1\ncode-2")
+    )
+    let updated = try entryRepository.updateNoteEntry(
+        projectID: project.id,
+        entryID: created.id,
+        draft: LocalNoteEntryDraft(title: "Recovery codes updated", body: "code-3\ncode-4")
+    )
+    try entryRepository.deleteNoteEntry(projectID: project.id, entryID: created.id)
+    let deleted = try entryRepository.listDeletedNoteEntries(projectID: project.id)
+    let restored = try entryRepository.restoreNoteEntry(projectID: project.id, entryID: created.id)
+    let notes = try entryRepository.listNoteEntries(projectID: project.id)
+
+    #expect(created.title == "Recovery codes")
+    #expect(updated.id == created.id)
+    #expect(updated.body == "code-3\ncode-4")
+    #expect(deleted == [updated])
+    #expect(restored == updated)
+    #expect(notes == [updated])
+    #expect(engine.createdNoteEntries.first?.projectID == project.id)
+    #expect(engine.updatedNoteEntries.first?.entryID == created.id)
+    #expect(engine.deletedNoteEntries.first?.entryID == created.id)
+    #expect(engine.restoredNoteEntries.first?.entryID == created.id)
+}
+
+@Test func totpEntryRepositoryCreatesUpdatesDeletesAndRestoresProjectScopedTotp() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Personal")
+
+    let created = try entryRepository.createTotpEntry(
+        projectID: project.id,
+        draft: LocalTotpEntryDraft(
+            title: "GitHub TOTP",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "GitHub",
+            accountName: "alice",
+            period: 30,
+            digits: 6,
+            algorithm: "SHA1",
+            otpType: "TOTP",
+            counter: 0
+        )
+    )
+    let updated = try entryRepository.updateTotpEntry(
+        projectID: project.id,
+        entryID: created.id,
+        draft: LocalTotpEntryDraft(
+            title: "GitHub Work TOTP",
+            secret: "JBSWY3DPEHPK3PXQ",
+            issuer: "GitHub",
+            accountName: "alice@example.com",
+            period: 60,
+            digits: 8,
+            algorithm: "SHA256",
+            otpType: "TOTP",
+            counter: 0
+        )
+    )
+    try entryRepository.deleteTotpEntry(projectID: project.id, entryID: created.id)
+    let deleted = try entryRepository.listDeletedTotpEntries(projectID: project.id)
+    let restored = try entryRepository.restoreTotpEntry(projectID: project.id, entryID: created.id)
+    let totpEntries = try entryRepository.listTotpEntries(projectID: project.id)
+
+    #expect(created.title == "GitHub TOTP")
+    #expect(created.secret == "JBSWY3DPEHPK3PXP")
+    #expect(created.issuer == "GitHub")
+    #expect(created.accountName == "alice")
+    #expect(created.period == 30)
+    #expect(created.digits == 6)
+    #expect(created.algorithm == "SHA1")
+    #expect(created.otpType == "TOTP")
+    #expect(created.counter == 0)
+    #expect(updated.id == created.id)
+    #expect(updated.title == "GitHub Work TOTP")
+    #expect(updated.secret == "JBSWY3DPEHPK3PXQ")
+    #expect(updated.accountName == "alice@example.com")
+    #expect(updated.period == 60)
+    #expect(updated.digits == 8)
+    #expect(updated.algorithm == "SHA256")
+    #expect(deleted == [updated])
+    #expect(restored == updated)
+    #expect(totpEntries == [updated])
+    #expect(engine.createdTotpEntries.first?.projectID == project.id)
+    #expect(engine.updatedTotpEntries.first?.entryID == created.id)
+    #expect(engine.deletedTotpEntries.first?.entryID == created.id)
+    #expect(engine.restoredTotpEntries.first?.entryID == created.id)
+}
+
+@Test func cardEntryRepositoryCreatesUpdatesDeletesAndRestoresProjectScopedCard() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Personal")
+
+    let created = try entryRepository.createCardEntry(
+        projectID: project.id,
+        draft: LocalCardEntryDraft(
+            title: "Everyday Visa",
+            cardholderName: "Alice Example",
+            number: "4111111111111111",
+            expiryMonth: "12",
+            expiryYear: "2031",
+            cvv: "123",
+            issuer: "Monica Bank",
+            network: "Visa",
+            notes: "Primary checking card"
+        )
+    )
+    let updated = try entryRepository.updateCardEntry(
+        projectID: project.id,
+        entryID: created.id,
+        draft: LocalCardEntryDraft(
+            title: "Travel Mastercard",
+            cardholderName: "Alice Q. Example",
+            number: "5555555555554444",
+            expiryMonth: "01",
+            expiryYear: "2032",
+            cvv: "456",
+            issuer: "Monica Credit Union",
+            network: "Mastercard",
+            notes: "No foreign transaction fee"
+        )
+    )
+    try entryRepository.deleteCardEntry(projectID: project.id, entryID: created.id)
+    let deleted = try entryRepository.listDeletedCardEntries(projectID: project.id)
+    let restored = try entryRepository.restoreCardEntry(projectID: project.id, entryID: created.id)
+    let cardEntries = try entryRepository.listCardEntries(projectID: project.id)
+
+    #expect(created.title == "Everyday Visa")
+    #expect(created.cardholderName == "Alice Example")
+    #expect(created.number == "4111111111111111")
+    #expect(created.expiryMonth == "12")
+    #expect(created.expiryYear == "2031")
+    #expect(created.cvv == "123")
+    #expect(created.issuer == "Monica Bank")
+    #expect(created.network == "Visa")
+    #expect(updated.id == created.id)
+    #expect(updated.title == "Travel Mastercard")
+    #expect(updated.number == "5555555555554444")
+    #expect(updated.cvv == "456")
+    #expect(deleted == [updated])
+    #expect(restored == updated)
+    #expect(cardEntries == [updated])
+    #expect(engine.createdCardEntries.first?.projectID == project.id)
+    #expect(engine.updatedCardEntries.first?.entryID == created.id)
+    #expect(engine.deletedCardEntries.first?.entryID == created.id)
+    #expect(engine.restoredCardEntries.first?.entryID == created.id)
+}
+
+@Test func identityEntryRepositoryCreatesUpdatesDeletesAndRestoresProjectScopedIdentity() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Personal")
+
+    let created = try entryRepository.createIdentityEntry(
+        projectID: project.id,
+        draft: LocalIdentityEntryDraft(
+            title: "Passport",
+            documentType: "passport",
+            fullName: "Alice Example",
+            documentNumber: "P1234567",
+            issuer: "Monica Authority",
+            country: "US",
+            issueDate: "2026-01-02",
+            expiryDate: "2036-01-01",
+            notes: "Primary travel document"
+        )
+    )
+    let updated = try entryRepository.updateIdentityEntry(
+        projectID: project.id,
+        entryID: created.id,
+        draft: LocalIdentityEntryDraft(
+            title: "Driver License",
+            documentType: "driver_license",
+            fullName: "Alice Q. Example",
+            documentNumber: "D7654321",
+            issuer: "Monica DMV",
+            country: "US-CA",
+            issueDate: "2026-05-31",
+            expiryDate: "2031-05-30",
+            notes: "State license metadata"
+        )
+    )
+    try entryRepository.deleteIdentityEntry(projectID: project.id, entryID: created.id)
+    let deleted = try entryRepository.listDeletedIdentityEntries(projectID: project.id)
+    let restored = try entryRepository.restoreIdentityEntry(projectID: project.id, entryID: created.id)
+    let identityEntries = try entryRepository.listIdentityEntries(projectID: project.id)
+
+    #expect(created.title == "Passport")
+    #expect(created.documentType == "passport")
+    #expect(created.fullName == "Alice Example")
+    #expect(created.documentNumber == "P1234567")
+    #expect(created.issuer == "Monica Authority")
+    #expect(created.country == "US")
+    #expect(updated.id == created.id)
+    #expect(updated.title == "Driver License")
+    #expect(updated.documentType == "driver_license")
+    #expect(updated.documentNumber == "D7654321")
+    #expect(updated.country == "US-CA")
+    #expect(deleted == [updated])
+    #expect(restored == updated)
+    #expect(identityEntries == [updated])
+    #expect(engine.createdIdentityEntries.first?.projectID == project.id)
+    #expect(engine.updatedIdentityEntries.first?.entryID == created.id)
+    #expect(engine.deletedIdentityEntries.first?.entryID == created.id)
+    #expect(engine.restoredIdentityEntries.first?.entryID == created.id)
+}
+
+@Test func androidParityEntryRepositoriesCreateUpdateFavoriteDeleteAndRestore() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Personal")
+
+    let passkey = try entryRepository.createPasskeyEntry(
+        projectID: project.id,
+        draft: LocalPasskeyEntryDraft(
+            title: "GitHub Passkey",
+            relyingPartyID: "github.com",
+            username: "alice",
+            userHandle: "user-handle",
+            credentialID: "credential-id",
+            publicKeyCOSE: "public-key",
+            privateKeyReference: "keychain-ref",
+            notes: "iOS AuthenticationServices metadata"
+        )
+    )
+    let updatedPasskey = try entryRepository.updatePasskeyEntry(
+        projectID: project.id,
+        entryID: passkey.id,
+        draft: LocalPasskeyEntryDraft(
+            title: "GitHub Work Passkey",
+            relyingPartyID: "github.com",
+            username: "alice@example.com",
+            userHandle: "user-handle-2",
+            credentialID: "credential-id-2",
+            publicKeyCOSE: "public-key-2",
+            privateKeyReference: "keychain-ref-2",
+            notes: "updated metadata"
+        )
+    )
+    let favoritedPasskey = try entryRepository.setPasskeyEntryFavorite(
+        projectID: project.id,
+        entryID: passkey.id,
+        favorite: true
+    )
+    try entryRepository.deletePasskeyEntry(projectID: project.id, entryID: passkey.id)
+    #expect(try entryRepository.listDeletedPasskeyEntries(projectID: project.id) == [favoritedPasskey])
+    #expect(try entryRepository.restorePasskeyEntry(projectID: project.id, entryID: passkey.id) == favoritedPasskey)
+
+    let sshKey = try entryRepository.createSshKeyEntry(
+        projectID: project.id,
+        draft: LocalSshKeyEntryDraft(
+            title: "Production SSH",
+            username: "deploy",
+            host: "prod.example.com",
+            publicKey: "ssh-ed25519 AAAA",
+            privateKeyReference: "keychain-ssh",
+            passphraseHint: "vault protected",
+            notes: "rotate quarterly"
+        )
+    )
+    let updatedSshKey = try entryRepository.updateSshKeyEntry(
+        projectID: project.id,
+        entryID: sshKey.id,
+        draft: LocalSshKeyEntryDraft(
+            title: "Staging SSH",
+            username: "deploy",
+            host: "staging.example.com",
+            publicKey: "ssh-ed25519 BBBB",
+            privateKeyReference: "keychain-ssh-2",
+            passphraseHint: "stored separately",
+            notes: "limited access"
+        )
+    )
+    let favoritedSshKey = try entryRepository.setSshKeyEntryFavorite(
+        projectID: project.id,
+        entryID: sshKey.id,
+        favorite: true
+    )
+    try entryRepository.deleteSshKeyEntry(projectID: project.id, entryID: sshKey.id)
+    #expect(try entryRepository.listDeletedSshKeyEntries(projectID: project.id) == [favoritedSshKey])
+    #expect(try entryRepository.restoreSshKeyEntry(projectID: project.id, entryID: sshKey.id) == favoritedSshKey)
+
+    let apiToken = try entryRepository.createApiTokenEntry(
+        projectID: project.id,
+        draft: LocalApiTokenEntryDraft(
+            title: "OpenAI",
+            issuer: "OpenAI",
+            accountName: "alice@example.com",
+            token: "sk-secret",
+            scopes: "responses.read",
+            expiresAt: "2026-12-31",
+            notes: "local-only"
+        )
+    )
+    let updatedApiToken = try entryRepository.updateApiTokenEntry(
+        projectID: project.id,
+        entryID: apiToken.id,
+        draft: LocalApiTokenEntryDraft(
+            title: "OpenAI Build",
+            issuer: "OpenAI",
+            accountName: "build@example.com",
+            token: "sk-secret-2",
+            scopes: "responses.write",
+            expiresAt: "2027-12-31",
+            notes: "rotation candidate"
+        )
+    )
+    let favoritedApiToken = try entryRepository.setApiTokenEntryFavorite(
+        projectID: project.id,
+        entryID: apiToken.id,
+        favorite: true
+    )
+    try entryRepository.deleteApiTokenEntry(projectID: project.id, entryID: apiToken.id)
+    #expect(try entryRepository.listDeletedApiTokenEntries(projectID: project.id) == [favoritedApiToken])
+    #expect(try entryRepository.restoreApiTokenEntry(projectID: project.id, entryID: apiToken.id) == favoritedApiToken)
+
+    let wifi = try entryRepository.createWifiEntry(
+        projectID: project.id,
+        draft: LocalWifiEntryDraft(
+            title: "Studio Wi-Fi",
+            ssid: "MonicaLab",
+            securityType: "WPA3",
+            password: "wifi-secret",
+            hidden: false,
+            notes: "office"
+        )
+    )
+    let updatedWifi = try entryRepository.updateWifiEntry(
+        projectID: project.id,
+        entryID: wifi.id,
+        draft: LocalWifiEntryDraft(
+            title: "Guest Wi-Fi",
+            ssid: "MonicaGuest",
+            securityType: "WPA2",
+            password: "guest-secret",
+            hidden: true,
+            notes: "visitor network"
+        )
+    )
+    let favoritedWifi = try entryRepository.setWifiEntryFavorite(
+        projectID: project.id,
+        entryID: wifi.id,
+        favorite: true
+    )
+    try entryRepository.deleteWifiEntry(projectID: project.id, entryID: wifi.id)
+    #expect(try entryRepository.listDeletedWifiEntries(projectID: project.id) == [favoritedWifi])
+    #expect(try entryRepository.restoreWifiEntry(projectID: project.id, entryID: wifi.id) == favoritedWifi)
+
+    let send = try entryRepository.createSendEntry(
+        projectID: project.id,
+        draft: LocalSendEntryDraft(
+            title: "One-time secret",
+            body: "share once",
+            expiresAt: "2026-06-02T00:00:00Z",
+            maxViews: 1,
+            notes: "local metadata"
+        )
+    )
+    let updatedSend = try entryRepository.updateSendEntry(
+        projectID: project.id,
+        entryID: send.id,
+        draft: LocalSendEntryDraft(
+            title: "One-day secret",
+            body: "share within a day",
+            expiresAt: "2026-06-03T00:00:00Z",
+            maxViews: 3,
+            notes: "local metadata updated"
+        )
+    )
+    let favoritedSend = try entryRepository.setSendEntryFavorite(
+        projectID: project.id,
+        entryID: send.id,
+        favorite: true
+    )
+    try entryRepository.deleteSendEntry(projectID: project.id, entryID: send.id)
+    #expect(try entryRepository.listDeletedSendEntries(projectID: project.id) == [favoritedSend])
+    #expect(try entryRepository.restoreSendEntry(projectID: project.id, entryID: send.id) == favoritedSend)
+
+    let attachment = try entryRepository.createAttachmentMetadata(
+        projectID: project.id,
+        entryID: passkey.id,
+        fileName: "passkey-note.txt",
+        mediaType: "text/plain",
+        originalSize: 128,
+        storedSize: 96,
+        contentHash: "sha256:attachment",
+        storageMode: "embedded-inline"
+    )
+    try entryRepository.deleteAttachmentMetadata(projectID: project.id, attachmentID: attachment.id)
+    #expect(try entryRepository.listDeletedAttachmentMetadata(projectID: project.id) == [
+        LocalAttachmentMetadata(
+            id: attachment.id,
+            projectID: project.id,
+            entryID: passkey.id,
+            fileName: "passkey-note.txt",
+            mediaType: "text/plain",
+            originalSize: 128,
+            storedSize: 96,
+            contentHash: "sha256:attachment",
+            storageMode: "embedded-inline",
+            deleted: true
+        )
+    ])
+    #expect(try entryRepository.restoreAttachmentMetadata(projectID: project.id, attachmentID: attachment.id) == attachment)
+
+    #expect(updatedPasskey.username == "alice@example.com")
+    #expect(updatedSshKey.host == "staging.example.com")
+    #expect(updatedApiToken.token == "sk-secret-2")
+    #expect(updatedWifi.hidden)
+    #expect(updatedSend.maxViews == 3)
+    #expect(try entryRepository.listPasskeyEntries(projectID: project.id) == [favoritedPasskey])
+    #expect(try entryRepository.listSshKeyEntries(projectID: project.id) == [favoritedSshKey])
+    #expect(try entryRepository.listApiTokenEntries(projectID: project.id) == [favoritedApiToken])
+    #expect(try entryRepository.listWifiEntries(projectID: project.id) == [favoritedWifi])
+    #expect(try entryRepository.listSendEntries(projectID: project.id) == [favoritedSend])
+    #expect(try entryRepository.listAttachmentMetadata(projectID: project.id) == [attachment])
+    #expect(engine.createdPasskeyEntries.first?.projectID == project.id)
+    #expect(engine.updatedPasskeyEntries.first?.entryID == passkey.id)
+    #expect(engine.favoritedPasskeyEntries.first?.favorite == true)
+    #expect(engine.createdAttachmentMetadata.first?.fileName == "passkey-note.txt")
+}
+
+@Test func loginEntryRepositoryDeletesAndRestoresProjectScopedLogin() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+
+    let project = try entryRepository.createProject(title: "Personal")
+    let created = try entryRepository.createLoginEntry(
+        projectID: project.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub",
+            username: "alice",
+            password: "correct horse battery staple",
+            url: "https://github.com"
+        )
+    )
+
+    try entryRepository.deleteLoginEntry(projectID: project.id, entryID: created.id)
+
+    #expect(try entryRepository.listLoginEntries(projectID: project.id).isEmpty)
+    #expect(try entryRepository.listDeletedLoginEntries(projectID: project.id) == [created])
+
+    let restored = try entryRepository.restoreLoginEntry(projectID: project.id, entryID: created.id)
+
+    #expect(restored == created)
+    #expect(try entryRepository.listLoginEntries(projectID: project.id) == [created])
+    #expect(try entryRepository.listDeletedLoginEntries(projectID: project.id).isEmpty)
+    #expect(engine.deletedLoginEntries == [
+        .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: created.id)
+    ])
+    #expect(engine.restoredLoginEntries == [
+        .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: created.id)
+    ])
+}
+
+@Test func encryptedAutoFillIndexStoreSavesAndLoadsEnvelope() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let store = FileAutoFillEncryptedIndexStore(appGroupContainerURL: directory)
+    let index = AutoFillEncryptedIndex(
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_100_000),
+        records: [
+            AutoFillEncryptedIndexRecord(
+                id: "record-1",
+                nonce: Data([1, 2, 3]),
+                ciphertext: Data([4, 5, 6]),
+                authenticationTag: Data([7, 8, 9])
+            )
+        ]
+    )
+
+    try store.save(index)
+
+    #expect(try store.load() == index)
+}
+
+@Test func encryptedAutoFillIndexFileDoesNotContainPlaintextCredentialMetadata() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let store = FileAutoFillEncryptedIndexStore(appGroupContainerURL: directory)
+    let index = AutoFillEncryptedIndex(
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_100_000),
+        records: [
+            AutoFillEncryptedIndexRecord(
+                id: "record-1",
+                nonce: Data([10, 11, 12]),
+                ciphertext: Data([13, 14, 15]),
+                authenticationTag: Data([16, 17, 18])
+            )
+        ]
+    )
+
+    try store.save(index)
+
+    let rawIndex = try String(contentsOf: store.indexFileURL, encoding: .utf8)
+    #expect(!rawIndex.contains("github.com"))
+    #expect(!rawIndex.contains("alice@example.com"))
+    #expect(!rawIndex.contains("GitHub"))
+}
+
+@Test func encryptedAutoFillIndexStoreReturnsNilWhenIndexIsMissing() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let store = FileAutoFillEncryptedIndexStore(appGroupContainerURL: directory)
+
+    #expect(try store.load() == nil)
+}
+
+@Test func autoFillIndexCodecEncryptsAndDecryptsCredentialMetadata() throws {
+    let codec = AutoFillEncryptedIndexCodec()
+    let key = try AutoFillIndexEncryptionKey(rawValue: Data(repeating: 7, count: 32))
+    let records = [
+        AutoFillCredentialIndexRecord(
+            id: "entry-1",
+            title: "GitHub",
+            username: "alice@example.com",
+            serviceIdentifiers: ["github.com", "https://github.com/login"]
+        )
+    ]
+
+    let index = try codec.encrypt(
+        records,
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_100_000),
+        key: key
+    )
+
+    #expect(index.vaultID == "vault-1")
+    #expect(index.keyIdentifier == "autofill-key-1")
+    #expect(index.records.count == 1)
+    #expect(index.records.first?.id == "entry-1")
+    #expect(index.records.first?.ciphertext.isEmpty == false)
+
+    let decrypted = try codec.decrypt(index, key: key)
+
+    #expect(decrypted == records)
+}
+
+@Test func autoFillIndexCodecDoesNotEncodePlaintextCredentialMetadata() throws {
+    let codec = AutoFillEncryptedIndexCodec()
+    let key = try AutoFillIndexEncryptionKey(rawValue: Data(repeating: 9, count: 32))
+    let index = try codec.encrypt(
+        [
+            AutoFillCredentialIndexRecord(
+                id: "entry-1",
+                title: "GitHub",
+                username: "alice@example.com",
+                serviceIdentifiers: ["github.com"]
+            )
+        ],
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_100_000),
+        key: key
+    )
+
+    let encoded = try JSONEncoder().encode(index)
+    let rawIndex = try #require(String(data: encoded, encoding: .utf8))
+
+    #expect(!rawIndex.contains("github.com"))
+    #expect(!rawIndex.contains("alice@example.com"))
+    #expect(!rawIndex.contains("GitHub"))
+}
+
+@Test func autoFillUnlockedIndexSearchesAndMatchesDecryptedCredentialMetadata() throws {
+    let codec = AutoFillEncryptedIndexCodec()
+    let key = try AutoFillIndexEncryptionKey(rawValue: Data(repeating: 17, count: 32))
+    let encryptedIndex = try codec.encrypt(
+        [
+            AutoFillCredentialIndexRecord(
+                id: "entry-1",
+                title: "GitHub",
+                username: "alice@example.com",
+                serviceIdentifiers: ["github.com", "https://github.com/login"]
+            ),
+            AutoFillCredentialIndexRecord(
+                id: "entry-2",
+                title: "Apple ID",
+                username: "bob@example.com",
+                serviceIdentifiers: ["appleid.apple.com"]
+            )
+        ],
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_400_000),
+        key: key
+    )
+
+    let unlockedIndex = try AutoFillCredentialIndexUnlocker().unlock(
+        encryptedIndex,
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        key: key
+    )
+
+    #expect(unlockedIndex.records(matchingServiceIdentifier: "https://github.com/session").map(\.id) == ["entry-1"])
+    #expect(unlockedIndex.records(matchingServiceIdentifier: "accounts.appleid.apple.com").map(\.id) == ["entry-2"])
+    #expect(unlockedIndex.search("alice").map(\.id) == ["entry-1"])
+    #expect(unlockedIndex.search("apple").map(\.id) == ["entry-2"])
+    #expect(unlockedIndex.search("example.com").map(\.id) == ["entry-1", "entry-2"])
+}
+
+@Test func autoFillCredentialSecretCodecEncryptsAndDecryptsFillableSecrets() throws {
+    let codec = AutoFillCredentialSecretCodec()
+    let key = try AutoFillIndexEncryptionKey(rawValue: Data(repeating: 23, count: 32))
+    let secrets = [
+        AutoFillCredentialSecretRecord(
+            id: "entry-1",
+            username: "alice@example.com",
+            password: "correct horse battery staple"
+        )
+    ]
+
+    let snapshot = try codec.encrypt(
+        secrets,
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_600_000),
+        key: key
+    )
+    let unlockedSnapshot = try AutoFillCredentialSecretUnlocker().unlock(
+        snapshot,
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        key: key
+    )
+
+    #expect(snapshot.vaultID == "vault-1")
+    #expect(snapshot.keyIdentifier == "autofill-key-1")
+    #expect(snapshot.records.count == 1)
+    #expect(unlockedSnapshot.secret(id: "entry-1") == secrets.first)
+}
+
+@Test func autoFillCredentialSecretStoreDoesNotContainPlaintextCredentialSecrets() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent(UUID().uuidString, isDirectory: true)
+    let store = FileAutoFillCredentialSecretStore(appGroupContainerURL: directory)
+    let key = try AutoFillIndexEncryptionKey(rawValue: Data(repeating: 29, count: 32))
+    let snapshot = try AutoFillCredentialSecretCodec().encrypt(
+        [
+            AutoFillCredentialSecretRecord(
+                id: "entry-1",
+                username: "alice@example.com",
+                password: "correct horse battery staple"
+            )
+        ],
+        vaultID: "vault-1",
+        keyIdentifier: "autofill-key-1",
+        updatedAt: Date(timeIntervalSince1970: 1_800_600_000),
+        key: key
+    )
+
+    try store.save(snapshot)
+
+    let loaded = try #require(try store.load())
+    let rawSnapshot = try String(contentsOf: store.secretFileURL, encoding: .utf8)
+    #expect(loaded.records.map(\.id) == ["entry-1"])
+    #expect(!rawSnapshot.contains("alice@example.com"))
+    #expect(!rawSnapshot.contains("correct horse battery staple"))
+}
+
+@Test func autoFillCredentialResolverMatchesDomainsAndDeduplicatesRecords() {
+    let resolver = AutoFillCredentialResolver(
+        index: AutoFillUnlockedCredentialIndex(
+            vaultID: "vault-1",
+            keyIdentifier: "autofill-key-1",
+            updatedAt: Date(timeIntervalSince1970: 1_800_800_000),
+            records: [
+                AutoFillCredentialIndexRecord(
+                    id: "entry-1",
+                    title: "GitHub",
+                    username: "alice@example.com",
+                    serviceIdentifiers: ["github.com", "https://github.com/login"]
+                ),
+                AutoFillCredentialIndexRecord(
+                    id: "entry-2",
+                    title: "Apple ID",
+                    username: "bob@example.com",
+                    serviceIdentifiers: ["appleid.apple.com"]
+                )
+            ]
+        ),
+        secrets: AutoFillUnlockedCredentialSecretSnapshot(
+            vaultID: "vault-1",
+            keyIdentifier: "autofill-key-1",
+            updatedAt: Date(timeIntervalSince1970: 1_800_800_000),
+            records: []
+        )
+    )
+
+    let records = resolver.records(
+        matchingServiceIdentifiers: [
+            "https://github.com/session",
+            "github.com"
+        ]
+    )
+
+    #expect(records.map(\.id) == ["entry-1"])
+}
+
+@Test func autoFillCredentialResolverSearchesOnlyWithinMatchedRecords() {
+    let matchedRecords = [
+        AutoFillCredentialIndexRecord(
+            id: "entry-1",
+            title: "GitHub",
+            username: "alice@example.com",
+            serviceIdentifiers: ["github.com"]
+        )
+    ]
+    let resolver = AutoFillCredentialResolver(
+        index: AutoFillUnlockedCredentialIndex(
+            vaultID: "vault-1",
+            keyIdentifier: "autofill-key-1",
+            updatedAt: Date(timeIntervalSince1970: 1_800_800_000),
+            records: matchedRecords + [
+                AutoFillCredentialIndexRecord(
+                    id: "entry-2",
+                    title: "Apple ID",
+                    username: "bob@example.com",
+                    serviceIdentifiers: ["appleid.apple.com"]
+                )
+            ]
+        ),
+        secrets: AutoFillUnlockedCredentialSecretSnapshot(
+            vaultID: "vault-1",
+            keyIdentifier: "autofill-key-1",
+            updatedAt: Date(timeIntervalSince1970: 1_800_800_000),
+            records: []
+        )
+    )
+
+    #expect(resolver.search("alice", within: matchedRecords).map(\.id) == ["entry-1"])
+    #expect(resolver.search("apple", within: matchedRecords).isEmpty)
+    #expect(resolver.search("   ", within: matchedRecords).map(\.id) == ["entry-1"])
+}
+
+@Test func autoFillCredentialResolverReturnsFillableSecretForSelectedRecordIdentifier() throws {
+    let resolver = AutoFillCredentialResolver(
+        index: AutoFillUnlockedCredentialIndex(
+            vaultID: "vault-1",
+            keyIdentifier: "autofill-key-1",
+            updatedAt: Date(timeIntervalSince1970: 1_800_800_000),
+            records: [
+                AutoFillCredentialIndexRecord(
+                    id: "entry-1",
+                    title: "GitHub",
+                    username: "alice@example.com",
+                    serviceIdentifiers: ["github.com"]
+                )
+            ]
+        ),
+        secrets: AutoFillUnlockedCredentialSecretSnapshot(
+            vaultID: "vault-1",
+            keyIdentifier: "autofill-key-1",
+            updatedAt: Date(timeIntervalSince1970: 1_800_800_000),
+            records: [
+                AutoFillCredentialSecretRecord(
+                    id: "entry-1",
+                    username: "alice@example.com",
+                    password: "correct horse battery staple"
+                )
+            ]
+        )
+    )
+
+    #expect(
+        try resolver.credential(recordIdentifier: "entry-1")
+            == AutoFillCredentialSecretRecord(
+                id: "entry-1",
+                username: "alice@example.com",
+                password: "correct horse battery staple"
+            )
+    )
+    #expect(throws: AutoFillCredentialResolverError.credentialUnavailable) {
+        try resolver.credential(recordIdentifier: "missing")
+    }
+}
+
+private final class RecordingVaultEngine: LocalVaultEngine {
+    private(set) var createdVaults: [RecordedVaultCall] = []
+    private(set) var openedVaults: [RecordedVaultCall] = []
+    private(set) var securityKeyOpenedVaults: [RecordedSecurityKeyVaultCall] = []
+    private(set) var securityKeySetups: [RecordedSecurityKeySetupCall] = []
+    private(set) var resetMasterPasswordCalls: [RecordedResetMasterPasswordCall] = []
+    private(set) var createdProjects: [RecordedProjectCall] = []
+    private(set) var createdLoginEntries: [RecordedLoginEntryCall] = []
+    private(set) var updatedLoginEntries: [RecordedUpdatedLoginEntryCall] = []
+    private(set) var favoritedLoginEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedNoteEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedTotpEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedCardEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedIdentityEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedPasskeyEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedSshKeyEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedApiTokenEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedWifiEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var favoritedSendEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var deletedLoginEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredLoginEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdNoteEntries: [RecordedNoteEntryCall] = []
+    private(set) var updatedNoteEntries: [RecordedUpdatedNoteEntryCall] = []
+    private(set) var deletedNoteEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredNoteEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdTotpEntries: [RecordedTotpEntryCall] = []
+    private(set) var updatedTotpEntries: [RecordedUpdatedTotpEntryCall] = []
+    private(set) var deletedTotpEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredTotpEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdCardEntries: [RecordedCardEntryCall] = []
+    private(set) var updatedCardEntries: [RecordedUpdatedCardEntryCall] = []
+    private(set) var deletedCardEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredCardEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdIdentityEntries: [RecordedIdentityEntryCall] = []
+    private(set) var updatedIdentityEntries: [RecordedUpdatedIdentityEntryCall] = []
+    private(set) var deletedIdentityEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredIdentityEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdPasskeyEntries: [RecordedPasskeyEntryCall] = []
+    private(set) var updatedPasskeyEntries: [RecordedUpdatedPasskeyEntryCall] = []
+    private(set) var deletedPasskeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredPasskeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdSshKeyEntries: [RecordedSshKeyEntryCall] = []
+    private(set) var updatedSshKeyEntries: [RecordedUpdatedSshKeyEntryCall] = []
+    private(set) var deletedSshKeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredSshKeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdApiTokenEntries: [RecordedApiTokenEntryCall] = []
+    private(set) var updatedApiTokenEntries: [RecordedUpdatedApiTokenEntryCall] = []
+    private(set) var deletedApiTokenEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredApiTokenEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdWifiEntries: [RecordedWifiEntryCall] = []
+    private(set) var updatedWifiEntries: [RecordedUpdatedWifiEntryCall] = []
+    private(set) var deletedWifiEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredWifiEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdSendEntries: [RecordedSendEntryCall] = []
+    private(set) var updatedSendEntries: [RecordedUpdatedSendEntryCall] = []
+    private(set) var deletedSendEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredSendEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdAttachmentMetadata: [RecordedAttachmentMetadataCall] = []
+    private(set) var deletedAttachmentMetadata: [RecordedAttachmentMutationCall] = []
+    private(set) var restoredAttachmentMetadata: [RecordedAttachmentMutationCall] = []
+    private var loginEntries: [String: [LocalLoginEntry]] = [:]
+    private var deletedEntries: [String: [LocalLoginEntry]] = [:]
+    private var noteEntries: [String: [LocalNoteEntry]] = [:]
+    private var deletedNotes: [String: [LocalNoteEntry]] = [:]
+    private var totpEntries: [String: [LocalTotpEntry]] = [:]
+    private var deletedTotp: [String: [LocalTotpEntry]] = [:]
+    private var cardEntries: [String: [LocalCardEntry]] = [:]
+    private var deletedCards: [String: [LocalCardEntry]] = [:]
+    private var identityEntries: [String: [LocalIdentityEntry]] = [:]
+    private var deletedIdentities: [String: [LocalIdentityEntry]] = [:]
+    private var passkeyEntries: [String: [LocalPasskeyEntry]] = [:]
+    private var deletedPasskeys: [String: [LocalPasskeyEntry]] = [:]
+    private var sshKeyEntries: [String: [LocalSshKeyEntry]] = [:]
+    private var deletedSshKeys: [String: [LocalSshKeyEntry]] = [:]
+    private var apiTokenEntries: [String: [LocalApiTokenEntry]] = [:]
+    private var deletedApiTokens: [String: [LocalApiTokenEntry]] = [:]
+    private var wifiEntries: [String: [LocalWifiEntry]] = [:]
+    private var deletedWifi: [String: [LocalWifiEntry]] = [:]
+    private var sendEntries: [String: [LocalSendEntry]] = [:]
+    private var deletedSend: [String: [LocalSendEntry]] = [:]
+    private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
+    private var deletedAttachments: [String: [LocalAttachmentMetadata]] = [:]
+
+    func createVault(
+        at fileURL: URL,
+        password: String,
+        deviceID: String
+    ) throws -> LocalVaultHandle {
+        createdVaults.append(.init(fileURL: fileURL, password: password, deviceID: deviceID))
+        return LocalVaultHandle(vaultID: "created-vault", deviceID: deviceID)
+    }
+
+    func openVault(
+        at fileURL: URL,
+        password: String,
+        deviceID: String
+    ) throws -> LocalVaultHandle {
+        openedVaults.append(.init(fileURL: fileURL, password: password, deviceID: deviceID))
+        return LocalVaultHandle(vaultID: "opened-vault", deviceID: deviceID)
+    }
+
+    func openVaultWithSecurityKey(
+        at fileURL: URL,
+        securityKeyMaterial: Data,
+        deviceID: String
+    ) throws -> LocalVaultHandle {
+        securityKeyOpenedVaults.append(
+            .init(fileURL: fileURL, keyMaterial: securityKeyMaterial, deviceID: deviceID)
+        )
+        return LocalVaultHandle(vaultID: "security-key-opened-vault", deviceID: deviceID)
+    }
+
+    func setupLocalSecurityKeyUnlock(
+        in handle: LocalVaultHandle,
+        securityKeyMaterial: Data
+    ) throws {
+        securityKeySetups.append(
+            .init(vaultID: handle.vaultID, keyMaterial: securityKeyMaterial)
+        )
+    }
+
+    func resetMasterPassword(
+        in handle: LocalVaultHandle,
+        newPassword: String
+    ) throws {
+        resetMasterPasswordCalls.append(
+            .init(vaultID: handle.vaultID, newPassword: newPassword)
+        )
+    }
+
+    func closeVault(_ handle: LocalVaultHandle) {}
+
+    func createProject(
+        in handle: LocalVaultHandle,
+        title: String
+    ) throws -> LocalVaultProject {
+        createdProjects.append(.init(vaultID: handle.vaultID, title: title))
+        return LocalVaultProject(id: "project-\(createdProjects.count)", title: title)
+    }
+
+    func createLoginEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalLoginEntryDraft
+    ) throws -> LocalLoginEntry {
+        let entry = LocalLoginEntry(
+            id: "entry-\(createdLoginEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            username: draft.username,
+            password: draft.password,
+            url: draft.url
+        )
+        createdLoginEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
+        )
+        loginEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listLoginEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalLoginEntry] {
+        loginEntries[projectID, default: []]
+    }
+
+    func updateLoginEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalLoginEntryDraft
+    ) throws -> LocalLoginEntry {
+        let entry = LocalLoginEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            username: draft.username,
+            password: draft.password,
+            url: draft.url
+        )
+        updatedLoginEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
+        )
+        loginEntries[projectID, default: []] = loginEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func setLoginEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalLoginEntry {
+        favoritedLoginEntries.append(
+            .init(
+                vaultID: handle.vaultID,
+                projectID: projectID,
+                entryID: entryID,
+                favorite: favorite
+            )
+        )
+        guard let current = loginEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = LocalLoginEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            username: current.username,
+            password: current.password,
+            url: current.url,
+            favorite: favorite
+        )
+        loginEntries[projectID, default: []] = loginEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func deleteLoginEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedLoginEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = loginEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            return
+        }
+        loginEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedLoginEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalLoginEntry] {
+        deletedEntries[projectID, default: []]
+    }
+
+    func restoreLoginEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalLoginEntry {
+        restoredLoginEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = deletedEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedEntries[projectID, default: []].removeAll { $0.id == entryID }
+        loginEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createNoteEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalNoteEntryDraft
+    ) throws -> LocalNoteEntry {
+        let entry = LocalNoteEntry(
+            id: "note-\(createdNoteEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            body: draft.body
+        )
+        createdNoteEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
+        )
+        noteEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listNoteEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalNoteEntry] {
+        noteEntries[projectID, default: []]
+    }
+
+    func updateNoteEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalNoteEntryDraft
+    ) throws -> LocalNoteEntry {
+        let currentFavorite = noteEntries[projectID, default: []]
+            .first { $0.id == entryID }?
+            .favorite ?? false
+        let entry = LocalNoteEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            body: draft.body,
+            favorite: currentFavorite
+        )
+        updatedNoteEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
+        )
+        noteEntries[projectID, default: []] = noteEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func setNoteEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalNoteEntry {
+        favoritedNoteEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite)
+        )
+        guard let current = noteEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = LocalNoteEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            body: current.body,
+            favorite: favorite
+        )
+        noteEntries[projectID, default: []] = noteEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func deleteNoteEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedNoteEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = noteEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            return
+        }
+        noteEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedNotes[projectID, default: []].append(entry)
+    }
+
+    func listDeletedNoteEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalNoteEntry] {
+        deletedNotes[projectID, default: []]
+    }
+
+    func restoreNoteEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalNoteEntry {
+        restoredNoteEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = deletedNotes[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedNotes[projectID, default: []].removeAll { $0.id == entryID }
+        noteEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createTotpEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalTotpEntryDraft
+    ) throws -> LocalTotpEntry {
+        let entry = LocalTotpEntry(
+            id: "totp-\(createdTotpEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            secret: draft.secret,
+            issuer: draft.issuer,
+            accountName: draft.accountName,
+            period: draft.period,
+            digits: draft.digits,
+            algorithm: draft.algorithm,
+            otpType: draft.otpType,
+            counter: draft.counter
+        )
+        createdTotpEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
+        )
+        totpEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listTotpEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalTotpEntry] {
+        totpEntries[projectID, default: []]
+    }
+
+    func updateTotpEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalTotpEntryDraft
+    ) throws -> LocalTotpEntry {
+        let currentFavorite = totpEntries[projectID, default: []]
+            .first { $0.id == entryID }?
+            .favorite ?? false
+        let entry = LocalTotpEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            secret: draft.secret,
+            issuer: draft.issuer,
+            accountName: draft.accountName,
+            period: draft.period,
+            digits: draft.digits,
+            algorithm: draft.algorithm,
+            otpType: draft.otpType,
+            counter: draft.counter,
+            favorite: currentFavorite
+        )
+        updatedTotpEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
+        )
+        totpEntries[projectID, default: []] = totpEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func setTotpEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalTotpEntry {
+        favoritedTotpEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite)
+        )
+        guard let current = totpEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = LocalTotpEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            secret: current.secret,
+            issuer: current.issuer,
+            accountName: current.accountName,
+            period: current.period,
+            digits: current.digits,
+            algorithm: current.algorithm,
+            otpType: current.otpType,
+            counter: current.counter,
+            favorite: favorite
+        )
+        totpEntries[projectID, default: []] = totpEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func deleteTotpEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedTotpEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = totpEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            return
+        }
+        totpEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedTotp[projectID, default: []].append(entry)
+    }
+
+    func listDeletedTotpEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalTotpEntry] {
+        deletedTotp[projectID, default: []]
+    }
+
+    func restoreTotpEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalTotpEntry {
+        restoredTotpEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = deletedTotp[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedTotp[projectID, default: []].removeAll { $0.id == entryID }
+        totpEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createCardEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalCardEntryDraft
+    ) throws -> LocalCardEntry {
+        let entry = LocalCardEntry(
+            id: "card-\(createdCardEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            cardholderName: draft.cardholderName,
+            number: draft.number,
+            expiryMonth: draft.expiryMonth,
+            expiryYear: draft.expiryYear,
+            cvv: draft.cvv,
+            issuer: draft.issuer,
+            network: draft.network,
+            notes: draft.notes
+        )
+        createdCardEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
+        )
+        cardEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listCardEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalCardEntry] {
+        cardEntries[projectID, default: []]
+    }
+
+    func updateCardEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalCardEntryDraft
+    ) throws -> LocalCardEntry {
+        let currentFavorite = cardEntries[projectID, default: []]
+            .first { $0.id == entryID }?
+            .favorite ?? false
+        let entry = LocalCardEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            cardholderName: draft.cardholderName,
+            number: draft.number,
+            expiryMonth: draft.expiryMonth,
+            expiryYear: draft.expiryYear,
+            cvv: draft.cvv,
+            issuer: draft.issuer,
+            network: draft.network,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        updatedCardEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
+        )
+        cardEntries[projectID, default: []] = cardEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func setCardEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalCardEntry {
+        favoritedCardEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite)
+        )
+        guard let current = cardEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = LocalCardEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            cardholderName: current.cardholderName,
+            number: current.number,
+            expiryMonth: current.expiryMonth,
+            expiryYear: current.expiryYear,
+            cvv: current.cvv,
+            issuer: current.issuer,
+            network: current.network,
+            notes: current.notes,
+            favorite: favorite
+        )
+        cardEntries[projectID, default: []] = cardEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func deleteCardEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedCardEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = cardEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            return
+        }
+        cardEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedCards[projectID, default: []].append(entry)
+    }
+
+    func listDeletedCardEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalCardEntry] {
+        deletedCards[projectID, default: []]
+    }
+
+    func restoreCardEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalCardEntry {
+        restoredCardEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = deletedCards[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedCards[projectID, default: []].removeAll { $0.id == entryID }
+        cardEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createIdentityEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalIdentityEntryDraft
+    ) throws -> LocalIdentityEntry {
+        let entry = LocalIdentityEntry(
+            id: "identity-\(createdIdentityEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            documentType: draft.documentType,
+            fullName: draft.fullName,
+            documentNumber: draft.documentNumber,
+            issuer: draft.issuer,
+            country: draft.country,
+            issueDate: draft.issueDate,
+            expiryDate: draft.expiryDate,
+            notes: draft.notes
+        )
+        createdIdentityEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
+        )
+        identityEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listIdentityEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalIdentityEntry] {
+        identityEntries[projectID, default: []]
+    }
+
+    func updateIdentityEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalIdentityEntryDraft
+    ) throws -> LocalIdentityEntry {
+        let currentFavorite = identityEntries[projectID, default: []]
+            .first { $0.id == entryID }?
+            .favorite ?? false
+        let entry = LocalIdentityEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            documentType: draft.documentType,
+            fullName: draft.fullName,
+            documentNumber: draft.documentNumber,
+            issuer: draft.issuer,
+            country: draft.country,
+            issueDate: draft.issueDate,
+            expiryDate: draft.expiryDate,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        updatedIdentityEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
+        )
+        identityEntries[projectID, default: []] = identityEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func setIdentityEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalIdentityEntry {
+        favoritedIdentityEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite)
+        )
+        guard let current = identityEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = LocalIdentityEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            documentType: current.documentType,
+            fullName: current.fullName,
+            documentNumber: current.documentNumber,
+            issuer: current.issuer,
+            country: current.country,
+            issueDate: current.issueDate,
+            expiryDate: current.expiryDate,
+            notes: current.notes,
+            favorite: favorite
+        )
+        identityEntries[projectID, default: []] = identityEntries[projectID, default: []].map {
+            $0.id == entryID ? entry : $0
+        }
+        return entry
+    }
+
+    func deleteIdentityEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedIdentityEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = identityEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            return
+        }
+        identityEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedIdentities[projectID, default: []].append(entry)
+    }
+
+    func listDeletedIdentityEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalIdentityEntry] {
+        deletedIdentities[projectID, default: []]
+    }
+
+    func restoreIdentityEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalIdentityEntry {
+        restoredIdentityEntries.append(
+            .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+        )
+        guard let entry = deletedIdentities[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedIdentities[projectID, default: []].removeAll { $0.id == entryID }
+        identityEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createPasskeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry {
+        let entry = LocalPasskeyEntry(id: "passkey-\(createdPasskeyEntries.count + 1)", projectID: projectID, title: draft.title, relyingPartyID: draft.relyingPartyID, username: draft.username, userHandle: draft.userHandle, credentialID: draft.credentialID, publicKeyCOSE: draft.publicKeyCOSE, privateKeyReference: draft.privateKeyReference, notes: draft.notes)
+        createdPasskeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        passkeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listPasskeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPasskeyEntry] {
+        passkeyEntries[projectID, default: []]
+    }
+
+    func updatePasskeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry {
+        let favorite = passkeyEntries[projectID, default: []].first { $0.id == entryID }?.favorite ?? false
+        let entry = LocalPasskeyEntry(id: entryID, projectID: projectID, title: draft.title, relyingPartyID: draft.relyingPartyID, username: draft.username, userHandle: draft.userHandle, credentialID: draft.credentialID, publicKeyCOSE: draft.publicKeyCOSE, privateKeyReference: draft.privateKeyReference, notes: draft.notes, favorite: favorite)
+        updatedPasskeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        passkeyEntries[projectID, default: []] = passkeyEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func setPasskeyEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalPasskeyEntry {
+        favoritedPasskeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = passkeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let entry = LocalPasskeyEntry(id: current.id, projectID: current.projectID, title: current.title, relyingPartyID: current.relyingPartyID, username: current.username, userHandle: current.userHandle, credentialID: current.credentialID, publicKeyCOSE: current.publicKeyCOSE, privateKeyReference: current.privateKeyReference, notes: current.notes, favorite: favorite)
+        passkeyEntries[projectID, default: []] = passkeyEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func deletePasskeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        deletedPasskeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = passkeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        passkeyEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedPasskeys[projectID, default: []].append(entry)
+    }
+
+    func listDeletedPasskeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPasskeyEntry] {
+        deletedPasskeys[projectID, default: []]
+    }
+
+    func restorePasskeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalPasskeyEntry {
+        restoredPasskeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedPasskeys[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        deletedPasskeys[projectID, default: []].removeAll { $0.id == entryID }
+        passkeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createSshKeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSshKeyEntryDraft) throws -> LocalSshKeyEntry {
+        let entry = LocalSshKeyEntry(id: "ssh-\(createdSshKeyEntries.count + 1)", projectID: projectID, title: draft.title, username: draft.username, host: draft.host, publicKey: draft.publicKey, privateKeyReference: draft.privateKeyReference, passphraseHint: draft.passphraseHint, notes: draft.notes)
+        createdSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        sshKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listSshKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSshKeyEntry] {
+        sshKeyEntries[projectID, default: []]
+    }
+
+    func updateSshKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalSshKeyEntryDraft) throws -> LocalSshKeyEntry {
+        let favorite = sshKeyEntries[projectID, default: []].first { $0.id == entryID }?.favorite ?? false
+        let entry = LocalSshKeyEntry(id: entryID, projectID: projectID, title: draft.title, username: draft.username, host: draft.host, publicKey: draft.publicKey, privateKeyReference: draft.privateKeyReference, passphraseHint: draft.passphraseHint, notes: draft.notes, favorite: favorite)
+        updatedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        sshKeyEntries[projectID, default: []] = sshKeyEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func setSshKeyEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalSshKeyEntry {
+        favoritedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = sshKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let entry = LocalSshKeyEntry(id: current.id, projectID: current.projectID, title: current.title, username: current.username, host: current.host, publicKey: current.publicKey, privateKeyReference: current.privateKeyReference, passphraseHint: current.passphraseHint, notes: current.notes, favorite: favorite)
+        sshKeyEntries[projectID, default: []] = sshKeyEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func deleteSshKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        deletedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = sshKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        sshKeyEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedSshKeys[projectID, default: []].append(entry)
+    }
+
+    func listDeletedSshKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSshKeyEntry] {
+        deletedSshKeys[projectID, default: []]
+    }
+
+    func restoreSshKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSshKeyEntry {
+        restoredSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedSshKeys[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        deletedSshKeys[projectID, default: []].removeAll { $0.id == entryID }
+        sshKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createApiTokenEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
+        let entry = LocalApiTokenEntry(id: "api-token-\(createdApiTokenEntries.count + 1)", projectID: projectID, title: draft.title, issuer: draft.issuer, accountName: draft.accountName, token: draft.token, scopes: draft.scopes, expiresAt: draft.expiresAt, notes: draft.notes)
+        createdApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        apiTokenEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listApiTokenEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalApiTokenEntry] {
+        apiTokenEntries[projectID, default: []]
+    }
+
+    func updateApiTokenEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
+        let favorite = apiTokenEntries[projectID, default: []].first { $0.id == entryID }?.favorite ?? false
+        let entry = LocalApiTokenEntry(id: entryID, projectID: projectID, title: draft.title, issuer: draft.issuer, accountName: draft.accountName, token: draft.token, scopes: draft.scopes, expiresAt: draft.expiresAt, notes: draft.notes, favorite: favorite)
+        updatedApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        apiTokenEntries[projectID, default: []] = apiTokenEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func setApiTokenEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalApiTokenEntry {
+        favoritedApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = apiTokenEntries[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let entry = LocalApiTokenEntry(id: current.id, projectID: current.projectID, title: current.title, issuer: current.issuer, accountName: current.accountName, token: current.token, scopes: current.scopes, expiresAt: current.expiresAt, notes: current.notes, favorite: favorite)
+        apiTokenEntries[projectID, default: []] = apiTokenEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func deleteApiTokenEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        deletedApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = apiTokenEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        apiTokenEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedApiTokens[projectID, default: []].append(entry)
+    }
+
+    func listDeletedApiTokenEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalApiTokenEntry] {
+        deletedApiTokens[projectID, default: []]
+    }
+
+    func restoreApiTokenEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalApiTokenEntry {
+        restoredApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedApiTokens[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        deletedApiTokens[projectID, default: []].removeAll { $0.id == entryID }
+        apiTokenEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createWifiEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalWifiEntryDraft) throws -> LocalWifiEntry {
+        let entry = LocalWifiEntry(id: "wifi-\(createdWifiEntries.count + 1)", projectID: projectID, title: draft.title, ssid: draft.ssid, securityType: draft.securityType, password: draft.password, hidden: draft.hidden, notes: draft.notes)
+        createdWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        wifiEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listWifiEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalWifiEntry] {
+        wifiEntries[projectID, default: []]
+    }
+
+    func updateWifiEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalWifiEntryDraft) throws -> LocalWifiEntry {
+        let favorite = wifiEntries[projectID, default: []].first { $0.id == entryID }?.favorite ?? false
+        let entry = LocalWifiEntry(id: entryID, projectID: projectID, title: draft.title, ssid: draft.ssid, securityType: draft.securityType, password: draft.password, hidden: draft.hidden, notes: draft.notes, favorite: favorite)
+        updatedWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        wifiEntries[projectID, default: []] = wifiEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func setWifiEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalWifiEntry {
+        favoritedWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = wifiEntries[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let entry = LocalWifiEntry(id: current.id, projectID: current.projectID, title: current.title, ssid: current.ssid, securityType: current.securityType, password: current.password, hidden: current.hidden, notes: current.notes, favorite: favorite)
+        wifiEntries[projectID, default: []] = wifiEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func deleteWifiEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        deletedWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = wifiEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        wifiEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedWifi[projectID, default: []].append(entry)
+    }
+
+    func listDeletedWifiEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalWifiEntry] {
+        deletedWifi[projectID, default: []]
+    }
+
+    func restoreWifiEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalWifiEntry {
+        restoredWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedWifi[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        deletedWifi[projectID, default: []].removeAll { $0.id == entryID }
+        wifiEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createSendEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
+        let entry = LocalSendEntry(id: "send-\(createdSendEntries.count + 1)", projectID: projectID, title: draft.title, body: draft.body, expiresAt: draft.expiresAt, maxViews: draft.maxViews, notes: draft.notes)
+        createdSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        sendEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] {
+        sendEntries[projectID, default: []]
+    }
+
+    func updateSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
+        let favorite = sendEntries[projectID, default: []].first { $0.id == entryID }?.favorite ?? false
+        let entry = LocalSendEntry(id: entryID, projectID: projectID, title: draft.title, body: draft.body, expiresAt: draft.expiresAt, maxViews: draft.maxViews, notes: draft.notes, favorite: favorite)
+        updatedSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        sendEntries[projectID, default: []] = sendEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func setSendEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalSendEntry {
+        favoritedSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = sendEntries[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let entry = LocalSendEntry(id: current.id, projectID: current.projectID, title: current.title, body: current.body, expiresAt: current.expiresAt, maxViews: current.maxViews, notes: current.notes, favorite: favorite)
+        sendEntries[projectID, default: []] = sendEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func deleteSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        deletedSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = sendEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        sendEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedSend[projectID, default: []].append(entry)
+    }
+
+    func listDeletedSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] {
+        deletedSend[projectID, default: []]
+    }
+
+    func restoreSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSendEntry {
+        restoredSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedSend[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        deletedSend[projectID, default: []].removeAll { $0.id == entryID }
+        sendEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, entryID: String?, fileName: String, mediaType: String, originalSize: Int64, storedSize: Int64, contentHash: String, storageMode: String) throws -> LocalAttachmentMetadata {
+        let metadata = LocalAttachmentMetadata(id: "attachment-\(createdAttachmentMetadata.count + 1)", projectID: projectID, entryID: entryID, fileName: fileName, mediaType: mediaType, originalSize: originalSize, storedSize: storedSize, contentHash: contentHash, storageMode: storageMode, deleted: false)
+        createdAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, fileName: fileName))
+        attachmentMetadata[projectID, default: []].append(metadata)
+        return metadata
+    }
+
+    func listAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] {
+        attachmentMetadata[projectID, default: []]
+    }
+
+    func deleteAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws {
+        deletedAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, attachmentID: attachmentID))
+        guard let metadata = attachmentMetadata[projectID, default: []].first(where: { $0.id == attachmentID }) else { return }
+        attachmentMetadata[projectID, default: []].removeAll { $0.id == attachmentID }
+        deletedAttachments[projectID, default: []].append(LocalAttachmentMetadata(id: metadata.id, projectID: metadata.projectID, entryID: metadata.entryID, fileName: metadata.fileName, mediaType: metadata.mediaType, originalSize: metadata.originalSize, storedSize: metadata.storedSize, contentHash: metadata.contentHash, storageMode: metadata.storageMode, deleted: true))
+    }
+
+    func listDeletedAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] {
+        deletedAttachments[projectID, default: []]
+    }
+
+    func restoreAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws -> LocalAttachmentMetadata {
+        restoredAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, attachmentID: attachmentID))
+        guard let metadata = deletedAttachments[projectID, default: []].first(where: { $0.id == attachmentID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let restored = LocalAttachmentMetadata(id: metadata.id, projectID: metadata.projectID, entryID: metadata.entryID, fileName: metadata.fileName, mediaType: metadata.mediaType, originalSize: metadata.originalSize, storedSize: metadata.storedSize, contentHash: metadata.contentHash, storageMode: metadata.storageMode, deleted: false)
+        deletedAttachments[projectID, default: []].removeAll { $0.id == attachmentID }
+        attachmentMetadata[projectID, default: []].append(restored)
+        return restored
+    }
+}
+
+private struct RecordedVaultCall: Equatable {
+    let fileURL: URL
+    let password: String
+    let deviceID: String
+}
+
+private struct RecordedSecurityKeyVaultCall: Equatable {
+    let fileURL: URL
+    let keyMaterial: Data
+    let deviceID: String
+}
+
+private struct RecordedSecurityKeySetupCall: Equatable {
+    let vaultID: String
+    let keyMaterial: Data
+}
+
+private struct RecordedResetMasterPasswordCall: Equatable {
+    let vaultID: String
+    let newPassword: String
+}
+
+private struct RecordedProjectCall: Equatable {
+    let vaultID: String
+    let title: String
+}
+
+private struct RecordedLoginEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalLoginEntryDraft
+}
+
+private struct RecordedUpdatedLoginEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalLoginEntryDraft
+}
+
+private struct RecordedFavoriteEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let favorite: Bool
+}
+
+private struct RecordedNoteEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalNoteEntryDraft
+}
+
+private struct RecordedUpdatedNoteEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalNoteEntryDraft
+}
+
+private struct RecordedTotpEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalTotpEntryDraft
+}
+
+private struct RecordedUpdatedTotpEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalTotpEntryDraft
+}
+
+private struct RecordedCardEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalCardEntryDraft
+}
+
+private struct RecordedUpdatedCardEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalCardEntryDraft
+}
+
+private struct RecordedIdentityEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalIdentityEntryDraft
+}
+
+private struct RecordedUpdatedIdentityEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalIdentityEntryDraft
+}
+
+private struct RecordedPasskeyEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalPasskeyEntryDraft
+}
+
+private struct RecordedUpdatedPasskeyEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalPasskeyEntryDraft
+}
+
+private struct RecordedSshKeyEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalSshKeyEntryDraft
+}
+
+private struct RecordedUpdatedSshKeyEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalSshKeyEntryDraft
+}
+
+private struct RecordedApiTokenEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalApiTokenEntryDraft
+}
+
+private struct RecordedUpdatedApiTokenEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalApiTokenEntryDraft
+}
+
+private struct RecordedWifiEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalWifiEntryDraft
+}
+
+private struct RecordedUpdatedWifiEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalWifiEntryDraft
+}
+
+private struct RecordedSendEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalSendEntryDraft
+}
+
+private struct RecordedUpdatedSendEntryCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalSendEntryDraft
+}
+
+private struct RecordedAttachmentMetadataCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String?
+    let fileName: String
+}
+
+private struct RecordedEntryMutationCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+}
+
+private struct RecordedAttachmentMutationCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let attachmentID: String
+}
