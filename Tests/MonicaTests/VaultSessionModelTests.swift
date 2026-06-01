@@ -575,6 +575,46 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(previews[0].detail.contains("OtherStrong1!"))
     }
 
+    func testSecurityCenterMergesDuplicateLoginPreviewBySoftDeletingDuplicates() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.loginTitle = " GitHub "
+        model.loginUsername = "Alice"
+        model.loginPassword = "UniqueStrong1!"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        let primary = try XCTUnwrap(model.loginEntries.first)
+
+        model.loginTitle = "github"
+        model.loginUsername = "alice"
+        model.loginPassword = "OtherStrong1!"
+        model.loginURL = " https://github.com "
+        try model.createLoginEntry(projectTitle: "Personal")
+        let duplicate = try XCTUnwrap(model.loginEntries.first { $0.id != primary.id })
+
+        let preview = try XCTUnwrap(model.duplicateLoginMergePreviews.first)
+
+        try model.mergeDuplicateLoginPreview(preview)
+
+        XCTAssertEqual(model.entryOperationState, .succeeded("已合并 GitHub"))
+        XCTAssertEqual(model.loginEntries.map(\.id), [primary.id])
+        XCTAssertEqual(model.deletedLoginEntries.map(\.id), [duplicate.id])
+        XCTAssertTrue(model.duplicateLoginMergePreviews.isEmpty)
+        XCTAssertEqual(model.securityCenterRows.first { $0.id == "duplicate-logins" }?.value, "0 项")
+        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), [duplicate.id])
+        XCTAssertTrue(engine.updatedLoginEntries.isEmpty)
+    }
+
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

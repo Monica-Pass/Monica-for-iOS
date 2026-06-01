@@ -2035,6 +2035,33 @@ final class AppSessionModel {
         }
     }
 
+    func mergeDuplicateLoginPreview(_ preview: AppDuplicateLoginMergePreview) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            guard let currentPreview = duplicateLoginMergePreviews.first(where: { $0.id == preview.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            for entryID in currentPreview.duplicateEntryIDs {
+                try entryRepository.deleteLoginEntry(projectID: projectID, entryID: entryID)
+            }
+            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
+            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            entryOperationState = .succeeded("已合并 \(currentPreview.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func restoreLoginEntry(_ entry: LocalLoginEntry) throws {
         recordUserActivity()
         entryOperationState = .running

@@ -163,7 +163,12 @@ struct SettingsRootView: View {
                 if !session.duplicateLoginMergePreviews.isEmpty {
                     AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                         ForEach(session.duplicateLoginMergePreviews) { preview in
-                            AndroidParityDuplicateLoginPreviewRow(preview: preview)
+                            AndroidParityDuplicateLoginPreviewRow(
+                                preview: preview,
+                                mergePreview: {
+                                    try? session.mergeDuplicateLoginPreview(preview)
+                                }
+                            )
                             if preview.id != session.duplicateLoginMergePreviews.last?.id {
                                 AndroidParityDivider()
                             }
@@ -507,6 +512,7 @@ private struct AndroidParitySecurityCenterRow: View {
 
 private struct AndroidParityDuplicateLoginPreviewRow: View {
     let preview: AppDuplicateLoginMergePreview
+    let mergePreview: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -534,6 +540,11 @@ private struct AndroidParityDuplicateLoginPreviewRow: View {
                     .font(.caption2)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                     .lineLimit(2)
+                Button(action: mergePreview) {
+                    Label("合并重复项", systemImage: "checkmark.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
