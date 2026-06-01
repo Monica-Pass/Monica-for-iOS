@@ -187,6 +187,15 @@ struct SettingsRootView: View {
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
+                if session.canUndoLastDuplicateLoginMerge {
+                    Button {
+                        try? session.undoLastDuplicateLoginMerge()
+                    } label: {
+                        Label("撤销上次合并", systemImage: "arrow.uturn.backward.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                }
             }
 
             AndroidParitySection(title: "权限管理") {

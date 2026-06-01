@@ -615,6 +615,46 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(engine.updatedLoginEntries.isEmpty)
     }
 
+    func testSecurityCenterCanUndoLastDuplicateLoginMerge() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        try unlockNewVault(model)
+
+        model.loginTitle = " GitHub "
+        model.loginUsername = "Alice"
+        model.loginPassword = "UniqueStrong1!"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        let primary = try XCTUnwrap(model.loginEntries.first)
+
+        model.loginTitle = "github"
+        model.loginUsername = "alice"
+        model.loginPassword = "OtherStrong1!"
+        model.loginURL = " https://github.com "
+        try model.createLoginEntry(projectTitle: "Personal")
+        let duplicate = try XCTUnwrap(model.loginEntries.first { $0.id != primary.id })
+
+        let preview = try XCTUnwrap(model.duplicateLoginMergePreviews.first)
+        try model.mergeDuplicateLoginPreview(preview)
+
+        XCTAssertTrue(model.canUndoLastDuplicateLoginMerge)
+        XCTAssertEqual(model.lastDuplicateLoginMergeUndoTitle, "GitHub")
+
+        try model.undoLastDuplicateLoginMerge()
+
+        XCTAssertEqual(model.entryOperationState, .succeeded("已撤销合并 GitHub"))
+        XCTAssertFalse(model.canUndoLastDuplicateLoginMerge)
+        XCTAssertNil(model.lastDuplicateLoginMergeUndoTitle)
+        XCTAssertEqual(model.loginEntries.map(\.id).sorted(), [primary.id, duplicate.id].sorted())
+        XCTAssertTrue(model.deletedLoginEntries.isEmpty)
+        XCTAssertEqual(model.duplicateLoginMergePreviews.map(\.id), [preview.id])
+        XCTAssertEqual(model.securityCenterRows.first { $0.id == "duplicate-logins" }?.value, "2 项")
+        XCTAssertEqual(engine.restoredLoginEntries.map(\.entryID), [duplicate.id])
+    }
+
     func testSecurityCenterCanIgnoreAndRestoreDuplicateLoginPreviews() throws {
         let model = AppSessionModel()
         model.loginEntries = [

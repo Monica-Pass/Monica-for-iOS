@@ -150,6 +150,11 @@ struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let detail: String
 }
 
+private struct AppDuplicateLoginMergeUndo: Sendable, Equatable {
+    let title: String
+    let restoredEntryIDs: [String]
+}
+
 private struct DuplicateLoginEntryKey: Hashable {
     let title: String
     let username: String
@@ -697,6 +702,7 @@ final class AppSessionModel {
     var loginEntries: [LocalLoginEntry] = []
     var deletedLoginEntries: [LocalLoginEntry] = []
     private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
+    private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
     var editingLoginEntryID: String?
     var editingLoginTitle = ""
     var editingLoginUsername = ""
@@ -1283,6 +1289,14 @@ final class AppSessionModel {
 
     var ignoredDuplicateLoginGroupCount: Int {
         ignoredDuplicateLoginKeys.count
+    }
+
+    var canUndoLastDuplicateLoginMerge: Bool {
+        lastDuplicateLoginMergeUndo != nil
+    }
+
+    var lastDuplicateLoginMergeUndoTitle: String? {
+        lastDuplicateLoginMergeUndo?.title
     }
 
     private static func isWeakPassword(_ password: String) -> Bool {
@@ -2063,10 +2077,40 @@ final class AppSessionModel {
             for entryID in currentPreview.duplicateEntryIDs {
                 try entryRepository.deleteLoginEntry(projectID: projectID, entryID: entryID)
             }
+            lastDuplicateLoginMergeUndo = AppDuplicateLoginMergeUndo(
+                title: currentPreview.title,
+                restoredEntryIDs: currentPreview.duplicateEntryIDs
+            )
             loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             try refreshAutoFillEncryptedIndexIfConfigured()
             entryOperationState = .succeeded("已合并 \(currentPreview.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func undoLastDuplicateLoginMerge() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let undo = lastDuplicateLoginMergeUndo,
+                  let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            for entryID in undo.restoredEntryIDs {
+                _ = try entryRepository.restoreLoginEntry(projectID: projectID, entryID: entryID)
+            }
+            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
+            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            lastDuplicateLoginMergeUndo = nil
+            entryOperationState = .succeeded("已撤销合并 \(undo.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
