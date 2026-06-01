@@ -441,6 +441,38 @@ import MonicaStorage
     #expect(attachment.encryptedBlob == Data("ciphertext".utf8))
 }
 
+@Test func androidBackupCodecReportsEncryptedBackupAsUnsupported() throws {
+    let encryptedBackup = Data("MONICA_ENC_V1".utf8)
+        + Data(repeating: 0, count: 32)
+        + Data(repeating: 1, count: 12)
+        + Data("ciphertext".utf8)
+
+    let report = try AndroidBackupCodec.importItems(from: encryptedBackup)
+
+    #expect(report.items.isEmpty)
+    #expect(report.attachments.isEmpty)
+    #expect(report.issues == [
+        AndroidBackupImportIssue(
+            entryPath: "backup",
+            code: .encryptedBackupUnsupported,
+            message: "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
+        )
+    ])
+
+    let namedReport = try AndroidBackupCodec.importItems(
+        from: Data("not-a-zip".utf8),
+        fileName: "monica_backup.enc.zip"
+    )
+
+    #expect(namedReport.issues == [
+        AndroidBackupImportIssue(
+            entryPath: "monica_backup.enc.zip",
+            code: .encryptedBackupUnsupported,
+            message: "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
+        )
+    ])
+}
+
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])

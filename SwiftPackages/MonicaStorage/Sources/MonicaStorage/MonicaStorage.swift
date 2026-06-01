@@ -218,6 +218,7 @@ public struct VaultCSVImportReport: Sendable, Equatable {
 
 public enum AndroidBackupIssueCode: Sendable, Equatable {
     case malformedZip
+    case encryptedBackupUnsupported
     case unsafeEntryPath
     case unsupportedEntry
     case malformedJSON
@@ -298,7 +299,23 @@ public struct AndroidBackupImportReport: Sendable, Equatable {
 }
 
 public enum AndroidBackupCodec {
-    public static func importItems(from zipData: Data) throws -> AndroidBackupImportReport {
+    private static let encryptedBackupMagic = Data("MONICA_ENC_V1".utf8)
+    public static let encryptedBackupUnsupportedMessage = "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
+
+    public static func importItems(from zipData: Data, fileName: String? = nil) throws -> AndroidBackupImportReport {
+        if isEncryptedBackup(zipData, fileName: fileName) {
+            return AndroidBackupImportReport(
+                items: [],
+                issues: [
+                    AndroidBackupImportIssue(
+                        entryPath: fileName ?? "backup",
+                        code: .encryptedBackupUnsupported,
+                        message: encryptedBackupUnsupportedMessage
+                    )
+                ]
+            )
+        }
+
         let archive = try Archive(data: zipData, accessMode: .read)
         var orderedItems: [(order: Int, index: Int, importedItem: AndroidBackupImportedItem)] = []
         var issues: [AndroidBackupImportIssue] = []
@@ -395,6 +412,13 @@ public enum AndroidBackupCodec {
             attachments: attachments,
             issues: issues
         )
+    }
+
+    private static func isEncryptedBackup(_ data: Data, fileName: String?) -> Bool {
+        if fileName?.lowercased().hasSuffix(".enc.zip") == true {
+            return true
+        }
+        return data.starts(with: encryptedBackupMagic)
     }
 
     public static func exportItems(_ items: [VaultCSVItemDraft], folderName: String = "Imported") throws -> Data {

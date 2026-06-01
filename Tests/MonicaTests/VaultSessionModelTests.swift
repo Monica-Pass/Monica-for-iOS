@@ -2025,6 +2025,42 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，1 个附件，0 个问题"))
     }
 
+    func testAndroidBackupEncryptedImportPreviewRequiresUnsupportedDecryptFlow() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        let encryptedBackup = Data("MONICA_ENC_V1".utf8)
+            + Data(repeating: 0, count: 32)
+            + Data(repeating: 1, count: 12)
+            + Data("ciphertext".utf8)
+
+        try unlockNewVault(model)
+
+        XCTAssertThrowsError(try model.previewAndroidBackupImport(encryptedBackup))
+        XCTAssertNil(model.androidBackupImportPreview)
+        XCTAssertEqual(
+            model.entryOperationState,
+            .failed("Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。")
+        )
+    }
+
+    func testAndroidBackupEncryptedFileNameRequiresUnsupportedDecryptFlow() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica_backup.enc.zip")
+        try Data("not-a-zip".utf8).write(to: fileURL)
+        defer {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+
+        try unlockNewVault(model)
+
+        XCTAssertThrowsError(try model.previewAndroidBackupImport(from: fileURL))
+        XCTAssertNil(model.androidBackupImportPreview)
+        XCTAssertEqual(
+            model.entryOperationState,
+            .failed("Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。")
+        )
+    }
+
     func testAndroidBackupConfirmImportsAttachmentMetadataWithRemappedLoginID() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()

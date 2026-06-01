@@ -3101,9 +3101,15 @@ final class AppSessionModel {
         }
     }
 
-    func previewAndroidBackupImport(_ data: Data) throws -> AndroidBackupImportPreview {
+    func previewAndroidBackupImport(_ data: Data, fileName: String? = nil) throws -> AndroidBackupImportPreview {
         recordUserActivity()
-        let report = try AndroidBackupCodec.importItems(from: data)
+        let report = try AndroidBackupCodec.importItems(from: data, fileName: fileName)
+        if let encryptedIssue = report.issues.first(where: { $0.code == .encryptedBackupUnsupported }) {
+            androidBackupImportPreview = nil
+            csvImportPreview = nil
+            entryOperationState = .failed(encryptedIssue.message)
+            throw AppAndroidBackupImportError.unsupportedEncryptedBackup(encryptedIssue.message)
+        }
         let preview = AndroidBackupImportPreview(report: report)
         androidBackupImportPreview = preview
         csvImportPreview = nil
@@ -3120,7 +3126,7 @@ final class AppSessionModel {
             }
         }
         let data = try Data(contentsOf: fileURL)
-        return try previewAndroidBackupImport(data)
+        return try previewAndroidBackupImport(data, fileName: fileURL.lastPathComponent)
     }
 
     func confirmAndroidBackupImport(projectTitle: String) throws {
@@ -4622,6 +4628,17 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
         fileName: String
     ) async throws -> WebDAVDownloadedBackup {
         try await WebDAVClient(endpoint: endpoint).download(fileName: fileName)
+    }
+}
+
+enum AppAndroidBackupImportError: Error, Sendable, Equatable, LocalizedError {
+    case unsupportedEncryptedBackup(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .unsupportedEncryptedBackup(let message):
+            return message
+        }
     }
 }
 
