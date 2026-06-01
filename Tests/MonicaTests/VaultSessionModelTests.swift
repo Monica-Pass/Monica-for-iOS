@@ -1833,6 +1833,81 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingSendBody, "")
     }
 
+    func testCSVImportPreviewDoesNotWriteUntilConfirmed() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+
+        try unlockNewVault(model)
+
+        let csv = VaultCSVCodec.exportItems([
+            .login(LocalLoginEntryDraft(
+                title: "GitHub",
+                username: "alice",
+                password: "secret-password",
+                url: "https://github.com"
+            )),
+            .apiToken(LocalApiTokenEntryDraft(
+                title: "Deploy token",
+                issuer: "Monica Cloud",
+                accountName: "alice@example.com",
+                token: "sk-secret",
+                scopes: "deploy,read",
+                expiresAt: "2031-06-01",
+                notes: "Imported from Android CSV"
+            ))
+        ])
+
+        let preview = model.previewCSVImport(csv)
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login, .apiToken])
+        XCTAssertTrue(preview.issues.isEmpty)
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertTrue(model.apiTokenEntries.isEmpty)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertTrue(engine.createdApiTokenEntries.isEmpty)
+        XCTAssertEqual(model.entryOperationState, .succeeded("CSV 预览：2 项可导入，0 个问题"))
+
+        try model.confirmCSVImport(projectTitle: "Personal")
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.apiTokenEntries.map(\.title), ["Deploy token"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["Personal"])
+        XCTAssertEqual(engine.createdLoginEntries.first?.draft.password, "secret-password")
+        XCTAssertEqual(engine.createdApiTokenEntries.first?.draft.token, "sk-secret")
+        XCTAssertNil(model.csvImportPreview)
+        XCTAssertEqual(model.entryOperationState, .succeeded("CSV 已导入 2 项"))
+    }
+
+    func testCSVExportUsesCurrentVisibleVaultEntries() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+
+        try unlockNewVault(model)
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "secret-password"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.noteTitle = "Recovery Codes"
+        model.noteBody = "line 1\nline 2"
+        try model.createNoteEntry(projectTitle: "Personal")
+
+        let exported = try model.exportCSV()
+        let report = VaultCSVCodec.importItems(from: exported)
+
+        XCTAssertTrue(report.issues.isEmpty)
+        XCTAssertEqual(report.items, [
+            .login(LocalLoginEntryDraft(
+                title: "GitHub",
+                username: "alice",
+                password: "secret-password",
+                url: "https://github.com"
+            )),
+            .note(LocalNoteEntryDraft(title: "Recovery Codes", body: "line 1\nline 2"))
+        ])
+        XCTAssertEqual(model.entryOperationState, .succeeded("CSV 已导出 2 项"))
+    }
+
     func testTotpEntryGeneratesCodeFromStoredSeed() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

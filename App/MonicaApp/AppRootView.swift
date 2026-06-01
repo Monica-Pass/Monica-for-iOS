@@ -38,6 +38,13 @@ enum ForgotPasswordRecoveryStep: Sendable, Equatable {
     case resetPassword
 }
 
+struct CSVImportPreview: Sendable, Equatable {
+    let report: VaultCSVImportReport
+
+    var items: [VaultCSVItemDraft] { report.items }
+    var issues: [VaultCSVImportIssue] { report.issues }
+}
+
 enum FirstTimePasswordSetupStep: Sendable, Equatable {
     case enterPassword
     case confirmPassword
@@ -532,6 +539,7 @@ final class AppSessionModel {
     var webDAVRestoreVaultPassword = ""
     var webDAVBackupState: WebDAVBackupState = .idle
     var webDAVRestorePreview: WebDAVRestorePreview?
+    var csvImportPreview: CSVImportPreview?
     var presentedEditorMode: VaultItemEditorMode?
     var expandedToolbarAction: AndroidParityToolbarAction?
     var isFabMenuPresented = false
@@ -2928,6 +2936,57 @@ final class AppSessionModel {
         }
     }
 
+    func previewCSVImport(_ csv: String) -> CSVImportPreview {
+        recordUserActivity()
+        let report = VaultCSVCodec.importItems(from: csv)
+        let preview = CSVImportPreview(report: report)
+        csvImportPreview = preview
+        entryOperationState = .succeeded("CSV 预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
+        return preview
+    }
+
+    func confirmCSVImport(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let preview = csvImportPreview else {
+                throw LocalVaultRepositoryError.invalidEntryPayload
+            }
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            for item in preview.items {
+                try createCSVImportedItem(item, projectID: project.id, entryRepository: entryRepository)
+            }
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            csvImportPreview = nil
+            entryOperationState = .succeeded("CSV 已导入 \(preview.items.count) 项")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func exportCSV() throws -> String {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            _ = try requireActiveVaultSession()
+            let drafts = csvExportDrafts()
+            let csv = VaultCSVCodec.exportItems(drafts)
+            entryOperationState = .succeeded("CSV 已导出 \(drafts.count) 项")
+            return csv
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func totpCode(for entry: LocalTotpEntry, at date: Date = Date()) throws -> String {
         try TotpGenerator.generate(
             secret: entry.secret,
@@ -3383,6 +3442,7 @@ final class AppSessionModel {
         passkeyPrivateKeyReference = ""
         clearEditingPasskeyEntry()
         clearExtendedParityEntries()
+        csvImportPreview = nil
         entryOperationState = .idle
     }
 
@@ -3490,6 +3550,169 @@ final class AppSessionModel {
         let project = try entryRepository.createProject(title: projectTitle)
         activeProject = project
         return project
+    }
+
+    private func createCSVImportedItem(
+        _ item: VaultCSVItemDraft,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws {
+        switch item {
+        case .login(let draft):
+            _ = try entryRepository.createLoginEntry(projectID: projectID, draft: draft)
+        case .note(let draft):
+            _ = try entryRepository.createNoteEntry(projectID: projectID, draft: draft)
+        case .totp(let draft):
+            _ = try entryRepository.createTotpEntry(projectID: projectID, draft: draft)
+        case .card(let draft):
+            _ = try entryRepository.createCardEntry(projectID: projectID, draft: draft)
+        case .identity(let draft):
+            _ = try entryRepository.createIdentityEntry(projectID: projectID, draft: draft)
+        case .passkey(let draft):
+            _ = try entryRepository.createPasskeyEntry(projectID: projectID, draft: draft)
+        case .sshKey(let draft):
+            _ = try entryRepository.createSshKeyEntry(projectID: projectID, draft: draft)
+        case .apiToken(let draft):
+            _ = try entryRepository.createApiTokenEntry(projectID: projectID, draft: draft)
+        case .wifi(let draft):
+            _ = try entryRepository.createWifiEntry(projectID: projectID, draft: draft)
+        case .send(let draft):
+            _ = try entryRepository.createSendEntry(projectID: projectID, draft: draft)
+        }
+    }
+
+    private func refreshAllEntryLists(
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws {
+        loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
+        deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
+        noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
+        deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: projectID)
+        totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
+        deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
+        cardEntries = try entryRepository.listCardEntries(projectID: projectID)
+        deletedCardEntries = try entryRepository.listDeletedCardEntries(projectID: projectID)
+        identityEntries = try entryRepository.listIdentityEntries(projectID: projectID)
+        deletedIdentityEntries = try entryRepository.listDeletedIdentityEntries(projectID: projectID)
+        passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
+        deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
+        sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
+        deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+        apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
+        deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
+        wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
+        deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+        sendEntries = try entryRepository.listSendEntries(projectID: projectID)
+        deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+    }
+
+    private func csvExportDrafts() -> [VaultCSVItemDraft] {
+        var drafts: [VaultCSVItemDraft] = []
+        drafts += loginEntries.map {
+            .login(LocalLoginEntryDraft(
+                title: $0.title,
+                username: $0.username,
+                password: $0.password,
+                url: $0.url
+            ))
+        }
+        drafts += noteEntries.map {
+            .note(LocalNoteEntryDraft(title: $0.title, body: $0.body))
+        }
+        drafts += totpEntries.map {
+            .totp(LocalTotpEntryDraft(
+                title: $0.title,
+                secret: $0.secret,
+                issuer: $0.issuer,
+                accountName: $0.accountName,
+                period: $0.period,
+                digits: $0.digits,
+                algorithm: $0.algorithm,
+                otpType: $0.otpType,
+                counter: $0.counter
+            ))
+        }
+        drafts += cardEntries.map {
+            .card(LocalCardEntryDraft(
+                title: $0.title,
+                cardholderName: $0.cardholderName,
+                number: $0.number,
+                expiryMonth: $0.expiryMonth,
+                expiryYear: $0.expiryYear,
+                cvv: $0.cvv,
+                issuer: $0.issuer,
+                network: $0.network,
+                notes: $0.notes
+            ))
+        }
+        drafts += identityEntries.map {
+            .identity(LocalIdentityEntryDraft(
+                title: $0.title,
+                documentType: $0.documentType,
+                fullName: $0.fullName,
+                documentNumber: $0.documentNumber,
+                issuer: $0.issuer,
+                country: $0.country,
+                issueDate: $0.issueDate,
+                expiryDate: $0.expiryDate,
+                notes: $0.notes
+            ))
+        }
+        drafts += passkeyEntries.map {
+            .passkey(LocalPasskeyEntryDraft(
+                title: $0.title,
+                relyingPartyID: $0.relyingPartyID,
+                username: $0.username,
+                userHandle: $0.userHandle,
+                credentialID: $0.credentialID,
+                publicKeyCOSE: $0.publicKeyCOSE,
+                privateKeyReference: $0.privateKeyReference,
+                notes: $0.notes
+            ))
+        }
+        drafts += sshKeyEntries.map {
+            .sshKey(LocalSshKeyEntryDraft(
+                title: $0.title,
+                username: $0.username,
+                host: $0.host,
+                publicKey: $0.publicKey,
+                privateKeyReference: $0.privateKeyReference,
+                passphraseHint: $0.passphraseHint,
+                notes: $0.notes
+            ))
+        }
+        drafts += apiTokenEntries.map {
+            .apiToken(LocalApiTokenEntryDraft(
+                title: $0.title,
+                issuer: $0.issuer,
+                accountName: $0.accountName,
+                token: $0.token,
+                scopes: $0.scopes,
+                expiresAt: $0.expiresAt,
+                notes: $0.notes
+            ))
+        }
+        drafts += wifiEntries.map {
+            .wifi(LocalWifiEntryDraft(
+                title: $0.title,
+                ssid: $0.ssid,
+                securityType: $0.securityType,
+                password: $0.password,
+                hidden: $0.hidden,
+                notes: $0.notes
+            ))
+        }
+        drafts += sendEntries.map {
+            .send(LocalSendEntryDraft(
+                title: $0.title,
+                body: $0.body,
+                expiresAt: $0.expiresAt,
+                maxViews: $0.maxViews,
+                notes: $0.notes
+            ))
+        }
+        return drafts
     }
 
     private func makeWebDAVEndpoint() throws -> WebDAVEndpoint {
