@@ -400,6 +400,13 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.permissionStatusRows[4].value, "待配置")
     }
 
+    func testPermissionStatusCenterUsesNotificationAuthorizationState() {
+        let model = AppSessionModel(notificationPermissionStatusProvider: { .granted })
+
+        XCTAssertEqual(model.permissionStatusRows[2].title, "通知")
+        XCTAssertEqual(model.permissionStatusRows[2].value, "已允许")
+    }
+
     func testDeveloperDiagnosticsExposeRedactedOperationalState() {
         let model = AppSessionModel()
         let environment = MonicaAppEnvironment(

@@ -14,6 +14,7 @@ import Observation
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
+import UserNotifications
 
 struct SecurityQuestionOption: Identifiable, Sendable, Equatable {
     let id: Int
@@ -828,6 +829,7 @@ final class AppSessionModel {
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
     var autoFillIndexState: AutoFillIndexState = .idle
+    var notificationPermissionState: AppPermissionStatusRow.State = .checkable
     var vaultKeychainState: VaultKeychainState = .idle
     var webDAVBaseURL = ""
     var webDAVUsername = ""
@@ -905,6 +907,7 @@ final class AppSessionModel {
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
+        notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
         passwordGenerator: @escaping () throws -> String = {
             try PasswordGenerator.generate()
         },
@@ -928,6 +931,7 @@ final class AppSessionModel {
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.passwordGenerator = passwordGenerator
         self.autoLockPolicy = autoLockPolicy
+        self.notificationPermissionState = notificationPermissionStatusProvider()
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
         if let remembered = try? rememberedVaultStore.load() {
             self.rememberedVaultDescriptor = LocalVaultDescriptor(
@@ -1144,7 +1148,7 @@ final class AppSessionModel {
                 id: "notifications",
                 title: "通知",
                 systemImage: "bell",
-                state: .checkable,
+                state: notificationPermissionState,
                 detail: "TOTP 快捷查看会使用 iOS 安全通知替代常驻验证码。"
             ),
             AppPermissionStatusRow(
@@ -1209,6 +1213,30 @@ final class AppSessionModel {
         case .authorized:
             .granted
         case .denied, .restricted:
+            .denied
+        case .notDetermined:
+            .notDetermined
+        @unknown default:
+            .checkable
+        }
+    }
+
+    func refreshNotificationPermissionStatus() {
+        Task { @MainActor in
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            notificationPermissionState = Self.notificationPermissionState(
+                for: settings.authorizationStatus
+            )
+        }
+    }
+
+    nonisolated private static func notificationPermissionState(
+        for authorizationStatus: UNAuthorizationStatus
+    ) -> AppPermissionStatusRow.State {
+        switch authorizationStatus {
+        case .authorized, .provisional, .ephemeral:
+            .granted
+        case .denied:
             .denied
         case .notDetermined:
             .notDetermined
@@ -4455,6 +4483,7 @@ final class AppSessionModel {
         switch phase {
         case .active:
             isPrivacyShieldVisible = false
+            refreshNotificationPermissionStatus()
             lockIfIdle()
         case .inactive:
             isPrivacyShieldVisible = vaultState == .unlocked

@@ -275,7 +275,7 @@ extension AppSessionModel {
         )
         let vaultSecurityKeyProvider = AppVaultSecurityKeyMaterialProvider()
 
-        return AppSessionModel(
+        let session = AppSessionModel(
             vaultKeychainService: vaultKeychainService,
             vaultWrappedKeyProvider: { session in
                 try vaultSecurityKeyProvider.wrappedKey(for: session)
@@ -291,5 +291,7 @@ extension AppSessionModel {
                 try keyMaterialProvider.keyMaterial(for: vaultID)
             }
         )
+        session.refreshNotificationPermissionStatus()
+        return session
     }
 }
