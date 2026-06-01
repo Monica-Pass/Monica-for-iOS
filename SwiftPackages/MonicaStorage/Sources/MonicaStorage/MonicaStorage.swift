@@ -219,6 +219,7 @@ public struct VaultCSVImportReport: Sendable, Equatable {
 public enum AndroidBackupIssueCode: Sendable, Equatable {
     case malformedZip
     case encryptedBackupUnsupported
+    case encryptedBackupDecryptionFailed
     case unsafeEntryPath
     case unsupportedEntry
     case malformedJSON
@@ -300,23 +301,55 @@ public struct AndroidBackupImportReport: Sendable, Equatable {
 
 public enum AndroidBackupCodec {
     private static let encryptedBackupMagic = Data("MONICA_ENC_V1".utf8)
+    private static let encryptedBackupSaltLength = 32
+    private static let encryptedBackupIVLength = 12
+    private static let encryptedBackupPBKDF2Iterations = 100_000
+    private static let encryptedBackupKeyLength = 32
+    private static let aesGCMTagLength = 16
     public static let encryptedBackupUnsupportedMessage = "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
+    public static let encryptedBackupDecryptionFailedMessage = "Android 加密备份解密失败，请检查密码或文件是否损坏。"
 
-    public static func importItems(from zipData: Data, fileName: String? = nil) throws -> AndroidBackupImportReport {
+    public static func importItems(
+        from zipData: Data,
+        fileName: String? = nil,
+        decryptPassword: String? = nil
+    ) throws -> AndroidBackupImportReport {
         if isEncryptedBackup(zipData, fileName: fileName) {
-            return AndroidBackupImportReport(
-                items: [],
-                issues: [
-                    AndroidBackupImportIssue(
-                        entryPath: fileName ?? "backup",
-                        code: .encryptedBackupUnsupported,
-                        message: encryptedBackupUnsupportedMessage
-                    )
-                ]
-            )
+            guard let decryptPassword, !decryptPassword.isEmpty else {
+                return AndroidBackupImportReport(
+                    items: [],
+                    issues: [
+                        AndroidBackupImportIssue(
+                            entryPath: fileName ?? "backup",
+                            code: .encryptedBackupUnsupported,
+                            message: encryptedBackupUnsupportedMessage
+                        )
+                    ]
+                )
+            }
+
+            do {
+                let decryptedZip = try decryptAndroidEncryptedBackup(zipData, password: decryptPassword)
+                return try importItems(from: decryptedZip)
+            } catch {
+                return AndroidBackupImportReport(
+                    items: [],
+                    issues: [
+                        AndroidBackupImportIssue(
+                            entryPath: fileName ?? "backup",
+                            code: .encryptedBackupDecryptionFailed,
+                            message: encryptedBackupDecryptionFailedMessage
+                        )
+                    ]
+                )
+            }
         }
 
         let archive = try Archive(data: zipData, accessMode: .read)
+        return try importItems(from: archive)
+    }
+
+    private static func importItems(from archive: Archive) throws -> AndroidBackupImportReport {
         var orderedItems: [(order: Int, index: Int, importedItem: AndroidBackupImportedItem)] = []
         var issues: [AndroidBackupImportIssue] = []
         var legacyCSVFiles: [(path: String, data: Data, index: Int)] = []
@@ -412,6 +445,84 @@ public enum AndroidBackupCodec {
             attachments: attachments,
             issues: issues
         )
+    }
+
+    private static func decryptAndroidEncryptedBackup(_ data: Data, password: String) throws -> Data {
+        let headerLength = encryptedBackupMagic.count
+        let minimumLength = headerLength
+            + encryptedBackupSaltLength
+            + encryptedBackupIVLength
+            + aesGCMTagLength
+        guard data.count >= minimumLength, data.starts(with: encryptedBackupMagic) else {
+            throw AndroidBackupEncryptedArchiveError.invalidFormat
+        }
+
+        var offset = headerLength
+        let salt = Data(data[offset..<offset + encryptedBackupSaltLength])
+        offset += encryptedBackupSaltLength
+        let nonceData = Data(data[offset..<offset + encryptedBackupIVLength])
+        offset += encryptedBackupIVLength
+        let encryptedPayload = Data(data[offset...])
+        guard encryptedPayload.count >= aesGCMTagLength else {
+            throw AndroidBackupEncryptedArchiveError.invalidFormat
+        }
+
+        let keyData = try pbkdf2SHA256(
+            password: Data(password.utf8),
+            salt: salt,
+            iterations: encryptedBackupPBKDF2Iterations,
+            keyLength: encryptedBackupKeyLength
+        )
+        let ciphertext = encryptedPayload.prefix(encryptedPayload.count - aesGCMTagLength)
+        let tag = encryptedPayload.suffix(aesGCMTagLength)
+        let sealedBox = try AES.GCM.SealedBox(
+            nonce: AES.GCM.Nonce(data: nonceData),
+            ciphertext: Data(ciphertext),
+            tag: Data(tag)
+        )
+        return try AES.GCM.open(sealedBox, using: SymmetricKey(data: keyData))
+    }
+
+    private static func pbkdf2SHA256(
+        password: Data,
+        salt: Data,
+        iterations: Int,
+        keyLength: Int
+    ) throws -> Data {
+        guard iterations > 0, keyLength > 0 else {
+            throw AndroidBackupEncryptedArchiveError.invalidFormat
+        }
+
+        let passwordKey = SymmetricKey(data: password)
+        let hmacLength = SHA256.byteCount
+        let blockCount = Int(ceil(Double(keyLength) / Double(hmacLength)))
+        var derivedKey = Data()
+
+        for blockIndex in 1...blockCount {
+            var blockInput = salt
+            blockInput.append(UInt8((blockIndex >> 24) & 0xff))
+            blockInput.append(UInt8((blockIndex >> 16) & 0xff))
+            blockInput.append(UInt8((blockIndex >> 8) & 0xff))
+            blockInput.append(UInt8(blockIndex & 0xff))
+
+            var u = Data(HMAC<SHA256>.authenticationCode(for: blockInput, using: passwordKey))
+            var t = u
+            if iterations > 1 {
+                for _ in 2...iterations {
+                    u = Data(HMAC<SHA256>.authenticationCode(for: u, using: passwordKey))
+                    for index in t.indices {
+                        t[index] ^= u[index]
+                    }
+                }
+            }
+            derivedKey.append(t)
+        }
+
+        return derivedKey.prefix(keyLength)
+    }
+
+    private enum AndroidBackupEncryptedArchiveError: Error {
+        case invalidFormat
     }
 
     private static func isEncryptedBackup(_ data: Data, fileName: String?) -> Bool {

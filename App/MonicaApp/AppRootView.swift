@@ -3101,14 +3101,28 @@ final class AppSessionModel {
         }
     }
 
-    func previewAndroidBackupImport(_ data: Data, fileName: String? = nil) throws -> AndroidBackupImportPreview {
+    func previewAndroidBackupImport(
+        _ data: Data,
+        fileName: String? = nil,
+        decryptPassword: String? = nil
+    ) throws -> AndroidBackupImportPreview {
         recordUserActivity()
-        let report = try AndroidBackupCodec.importItems(from: data, fileName: fileName)
+        let report = try AndroidBackupCodec.importItems(
+            from: data,
+            fileName: fileName,
+            decryptPassword: decryptPassword
+        )
         if let encryptedIssue = report.issues.first(where: { $0.code == .encryptedBackupUnsupported }) {
             androidBackupImportPreview = nil
             csvImportPreview = nil
             entryOperationState = .failed(encryptedIssue.message)
             throw AppAndroidBackupImportError.unsupportedEncryptedBackup(encryptedIssue.message)
+        }
+        if let decryptIssue = report.issues.first(where: { $0.code == .encryptedBackupDecryptionFailed }) {
+            androidBackupImportPreview = nil
+            csvImportPreview = nil
+            entryOperationState = .failed(decryptIssue.message)
+            throw AppAndroidBackupImportError.encryptedBackupDecryptionFailed(decryptIssue.message)
         }
         let preview = AndroidBackupImportPreview(report: report)
         androidBackupImportPreview = preview
@@ -4633,10 +4647,12 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
 
 enum AppAndroidBackupImportError: Error, Sendable, Equatable, LocalizedError {
     case unsupportedEncryptedBackup(String)
+    case encryptedBackupDecryptionFailed(String)
 
     var errorDescription: String? {
         switch self {
-        case .unsupportedEncryptedBackup(let message):
+        case .unsupportedEncryptedBackup(let message),
+             .encryptedBackupDecryptionFailed(let message):
             return message
         }
     }

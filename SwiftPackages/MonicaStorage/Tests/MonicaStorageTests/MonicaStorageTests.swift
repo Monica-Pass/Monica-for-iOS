@@ -473,6 +473,44 @@ import MonicaStorage
     ])
 }
 
+@Test func androidBackupCodecDecryptsAndroidEncryptedBackupWithPassword() throws {
+    let encryptedBackup = Data(base64Encoded: """
+    TU9OSUNBX0VOQ19WMQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSor3Y7UrXnMGjMyxTjucaTvnqyejqWi9PHsimI3t6aeujIinpZ9V4kzgGj5aN0bqpcK8dZ5GxOGeRjuXpPWnGZoN2XLZQEp9wGTrxF8MQqTNxfnOm3kQLENAOEcvxbnkLSso7VQDZGyUtynn3ysNVxGLbij/lWGBVjV0CrKZvKaMiXUJfmE9WSDZRuHDi1YIg2goD3ubLzMkOctElPzm9JF4YFzeYjGmZxMgNFuWJeerzy9HzcqhMYcGJUEvjmuWz3NybBvnurVJAgizdYXM9kIqjqE9wdr67/qVmw7KyUwfI3CFThAxxg57RFWwBTrf/drVNPUrJDknJTSJZLFkX6US+J6J5zYD8kePndLxF4AS6zj2mzVCNzLJzy9HpBYvrj3ZqchQ7/7hFNqbixH1NjH0+u+wz+aHkJ8LF5jb3bMJg==
+    """)!
+
+    let report = try AndroidBackupCodec.importItems(
+        from: encryptedBackup,
+        fileName: "monica_backup.enc.zip",
+        decryptPassword: "correct horse battery staple"
+    )
+
+    #expect(report.issues.isEmpty)
+    #expect(report.items.map(\.kind) == [.login])
+    guard case .login(let login) = report.items.first else {
+        Issue.record("Expected decrypted login")
+        return
+    }
+    #expect(login.title == "GitLab")
+    #expect(login.username == "dev")
+    #expect(login.password == "s3cret")
+    #expect(login.url == "https://gitlab.com")
+
+    let failedReport = try AndroidBackupCodec.importItems(
+        from: encryptedBackup,
+        fileName: "monica_backup.enc.zip",
+        decryptPassword: "wrong password"
+    )
+
+    #expect(failedReport.items.isEmpty)
+    #expect(failedReport.issues == [
+        AndroidBackupImportIssue(
+            entryPath: "monica_backup.enc.zip",
+            code: .encryptedBackupDecryptionFailed,
+            message: "Android 加密备份解密失败，请检查密码或文件是否损坏。"
+        )
+    ])
+}
+
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])
