@@ -2006,6 +2006,25 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 2 项"))
     }
 
+    func testAndroidBackupImportPreviewIncludesAttachmentManifestCount() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
+            "attachments/attachments_meta.json": #"""
+            {"version":1,"entries":[{"parentPasswordId":42,"fileName":"contract.pdf","mimeType":"application/pdf","sizeBytes":2048,"sha256Hex":"abc123","wrappedCek":"wrapped-key","localPath":"attachment-1.enc","createdAt":1710000000000,"updatedAt":1710000001000}]}
+            """#,
+            "attachments/attachment-1.enc": "ciphertext"
+        ])
+
+        try unlockNewVault(model)
+        let preview = try model.previewAndroidBackupImport(backup)
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login])
+        XCTAssertEqual(preview.attachments.map(\.fileName), ["contract.pdf"])
+        XCTAssertEqual(preview.attachments.first?.blobEntryPath, "attachments/attachment-1.enc")
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，1 个附件，0 个问题"))
+    }
+
     func testAndroidBackupExportDocumentWrapsCurrentVaultZipForFileExporter() throws {
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
 

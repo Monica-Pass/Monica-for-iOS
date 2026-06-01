@@ -50,6 +50,7 @@ struct AndroidBackupImportPreview: Sendable, Equatable {
     let report: AndroidBackupImportReport
 
     var items: [VaultCSVItemDraft] { report.items }
+    var attachments: [AndroidBackupAttachmentMetadata] { report.attachments }
     var issues: [AndroidBackupImportIssue] { report.issues }
 }
 
@@ -3040,7 +3041,8 @@ final class AppSessionModel {
         let preview = AndroidBackupImportPreview(report: report)
         androidBackupImportPreview = preview
         csvImportPreview = nil
-        entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
+        let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
+        entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(attachmentText)，\(report.issues.count) 个问题")
         return preview
     }
 
@@ -3074,7 +3076,8 @@ final class AppSessionModel {
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
             androidBackupImportPreview = nil
-            entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项")
+            let attachmentText = preview.attachments.isEmpty ? "" : "；\(preview.attachments.count) 个附件已保留为待恢复元数据"
+            entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项\(attachmentText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
