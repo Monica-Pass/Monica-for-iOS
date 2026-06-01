@@ -46,6 +46,13 @@ struct CSVImportPreview: Sendable, Equatable {
     var issues: [VaultCSVImportIssue] { report.issues }
 }
 
+struct AndroidBackupImportPreview: Sendable, Equatable {
+    let report: AndroidBackupImportReport
+
+    var items: [VaultCSVItemDraft] { report.items }
+    var issues: [AndroidBackupImportIssue] { report.issues }
+}
+
 struct CSVExportDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
@@ -67,6 +74,24 @@ struct CSVExportDocument: FileDocument, Sendable {
 
     func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
         FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
+}
+
+struct AndroidBackupExportDocument: FileDocument, Sendable {
+    static var readableContentTypes: [UTType] { [.zip] }
+
+    var data: Data
+
+    init(data: Data = Data()) {
+        self.data = data
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        data = configuration.file.regularFileContents ?? Data()
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: data)
     }
 }
 
@@ -565,6 +590,7 @@ final class AppSessionModel {
     var webDAVBackupState: WebDAVBackupState = .idle
     var webDAVRestorePreview: WebDAVRestorePreview?
     var csvImportPreview: CSVImportPreview?
+    var androidBackupImportPreview: AndroidBackupImportPreview?
     var presentedEditorMode: VaultItemEditorMode?
     var expandedToolbarAction: AndroidParityToolbarAction?
     var isFabMenuPresented = false
@@ -2966,6 +2992,7 @@ final class AppSessionModel {
         let report = VaultCSVCodec.importItems(from: csv)
         let preview = CSVImportPreview(report: report)
         csvImportPreview = preview
+        androidBackupImportPreview = nil
         entryOperationState = .succeeded("CSV 预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
         return preview
     }
@@ -3001,6 +3028,73 @@ final class AppSessionModel {
             try refreshAutoFillEncryptedIndexIfConfigured()
             csvImportPreview = nil
             entryOperationState = .succeeded("CSV 已导入 \(preview.items.count) 项")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func previewAndroidBackupImport(_ data: Data) throws -> AndroidBackupImportPreview {
+        recordUserActivity()
+        let report = try AndroidBackupCodec.importItems(from: data)
+        let preview = AndroidBackupImportPreview(report: report)
+        androidBackupImportPreview = preview
+        csvImportPreview = nil
+        entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
+        return preview
+    }
+
+    func previewAndroidBackupImport(from fileURL: URL) throws -> AndroidBackupImportPreview {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let data = try Data(contentsOf: fileURL)
+        return try previewAndroidBackupImport(data)
+    }
+
+    func confirmAndroidBackupImport(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let preview = androidBackupImportPreview else {
+                throw LocalVaultRepositoryError.invalidEntryPayload
+            }
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            for item in preview.items {
+                try createCSVImportedItem(item, projectID: project.id, entryRepository: entryRepository)
+            }
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            androidBackupImportPreview = nil
+            entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func androidBackupExportDocument() throws -> AndroidBackupExportDocument {
+        AndroidBackupExportDocument(data: try exportAndroidBackup())
+    }
+
+    func exportAndroidBackup() throws -> Data {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            _ = try requireActiveVaultSession()
+            let drafts = csvExportDrafts()
+            let data = try AndroidBackupCodec.exportItems(drafts)
+            entryOperationState = .succeeded("Android 备份已导出 \(drafts.count) 项")
+            return data
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -3483,6 +3577,7 @@ final class AppSessionModel {
         clearEditingPasskeyEntry()
         clearExtendedParityEntries()
         csvImportPreview = nil
+        androidBackupImportPreview = nil
         entryOperationState = .idle
     }
 

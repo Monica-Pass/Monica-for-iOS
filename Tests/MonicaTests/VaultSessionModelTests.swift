@@ -1953,6 +1953,77 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("CSV 已导出 1 项"))
     }
 
+    func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fileURL = directory.appendingPathComponent("monica_backup.zip")
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_1_1000.json": #"{"id":1,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
+            "folders/Work/authenticators/totp_2_1000.json": #"{"id":2,"title":"GitHub 2FA","itemData":"{\"secret\":\"JBSWY3DPEHPK3PXP\",\"issuer\":\"GitHub\",\"accountName\":\"alice\",\"period\":30,\"digits\":6,\"algorithm\":\"SHA1\",\"otpType\":\"TOTP\",\"counter\":0}","categoryName":"Work"}"#
+        ])
+        try backup.write(to: fileURL)
+
+        try unlockNewVault(model)
+        let preview = try model.previewAndroidBackupImport(from: fileURL)
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login, .totp])
+        XCTAssertTrue(preview.issues.isEmpty)
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertTrue(model.totpEntries.isEmpty)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertTrue(engine.createdTotpEntries.isEmpty)
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：2 项可导入，0 个问题"))
+    }
+
+    func testAndroidBackupImportPreviewDoesNotWriteUntilConfirmed() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let backup = try AndroidBackupCodec.exportItems([
+            .login(LocalLoginEntryDraft(title: "GitHub", username: "alice", password: "secret-password", url: "https://github.com")),
+            .note(LocalNoteEntryDraft(title: "Recovery", body: "backup codes"))
+        ])
+
+        try unlockNewVault(model)
+        let preview = try model.previewAndroidBackupImport(backup)
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login, .note])
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertTrue(model.noteEntries.isEmpty)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertTrue(engine.createdNoteEntries.isEmpty)
+
+        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.noteEntries.map(\.title), ["Recovery"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["Android 备份"])
+        XCTAssertEqual(engine.createdLoginEntries.first?.draft.password, "secret-password")
+        XCTAssertEqual(engine.createdNoteEntries.first?.draft.body, "backup codes")
+        XCTAssertNil(model.androidBackupImportPreview)
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 2 项"))
+    }
+
+    func testAndroidBackupExportDocumentWrapsCurrentVaultZipForFileExporter() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "secret-password"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        let document = try model.androidBackupExportDocument()
+        let report = try AndroidBackupCodec.importItems(from: document.data)
+
+        XCTAssertEqual(AndroidBackupExportDocument.readableContentTypes, [.zip])
+        XCTAssertEqual(report.items.map(\.kind), [.login])
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导出 1 项"))
+    }
+
     func testTotpEntryGeneratesCodeFromStoredSeed() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

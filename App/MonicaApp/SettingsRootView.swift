@@ -16,6 +16,9 @@ struct SettingsRootView: View {
     @State private var isCSVImporterPresented = false
     @State private var isCSVExporterPresented = false
     @State private var csvExportDocument = CSVExportDocument()
+    @State private var isAndroidBackupImporterPresented = false
+    @State private var isAndroidBackupExporterPresented = false
+    @State private var androidBackupExportDocument = AndroidBackupExportDocument()
 
     private var autoLockSelection: Binding<AppAutoLockPolicy> {
         Binding {
@@ -192,6 +195,51 @@ struct SettingsRootView: View {
                         .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                         .disabled(preview.items.isEmpty)
                     }
+
+                    AndroidParityDivider()
+                    AndroidParityInfoRow(title: "Android 备份", value: session.entryOperationState.label)
+                    HStack(spacing: 12) {
+                        Button {
+                            isAndroidBackupImporterPresented = true
+                        } label: {
+                            Label("导入备份", systemImage: "archivebox")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                        .disabled(session.vaultState != .unlocked)
+
+                        Button {
+                            do {
+                                androidBackupExportDocument = try session.androidBackupExportDocument()
+                                isAndroidBackupExporterPresented = true
+                            } catch {
+                                session.entryOperationState = .failed(error.localizedDescription)
+                            }
+                        } label: {
+                            Label("导出备份", systemImage: "archivebox.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(session.vaultState != .unlocked)
+                    }
+
+                    if let preview = session.androidBackupImportPreview {
+                        AndroidParityDivider()
+                        AndroidParityInfoRow(title: "备份可导入", value: "\(preview.items.count)")
+                        AndroidParityInfoRow(title: "备份问题", value: "\(preview.issues.count)")
+                        Button {
+                            do {
+                                try session.confirmAndroidBackupImport(projectTitle: "Android 备份")
+                            } catch {
+                                // AppSessionModel owns user-visible failure state.
+                            }
+                        } label: {
+                            Label("确认导入备份", systemImage: "checkmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(preview.items.isEmpty)
+                    }
                 }
             }
 
@@ -294,6 +342,35 @@ struct SettingsRootView: View {
             document: csvExportDocument,
             contentType: .commaSeparatedText,
             defaultFilename: "monica-vault.csv"
+        ) { result in
+            if case .failure(let error) = result {
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
+        .fileImporter(
+            isPresented: $isAndroidBackupImporterPresented,
+            allowedContentTypes: [.zip],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                do {
+                    _ = try session.previewAndroidBackupImport(from: fileURL)
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                }
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
+        .fileExporter(
+            isPresented: $isAndroidBackupExporterPresented,
+            document: androidBackupExportDocument,
+            contentType: .zip,
+            defaultFilename: "monica-android-backup.zip"
         ) { result in
             if case .failure(let error) = result {
                 session.entryOperationState = .failed(error.localizedDescription)
