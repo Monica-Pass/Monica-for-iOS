@@ -2359,6 +2359,12 @@ final class AppSessionModel {
             )
             noteEntries = try entryRepository.listNoteEntries(projectID: project.id)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .note,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2394,6 +2400,12 @@ final class AppSessionModel {
             noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: projectID)
             selectNoteEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .note,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2444,6 +2456,12 @@ final class AppSessionModel {
             noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: projectID)
             clearEditingNoteEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .note,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2468,6 +2486,12 @@ final class AppSessionModel {
             )
             noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .note,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2507,6 +2531,12 @@ final class AppSessionModel {
             totpSecret = ""
             totpEntries = try entryRepository.listTotpEntries(projectID: project.id)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .totp,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2621,6 +2651,12 @@ final class AppSessionModel {
             totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
             selectTotpEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .totp,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2671,6 +2707,12 @@ final class AppSessionModel {
             totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
             clearEditingTotpEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .totp,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2695,6 +2737,12 @@ final class AppSessionModel {
             )
             totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .totp,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2735,6 +2783,12 @@ final class AppSessionModel {
             cardCVV = ""
             cardEntries = try entryRepository.listCardEntries(projectID: project.id)
             deletedCardEntries = try entryRepository.listDeletedCardEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .card,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             cardNumber = ""
@@ -2789,6 +2843,12 @@ final class AppSessionModel {
             cardEntries = try entryRepository.listCardEntries(projectID: projectID)
             deletedCardEntries = try entryRepository.listDeletedCardEntries(projectID: projectID)
             selectCardEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .card,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2839,6 +2899,12 @@ final class AppSessionModel {
             cardEntries = try entryRepository.listCardEntries(projectID: projectID)
             deletedCardEntries = try entryRepository.listDeletedCardEntries(projectID: projectID)
             clearEditingCardEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .card,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2863,6 +2929,12 @@ final class AppSessionModel {
             )
             cardEntries = try entryRepository.listCardEntries(projectID: projectID)
             deletedCardEntries = try entryRepository.listDeletedCardEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .card,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2901,6 +2973,12 @@ final class AppSessionModel {
             )
             identityEntries = try entryRepository.listIdentityEntries(projectID: project.id)
             deletedIdentityEntries = try entryRepository.listDeletedIdentityEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .identity,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2953,6 +3031,12 @@ final class AppSessionModel {
             identityEntries = try entryRepository.listIdentityEntries(projectID: projectID)
             deletedIdentityEntries = try entryRepository.listDeletedIdentityEntries(projectID: projectID)
             selectIdentityEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .identity,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3003,6 +3087,12 @@ final class AppSessionModel {
             identityEntries = try entryRepository.listIdentityEntries(projectID: projectID)
             deletedIdentityEntries = try entryRepository.listDeletedIdentityEntries(projectID: projectID)
             clearEditingIdentityEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .identity,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3027,6 +3117,12 @@ final class AppSessionModel {
             )
             identityEntries = try entryRepository.listIdentityEntries(projectID: projectID)
             deletedIdentityEntries = try entryRepository.listDeletedIdentityEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .identity,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)

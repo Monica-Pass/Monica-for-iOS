@@ -1656,6 +1656,112 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(timelineText.contains("alice"))
     }
 
+    func testCoreEntryOperationsAppendRedactedTimelineEvents() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.noteTitle = "Recovery Codes"
+        model.noteBody = "github: 123456\napple: 654321"
+        try model.createNoteEntry(projectTitle: "Personal")
+        let createdNote = try XCTUnwrap(model.noteEntries.first)
+        model.selectNoteEntryForEditing(createdNote)
+        model.editingNoteTitle = "Recovery Codes Main"
+        model.editingNoteBody = "rotated note body secret"
+        try model.updateSelectedNoteEntry()
+        try model.deleteSelectedNoteEntry()
+        try model.restoreNoteEntry(try XCTUnwrap(model.deletedNoteEntries.first))
+
+        model.totpTitle = "GitHub TOTP"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        model.totpIssuer = "GitHub"
+        model.totpAccountName = "alice@example.com"
+        try model.createTotpEntry(projectTitle: "Personal")
+        let createdTotp = try XCTUnwrap(model.totpEntries.first)
+        model.selectTotpEntryForEditing(createdTotp)
+        model.editingTotpTitle = "GitHub Work TOTP"
+        model.editingTotpSecret = "JBSWY3DPEHPK3PXQ"
+        try model.updateSelectedTotpEntry()
+        try model.deleteSelectedTotpEntry()
+        try model.restoreTotpEntry(try XCTUnwrap(model.deletedTotpEntries.first))
+
+        model.cardTitle = "Everyday Visa"
+        model.cardholderName = "Alice Example"
+        model.cardNumber = "4111111111111111"
+        model.cardExpiryMonth = "12"
+        model.cardExpiryYear = "2031"
+        model.cardCVV = "123"
+        try model.createCardEntry(projectTitle: "Personal")
+        let createdCard = try XCTUnwrap(model.cardEntries.first)
+        model.selectCardEntryForEditing(createdCard)
+        model.editingCardTitle = "Travel Mastercard"
+        model.editingCardNumber = "5555555555554444"
+        model.editingCardCVV = "456"
+        try model.updateSelectedCardEntry()
+        try model.deleteSelectedCardEntry()
+        try model.restoreCardEntry(try XCTUnwrap(model.deletedCardEntries.first))
+
+        model.identityTitle = "Passport"
+        model.identityDocumentType = "passport"
+        model.identityFullName = "Alice Example"
+        model.identityDocumentNumber = "P1234567"
+        try model.createIdentityEntry(projectTitle: "Personal")
+        let createdIdentity = try XCTUnwrap(model.identityEntries.first)
+        model.selectIdentityEntryForEditing(createdIdentity)
+        model.editingIdentityTitle = "Driver License"
+        model.editingIdentityDocumentNumber = "D7654321"
+        try model.updateSelectedIdentityEntry()
+        try model.deleteSelectedIdentityEntry()
+        try model.restoreIdentityEntry(try XCTUnwrap(model.deletedIdentityEntries.first))
+
+        let events = model.operationTimelineEvents
+
+        XCTAssertEqual(events.map(\.action), [
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created
+        ])
+        XCTAssertEqual(events.map(\.itemKind), [
+            .identity, .identity, .identity, .identity,
+            .card, .card, .card, .card,
+            .totp, .totp, .totp, .totp,
+            .note, .note, .note, .note
+        ])
+        XCTAssertEqual(events.map(\.itemTitle), [
+            "Driver License", "Driver License", "Driver License", "Passport",
+            "Travel Mastercard", "Travel Mastercard", "Travel Mastercard", "Everyday Visa",
+            "GitHub Work TOTP", "GitHub Work TOTP", "GitHub Work TOTP", "GitHub TOTP",
+            "Recovery Codes Main", "Recovery Codes Main", "Recovery Codes Main", "Recovery Codes"
+        ])
+        XCTAssertTrue(events.allSatisfy { $0.occurredAt > Date(timeIntervalSince1970: 0) })
+
+        let timelineText = events.map { "\($0.title) \($0.detail)" }.joined(separator: " ")
+        [
+            "github: 123456",
+            "rotated note body secret",
+            "JBSWY3DPEHPK3PXP",
+            "JBSWY3DPEHPK3PXQ",
+            "alice@example.com",
+            "4111111111111111",
+            "5555555555554444",
+            "123",
+            "456",
+            "P1234567",
+            "D7654321"
+        ].forEach { secret in
+            XCTAssertFalse(timelineText.contains(secret))
+        }
+    }
+
     func testCreateUpdateDeleteAndRestoreNoteEntryInActiveVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
