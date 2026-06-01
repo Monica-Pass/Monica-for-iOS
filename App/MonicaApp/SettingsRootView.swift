@@ -170,6 +170,16 @@ struct SettingsRootView: View {
                         }
                     }
                 }
+                if !recentOperationTimelineEvents.isEmpty {
+                    AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                        ForEach(recentOperationTimelineEvents) { event in
+                            AndroidParityOperationTimelineRow(event: event)
+                            if event.id != recentOperationTimelineEvents.last?.id {
+                                AndroidParityDivider()
+                            }
+                        }
+                    }
+                }
                 if !session.duplicateLoginMergePreviews.isEmpty {
                     AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                         ForEach(session.duplicateLoginMergePreviews) { preview in
@@ -500,6 +510,10 @@ struct SettingsRootView: View {
         session.canUseBiometricUnlockHardware ? "未启用" : "不可用"
     }
 
+    private var recentOperationTimelineEvents: [AppOperationTimelineEvent] {
+        Array(session.operationTimelineEvents.prefix(6))
+    }
+
     private var securityQuestionStateColor: Color {
         switch session.securityQuestionState {
         case .failed:
@@ -507,6 +521,37 @@ struct SettingsRootView: View {
         case .idle, .running, .succeeded:
             return AndroidParityPalette.textSecondary
         }
+    }
+}
+
+private struct AndroidParityOperationTimelineRow: View {
+    let event: AppOperationTimelineEvent
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: event.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .frame(width: 28, height: 28)
+                .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(event.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                    Spacer(minLength: 8)
+                    Text(event.occurredAt, style: .time)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+                Text(event.detail)
+                    .font(.caption)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .lineLimit(2)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

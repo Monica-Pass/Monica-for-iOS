@@ -147,6 +147,60 @@ struct AppSecurityCenterRepairSuggestion: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+enum AppOperationTimelineAction: String, Sendable, Equatable {
+    case created
+    case updated
+    case deleted
+    case restored
+
+    var title: String {
+        switch self {
+        case .created:
+            "已创建"
+        case .updated:
+            "已更新"
+        case .deleted:
+            "已删除"
+        case .restored:
+            "已恢复"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .created:
+            "plus.circle"
+        case .updated:
+            "pencil.circle"
+        case .deleted:
+            "trash.circle"
+        case .restored:
+            "arrow.uturn.backward.circle"
+        }
+    }
+}
+
+struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
+    let id: String
+    let action: AppOperationTimelineAction
+    let itemKind: UnifiedVaultItemKind
+    let itemID: String
+    let itemTitle: String
+    let occurredAt: Date
+
+    var title: String {
+        "\(action.title) \(itemKind.displayName)"
+    }
+
+    var detail: String {
+        itemTitle.isEmpty ? "未命名条目" : itemTitle
+    }
+
+    var systemImage: String {
+        action.systemImage
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -710,8 +764,10 @@ final class AppSessionModel {
     var loginEntries: [LocalLoginEntry] = []
     var deletedLoginEntries: [LocalLoginEntry] = []
     var breachedPasswordSHA256Fingerprints: Set<String> = []
+    var operationTimelineEvents: [AppOperationTimelineEvent] = []
     private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
     private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
+    private var nextOperationTimelineEventSequence = 0
     var editingLoginEntryID: String?
     var editingLoginTitle = ""
     var editingLoginUsername = ""
@@ -1628,6 +1684,7 @@ final class AppSessionModel {
             passkeyEntries = []
             deletedPasskeyEntries = []
             clearExtendedParityEntries()
+            clearOperationTimelineEvents()
             recordUserActivity(at: now)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
@@ -1672,6 +1729,7 @@ final class AppSessionModel {
             passkeyEntries = []
             deletedPasskeyEntries = []
             clearExtendedParityEntries()
+            clearOperationTimelineEvents()
             recordUserActivity(at: now)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
@@ -2030,6 +2088,12 @@ final class AppSessionModel {
             loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
             try refreshAutoFillEncryptedIndexIfConfigured()
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .login,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2084,6 +2148,12 @@ final class AppSessionModel {
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             selectLoginEntryForEditing(entry)
             try refreshAutoFillEncryptedIndexIfConfigured()
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .login,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2146,6 +2216,12 @@ final class AppSessionModel {
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             clearEditingLoginEntry()
             try refreshAutoFillEncryptedIndexIfConfigured()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .login,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -2249,6 +2325,12 @@ final class AppSessionModel {
             loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             try refreshAutoFillEncryptedIndexIfConfigured()
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .login,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -4480,6 +4562,7 @@ final class AppSessionModel {
         csvImportPreview = nil
         androidBackupImportPreview = nil
         entryOperationState = .idle
+        clearOperationTimelineEvents()
     }
 
     private func clearVaultAccessAfterFailure() {
@@ -4810,6 +4893,35 @@ final class AppSessionModel {
             backupItemName: nil,
             options: [.usingNewMetadataOnly]
         )
+    }
+
+    private func appendOperationTimelineEvent(
+        action: AppOperationTimelineAction,
+        itemKind: UnifiedVaultItemKind,
+        itemID: String,
+        itemTitle: String
+    ) {
+        nextOperationTimelineEventSequence += 1
+        let trimmedTitle = itemTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        operationTimelineEvents.insert(
+            AppOperationTimelineEvent(
+                id: "operation-\(nextOperationTimelineEventSequence)-\(itemID)",
+                action: action,
+                itemKind: itemKind,
+                itemID: itemID,
+                itemTitle: trimmedTitle,
+                occurredAt: Date()
+            ),
+            at: 0
+        )
+        if operationTimelineEvents.count > 50 {
+            operationTimelineEvents.removeLast(operationTimelineEvents.count - 50)
+        }
+    }
+
+    private func clearOperationTimelineEvents() {
+        operationTimelineEvents = []
+        nextOperationTimelineEventSequence = 0
     }
 
     private func validateDownloadedWebDAVRestore(

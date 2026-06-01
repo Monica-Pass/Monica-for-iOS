@@ -1611,6 +1611,51 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.deletedLoginEntries.isEmpty)
     }
 
+    func testLoginEntryOperationsAppendRedactedTimelineEvents() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "correct horse battery staple"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        let created = try XCTUnwrap(model.loginEntries.first)
+
+        model.selectLoginEntryForEditing(created)
+        model.editingLoginTitle = "GitHub Main"
+        model.editingLoginPassword = "new secret value"
+        try model.updateSelectedLoginEntry()
+        let updated = try XCTUnwrap(model.loginEntries.first)
+
+        model.selectLoginEntryForEditing(updated)
+        try model.deleteSelectedLoginEntry()
+        let deleted = try XCTUnwrap(model.deletedLoginEntries.first)
+        try model.restoreLoginEntry(deleted)
+
+        let events = model.operationTimelineEvents
+
+        XCTAssertEqual(events.map(\.action), [.restored, .deleted, .updated, .created])
+        XCTAssertEqual(events.map(\.itemKind), [.login, .login, .login, .login])
+        XCTAssertEqual(events.map(\.itemTitle), ["GitHub Main", "GitHub Main", "GitHub Main", "GitHub"])
+        XCTAssertEqual(events.map(\.itemID), [created.id, created.id, created.id, created.id])
+        XCTAssertTrue(events.allSatisfy { $0.occurredAt > Date(timeIntervalSince1970: 0) })
+
+        let timelineText = events.map { "\($0.title) \($0.detail)" }.joined(separator: " ")
+        XCTAssertFalse(timelineText.contains("correct horse battery staple"))
+        XCTAssertFalse(timelineText.contains("new secret value"))
+        XCTAssertFalse(timelineText.contains("alice"))
+    }
+
     func testCreateUpdateDeleteAndRestoreNoteEntryInActiveVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
