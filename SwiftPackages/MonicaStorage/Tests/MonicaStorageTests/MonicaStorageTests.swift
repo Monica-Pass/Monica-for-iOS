@@ -249,6 +249,7 @@ import MonicaStorage
 
     #expect(report.issues.isEmpty)
     #expect(report.items.map(\.kind) == [.login, .totp, .note, .card, .identity, .passkey])
+    #expect(report.importedItems.map(\.sourceID) == [1, 2, 3, 4, 5, nil])
 
     guard case .login(let login) = report.items[0] else {
         Issue.record("Expected login")

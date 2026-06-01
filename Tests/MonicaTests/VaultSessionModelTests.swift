@@ -2025,6 +2025,43 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，1 个附件，0 个问题"))
     }
 
+    func testAndroidBackupConfirmImportsAttachmentMetadataWithRemappedLoginID() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
+            "attachments/attachments_meta.json": #"""
+            {"version":1,"entries":[{"parentPasswordId":42,"fileName":"contract.pdf","mimeType":"application/pdf","sizeBytes":2048,"sha256Hex":"abc123","wrappedCek":"wrapped-key","localPath":"attachment-1.enc","createdAt":1710000000000,"updatedAt":1710000001000}]}
+            """#,
+            "attachments/attachment-1.enc": "ciphertext"
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewAndroidBackupImport(backup)
+
+        XCTAssertTrue(engine.createdAttachmentMetadata.isEmpty)
+
+        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+
+        XCTAssertEqual(model.loginEntries.map(\.id), ["entry-1"])
+        XCTAssertEqual(engine.createdAttachmentMetadata.count, 1)
+        XCTAssertEqual(
+            engine.createdAttachmentMetadata.first,
+            RecordedAttachmentMetadataCall(
+                vaultID: "created-vault",
+                projectID: "project-1",
+                entryID: "entry-1",
+                fileName: "contract.pdf",
+                mediaType: "application/pdf",
+                originalSize: 2048,
+                storedSize: 0,
+                contentHash: "abc123",
+                storageMode: "android-backup-pending"
+            )
+        )
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；1 个附件元数据待恢复"))
+    }
+
     func testAndroidBackupExportDocumentWrapsCurrentVaultZipForFileExporter() throws {
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
 
@@ -3134,6 +3171,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var favoritedSendEntries: [RecordedFavoriteEntryCall] = []
     private(set) var deletedSendEntries: [RecordedEntryMutationCall] = []
     private(set) var restoredSendEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdAttachmentMetadata: [RecordedAttachmentMetadataCall] = []
     private var loginEntries: [String: [LocalLoginEntry]] = [:]
     private var deletedEntries: [String: [LocalLoginEntry]] = [:]
     private var noteEntries: [String: [LocalNoteEntry]] = [:]
@@ -3154,6 +3192,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedWifi: [String: [LocalWifiEntry]] = [:]
     private var sendEntries: [String: [LocalSendEntry]] = [:]
     private var deletedSends: [String: [LocalSendEntry]] = [:]
+    private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
 
     func createVault(
         at fileURL: URL,
@@ -4523,6 +4562,53 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     ) throws -> [LocalSendEntry] {
         deletedSends[projectID, default: []]
     }
+
+    func createAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        storedSize: Int64,
+        contentHash: String,
+        storageMode: String
+    ) throws -> LocalAttachmentMetadata {
+        let metadata = LocalAttachmentMetadata(
+            id: "attachment-\(createdAttachmentMetadata.count + 1)",
+            projectID: projectID,
+            entryID: entryID,
+            fileName: fileName,
+            mediaType: mediaType,
+            originalSize: originalSize,
+            storedSize: storedSize,
+            contentHash: contentHash,
+            storageMode: storageMode,
+            deleted: false
+        )
+        createdAttachmentMetadata.append(
+            .init(
+                vaultID: handle.vaultID,
+                projectID: projectID,
+                entryID: entryID,
+                fileName: fileName,
+                mediaType: mediaType,
+                originalSize: originalSize,
+                storedSize: storedSize,
+                contentHash: contentHash,
+                storageMode: storageMode
+            )
+        )
+        attachmentMetadata[projectID, default: []].append(metadata)
+        return metadata
+    }
+
+    func listAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalAttachmentMetadata] {
+        attachmentMetadata[projectID, default: []]
+    }
 }
 
 private struct RecordedVaultCall {
@@ -4687,6 +4773,18 @@ private struct RecordedUpdatedSendEntryCall {
     let projectID: String
     let entryID: String
     let draft: LocalSendEntryDraft
+}
+
+private struct RecordedAttachmentMetadataCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let entryID: String?
+    let fileName: String
+    let mediaType: String
+    let originalSize: Int64
+    let storedSize: Int64
+    let contentHash: String
+    let storageMode: String
 }
 
 private struct RecordedEntryMutationCall {

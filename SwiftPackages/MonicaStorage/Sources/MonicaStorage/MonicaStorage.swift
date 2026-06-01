@@ -172,6 +172,16 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
     }
 }
 
+public struct AndroidBackupImportedItem: Sendable, Equatable {
+    public let sourceID: Int64?
+    public let draft: VaultCSVItemDraft
+
+    public init(sourceID: Int64?, draft: VaultCSVItemDraft) {
+        self.sourceID = sourceID
+        self.draft = draft
+    }
+}
+
 public enum VaultCSVImportIssueCode: Sendable, Equatable {
     case emptyCSV
     case missingKindColumn
@@ -267,15 +277,18 @@ public struct AndroidBackupAttachmentMetadata: Sendable, Equatable, Identifiable
 
 public struct AndroidBackupImportReport: Sendable, Equatable {
     public let items: [VaultCSVItemDraft]
+    public let importedItems: [AndroidBackupImportedItem]
     public let attachments: [AndroidBackupAttachmentMetadata]
     public let issues: [AndroidBackupImportIssue]
 
     public init(
         items: [VaultCSVItemDraft],
+        importedItems: [AndroidBackupImportedItem]? = nil,
         attachments: [AndroidBackupAttachmentMetadata] = [],
         issues: [AndroidBackupImportIssue]
     ) {
         self.items = items
+        self.importedItems = importedItems ?? items.map { AndroidBackupImportedItem(sourceID: nil, draft: $0) }
         self.attachments = attachments
         self.issues = issues
     }
@@ -284,7 +297,7 @@ public struct AndroidBackupImportReport: Sendable, Equatable {
 public enum AndroidBackupCodec {
     public static func importItems(from zipData: Data) throws -> AndroidBackupImportReport {
         let archive = try Archive(data: zipData, accessMode: .read)
-        var orderedItems: [(order: Int, index: Int, item: VaultCSVItemDraft)] = []
+        var orderedItems: [(order: Int, index: Int, importedItem: AndroidBackupImportedItem)] = []
         var issues: [AndroidBackupImportIssue] = []
         var legacyCSVFiles: [(path: String, data: Data, index: Int)] = []
         var jsonBackedKinds = Set<BackupKind>()
@@ -327,11 +340,11 @@ public enum AndroidBackupCodec {
             guard let kind = kind(for: path) else {
                 continue
             }
-            guard let item = parseItem(kind: kind, data: data, path: path, issues: &issues) else {
+            guard let importedItem = parseItem(kind: kind, data: data, path: path, issues: &issues) else {
                 continue
             }
             jsonBackedKinds.insert(kind)
-            orderedItems.append((order: order(for: path, kind: kind), index: index, item: item))
+            orderedItems.append((order: order(for: path, kind: kind), index: index, importedItem: importedItem))
             index += 1
         }
 
@@ -344,25 +357,37 @@ public enum AndroidBackupCodec {
             )
             for item in parsedItems {
                 let kind = backupKind(for: item)
-                orderedItems.append((order: kindPriority(kind), index: index, item: item))
+                orderedItems.append(
+                    (
+                        order: kindPriority(kind),
+                        index: index,
+                        importedItem: AndroidBackupImportedItem(sourceID: nil, draft: item)
+                    )
+                )
                 index += 1
             }
         }
 
-        let items = orderedItems
+        let importedItems = orderedItems
             .sorted { lhs, rhs in
                 if lhs.order == rhs.order {
                     return lhs.index < rhs.index
                 }
                 return lhs.order < rhs.order
             }
-            .map(\.item)
+            .map(\.importedItem)
+        let items = importedItems.map(\.draft)
         let attachments = parseAttachmentManifest(
             attachmentManifest,
             blobPaths: attachmentBlobPaths,
             issues: &issues
         )
-        return AndroidBackupImportReport(items: items, attachments: attachments, issues: issues)
+        return AndroidBackupImportReport(
+            items: items,
+            importedItems: importedItems,
+            attachments: attachments,
+            issues: issues
+        )
     }
 
     public static func exportItems(_ items: [VaultCSVItemDraft], folderName: String = "Imported") throws -> Data {
@@ -784,12 +809,14 @@ public enum AndroidBackupCodec {
         data: Data,
         path: String,
         issues: inout [AndroidBackupImportIssue]
-    ) -> VaultCSVItemDraft? {
+    ) -> AndroidBackupImportedItem? {
         do {
             let object = try JSONObject(data: data)
+            let sourceID = object.contains("id") ? Int64(object.int("id", defaultValue: 0)) : nil
+            let draft: VaultCSVItemDraft
             switch kind {
             case .password:
-                return .login(LocalLoginEntryDraft(
+                draft = .login(LocalLoginEntryDraft(
                     title: object.string("title"),
                     username: object.string("username"),
                     password: object.string("password"),
@@ -797,7 +824,7 @@ public enum AndroidBackupCodec {
                 ))
             case .totp:
                 let itemData = try object.nestedObject("itemData")
-                return .totp(LocalTotpEntryDraft(
+                draft = .totp(LocalTotpEntryDraft(
                     title: object.string("title"),
                     secret: itemData.string("secret"),
                     issuer: itemData.string("issuer"),
@@ -809,13 +836,13 @@ public enum AndroidBackupCodec {
                     counter: UInt64(itemData.int("counter", defaultValue: 0))
                 ))
             case .note:
-                return .note(LocalNoteEntryDraft(
+                draft = .note(LocalNoteEntryDraft(
                     title: object.string("title"),
                     body: object.string("itemData", defaultValue: object.string("notes"))
                 ))
             case .card:
                 let itemData = try object.nestedObject("itemData")
-                return .card(LocalCardEntryDraft(
+                draft = .card(LocalCardEntryDraft(
                     title: object.string("title"),
                     cardholderName: itemData.string("cardholderName"),
                     number: itemData.string("cardNumber", defaultValue: itemData.string("number")),
@@ -828,7 +855,7 @@ public enum AndroidBackupCodec {
                 ))
             case .identity:
                 let itemData = try object.nestedObject("itemData")
-                return .identity(LocalIdentityEntryDraft(
+                draft = .identity(LocalIdentityEntryDraft(
                     title: object.string("title"),
                     documentType: itemData.string("documentType"),
                     fullName: itemData.string("fullName"),
@@ -840,7 +867,7 @@ public enum AndroidBackupCodec {
                     notes: object.string("notes")
                 ))
             case .passkey:
-                return .passkey(LocalPasskeyEntryDraft(
+                draft = .passkey(LocalPasskeyEntryDraft(
                     title: object.string("rpName", defaultValue: object.string("rpId")),
                     relyingPartyID: object.string("rpId"),
                     username: object.string("userName", defaultValue: object.string("userDisplayName")),
@@ -851,6 +878,7 @@ public enum AndroidBackupCodec {
                     notes: object.string("notes")
                 ))
             }
+            return AndroidBackupImportedItem(sourceID: sourceID, draft: draft)
         } catch {
             issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 备份 JSON 无法解析"))
             return nil

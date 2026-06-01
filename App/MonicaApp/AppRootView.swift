@@ -3023,7 +3023,7 @@ final class AppSessionModel {
 
             let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
             for item in preview.items {
-                try createCSVImportedItem(item, projectID: project.id, entryRepository: entryRepository)
+                _ = try createCSVImportedItem(item, projectID: project.id, entryRepository: entryRepository)
             }
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
@@ -3070,13 +3070,35 @@ final class AppSessionModel {
             }
 
             let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
-            for item in preview.items {
-                try createCSVImportedItem(item, projectID: project.id, entryRepository: entryRepository)
+            var importedLoginIDsByAndroidID: [Int64: String] = [:]
+            for importedItem in preview.report.importedItems {
+                let createdEntryID = try createCSVImportedItem(
+                    importedItem.draft,
+                    projectID: project.id,
+                    entryRepository: entryRepository
+                )
+                if case .login = importedItem.draft,
+                   let sourceID = importedItem.sourceID,
+                   let createdEntryID {
+                    importedLoginIDsByAndroidID[sourceID] = createdEntryID
+                }
+            }
+            for attachment in preview.attachments {
+                _ = try entryRepository.createAttachmentMetadata(
+                    projectID: project.id,
+                    entryID: importedLoginIDsByAndroidID[attachment.parentPasswordID],
+                    fileName: attachment.fileName,
+                    mediaType: attachment.mediaType,
+                    originalSize: attachment.originalSize,
+                    storedSize: 0,
+                    contentHash: attachment.contentHash,
+                    storageMode: "android-backup-pending"
+                )
             }
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
             androidBackupImportPreview = nil
-            let attachmentText = preview.attachments.isEmpty ? "" : "；\(preview.attachments.count) 个附件已保留为待恢复元数据"
+            let attachmentText = preview.attachments.isEmpty ? "" : "；\(preview.attachments.count) 个附件元数据待恢复"
             entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项\(attachmentText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3694,28 +3716,28 @@ final class AppSessionModel {
         _ item: VaultCSVItemDraft,
         projectID: String,
         entryRepository: LocalVaultEntryRepository
-    ) throws {
+    ) throws -> String? {
         switch item {
         case .login(let draft):
-            _ = try entryRepository.createLoginEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createLoginEntry(projectID: projectID, draft: draft).id
         case .note(let draft):
-            _ = try entryRepository.createNoteEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createNoteEntry(projectID: projectID, draft: draft).id
         case .totp(let draft):
-            _ = try entryRepository.createTotpEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createTotpEntry(projectID: projectID, draft: draft).id
         case .card(let draft):
-            _ = try entryRepository.createCardEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createCardEntry(projectID: projectID, draft: draft).id
         case .identity(let draft):
-            _ = try entryRepository.createIdentityEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createIdentityEntry(projectID: projectID, draft: draft).id
         case .passkey(let draft):
-            _ = try entryRepository.createPasskeyEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createPasskeyEntry(projectID: projectID, draft: draft).id
         case .sshKey(let draft):
-            _ = try entryRepository.createSshKeyEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createSshKeyEntry(projectID: projectID, draft: draft).id
         case .apiToken(let draft):
-            _ = try entryRepository.createApiTokenEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createApiTokenEntry(projectID: projectID, draft: draft).id
         case .wifi(let draft):
-            _ = try entryRepository.createWifiEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createWifiEntry(projectID: projectID, draft: draft).id
         case .send(let draft):
-            _ = try entryRepository.createSendEntry(projectID: projectID, draft: draft)
+            return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
         }
     }
 
