@@ -139,6 +139,14 @@ struct AppSecurityCenterRow: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+struct AppSecurityCenterRepairSuggestion: Sendable, Equatable, Identifiable {
+    let id: String
+    let relatedRowID: String
+    let title: String
+    let detail: String
+    let systemImage: String
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1276,6 +1284,61 @@ final class AppSessionModel {
                 systemImage: "doc.on.doc"
             )
         ]
+    }
+
+    var securityCenterRepairSuggestions: [AppSecurityCenterRepairSuggestion] {
+        let weakPasswordCount = loginEntries.filter { Self.isWeakPassword($0.password) }.count
+        let reusedPasswordCount = reusedPasswordEntryCount(in: loginEntries)
+        let breachedPasswordCount = breachedPasswordEntryCount(in: loginEntries)
+        let duplicateLoginCount = duplicateLoginEntryCount(in: loginEntries)
+        var suggestions: [AppSecurityCenterRepairSuggestion] = []
+
+        if weakPasswordCount > 0 {
+            suggestions.append(
+                AppSecurityCenterRepairSuggestion(
+                    id: "repair-weak-passwords",
+                    relatedRowID: "weak-passwords",
+                    title: "生成强密码",
+                    detail: "为弱密码条目生成更长且包含多类字符的唯一密码。",
+                    systemImage: "wand.and.stars"
+                )
+            )
+        }
+        if reusedPasswordCount > 0 {
+            suggestions.append(
+                AppSecurityCenterRepairSuggestion(
+                    id: "repair-reused-passwords",
+                    relatedRowID: "reused-passwords",
+                    title: "拆分复用密码",
+                    detail: "逐个为复用密码条目设置不同密码，降低单点泄露影响。",
+                    systemImage: "rectangle.2.swap"
+                )
+            )
+        }
+        if breachedPasswordCount > 0 {
+            suggestions.append(
+                AppSecurityCenterRepairSuggestion(
+                    id: "repair-breached-passwords",
+                    relatedRowID: "breached-passwords",
+                    title: "更换泄露密码",
+                    detail: "优先处理命中泄露指纹的登录条目，并同步更新对应服务。",
+                    systemImage: "bolt.shield"
+                )
+            )
+        }
+        if duplicateLoginCount > 0 {
+            suggestions.append(
+                AppSecurityCenterRepairSuggestion(
+                    id: "repair-duplicate-logins",
+                    relatedRowID: "duplicate-logins",
+                    title: "合并重复项",
+                    detail: "检查重复登录预览，确认后保留主条目并清理重复记录。",
+                    systemImage: "arrow.triangle.merge"
+                )
+            )
+        }
+
+        return suggestions
     }
 
     var duplicateLoginMergePreviews: [AppDuplicateLoginMergePreview] {

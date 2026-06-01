@@ -527,6 +527,85 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.securityCenterRows.map(\.detail).joined(separator: " ").contains(breachedPassword))
     }
 
+    func testSecurityCenterBuildsRepairSuggestionsWithoutLeakingSecrets() {
+        let breachedPassword = "KnownBreached1!"
+        let model = AppSessionModel()
+        model.breachedPasswordSHA256Fingerprints = [Self.sha256Fingerprint(for: breachedPassword)]
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: "Short",
+                username: "alice",
+                password: "short",
+                url: "https://short.example.com"
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "GitHub",
+                username: "alice",
+                password: "RepeatedStrong1!",
+                url: "https://github.com"
+            ),
+            LocalLoginEntry(
+                id: "login-3",
+                projectID: "project-1",
+                title: "GitLab",
+                username: "alice",
+                password: "RepeatedStrong1!",
+                url: "https://gitlab.com"
+            ),
+            LocalLoginEntry(
+                id: "login-4",
+                projectID: "project-1",
+                title: "Leaked",
+                username: "alice",
+                password: breachedPassword,
+                url: "https://leaked.example.com"
+            ),
+            LocalLoginEntry(
+                id: "login-5",
+                projectID: "project-1",
+                title: " Bank ",
+                username: "Alice",
+                password: "UniqueStrong1!",
+                url: "https://bank.example.com"
+            ),
+            LocalLoginEntry(
+                id: "login-6",
+                projectID: "project-1",
+                title: "bank",
+                username: "alice",
+                password: "OtherStrong1!",
+                url: " https://bank.example.com "
+            )
+        ]
+
+        let suggestions = model.securityCenterRepairSuggestions
+
+        XCTAssertEqual(
+            suggestions.map(\.id),
+            [
+                "repair-weak-passwords",
+                "repair-reused-passwords",
+                "repair-breached-passwords",
+                "repair-duplicate-logins"
+            ]
+        )
+        XCTAssertEqual(
+            suggestions.map(\.relatedRowID),
+            ["weak-passwords", "reused-passwords", "breached-passwords", "duplicate-logins"]
+        )
+        XCTAssertEqual(suggestions.map(\.title), ["生成强密码", "拆分复用密码", "更换泄露密码", "合并重复项"])
+        let text = suggestions.map { "\($0.title) \($0.detail)" }.joined(separator: " ")
+        XCTAssertFalse(text.contains("short"))
+        XCTAssertFalse(text.contains("RepeatedStrong1!"))
+        XCTAssertFalse(text.contains(breachedPassword))
+        XCTAssertFalse(text.contains("UniqueStrong1!"))
+        XCTAssertFalse(text.contains("OtherStrong1!"))
+    }
+
     func testSecurityCenterSummarizesDuplicateLoginEntries() {
         let model = AppSessionModel()
         model.loginEntries = [

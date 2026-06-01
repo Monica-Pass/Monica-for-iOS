@@ -160,6 +160,16 @@ struct SettingsRootView: View {
                         }
                     }
                 }
+                if !session.securityCenterRepairSuggestions.isEmpty {
+                    AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                        ForEach(session.securityCenterRepairSuggestions) { suggestion in
+                            AndroidParitySecurityRepairSuggestionRow(suggestion: suggestion)
+                            if suggestion.id != session.securityCenterRepairSuggestions.last?.id {
+                                AndroidParityDivider()
+                            }
+                        }
+                    }
+                }
                 if !session.duplicateLoginMergePreviews.isEmpty {
                     AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                         ForEach(session.duplicateLoginMergePreviews) { preview in
@@ -522,6 +532,31 @@ private struct AndroidParitySecurityCenterRow: View {
                         .foregroundStyle(AndroidParityPalette.textSecondary)
                 }
                 Text(row.detail)
+                    .font(.caption)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AndroidParitySecurityRepairSuggestionRow: View {
+    let suggestion: AppSecurityCenterRepairSuggestion
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: suggestion.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .frame(width: 28, height: 28)
+                .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(suggestion.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                Text(suggestion.detail)
                     .font(.caption)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
