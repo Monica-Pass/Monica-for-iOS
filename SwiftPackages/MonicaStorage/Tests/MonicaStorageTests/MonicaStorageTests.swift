@@ -398,6 +398,47 @@ import MonicaStorage
     #expect(identity.issuer == "Monica Authority")
 }
 
+@Test func androidBackupCodecImportsAttachmentManifestMetadata() throws {
+    let backup = try AndroidBackupCodec.exportZip(entries: [
+        "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret","website":"https://github.com","categoryName":"Work"}"#,
+        "attachments/attachments_meta.json": #"""
+        {
+          "version": 1,
+          "entries": [
+            {
+              "parentPasswordId": 42,
+              "fileName": "contract.pdf",
+              "mimeType": "application/pdf",
+              "sizeBytes": 2048,
+              "sha256Hex": "abc123",
+              "wrappedCek": "wrapped-key",
+              "localPath": "attachment-1.enc",
+              "createdAt": 1710000000000,
+              "updatedAt": 1710000001000
+            }
+          ]
+        }
+        """#,
+        "attachments/attachment-1.enc": "ciphertext"
+    ])
+
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(report.items.map(\.kind) == [.login])
+    #expect(report.attachments.count == 1)
+    guard let attachment = report.attachments.first else {
+        return
+    }
+    #expect(attachment.parentPasswordID == 42)
+    #expect(attachment.fileName == "contract.pdf")
+    #expect(attachment.mediaType == "application/pdf")
+    #expect(attachment.originalSize == 2048)
+    #expect(attachment.contentHash == "abc123")
+    #expect(attachment.wrappedContentEncryptionKey == "wrapped-key")
+    #expect(attachment.localPath == "attachment-1.enc")
+    #expect(attachment.blobEntryPath == "attachments/attachment-1.enc")
+}
+
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])

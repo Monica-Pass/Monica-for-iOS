@@ -225,12 +225,58 @@ public struct AndroidBackupImportIssue: Sendable, Equatable {
     }
 }
 
+public struct AndroidBackupAttachmentMetadata: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let parentPasswordID: Int64
+    public let fileName: String
+    public let mediaType: String
+    public let originalSize: Int64
+    public let contentHash: String
+    public let wrappedContentEncryptionKey: String
+    public let localPath: String
+    public let blobEntryPath: String?
+    public let createdAt: Int64
+    public let updatedAt: Int64
+
+    public init(
+        id: String,
+        parentPasswordID: Int64,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        contentHash: String,
+        wrappedContentEncryptionKey: String,
+        localPath: String,
+        blobEntryPath: String?,
+        createdAt: Int64,
+        updatedAt: Int64
+    ) {
+        self.id = id
+        self.parentPasswordID = parentPasswordID
+        self.fileName = fileName
+        self.mediaType = mediaType
+        self.originalSize = originalSize
+        self.contentHash = contentHash
+        self.wrappedContentEncryptionKey = wrappedContentEncryptionKey
+        self.localPath = localPath
+        self.blobEntryPath = blobEntryPath
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
 public struct AndroidBackupImportReport: Sendable, Equatable {
     public let items: [VaultCSVItemDraft]
+    public let attachments: [AndroidBackupAttachmentMetadata]
     public let issues: [AndroidBackupImportIssue]
 
-    public init(items: [VaultCSVItemDraft], issues: [AndroidBackupImportIssue]) {
+    public init(
+        items: [VaultCSVItemDraft],
+        attachments: [AndroidBackupAttachmentMetadata] = [],
+        issues: [AndroidBackupImportIssue]
+    ) {
         self.items = items
+        self.attachments = attachments
         self.issues = issues
     }
 }
@@ -242,12 +288,19 @@ public enum AndroidBackupCodec {
         var issues: [AndroidBackupImportIssue] = []
         var legacyCSVFiles: [(path: String, data: Data, index: Int)] = []
         var jsonBackedKinds = Set<BackupKind>()
+        var attachmentManifest: (path: String, data: Data)?
+        var attachmentBlobPaths = Set<String>()
         var index = 0
 
         for entry in archive where entry.type == .file {
             let path = normalizedPath(entry.path)
             guard isSafeEntryPath(path) else {
                 issues.append(issue(entryPath: entry.path, code: .unsafeEntryPath, detail: "ZIP 条目路径不安全"))
+                continue
+            }
+            if isAttachmentBlob(path) {
+                attachmentBlobPaths.insert(path)
+                index += 1
                 continue
             }
             guard path.hasSuffix(".json") || path.hasSuffix(".csv") else {
@@ -257,6 +310,12 @@ public enum AndroidBackupCodec {
             var data = Data()
             _ = try archive.extract(entry) { chunk in
                 data.append(chunk)
+            }
+
+            if isAttachmentManifest(path) {
+                attachmentManifest = (path: path, data: data)
+                index += 1
+                continue
             }
 
             if path.hasSuffix(".csv") {
@@ -298,7 +357,12 @@ public enum AndroidBackupCodec {
                 return lhs.order < rhs.order
             }
             .map(\.item)
-        return AndroidBackupImportReport(items: items, issues: issues)
+        let attachments = parseAttachmentManifest(
+            attachmentManifest,
+            blobPaths: attachmentBlobPaths,
+            issues: &issues
+        )
+        return AndroidBackupImportReport(items: items, attachments: attachments, issues: issues)
     }
 
     public static func exportItems(_ items: [VaultCSVItemDraft], folderName: String = "Imported") throws -> Data {
@@ -372,6 +436,23 @@ public enum AndroidBackupCodec {
         case cardsAndDocumentsOnly
     }
 
+    private struct AttachmentManifest: Decodable {
+        let version: Int
+        let entries: [AttachmentEntry]
+    }
+
+    private struct AttachmentEntry: Decodable {
+        let parentPasswordId: Int64
+        let fileName: String
+        let mimeType: String
+        let sizeBytes: Int64
+        let sha256Hex: String?
+        let wrappedCek: String
+        let localPath: String
+        let createdAt: Int64
+        let updatedAt: Int64
+    }
+
     private static func order(for path: String, kind: BackupKind) -> Int {
         let fileName = path.split(separator: "/").last.map(String.init) ?? path
         if let firstNumber = fileName.split(whereSeparator: { !$0.isNumber }).compactMap({ Int($0) }).first {
@@ -405,6 +486,65 @@ public enum AndroidBackupCodec {
             return .identity
         case .passkey:
             return .passkey
+        }
+    }
+
+    private static func parseAttachmentManifest(
+        _ manifest: (path: String, data: Data)?,
+        blobPaths: Set<String>,
+        issues: inout [AndroidBackupImportIssue]
+    ) -> [AndroidBackupAttachmentMetadata] {
+        guard let manifest else { return [] }
+        do {
+            let decoded = try JSONDecoder().decode(AttachmentManifest.self, from: manifest.data)
+            guard decoded.version == 1 else {
+                issues.append(issue(entryPath: manifest.path, code: .unsupportedEntry, detail: "不支持的附件 manifest 版本"))
+                return []
+            }
+            return decoded.entries.enumerated().map { offset, entry in
+                let blobPath = attachmentBlobPath(for: entry.localPath, in: blobPaths)
+                return AndroidBackupAttachmentMetadata(
+                    id: "android-attachment-\(entry.parentPasswordId)-\(offset)",
+                    parentPasswordID: entry.parentPasswordId,
+                    fileName: entry.fileName,
+                    mediaType: entry.mimeType,
+                    originalSize: entry.sizeBytes,
+                    contentHash: entry.sha256Hex ?? "",
+                    wrappedContentEncryptionKey: entry.wrappedCek,
+                    localPath: entry.localPath,
+                    blobEntryPath: blobPath,
+                    createdAt: entry.createdAt,
+                    updatedAt: entry.updatedAt
+                )
+            }
+        } catch {
+            issues.append(issue(entryPath: manifest.path, code: .malformedJSON, detail: "Android 附件 manifest 无法解析"))
+            return []
+        }
+    }
+
+    private static func isAttachmentManifest(_ path: String) -> Bool {
+        path.lowercased() == "attachments/attachments_meta.json"
+    }
+
+    private static func isAttachmentBlob(_ path: String) -> Bool {
+        let lowercased = path.lowercased()
+        return lowercased.hasPrefix("attachments/")
+            && lowercased != "attachments/attachments_meta.json"
+            && !path.hasSuffix("/")
+    }
+
+    private static func attachmentBlobPath(for localPath: String, in blobPaths: Set<String>) -> String? {
+        let fileName = localPath.replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? localPath
+        let expectedPath = "attachments/\(fileName)"
+        if blobPaths.contains(expectedPath) {
+            return expectedPath
+        }
+        return blobPaths.first { path in
+            path.split(separator: "/").last.map(String.init) == fileName
         }
     }
 
