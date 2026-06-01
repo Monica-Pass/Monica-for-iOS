@@ -245,6 +245,7 @@ public struct AndroidBackupAttachmentMetadata: Sendable, Equatable, Identifiable
     public let wrappedContentEncryptionKey: String
     public let localPath: String
     public let blobEntryPath: String?
+    public let encryptedBlob: Data?
     public let createdAt: Int64
     public let updatedAt: Int64
 
@@ -258,6 +259,7 @@ public struct AndroidBackupAttachmentMetadata: Sendable, Equatable, Identifiable
         wrappedContentEncryptionKey: String,
         localPath: String,
         blobEntryPath: String?,
+        encryptedBlob: Data? = nil,
         createdAt: Int64,
         updatedAt: Int64
     ) {
@@ -270,6 +272,7 @@ public struct AndroidBackupAttachmentMetadata: Sendable, Equatable, Identifiable
         self.wrappedContentEncryptionKey = wrappedContentEncryptionKey
         self.localPath = localPath
         self.blobEntryPath = blobEntryPath
+        self.encryptedBlob = encryptedBlob
         self.createdAt = createdAt
         self.updatedAt = updatedAt
     }
@@ -302,7 +305,7 @@ public enum AndroidBackupCodec {
         var legacyCSVFiles: [(path: String, data: Data, index: Int)] = []
         var jsonBackedKinds = Set<BackupKind>()
         var attachmentManifest: (path: String, data: Data)?
-        var attachmentBlobPaths = Set<String>()
+        var attachmentBlobDataByPath: [String: Data] = [:]
         var index = 0
 
         for entry in archive where entry.type == .file {
@@ -312,7 +315,11 @@ public enum AndroidBackupCodec {
                 continue
             }
             if isAttachmentBlob(path) {
-                attachmentBlobPaths.insert(path)
+                var data = Data()
+                _ = try archive.extract(entry) { chunk in
+                    data.append(chunk)
+                }
+                attachmentBlobDataByPath[path] = data
                 index += 1
                 continue
             }
@@ -379,7 +386,7 @@ public enum AndroidBackupCodec {
         let items = importedItems.map(\.draft)
         let attachments = parseAttachmentManifest(
             attachmentManifest,
-            blobPaths: attachmentBlobPaths,
+            blobDataByPath: attachmentBlobDataByPath,
             issues: &issues
         )
         return AndroidBackupImportReport(
@@ -516,7 +523,7 @@ public enum AndroidBackupCodec {
 
     private static func parseAttachmentManifest(
         _ manifest: (path: String, data: Data)?,
-        blobPaths: Set<String>,
+        blobDataByPath: [String: Data],
         issues: inout [AndroidBackupImportIssue]
     ) -> [AndroidBackupAttachmentMetadata] {
         guard let manifest else { return [] }
@@ -527,7 +534,7 @@ public enum AndroidBackupCodec {
                 return []
             }
             return decoded.entries.enumerated().map { offset, entry in
-                let blobPath = attachmentBlobPath(for: entry.localPath, in: blobPaths)
+                let blob = attachmentBlob(for: entry.localPath, in: blobDataByPath)
                 return AndroidBackupAttachmentMetadata(
                     id: "android-attachment-\(entry.parentPasswordId)-\(offset)",
                     parentPasswordID: entry.parentPasswordId,
@@ -537,7 +544,8 @@ public enum AndroidBackupCodec {
                     contentHash: entry.sha256Hex ?? "",
                     wrappedContentEncryptionKey: entry.wrappedCek,
                     localPath: entry.localPath,
-                    blobEntryPath: blobPath,
+                    blobEntryPath: blob?.path,
+                    encryptedBlob: blob?.data,
                     createdAt: entry.createdAt,
                     updatedAt: entry.updatedAt
                 )
@@ -559,18 +567,21 @@ public enum AndroidBackupCodec {
             && !path.hasSuffix("/")
     }
 
-    private static func attachmentBlobPath(for localPath: String, in blobPaths: Set<String>) -> String? {
+    private static func attachmentBlob(for localPath: String, in blobDataByPath: [String: Data]) -> (path: String, data: Data)? {
         let fileName = localPath.replacingOccurrences(of: "\\", with: "/")
             .split(separator: "/")
             .last
             .map(String.init) ?? localPath
         let expectedPath = "attachments/\(fileName)"
-        if blobPaths.contains(expectedPath) {
-            return expectedPath
+        if let data = blobDataByPath[expectedPath] {
+            return (expectedPath, data)
         }
-        return blobPaths.first { path in
+        guard let matchedPath = blobDataByPath.keys.first(where: { path in
             path.split(separator: "/").last.map(String.init) == fileName
+        }) else {
+            return nil
         }
+        return (matchedPath, blobDataByPath[matchedPath] ?? Data())
     }
 
     private static func parseLegacyCSVItems(
@@ -2280,7 +2291,11 @@ public protocol LocalVaultEngine {
         originalSize: Int64,
         storedSize: Int64,
         contentHash: String,
-        storageMode: String
+        storageMode: String,
+        source: String,
+        downloadState: String,
+        wrappedContentEncryptionKey: String?,
+        localPath: String?
     ) throws -> LocalAttachmentMetadata
 
     func listAttachmentMetadata(
@@ -2347,7 +2362,7 @@ public extension LocalVaultEngine {
     func listDeletedSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.send) }
     func restoreSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSendEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.send) }
 
-    func createAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, entryID: String?, fileName: String, mediaType: String, originalSize: Int64, storedSize: Int64, contentHash: String, storageMode: String) throws -> LocalAttachmentMetadata { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
+    func createAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, entryID: String?, fileName: String, mediaType: String, originalSize: Int64, storedSize: Int64, contentHash: String, storageMode: String, source: String = "", downloadState: String = "", wrappedContentEncryptionKey: String? = nil, localPath: String? = nil) throws -> LocalAttachmentMetadata { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func listAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func deleteAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func listDeletedAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
@@ -2997,6 +3012,10 @@ public struct LocalAttachmentMetadata: Sendable, Equatable, Identifiable {
     public let storedSize: Int64
     public let contentHash: String
     public let storageMode: String
+    public let source: String
+    public let downloadState: String
+    public let wrappedContentEncryptionKey: String?
+    public let localPath: String?
     public let deleted: Bool
 
     public init(
@@ -3009,6 +3028,10 @@ public struct LocalAttachmentMetadata: Sendable, Equatable, Identifiable {
         storedSize: Int64,
         contentHash: String,
         storageMode: String,
+        source: String = "",
+        downloadState: String = "",
+        wrappedContentEncryptionKey: String? = nil,
+        localPath: String? = nil,
         deleted: Bool
     ) {
         self.id = id
@@ -3020,6 +3043,10 @@ public struct LocalAttachmentMetadata: Sendable, Equatable, Identifiable {
         self.storedSize = storedSize
         self.contentHash = contentHash
         self.storageMode = storageMode
+        self.source = source
+        self.downloadState = downloadState
+        self.wrappedContentEncryptionKey = wrappedContentEncryptionKey
+        self.localPath = localPath
         self.deleted = deleted
     }
 }
@@ -4292,7 +4319,11 @@ public struct LocalVaultEntryRepository {
         originalSize: Int64,
         storedSize: Int64,
         contentHash: String,
-        storageMode: String
+        storageMode: String,
+        source: String = "",
+        downloadState: String = "",
+        wrappedContentEncryptionKey: String? = nil,
+        localPath: String? = nil
     ) throws -> LocalAttachmentMetadata {
         let normalizedFileName = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedFileName.isEmpty else {
@@ -4307,7 +4338,11 @@ public struct LocalVaultEntryRepository {
             originalSize: originalSize,
             storedSize: storedSize,
             contentHash: contentHash,
-            storageMode: storageMode
+            storageMode: storageMode,
+            source: source,
+            downloadState: downloadState,
+            wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+            localPath: localPath
         )
     }
 
@@ -5311,7 +5346,11 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         originalSize: Int64,
         storedSize: Int64,
         contentHash: String,
-        storageMode: String
+        storageMode: String,
+        source: String = "",
+        downloadState: String = "",
+        wrappedContentEncryptionKey: String? = nil,
+        localPath: String? = nil
     ) throws -> LocalAttachmentMetadata {
         var payload: [String: Any] = [
             "fileName": fileName,
@@ -5319,10 +5358,18 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             "originalSize": originalSize,
             "storedSize": storedSize,
             "contentHash": contentHash,
-            "storageMode": storageMode
+            "storageMode": storageMode,
+            "source": source,
+            "downloadState": downloadState
         ]
         if let entryID {
             payload["entryID"] = entryID
+        }
+        if let wrappedContentEncryptionKey {
+            payload["wrappedContentEncryptionKey"] = wrappedContentEncryptionKey
+        }
+        if let localPath {
+            payload["localPath"] = localPath
         }
         let entry = try createParityEntry(
             in: handle,
@@ -5675,6 +5722,10 @@ private extension LocalAttachmentMetadata {
             storedSize: payload.int64("storedSize"),
             contentHash: payload.string("contentHash"),
             storageMode: payload.string("storageMode"),
+            source: payload.string("source"),
+            downloadState: payload.string("downloadState"),
+            wrappedContentEncryptionKey: payload.optionalString("wrappedContentEncryptionKey"),
+            localPath: payload.optionalString("localPath"),
             deleted: deleted
         )
     }

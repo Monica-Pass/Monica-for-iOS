@@ -438,6 +438,7 @@ import MonicaStorage
     #expect(attachment.wrappedContentEncryptionKey == "wrapped-key")
     #expect(attachment.localPath == "attachment-1.enc")
     #expect(attachment.blobEntryPath == "attachments/attachment-1.enc")
+    #expect(attachment.encryptedBlob == Data("ciphertext".utf8))
 }
 
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
@@ -2640,9 +2641,38 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         return entry
     }
 
-    func createAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, entryID: String?, fileName: String, mediaType: String, originalSize: Int64, storedSize: Int64, contentHash: String, storageMode: String) throws -> LocalAttachmentMetadata {
-        let metadata = LocalAttachmentMetadata(id: "attachment-\(createdAttachmentMetadata.count + 1)", projectID: projectID, entryID: entryID, fileName: fileName, mediaType: mediaType, originalSize: originalSize, storedSize: storedSize, contentHash: contentHash, storageMode: storageMode, deleted: false)
-        createdAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, fileName: fileName))
+    func createAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        storedSize: Int64,
+        contentHash: String,
+        storageMode: String,
+        source: String,
+        downloadState: String,
+        wrappedContentEncryptionKey: String?,
+        localPath: String?
+    ) throws -> LocalAttachmentMetadata {
+        let metadata = LocalAttachmentMetadata(
+            id: "attachment-\(createdAttachmentMetadata.count + 1)",
+            projectID: projectID,
+            entryID: entryID,
+            fileName: fileName,
+            mediaType: mediaType,
+            originalSize: originalSize,
+            storedSize: storedSize,
+            contentHash: contentHash,
+            storageMode: storageMode,
+            source: source,
+            downloadState: downloadState,
+            wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+            localPath: localPath,
+            deleted: false
+        )
+        createdAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, fileName: fileName, source: source, downloadState: downloadState, wrappedContentEncryptionKey: wrappedContentEncryptionKey, localPath: localPath))
         attachmentMetadata[projectID, default: []].append(metadata)
         return metadata
     }
@@ -2655,7 +2685,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         deletedAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, attachmentID: attachmentID))
         guard let metadata = attachmentMetadata[projectID, default: []].first(where: { $0.id == attachmentID }) else { return }
         attachmentMetadata[projectID, default: []].removeAll { $0.id == attachmentID }
-        deletedAttachments[projectID, default: []].append(LocalAttachmentMetadata(id: metadata.id, projectID: metadata.projectID, entryID: metadata.entryID, fileName: metadata.fileName, mediaType: metadata.mediaType, originalSize: metadata.originalSize, storedSize: metadata.storedSize, contentHash: metadata.contentHash, storageMode: metadata.storageMode, deleted: true))
+        deletedAttachments[projectID, default: []].append(LocalAttachmentMetadata(id: metadata.id, projectID: metadata.projectID, entryID: metadata.entryID, fileName: metadata.fileName, mediaType: metadata.mediaType, originalSize: metadata.originalSize, storedSize: metadata.storedSize, contentHash: metadata.contentHash, storageMode: metadata.storageMode, source: metadata.source, downloadState: metadata.downloadState, wrappedContentEncryptionKey: metadata.wrappedContentEncryptionKey, localPath: metadata.localPath, deleted: true))
     }
 
     func listDeletedAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] {
@@ -2665,7 +2695,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     func restoreAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws -> LocalAttachmentMetadata {
         restoredAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, attachmentID: attachmentID))
         guard let metadata = deletedAttachments[projectID, default: []].first(where: { $0.id == attachmentID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
-        let restored = LocalAttachmentMetadata(id: metadata.id, projectID: metadata.projectID, entryID: metadata.entryID, fileName: metadata.fileName, mediaType: metadata.mediaType, originalSize: metadata.originalSize, storedSize: metadata.storedSize, contentHash: metadata.contentHash, storageMode: metadata.storageMode, deleted: false)
+        let restored = LocalAttachmentMetadata(id: metadata.id, projectID: metadata.projectID, entryID: metadata.entryID, fileName: metadata.fileName, mediaType: metadata.mediaType, originalSize: metadata.originalSize, storedSize: metadata.storedSize, contentHash: metadata.contentHash, storageMode: metadata.storageMode, source: metadata.source, downloadState: metadata.downloadState, wrappedContentEncryptionKey: metadata.wrappedContentEncryptionKey, localPath: metadata.localPath, deleted: false)
         deletedAttachments[projectID, default: []].removeAll { $0.id == attachmentID }
         attachmentMetadata[projectID, default: []].append(restored)
         return restored
@@ -2841,6 +2871,10 @@ private struct RecordedAttachmentMetadataCall: Equatable {
     let projectID: String
     let entryID: String?
     let fileName: String
+    let source: String
+    let downloadState: String
+    let wrappedContentEncryptionKey: String?
+    let localPath: String?
 }
 
 private struct RecordedEntryMutationCall: Equatable {

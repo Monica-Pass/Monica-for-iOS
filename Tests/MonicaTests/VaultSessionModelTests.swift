@@ -2027,7 +2027,11 @@ final class VaultSessionModelTests: XCTestCase {
 
     func testAndroidBackupConfirmImportsAttachmentMetadataWithRemappedLoginID() throws {
         let engine = RecordingVaultEngine()
-        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
         let backup = try AndroidBackupCodec.exportZip(entries: [
             "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
             "attachments/attachments_meta.json": #"""
@@ -2044,6 +2048,16 @@ final class VaultSessionModelTests: XCTestCase {
         try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
 
         XCTAssertEqual(model.loginEntries.map(\.id), ["entry-1"])
+        XCTAssertEqual(
+            blobStore.savedBlobs,
+            [
+                RecordedAndroidBackupAttachmentBlob(
+                    vaultID: "created-vault",
+                    localPath: "attachment-1.enc",
+                    data: Data("ciphertext".utf8)
+                )
+            ]
+        )
         XCTAssertEqual(engine.createdAttachmentMetadata.count, 1)
         XCTAssertEqual(
             engine.createdAttachmentMetadata.first,
@@ -2054,12 +2068,37 @@ final class VaultSessionModelTests: XCTestCase {
                 fileName: "contract.pdf",
                 mediaType: "application/pdf",
                 originalSize: 2048,
-                storedSize: 0,
+                storedSize: 10,
                 contentHash: "abc123",
-                storageMode: "android-backup-pending"
+                storageMode: "android-backup-encrypted-blob",
+                source: "android-backup-local",
+                downloadState: "downloaded",
+                wrappedContentEncryptionKey: "wrapped-key",
+                localPath: "attachment-1.enc"
             )
         )
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；1 个附件元数据待恢复"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；1 个附件密文待恢复"))
+    }
+
+    func testFileAndroidBackupAttachmentBlobStoreWritesSanitizedEncryptedBlob() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let store = FileAndroidBackupAttachmentBlobStore(baseDirectory: directory)
+
+        let relativePath = try store.saveEncryptedBlob(
+            Data("ciphertext".utf8),
+            vaultID: "created-vault",
+            localPath: "../合同 attachment-1.enc"
+        )
+
+        XCTAssertEqual(relativePath, "___attachment-1.enc")
+        XCTAssertEqual(
+            try Data(contentsOf: directory.appendingPathComponent("created-vault").appendingPathComponent(relativePath)),
+            Data("ciphertext".utf8)
+        )
     }
 
     func testAndroidBackupExportDocumentWrapsCurrentVaultZipForFileExporter() throws {
@@ -3108,6 +3147,27 @@ private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @un
         }
         return downloadedBackup
     }
+}
+
+private final class RecordingAndroidBackupAttachmentBlobStore: AndroidBackupAttachmentBlobStore {
+    private(set) var savedBlobs: [RecordedAndroidBackupAttachmentBlob] = []
+
+    func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String {
+        savedBlobs.append(
+            RecordedAndroidBackupAttachmentBlob(
+                vaultID: vaultID,
+                localPath: localPath,
+                data: data
+            )
+        )
+        return localPath
+    }
+}
+
+private struct RecordedAndroidBackupAttachmentBlob: Equatable {
+    let vaultID: String
+    let localPath: String
+    let data: Data
 }
 
 private final class RecordingVaultEngine: LocalVaultEngine {
@@ -4572,7 +4632,11 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         originalSize: Int64,
         storedSize: Int64,
         contentHash: String,
-        storageMode: String
+        storageMode: String,
+        source: String,
+        downloadState: String,
+        wrappedContentEncryptionKey: String?,
+        localPath: String?
     ) throws -> LocalAttachmentMetadata {
         let metadata = LocalAttachmentMetadata(
             id: "attachment-\(createdAttachmentMetadata.count + 1)",
@@ -4584,6 +4648,10 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             storedSize: storedSize,
             contentHash: contentHash,
             storageMode: storageMode,
+            source: source,
+            downloadState: downloadState,
+            wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+            localPath: localPath,
             deleted: false
         )
         createdAttachmentMetadata.append(
@@ -4596,7 +4664,11 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                 originalSize: originalSize,
                 storedSize: storedSize,
                 contentHash: contentHash,
-                storageMode: storageMode
+                storageMode: storageMode,
+                source: source,
+                downloadState: downloadState,
+                wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+                localPath: localPath
             )
         )
         attachmentMetadata[projectID, default: []].append(metadata)
@@ -4785,6 +4857,10 @@ private struct RecordedAttachmentMetadataCall: Equatable {
     let storedSize: Int64
     let contentHash: String
     let storageMode: String
+    let source: String
+    let downloadState: String
+    let wrappedContentEncryptionKey: String?
+    let localPath: String?
 }
 
 private struct RecordedEntryMutationCall {

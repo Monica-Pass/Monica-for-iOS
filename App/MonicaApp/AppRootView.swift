@@ -96,6 +96,69 @@ struct AndroidBackupExportDocument: FileDocument, Sendable {
     }
 }
 
+protocol AndroidBackupAttachmentBlobStore {
+    func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String
+}
+
+struct FileAndroidBackupAttachmentBlobStore: AndroidBackupAttachmentBlobStore {
+    private let baseDirectory: URL?
+    private let fileManager: FileManager
+
+    init(baseDirectory: URL? = nil, fileManager: FileManager = .default) {
+        self.baseDirectory = baseDirectory
+        self.fileManager = fileManager
+    }
+
+    func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String {
+        let vaultDirectory = try storageRoot()
+            .appendingPathComponent(sanitizedPathComponent(vaultID), isDirectory: true)
+        try fileManager.createDirectory(at: vaultDirectory, withIntermediateDirectories: true)
+
+        let relativePath = sanitizedPathComponent(localPath)
+        let fileURL = vaultDirectory.appendingPathComponent(relativePath, isDirectory: false)
+        try data.write(to: fileURL, options: [.atomic])
+        return relativePath
+    }
+
+    private func storageRoot() throws -> URL {
+        if let baseDirectory {
+            return baseDirectory
+        }
+        guard let applicationSupport = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("MonicaAndroidBackupAttachments", isDirectory: true)
+        }
+        return applicationSupport
+            .appendingPathComponent("Monica", isDirectory: true)
+            .appendingPathComponent("AndroidBackupAttachments", isDirectory: true)
+    }
+
+    private func sanitizedPathComponent(_ value: String) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? value
+        let sanitized = normalized.unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 46, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        return sanitized.isEmpty ? UUID().uuidString + ".enc" : sanitized
+    }
+}
+
 enum FirstTimePasswordSetupStep: Sendable, Equatable {
     case enterPassword
     case confirmPassword
@@ -630,6 +693,7 @@ final class AppSessionModel {
     private let autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)?
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
+    private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let passwordGenerator: () throws -> String
     private var activeVaultSession: LocalVaultSession?
     private var activeEntryRepository: LocalVaultEntryRepository?
@@ -654,6 +718,7 @@ final class AppSessionModel {
         autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)? = nil,
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
+        androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         passwordGenerator: @escaping () throws -> String = {
             try PasswordGenerator.generate()
         },
@@ -674,6 +739,7 @@ final class AppSessionModel {
         self.autoFillIndexKeyMaterialProvider = autoFillIndexKeyMaterialProvider
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
+        self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.passwordGenerator = passwordGenerator
         self.autoLockPolicy = autoLockPolicy
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
@@ -3068,6 +3134,7 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
+            let vaultSession = try requireActiveVaultSession()
 
             let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
             var importedLoginIDsByAndroidID: [Int64: String] = [:]
@@ -3083,22 +3150,47 @@ final class AppSessionModel {
                     importedLoginIDsByAndroidID[sourceID] = createdEntryID
                 }
             }
+            var savedAttachmentBlobCount = 0
             for attachment in preview.attachments {
+                let encryptedBlobLocalPath: String?
+                if let encryptedBlob = attachment.encryptedBlob {
+                    encryptedBlobLocalPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
+                        encryptedBlob,
+                        vaultID: vaultSession.handle.vaultID,
+                        localPath: attachment.localPath
+                    )
+                    savedAttachmentBlobCount += 1
+                } else {
+                    encryptedBlobLocalPath = nil
+                }
                 _ = try entryRepository.createAttachmentMetadata(
                     projectID: project.id,
                     entryID: importedLoginIDsByAndroidID[attachment.parentPasswordID],
                     fileName: attachment.fileName,
                     mediaType: attachment.mediaType,
                     originalSize: attachment.originalSize,
-                    storedSize: 0,
+                    storedSize: Int64(attachment.encryptedBlob?.count ?? 0),
                     contentHash: attachment.contentHash,
-                    storageMode: "android-backup-pending"
+                    storageMode: encryptedBlobLocalPath == nil ? "android-backup-pending" : "android-backup-encrypted-blob",
+                    source: "android-backup-local",
+                    downloadState: encryptedBlobLocalPath == nil ? "missing-blob" : "downloaded",
+                    wrappedContentEncryptionKey: encryptedBlobLocalPath == nil ? nil : attachment.wrappedContentEncryptionKey,
+                    localPath: encryptedBlobLocalPath
                 )
             }
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
             androidBackupImportPreview = nil
-            let attachmentText = preview.attachments.isEmpty ? "" : "；\(preview.attachments.count) 个附件元数据待恢复"
+            let attachmentText: String
+            if preview.attachments.isEmpty {
+                attachmentText = ""
+            } else if savedAttachmentBlobCount == preview.attachments.count {
+                attachmentText = "；\(savedAttachmentBlobCount) 个附件密文待恢复"
+            } else if savedAttachmentBlobCount > 0 {
+                attachmentText = "；\(savedAttachmentBlobCount) 个附件密文待恢复，\(preview.attachments.count - savedAttachmentBlobCount) 个附件元数据待恢复"
+            } else {
+                attachmentText = "；\(preview.attachments.count) 个附件元数据待恢复"
+            }
             entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项\(attachmentText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
