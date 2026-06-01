@@ -134,6 +134,106 @@ import MonicaStorage
     #expect(attachment.storageMode == "embedded-inline")
 }
 
+@Test func csvMigrationCodecImportsCoreAndExtendedVaultItems() {
+    let csv = #"""
+    kind,title,username,password,url,body,secret,issuer,accountName,period,digits,algorithm,otpType,counter,cardholderName,number,expiryMonth,expiryYear,cvv,network,documentType,fullName,documentNumber,country,issueDate,expiryDate,relyingPartyID,userHandle,credentialID,publicKeyCOSE,privateKeyReference,host,publicKey,passphraseHint,token,scopes,expiresAt,ssid,securityType,hidden,maxViews,notes
+    login,GitHub,alice,"p,ass","https://github.com",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,
+    note,"Launch, Notes",,,,"Line 1
+    Line 2",,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,"quoted ""note"""
+    totp,GitHub 2FA,,,,,JBSWY3DPEHPK3PXP,GitHub,alice,30,6,SHA1,totp,0,,,,,,,,,,,,,,,,,,,,,,,,,
+    card,Everyday Visa,,,,,,,,,,,,,Alice,4111111111111111,12,2030,123,Visa,,,,,,,,,,,,,,,,,,Monica Bank card
+    identity,Passport,,,,,,,,,,,,,,,,,,,,Passport,Alice Example,P1234567,US,2024-01-01,2034-01-01,,,,,,,,,,,,,
+    passkey,GitHub passkey,alice,,,,,,,,,,,,,,,,,,,,,,,,github.com,user-handle,credential-id,public-key-cose,keychain://passkeys/github,,,,,,,,,
+    sshKey,Production deploy,deploy,,,,,,,,,,,,,,,,,,,,,,,,,,,,keychain://ssh/prod,prod.example.com,ssh-ed25519 AAAA,hardware key,,,,,,rotate quarterly
+    apiToken,OpenAI,,, ,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,sk-secret,responses.read,2027-01-01,,,,,agent token
+    wifi,Studio Wi-Fi,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,MonicaLab,WPA3,true,,office network
+    send,One-time send,,,,share once,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,,2026-06-02,,,1,share once only
+    """#
+
+    let report = VaultCSVCodec.importItems(from: csv)
+
+    #expect(report.issues.isEmpty)
+    #expect(report.items.count == 10)
+    #expect(report.items.map(\.kind) == [.login, .note, .totp, .card, .identity, .passkey, .sshKey, .apiToken, .wifi, .send])
+
+    guard case .login(let login) = report.items[0] else {
+        Issue.record("Expected login draft")
+        return
+    }
+    #expect(login.password == "p,ass")
+    #expect(login.url == "https://github.com")
+
+    guard case .note(let note) = report.items[1] else {
+        Issue.record("Expected note draft")
+        return
+    }
+    #expect(note.body == "Line 1\nLine 2")
+
+    guard case .totp(let totp) = report.items[2] else {
+        Issue.record("Expected totp draft")
+        return
+    }
+    #expect(totp.secret == "JBSWY3DPEHPK3PXP")
+    #expect(totp.period == 30)
+    #expect(totp.digits == 6)
+
+    guard case .wifi(let wifi) = report.items[8] else {
+        Issue.record("Expected Wi-Fi draft")
+        return
+    }
+    #expect(wifi.hidden)
+    #expect(wifi.password == "")
+
+    guard case .send(let send) = report.items[9] else {
+        Issue.record("Expected send draft")
+        return
+    }
+    #expect(send.maxViews == 1)
+}
+
+@Test func csvMigrationCodecExportsEscapedHeaderAndRoundTripsSensitiveFields() {
+    let items: [VaultCSVItemDraft] = [
+        .login(LocalLoginEntryDraft(title: "GitHub", username: "alice", password: "p,ass", url: "https://github.com")),
+        .note(LocalNoteEntryDraft(title: "Launch", body: "Line 1\nLine 2")),
+        .apiToken(LocalApiTokenEntryDraft(title: "OpenAI", issuer: "OpenAI", accountName: "alice@example.com", token: "sk-secret", scopes: "responses.read", expiresAt: "2027-01-01", notes: "quoted \"note\""))
+    ]
+
+    let csv = VaultCSVCodec.exportItems(items)
+    let report = VaultCSVCodec.importItems(from: csv)
+
+    #expect(csv.hasPrefix(VaultCSVCodec.headerLine))
+    #expect(csv.contains("\"p,ass\""))
+    #expect(csv.contains("\"Line 1\nLine 2\""))
+    #expect(csv.contains("\"quoted \"\"note\"\"\""))
+    #expect(report.issues.isEmpty)
+    #expect(report.items == items)
+}
+
+@Test func csvMigrationCodecReportsValidationIssuesWithoutLeakingSensitiveValues() {
+    let csv = #"""
+    kind,title,username,password,secret,token,period,digits,maxViews,hidden
+    login,,alice,super-secret-password,,,,,,
+    totp,Broken 2FA,,,JBSWY3DPEHPK3PXP,,not-number,also-bad,,
+    apiToken,Unknown,,,,sk-live-secret,,,,
+    wifi,Studio,,,,,,,not-a-number,not-bool
+    mystery,Secret Thing,,hidden-password,,sk-hidden,,,,
+    """#
+
+    let report = VaultCSVCodec.importItems(from: csv)
+    let issueText = report.issues.map(\.message).joined(separator: "\n")
+
+    #expect(report.items.count == 1)
+    #expect(report.issues.map(\.code).contains(.missingRequiredField))
+    #expect(report.issues.map(\.code).contains(.invalidNumber))
+    #expect(report.issues.map(\.code).contains(.invalidBoolean))
+    #expect(report.issues.map(\.code).contains(.unsupportedKind))
+    #expect(!issueText.contains("super-secret-password"))
+    #expect(!issueText.contains("JBSWY3DPEHPK3PXP"))
+    #expect(!issueText.contains("sk-live-secret"))
+    #expect(!issueText.contains("hidden-password"))
+    #expect(!issueText.contains("sk-hidden"))
+}
+
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])
