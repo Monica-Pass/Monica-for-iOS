@@ -387,6 +387,19 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.biometricUnlockSystemImage, "touchid")
     }
 
+    func testPermissionStatusCenterExposesIOSNativeCapabilities() {
+        let model = AppSessionModel()
+
+        XCTAssertEqual(
+            model.permissionStatusRows.map(\.title),
+            ["相机", "AutoFill", "通知", "App Group", "Keychain"]
+        )
+        XCTAssertEqual(model.permissionStatusRows[0].value, "可检查")
+        XCTAssertEqual(model.permissionStatusRows[1].value, "待配置")
+        XCTAssertEqual(model.permissionStatusRows[3].value, "待配置")
+        XCTAssertEqual(model.permissionStatusRows[4].value, "待配置")
+    }
+
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

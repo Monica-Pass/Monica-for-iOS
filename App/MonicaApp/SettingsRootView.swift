@@ -151,6 +151,17 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "权限管理") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    ForEach(session.permissionStatusRows) { row in
+                        AndroidParityPermissionRow(row: row)
+                        if row.id != session.permissionStatusRows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                }
+            }
+
             AndroidParitySection(title: "迁移") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "CSV", value: session.entryOperationState.label)
@@ -421,6 +432,48 @@ struct SettingsRootView: View {
             return .red
         case .idle, .running, .succeeded:
             return AndroidParityPalette.textSecondary
+        }
+    }
+}
+
+private struct AndroidParityPermissionRow: View {
+    let row: AppPermissionStatusRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: row.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(statusColor)
+                .frame(width: 28, height: 28)
+                .background(statusColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(row.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                    Spacer(minLength: 8)
+                    Text(row.value)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(statusColor)
+                }
+                Text(row.detail)
+                    .font(.caption)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var statusColor: Color {
+        switch row.state {
+        case .granted, .configured:
+            AndroidParityPalette.primary
+        case .denied, .unavailable:
+            .red
+        case .notDetermined, .notConfigured, .checkable:
+            AndroidParityPalette.textSecondary
         }
     }
 }

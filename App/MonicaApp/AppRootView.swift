@@ -64,6 +64,47 @@ enum WifiQRCodeRenderer {
     }
 }
 
+struct AppPermissionStatusRow: Sendable, Equatable, Identifiable {
+    enum State: String, Sendable, Equatable {
+        case granted
+        case denied
+        case notDetermined
+        case unavailable
+        case configured
+        case notConfigured
+        case checkable
+
+        var label: String {
+            switch self {
+            case .granted:
+                "已允许"
+            case .denied:
+                "未允许"
+            case .notDetermined:
+                "可检查"
+            case .unavailable:
+                "不可用"
+            case .configured:
+                "已配置"
+            case .notConfigured:
+                "待配置"
+            case .checkable:
+                "可检查"
+            }
+        }
+    }
+
+    let id: String
+    let title: String
+    let systemImage: String
+    let state: State
+    let detail: String
+
+    var value: String {
+        state.label
+    }
+}
+
 struct SecurityQuestionRecoverySetup: Sendable, Codable, Equatable {
     let vaultID: String
     let question1ID: Int
@@ -991,6 +1032,46 @@ final class AppSessionModel {
         }
     }
 
+    var permissionStatusRows: [AppPermissionStatusRow] {
+        [
+            AppPermissionStatusRow(
+                id: "camera",
+                title: "相机",
+                systemImage: "camera",
+                state: cameraPermissionState,
+                detail: "用于扫描 TOTP 设置二维码。"
+            ),
+            AppPermissionStatusRow(
+                id: "autofill",
+                title: "AutoFill",
+                systemImage: "key.viewfinder",
+                state: autoFillIndexStore == nil || autoFillCredentialIdentityStore == nil ? .notConfigured : .configured,
+                detail: "Credential Provider、QuickType identity 和加密索引。"
+            ),
+            AppPermissionStatusRow(
+                id: "notifications",
+                title: "通知",
+                systemImage: "bell",
+                state: .checkable,
+                detail: "TOTP 快捷查看会使用 iOS 安全通知替代常驻验证码。"
+            ),
+            AppPermissionStatusRow(
+                id: "app-group",
+                title: "App Group",
+                systemImage: "rectangle.connected.to.line.below",
+                state: autoFillIndexStore == nil || autoFillCredentialSecretStore == nil ? .notConfigured : .configured,
+                detail: "主 App 与 AutoFill Extension 共享加密索引和 secret snapshot。"
+            ),
+            AppPermissionStatusRow(
+                id: "keychain",
+                title: "Keychain",
+                systemImage: "lock.shield",
+                state: vaultKeychainService == nil ? .notConfigured : .configured,
+                detail: "保存受系统保护的本地解锁材料，不保存主密码。"
+            )
+        ]
+    }
+
     var isFirstTimeVaultSetup: Bool {
         rememberedVaultDescriptor == nil
     }
@@ -1029,6 +1110,19 @@ final class AppSessionModel {
 
     var biometricUnlockSystemImage: String {
         biometricUnlockKind?.systemImage ?? "person.badge.key"
+    }
+
+    private var cameraPermissionState: AppPermissionStatusRow.State {
+        switch AVCaptureDevice.authorizationStatus(for: .video) {
+        case .authorized:
+            .granted
+        case .denied, .restricted:
+            .denied
+        case .notDetermined:
+            .notDetermined
+        @unknown default:
+            .checkable
+        }
     }
 
     var canUseBiometricUnlockHardware: Bool {
