@@ -3,6 +3,7 @@ import MonicaSecurity
 import MonicaStorage
 import MonicaSync
 import SwiftUI
+import UIKit
 import XCTest
 
 @MainActor
@@ -1781,6 +1782,19 @@ final class VaultSessionModelTests: XCTestCase {
         model.lockLocalVault()
         XCTAssertEqual(model.wifiSearchQuery, "")
         XCTAssertEqual(model.editingWifiPassword, "")
+    }
+
+    func testWifiQRCodeRendererProducesShareableImage() throws {
+        let image = try XCTUnwrap(
+            WifiQRCodeRenderer.image(
+                for: "WIFI:T:WPA;S:Monica Studio;P:wifi-secret;H:true;;",
+                size: 192
+            )
+        )
+
+        XCTAssertEqual(image.size.width, 192)
+        XCTAssertEqual(image.size.height, 192)
+        XCTAssertGreaterThan(image.pngData()?.count ?? 0, 500)
     }
 
     func testCreateUpdateFavoriteDeleteAndRestoreSendEntryInActiveVault() throws {

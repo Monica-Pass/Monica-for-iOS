@@ -1,6 +1,7 @@
 import MonicaStorage
 import Observation
 import SwiftUI
+import UIKit
 import UniformTypeIdentifiers
 
 struct AndroidParityVaultHomeView: View {
@@ -1417,6 +1418,15 @@ struct AddEditVaultItemView: View {
                 .tint(AndroidParityPalette.primary)
             field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.wifiNotes : $session.editingWifiNotes)
             if !mode.isAdding, !session.editingWifiQRCodePayload.isEmpty {
+                if let image = WifiQRCodeRenderer.image(for: session.editingWifiQRCodePayload, size: 192) {
+                    Image(uiImage: image)
+                        .interpolation(.none)
+                        .resizable()
+                        .frame(width: 192, height: 192)
+                        .padding(16)
+                        .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        .frame(maxWidth: .infinity)
+                }
                 AndroidParityInfoRow(title: "二维码内容", value: session.editingWifiQRCodePayload)
                 ShareLink(item: session.editingWifiQRCodePayload) {
                     Label("分享 Wi-Fi", systemImage: "square.and.arrow.up")
