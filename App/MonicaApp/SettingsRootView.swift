@@ -167,6 +167,9 @@ struct SettingsRootView: View {
                                 preview: preview,
                                 mergePreview: {
                                     try? session.mergeDuplicateLoginPreview(preview)
+                                },
+                                ignorePreview: {
+                                    session.ignoreDuplicateLoginPreview(preview)
                                 }
                             )
                             if preview.id != session.duplicateLoginMergePreviews.last?.id {
@@ -174,6 +177,15 @@ struct SettingsRootView: View {
                             }
                         }
                     }
+                }
+                if session.ignoredDuplicateLoginGroupCount > 0 {
+                    Button {
+                        session.clearIgnoredDuplicateLoginPreviews()
+                    } label: {
+                        Label("恢复已忽略重复项", systemImage: "arrow.uturn.backward")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
             }
 
@@ -513,6 +525,7 @@ private struct AndroidParitySecurityCenterRow: View {
 private struct AndroidParityDuplicateLoginPreviewRow: View {
     let preview: AppDuplicateLoginMergePreview
     let mergePreview: () -> Void
+    let ignorePreview: () -> Void
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -540,11 +553,19 @@ private struct AndroidParityDuplicateLoginPreviewRow: View {
                     .font(.caption2)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                     .lineLimit(2)
-                Button(action: mergePreview) {
-                    Label("合并重复项", systemImage: "checkmark.circle")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 8) {
+                    Button(action: mergePreview) {
+                        Label("合并重复项", systemImage: "checkmark.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+
+                    Button(action: ignorePreview) {
+                        Label("忽略", systemImage: "eye.slash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
-                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

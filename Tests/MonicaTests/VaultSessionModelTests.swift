@@ -615,6 +615,46 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(engine.updatedLoginEntries.isEmpty)
     }
 
+    func testSecurityCenterCanIgnoreAndRestoreDuplicateLoginPreviews() throws {
+        let model = AppSessionModel()
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: " GitHub ",
+                username: "Alice",
+                password: "UniqueStrong1!",
+                url: "https://github.com"
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "github",
+                username: "alice",
+                password: "OtherStrong1!",
+                url: " https://github.com "
+            )
+        ]
+
+        let preview = try XCTUnwrap(model.duplicateLoginMergePreviews.first)
+
+        model.ignoreDuplicateLoginPreview(preview)
+
+        XCTAssertEqual(model.ignoredDuplicateLoginGroupCount, 1)
+        XCTAssertTrue(model.duplicateLoginMergePreviews.isEmpty)
+        XCTAssertEqual(model.securityCenterRows.first { $0.id == "duplicate-logins" }?.value, "0 项")
+        XCTAssertEqual(model.loginEntries.map(\.id), ["login-1", "login-2"])
+        XCTAssertTrue(model.deletedLoginEntries.isEmpty)
+        XCTAssertFalse(model.securityCenterRows.map(\.detail).joined(separator: " ").contains("UniqueStrong1!"))
+        XCTAssertFalse(model.securityCenterRows.map(\.detail).joined(separator: " ").contains("OtherStrong1!"))
+
+        model.clearIgnoredDuplicateLoginPreviews()
+
+        XCTAssertEqual(model.ignoredDuplicateLoginGroupCount, 0)
+        XCTAssertEqual(model.duplicateLoginMergePreviews.map(\.id), [preview.id])
+        XCTAssertEqual(model.securityCenterRows.first { $0.id == "duplicate-logins" }?.value, "2 项")
+    }
+
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

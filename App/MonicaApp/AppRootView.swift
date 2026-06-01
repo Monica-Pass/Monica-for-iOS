@@ -696,6 +696,7 @@ final class AppSessionModel {
     var showFavoriteLoginEntriesOnly = false
     var loginEntries: [LocalLoginEntry] = []
     var deletedLoginEntries: [LocalLoginEntry] = []
+    private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
     var editingLoginEntryID: String?
     var editingLoginTitle = ""
     var editingLoginUsername = ""
@@ -1280,6 +1281,10 @@ final class AppSessionModel {
         }
     }
 
+    var ignoredDuplicateLoginGroupCount: Int {
+        ignoredDuplicateLoginKeys.count
+    }
+
     private static func isWeakPassword(_ password: String) -> Bool {
         let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 12 else {
@@ -1312,7 +1317,10 @@ final class AppSessionModel {
             .reduce(0) { count, group in count + group.entries.count }
     }
 
-    private func duplicateLoginGroups(in entries: [LocalLoginEntry]) -> [(key: DuplicateLoginEntryKey, entries: [LocalLoginEntry])] {
+    private func duplicateLoginGroups(
+        in entries: [LocalLoginEntry],
+        excludingIgnored: Bool = true
+    ) -> [(key: DuplicateLoginEntryKey, entries: [LocalLoginEntry])] {
         var grouped: [DuplicateLoginEntryKey: [LocalLoginEntry]] = [:]
         for entry in entries {
             guard let key = DuplicateLoginEntryKey(entry: entry) else {
@@ -1322,6 +1330,9 @@ final class AppSessionModel {
         }
         return grouped
             .filter { _, entries in entries.count > 1 }
+            .filter { key, _ in
+                !excludingIgnored || !ignoredDuplicateLoginKeys.contains(key)
+            }
             .map { key, entries in (key: key, entries: entries) }
             .sorted { lhs, rhs in
                 lhs.entries[0].id.localizedStandardCompare(rhs.entries[0].id) == .orderedAscending
@@ -2060,6 +2071,27 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    func ignoreDuplicateLoginPreview(_ preview: AppDuplicateLoginMergePreview) {
+        recordUserActivity()
+
+        guard let group = duplicateLoginGroups(in: loginEntries, excludingIgnored: false)
+            .first(where: { group in
+                "duplicate-login-\(group.entries[0].id)" == preview.id
+            })
+        else {
+            return
+        }
+
+        ignoredDuplicateLoginKeys.insert(group.key)
+        entryOperationState = .succeeded("已忽略 \(preview.title)")
+    }
+
+    func clearIgnoredDuplicateLoginPreviews() {
+        recordUserActivity()
+        ignoredDuplicateLoginKeys.removeAll()
+        entryOperationState = .succeeded("已恢复重复项提示")
     }
 
     func restoreLoginEntry(_ entry: LocalLoginEntry) throws {
