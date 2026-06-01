@@ -100,6 +100,23 @@ struct AppPermissionStatusRow: Sendable, Equatable, Identifiable {
     let systemImage: String
     let state: State
     let detail: String
+    let settingsURL: URL?
+
+    init(
+        id: String,
+        title: String,
+        systemImage: String,
+        state: State,
+        detail: String,
+        settingsURL: URL? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.systemImage = systemImage
+        self.state = state
+        self.detail = detail
+        self.settingsURL = settingsURL
+    }
 
     var value: String {
         state.label
@@ -1135,7 +1152,8 @@ final class AppSessionModel {
                 title: "相机",
                 systemImage: "camera",
                 state: cameraPermissionState,
-                detail: "用于扫描 TOTP 设置二维码。"
+                detail: "用于扫描 TOTP 设置二维码。",
+                settingsURL: URL(string: UIApplication.openSettingsURLString)
             ),
             AppPermissionStatusRow(
                 id: "autofill",
@@ -1149,7 +1167,8 @@ final class AppSessionModel {
                 title: "通知",
                 systemImage: "bell",
                 state: notificationPermissionState,
-                detail: "TOTP 快捷查看会使用 iOS 安全通知替代常驻验证码。"
+                detail: "TOTP 快捷查看会使用 iOS 安全通知替代常驻验证码。",
+                settingsURL: URL(string: UIApplication.openSettingsURLString)
             ),
             AppPermissionStatusRow(
                 id: "app-group",

@@ -455,6 +455,7 @@ struct SettingsRootView: View {
 
 private struct AndroidParityPermissionRow: View {
     let row: AppPermissionStatusRow
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
@@ -478,6 +479,15 @@ private struct AndroidParityPermissionRow: View {
                     .font(.caption)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+                if let settingsURL = row.settingsURL {
+                    Button {
+                        openURL(settingsURL)
+                    } label: {
+                        Label("打开设置", systemImage: "gearshape")
+                    }
+                    .font(.caption.weight(.semibold))
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

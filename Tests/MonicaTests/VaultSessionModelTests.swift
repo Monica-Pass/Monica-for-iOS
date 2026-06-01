@@ -407,6 +407,18 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.permissionStatusRows[2].value, "已允许")
     }
 
+    func testPermissionStatusCenterOffersSettingsLinkForUserManagedPermissionsOnly() {
+        let model = AppSessionModel()
+        let appSettingsURL = URL(string: UIApplication.openSettingsURLString)
+
+        XCTAssertEqual(model.permissionStatusRows[0].title, "相机")
+        XCTAssertEqual(model.permissionStatusRows[0].settingsURL, appSettingsURL)
+        XCTAssertEqual(model.permissionStatusRows[2].title, "通知")
+        XCTAssertEqual(model.permissionStatusRows[2].settingsURL, appSettingsURL)
+        XCTAssertNil(model.permissionStatusRows[3].settingsURL)
+        XCTAssertNil(model.permissionStatusRows[4].settingsURL)
+    }
+
     func testDeveloperDiagnosticsExposeRedactedOperationalState() {
         let model = AppSessionModel()
         let environment = MonicaAppEnvironment(
