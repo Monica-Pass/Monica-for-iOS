@@ -2078,6 +2078,44 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，0 个问题"))
     }
 
+    func testAndroidBackupEncryptedFileCanBePreparedAndRetriedWithPassword() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        let encryptedBackup = Data(base64Encoded: """
+        TU9OSUNBX0VOQ19WMQABAgMEBQYHCAkKCwwNDg8QERITFBUWFxgZGhscHR4fICEiIyQlJicoKSor3Y7UrXnMGjMyxTjucaTvnqyejqWi9PHsimI3t6aeujIinpZ9V4kzgGj5aN0bqpcK8dZ5GxOGeRjuXpPWnGZoN2XLZQEp9wGTrxF8MQqTNxfnOm3kQLENAOEcvxbnkLSso7VQDZGyUtynn3ysNVxGLbij/lWGBVjV0CrKZvKaMiXUJfmE9WSDZRuHDi1YIg2goD3ubLzMkOctElPzm9JF4YFzeYjGmZxMgNFuWJeerzy9HzcqhMYcGJUEvjmuWz3NybBvnurVJAgizdYXM9kIqjqE9wdr67/qVmw7KyUwfI3CFThAxxg57RFWwBTrf/drVNPUrJDknJTSJZLFkX6US+J6J5zYD8kePndLxF4AS6zj2mzVCNzLJzy9HpBYvrj3ZqchQ7/7hFNqbixH1NjH0+u+wz+aHkJ8LF5jb3bMJg==
+        """)!
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica_backup.enc.zip")
+        try encryptedBackup.write(to: fileURL)
+        defer {
+            try? FileManager.default.removeItem(at: fileURL)
+        }
+
+        try unlockNewVault(model)
+        let immediatePreview = try model.prepareAndroidBackupImport(from: fileURL)
+
+        XCTAssertNil(immediatePreview)
+        XCTAssertEqual(model.pendingAndroidEncryptedBackupFileName, "monica_backup.enc.zip")
+        XCTAssertEqual(model.entryOperationState, .failed("请输入 Android 加密备份密码。"))
+
+        model.androidBackupDecryptPassword = "wrong password"
+        XCTAssertThrowsError(try model.previewPendingAndroidEncryptedBackupImport())
+        XCTAssertEqual(model.pendingAndroidEncryptedBackupFileName, "monica_backup.enc.zip")
+        XCTAssertEqual(model.androidBackupDecryptPassword, "")
+        XCTAssertNil(model.androidBackupImportPreview)
+        XCTAssertEqual(
+            model.entryOperationState,
+            .failed("Android 加密备份解密失败，请检查密码或文件是否损坏。")
+        )
+
+        model.androidBackupDecryptPassword = "correct horse battery staple"
+        let preview = try model.previewPendingAndroidEncryptedBackupImport()
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login])
+        XCTAssertNil(model.pendingAndroidEncryptedBackupFileName)
+        XCTAssertEqual(model.androidBackupDecryptPassword, "")
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，0 个问题"))
+    }
+
     func testAndroidBackupConfirmImportsAttachmentMetadataWithRemappedLoginID() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()

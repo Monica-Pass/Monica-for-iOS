@@ -18,6 +18,7 @@ struct SettingsRootView: View {
     @State private var csvExportDocument = CSVExportDocument()
     @State private var isAndroidBackupImporterPresented = false
     @State private var isAndroidBackupExporterPresented = false
+    @State private var isAndroidBackupPasswordPromptPresented = false
     @State private var androidBackupExportDocument = AndroidBackupExportDocument()
 
     private var autoLockSelection: Binding<AppAutoLockPolicy> {
@@ -198,6 +199,9 @@ struct SettingsRootView: View {
 
                     AndroidParityDivider()
                     AndroidParityInfoRow(title: "Android 备份", value: session.entryOperationState.label)
+                    if let encryptedFileName = session.pendingAndroidEncryptedBackupFileName {
+                        AndroidParityInfoRow(title: "加密备份", value: encryptedFileName)
+                    }
                     HStack(spacing: 12) {
                         Button {
                             isAndroidBackupImporterPresented = true
@@ -358,7 +362,8 @@ struct SettingsRootView: View {
                     return
                 }
                 do {
-                    _ = try session.previewAndroidBackupImport(from: fileURL)
+                    _ = try session.prepareAndroidBackupImport(from: fileURL)
+                    isAndroidBackupPasswordPromptPresented = session.pendingAndroidEncryptedBackupFileName != nil
                 } catch {
                     session.entryOperationState = .failed(error.localizedDescription)
                 }
@@ -375,6 +380,23 @@ struct SettingsRootView: View {
             if case .failure(let error) = result {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
+        }
+        .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
+            SecureField("备份密码", text: $session.androidBackupDecryptPassword)
+            Button("取消", role: .cancel) {
+                session.cancelPendingAndroidEncryptedBackupImport()
+            }
+            Button("解密预览") {
+                do {
+                    _ = try session.previewPendingAndroidEncryptedBackupImport()
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                    isAndroidBackupPasswordPromptPresented = session.pendingAndroidEncryptedBackupFileName != nil
+                }
+            }
+            .disabled(session.androidBackupDecryptPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("请输入从 Android 导出该备份时设置的密码。密码只在本次解密中使用。")
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)

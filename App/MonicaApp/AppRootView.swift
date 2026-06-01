@@ -655,6 +655,8 @@ final class AppSessionModel {
     var webDAVRestorePreview: WebDAVRestorePreview?
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
+    var androidBackupDecryptPassword = ""
+    var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
     var expandedToolbarAction: AndroidParityToolbarAction?
     var isFabMenuPresented = false
@@ -701,6 +703,7 @@ final class AppSessionModel {
     private var rememberedVaultDescriptor: LocalVaultDescriptor?
     private var rememberedVaultID: String?
     private var lastUserActivityAt: Date?
+    private var pendingAndroidEncryptedBackupData: Data?
 
     init(
         vaultRepository: LocalVaultRepository = LocalVaultRepository(),
@@ -3127,6 +3130,7 @@ final class AppSessionModel {
         let preview = AndroidBackupImportPreview(report: report)
         androidBackupImportPreview = preview
         csvImportPreview = nil
+        clearPendingAndroidEncryptedBackup()
         let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
         entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(attachmentText)，\(report.issues.count) 个问题")
         return preview
@@ -3141,6 +3145,63 @@ final class AppSessionModel {
         }
         let data = try Data(contentsOf: fileURL)
         return try previewAndroidBackupImport(data, fileName: fileURL.lastPathComponent)
+    }
+
+    func prepareAndroidBackupImport(from fileURL: URL) throws -> AndroidBackupImportPreview? {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let data = try Data(contentsOf: fileURL)
+        do {
+            let preview = try previewAndroidBackupImport(data, fileName: fileURL.lastPathComponent)
+            clearPendingAndroidEncryptedBackup()
+            return preview
+        } catch AppAndroidBackupImportError.unsupportedEncryptedBackup {
+            pendingAndroidEncryptedBackupData = data
+            pendingAndroidEncryptedBackupFileName = fileURL.lastPathComponent
+            androidBackupDecryptPassword = ""
+            entryOperationState = .failed("请输入 Android 加密备份密码。")
+            return nil
+        } catch {
+            clearPendingAndroidEncryptedBackup()
+            throw error
+        }
+    }
+
+    func previewPendingAndroidEncryptedBackupImport() throws -> AndroidBackupImportPreview {
+        recordUserActivity()
+        guard let data = pendingAndroidEncryptedBackupData,
+              let fileName = pendingAndroidEncryptedBackupFileName else {
+            throw AppAndroidBackupImportError.encryptedBackupUnavailable
+        }
+        let password = androidBackupDecryptPassword
+        androidBackupDecryptPassword = ""
+
+        do {
+            let preview = try previewAndroidBackupImport(
+                data,
+                fileName: fileName,
+                decryptPassword: password
+            )
+            clearPendingAndroidEncryptedBackup()
+            return preview
+        } catch AppAndroidBackupImportError.encryptedBackupDecryptionFailed(let message) {
+            throw AppAndroidBackupImportError.encryptedBackupDecryptionFailed(message)
+        } catch {
+            clearPendingAndroidEncryptedBackup()
+            throw error
+        }
+    }
+
+    func cancelPendingAndroidEncryptedBackupImport() {
+        recordUserActivity()
+        clearPendingAndroidEncryptedBackup()
+        if androidBackupImportPreview == nil {
+            entryOperationState = .idle
+        }
     }
 
     func confirmAndroidBackupImport(projectTitle: String) throws {
@@ -3640,6 +3701,7 @@ final class AppSessionModel {
         webDAVRestorePreview = nil
         webDAVRestoreVaultPassword = ""
         downloadedWebDAVRestoreBackup = nil
+        clearPendingAndroidEncryptedBackup()
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
@@ -3775,6 +3837,13 @@ final class AppSessionModel {
         webDAVRestorePreview = nil
         webDAVRestoreVaultPassword = ""
         downloadedWebDAVRestoreBackup = nil
+        clearPendingAndroidEncryptedBackup()
+    }
+
+    private func clearPendingAndroidEncryptedBackup() {
+        pendingAndroidEncryptedBackupData = nil
+        pendingAndroidEncryptedBackupFileName = nil
+        androidBackupDecryptPassword = ""
     }
 
     private func clearExtendedParityEntries() {
@@ -4648,12 +4717,15 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
 enum AppAndroidBackupImportError: Error, Sendable, Equatable, LocalizedError {
     case unsupportedEncryptedBackup(String)
     case encryptedBackupDecryptionFailed(String)
+    case encryptedBackupUnavailable
 
     var errorDescription: String? {
         switch self {
         case .unsupportedEncryptedBackup(let message),
              .encryptedBackupDecryptionFailed(let message):
             return message
+        case .encryptedBackupUnavailable:
+            return "请先选择 Android 加密备份文件。"
         }
     }
 }
