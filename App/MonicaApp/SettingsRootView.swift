@@ -272,6 +272,23 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "开发者设置") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    let rows = AppDeveloperDiagnostics.rows(
+                        environment: environment,
+                        session: session,
+                        storageStrategy: storageStrategy,
+                        mdbxBridge: mdbxBridge
+                    )
+                    ForEach(rows) { row in
+                        AndroidParityDeveloperDiagnosticRow(row: row)
+                        if row.id != rows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                }
+            }
+
             AndroidParitySection(title: "WebDAV") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     TextField("服务器 URL", text: $session.webDAVBaseURL)
@@ -475,5 +492,38 @@ private struct AndroidParityPermissionRow: View {
         case .notDetermined, .notConfigured, .checkable:
             AndroidParityPalette.textSecondary
         }
+    }
+}
+
+private struct AndroidParityDeveloperDiagnosticRow: View {
+    let row: AppDeveloperDiagnosticRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: row.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .frame(width: 28, height: 28)
+                .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(row.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                    Spacer(minLength: 8)
+                    Text(row.value)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
+                Text(row.detail)
+                    .font(.caption)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }

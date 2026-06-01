@@ -400,6 +400,34 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.permissionStatusRows[4].value, "待配置")
     }
 
+    func testDeveloperDiagnosticsExposeRedactedOperationalState() {
+        let model = AppSessionModel()
+        let environment = MonicaAppEnvironment(
+            appGroupIdentifier: "group.takagi.ru.monica",
+            minimumIOSVersion: "17.0",
+            firstBackupProvider: "WebDAV",
+            localDeviceIdentifier: "ios-local-device-secret"
+        )
+
+        let rows = AppDeveloperDiagnostics.rows(
+            environment: environment,
+            session: model,
+            storageStrategy: "MDBX",
+            mdbxBridge: "UniFFI"
+        )
+
+        XCTAssertEqual(
+            rows.map(\.title),
+            ["主存储", "MDBX 桥接", "App Group", "本机标识", "AutoFill 索引", "同步日志"]
+        )
+        XCTAssertEqual(rows[0].value, "MDBX")
+        XCTAssertEqual(rows[1].value, "UniFFI")
+        XCTAssertEqual(rows[2].value, "group.takagi.ru.monica")
+        XCTAssertFalse(rows[3].value.contains("secret"))
+        XCTAssertEqual(rows[4].value, "未生成")
+        XCTAssertEqual(rows[5].value, "空闲")
+    }
+
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

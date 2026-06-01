@@ -105,6 +105,98 @@ struct AppPermissionStatusRow: Sendable, Equatable, Identifiable {
     }
 }
 
+struct AppDeveloperDiagnosticRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+}
+
+enum AppDeveloperDiagnostics {
+    @MainActor
+    static func rows(
+        environment: MonicaAppEnvironment,
+        session: AppSessionModel,
+        storageStrategy: String,
+        mdbxBridge: String
+    ) -> [AppDeveloperDiagnosticRow] {
+        [
+            AppDeveloperDiagnosticRow(
+                id: "storage",
+                title: "主存储",
+                value: storageStrategy,
+                detail: "当前 iOS 本地 vault 主格式。",
+                systemImage: "externaldrive"
+            ),
+            AppDeveloperDiagnosticRow(
+                id: "mdbx-bridge",
+                title: "MDBX 桥接",
+                value: mdbxBridge,
+                detail: "Swift 到 Rust MDBX 的桥接层。",
+                systemImage: "point.3.connected.trianglepath.dotted"
+            ),
+            AppDeveloperDiagnosticRow(
+                id: "app-group",
+                title: "App Group",
+                value: environment.appGroupIdentifier,
+                detail: "主 App 与扩展共享加密索引的位置。",
+                systemImage: "rectangle.connected.to.line.below"
+            ),
+            AppDeveloperDiagnosticRow(
+                id: "device-id",
+                title: "本机标识",
+                value: redactedIdentifier(environment.localDeviceIdentifier),
+                detail: "仅显示脱敏值，用于排查本地 vault/device 绑定。",
+                systemImage: "iphone"
+            ),
+            AppDeveloperDiagnosticRow(
+                id: "autofill-index",
+                title: "AutoFill 索引",
+                value: autoFillDiagnosticValue(session.autoFillIndexState),
+                detail: "最近一次 AutoFill 加密索引生成状态。",
+                systemImage: "key.viewfinder"
+            ),
+            AppDeveloperDiagnosticRow(
+                id: "sync-log",
+                title: "同步日志",
+                value: syncDiagnosticValue(session.webDAVBackupState),
+                detail: "当前 WebDAV 备份/恢复状态摘要，不包含 URL、用户名或密码。",
+                systemImage: "arrow.triangle.2.circlepath"
+            )
+        ]
+    }
+
+    private static func redactedIdentifier(_ identifier: String) -> String {
+        let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "未设置"
+        }
+        guard trimmed.count > 8 else {
+            return "已设置"
+        }
+        return "\(trimmed.prefix(3))…\(trimmed.suffix(3))"
+    }
+
+    private static func autoFillDiagnosticValue(_ state: AutoFillIndexState) -> String {
+        switch state {
+        case .idle:
+            return "未生成"
+        case .running, .succeeded, .failed:
+            return state.label
+        }
+    }
+
+    private static func syncDiagnosticValue(_ state: WebDAVBackupState) -> String {
+        switch state {
+        case .idle:
+            return "空闲"
+        case .running, .backupSucceeded, .restorePreviewReady, .restoreSucceeded, .failed:
+            return state.label
+        }
+    }
+}
+
 struct SecurityQuestionRecoverySetup: Sendable, Codable, Equatable {
     let vaultID: String
     let question1ID: Int
