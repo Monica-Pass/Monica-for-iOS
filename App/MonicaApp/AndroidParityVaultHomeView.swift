@@ -59,6 +59,8 @@ struct AndroidParityVaultHomeView: View {
     let setSelectedSendFavorite: (Bool) -> Void
     let deleteSendEntry: () -> Void
     let restoreSendEntry: (LocalSendEntry) -> Void
+    let deleteAttachmentEntry: (LocalAttachmentMetadata) -> Void
+    let restoreAttachmentEntry: (LocalAttachmentMetadata) -> Void
     let refreshExtendedParityEntries: () -> Void
 
     @State private var isVaultImporterPresented = false
@@ -158,7 +160,7 @@ struct AndroidParityVaultHomeView: View {
         case .send:
             sendList
         case .attachmentRef:
-            AndroidParityEmptyCard(title: "附件引用等待附件内容层接入。", systemImage: "paperclip")
+            attachmentList
         }
     }
 
@@ -356,6 +358,20 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    private var attachmentList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredAttachmentEntries) { entry in
+                AndroidAttachmentListCard(entry: entry) {
+                    deleteAttachmentEntry(entry)
+                }
+            }
+            if session.filteredAttachmentEntries.isEmpty {
+                emptyList("没有匹配的附件引用", icon: "paperclip")
+            }
+            deletedAttachmentRows
+        }
+    }
+
     private var extendedPasskeySections: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSshKeyEntries) { entry in
@@ -496,6 +512,18 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    @ViewBuilder private var deletedAttachmentRows: some View {
+        if !session.deletedAttachmentEntries.isEmpty {
+            restoreSection("已删除附件引用") {
+                ForEach(session.deletedAttachmentEntries) { entry in
+                    restoreButton(title: entry.fileName, subtitle: attachmentSubtitle(for: entry)) {
+                        restoreAttachmentEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
     private var largeTitle: String {
         itemKind == .passkey ? "通行密钥" : (session.activeVaultName ?? "Monica")
     }
@@ -523,7 +551,7 @@ struct AndroidParityVaultHomeView: View {
                 case .apiToken: return session.apiTokenSearchQuery
                 case .wifi: return session.wifiSearchQuery
                 case .send: return session.sendSearchQuery
-                case .attachmentRef: return ""
+                case .attachmentRef: return session.attachmentSearchQuery
                 }
             },
             set: { value in
@@ -540,7 +568,7 @@ struct AndroidParityVaultHomeView: View {
                 case .apiToken: session.apiTokenSearchQuery = value
                 case .wifi: session.wifiSearchQuery = value
                 case .send: session.sendSearchQuery = value
-                case .attachmentRef: break
+                case .attachmentRef: session.attachmentSearchQuery = value
                 }
             }
         )
@@ -633,6 +661,17 @@ struct AndroidParityVaultHomeView: View {
 
     private func identitySummary(for entry: LocalIdentityEntry) -> String {
         [entry.documentType, entry.fullName, entry.country].filter { !$0.isEmpty }.joined(separator: " / ")
+    }
+
+    private func attachmentSubtitle(for entry: LocalAttachmentMetadata) -> String {
+        let sizeText = "\(entry.storedSize)/\(entry.originalSize) 字节"
+        return [
+            entry.downloadState.isEmpty ? "未知状态" : entry.downloadState,
+            entry.storageMode,
+            sizeText
+        ]
+            .filter { !$0.isEmpty }
+            .joined(separator: " / ")
     }
 
     private func emptyList(_ title: String, icon: String) -> some View {
@@ -1022,6 +1061,56 @@ private struct AndroidSendListCard: View {
             secondary: "最多查看 \(entry.maxViews) 次",
             favorite: entry.favorite
         )
+    }
+}
+
+private struct AndroidAttachmentListCard: View {
+    let entry: LocalAttachmentMetadata
+    let delete: () -> Void
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
+            HStack(alignment: .top, spacing: 18) {
+                AndroidParityIconTile(systemImage: "paperclip", fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(entry.fileName.isEmpty ? "未命名附件" : entry.fileName)
+                        .font(.subheadline.weight(.semibold))
+                    Text(primaryText)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    Text(secondaryText)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Button(role: .destructive, action: delete) {
+                    Image(systemName: "trash")
+                        .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+            }
+        }
+    }
+
+    private var primaryText: String {
+        [
+            entry.mediaType.isEmpty ? "未知类型" : entry.mediaType,
+            entry.downloadState.isEmpty ? "未知状态" : entry.downloadState
+        ]
+            .joined(separator: " / ")
+    }
+
+    private var secondaryText: String {
+        let sizeText = "\(entry.storedSize)/\(entry.originalSize) 字节"
+        return [
+            entry.storageMode,
+            sizeText,
+            entry.localPath ?? ""
+        ]
+            .filter { !$0.isEmpty }
+            .joined(separator: " / ")
     }
 }
 

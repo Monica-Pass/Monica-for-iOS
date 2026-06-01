@@ -2150,6 +2150,13 @@ final class VaultSessionModelTests: XCTestCase {
             ]
         )
         XCTAssertEqual(engine.createdAttachmentMetadata.count, 1)
+        XCTAssertEqual(model.attachmentEntries.map(\.fileName), ["contract.pdf"])
+        XCTAssertEqual(model.attachmentEntries.first?.entryID, "entry-1")
+        XCTAssertEqual(model.attachmentEntries.first?.storageMode, "android-backup-encrypted-blob")
+        XCTAssertEqual(model.attachmentEntries.first?.downloadState, "downloaded")
+        XCTAssertEqual(model.attachmentEntries.first?.localPath, "attachment-1.enc")
+        model.attachmentSearchQuery = "entry-1"
+        XCTAssertEqual(model.filteredAttachmentEntries.map(\.fileName), ["contract.pdf"])
         XCTAssertEqual(
             engine.createdAttachmentMetadata.first,
             RecordedAttachmentMetadataCall(
@@ -2169,6 +2176,48 @@ final class VaultSessionModelTests: XCTestCase {
             )
         )
         XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；1 个附件密文待恢复"))
+    }
+
+    func testAndroidBackupAttachmentReferenceCanBeDeletedAndRestored() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
+            "attachments/attachments_meta.json": #"""
+            {"version":1,"entries":[{"parentPasswordId":42,"fileName":"contract.pdf","mimeType":"application/pdf","sizeBytes":2048,"sha256Hex":"abc123","wrappedCek":"wrapped-key","localPath":"attachment-1.enc","createdAt":1710000000000,"updatedAt":1710000001000}]}
+            """#,
+            "attachments/attachment-1.enc": "ciphertext"
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewAndroidBackupImport(backup)
+        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+
+        guard let attachment = model.attachmentEntries.first else {
+            return XCTFail("Expected imported attachment reference")
+        }
+
+        try model.deleteAttachmentEntry(attachment)
+
+        XCTAssertTrue(model.attachmentEntries.isEmpty)
+        XCTAssertEqual(model.deletedAttachmentEntries.map(\.fileName), ["contract.pdf"])
+        XCTAssertEqual(model.deletedAttachmentEntries.first?.deleted, true)
+        XCTAssertEqual(model.entryOperationState, .succeeded("已删除 contract.pdf"))
+
+        guard let deletedAttachment = model.deletedAttachmentEntries.first else {
+            return XCTFail("Expected deleted attachment reference")
+        }
+
+        try model.restoreAttachmentEntry(deletedAttachment)
+
+        XCTAssertEqual(model.attachmentEntries.map(\.fileName), ["contract.pdf"])
+        XCTAssertTrue(model.deletedAttachmentEntries.isEmpty)
+        XCTAssertEqual(model.attachmentEntries.first?.deleted, false)
+        XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 contract.pdf"))
     }
 
     func testFileAndroidBackupAttachmentBlobStoreWritesSanitizedEncryptedBlob() throws {
@@ -3344,6 +3393,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var sendEntries: [String: [LocalSendEntry]] = [:]
     private var deletedSends: [String: [LocalSendEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
+    private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
 
     func createVault(
         at fileURL: URL,
@@ -4771,6 +4821,71 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         projectID: String
     ) throws -> [LocalAttachmentMetadata] {
         attachmentMetadata[projectID, default: []]
+    }
+
+    func deleteAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        attachmentID: String
+    ) throws {
+        guard let index = attachmentMetadata[projectID, default: []].firstIndex(where: { $0.id == attachmentID }) else {
+            return
+        }
+        let removed = attachmentMetadata[projectID, default: []].remove(at: index)
+        deletedAttachmentMetadata[projectID, default: []].append(
+            LocalAttachmentMetadata(
+                id: removed.id,
+                projectID: removed.projectID,
+                entryID: removed.entryID,
+                fileName: removed.fileName,
+                mediaType: removed.mediaType,
+                originalSize: removed.originalSize,
+                storedSize: removed.storedSize,
+                contentHash: removed.contentHash,
+                storageMode: removed.storageMode,
+                source: removed.source,
+                downloadState: removed.downloadState,
+                wrappedContentEncryptionKey: removed.wrappedContentEncryptionKey,
+                localPath: removed.localPath,
+                deleted: true
+            )
+        )
+    }
+
+    func listDeletedAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalAttachmentMetadata] {
+        deletedAttachmentMetadata[projectID, default: []]
+    }
+
+    func restoreAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        attachmentID: String
+    ) throws -> LocalAttachmentMetadata {
+        guard let index = deletedAttachmentMetadata[projectID, default: []].firstIndex(where: { $0.id == attachmentID }) else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        let removed = deletedAttachmentMetadata[projectID, default: []].remove(at: index)
+        let restored = LocalAttachmentMetadata(
+            id: removed.id,
+            projectID: removed.projectID,
+            entryID: removed.entryID,
+            fileName: removed.fileName,
+            mediaType: removed.mediaType,
+            originalSize: removed.originalSize,
+            storedSize: removed.storedSize,
+            contentHash: removed.contentHash,
+            storageMode: removed.storageMode,
+            source: removed.source,
+            downloadState: removed.downloadState,
+            wrappedContentEncryptionKey: removed.wrappedContentEncryptionKey,
+            localPath: removed.localPath,
+            deleted: false
+        )
+        attachmentMetadata[projectID, default: []].append(restored)
+        return restored
     }
 }
 

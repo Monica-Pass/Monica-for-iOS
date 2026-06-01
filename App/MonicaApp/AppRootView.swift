@@ -641,6 +641,9 @@ final class AppSessionModel {
     var editingSendMaxViews = 1
     var editingSendNotes = ""
     var editingSendFavorite = false
+    var attachmentEntries: [LocalAttachmentMetadata] = []
+    var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
+    var attachmentSearchQuery = ""
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -904,6 +907,23 @@ final class AppSessionModel {
                 || entry.body.localizedCaseInsensitiveContains(query)
                 || entry.expiresAt.localizedCaseInsensitiveContains(query)
                 || entry.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var filteredAttachmentEntries: [LocalAttachmentMetadata] {
+        let query = attachmentSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            return attachmentEntries
+        }
+        return attachmentEntries.filter { entry in
+            entry.fileName.localizedCaseInsensitiveContains(query)
+                || entry.mediaType.localizedCaseInsensitiveContains(query)
+                || entry.storageMode.localizedCaseInsensitiveContains(query)
+                || entry.downloadState.localizedCaseInsensitiveContains(query)
+                || entry.source.localizedCaseInsensitiveContains(query)
+                || entry.contentHash.localizedCaseInsensitiveContains(query)
+                || (entry.entryID?.localizedCaseInsensitiveContains(query) ?? false)
+                || (entry.localPath?.localizedCaseInsensitiveContains(query) ?? false)
         }
     }
 
@@ -3031,6 +3051,48 @@ final class AppSessionModel {
         }
     }
 
+    func deleteAttachmentEntry(_ entry: LocalAttachmentMetadata) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            try entryRepository.deleteAttachmentMetadata(projectID: projectID, attachmentID: entry.id)
+            attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+            deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+            entryOperationState = .succeeded("已删除 \(entry.fileName)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func restoreAttachmentEntry(_ entry: LocalAttachmentMetadata) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let restored = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: entry.id)
+            attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+            deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+            entryOperationState = .succeeded("已恢复 \(restored.fileName)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func refreshExtendedParityEntries() throws {
         recordUserActivity()
         entryOperationState = .running
@@ -3050,6 +3112,8 @@ final class AppSessionModel {
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+            deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
             entryOperationState = .succeeded("已刷新扩展通行条目")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3871,6 +3935,9 @@ final class AppSessionModel {
         showFavoriteSendEntriesOnly = false
         sendBody = ""
         clearEditingSendEntry()
+        attachmentEntries = []
+        deletedAttachmentEntries = []
+        attachmentSearchQuery = ""
     }
 
     private func requireActiveVaultSession() throws -> LocalVaultSession {
@@ -3946,6 +4013,8 @@ final class AppSessionModel {
         deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
         sendEntries = try entryRepository.listSendEntries(projectID: projectID)
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+        attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+        deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
     }
 
     private func csvExportDrafts() -> [VaultCSVItemDraft] {
@@ -4949,6 +5018,8 @@ struct AppRootView: View {
                     setSelectedSendFavorite: setSelectedSendFavorite,
                     deleteSendEntry: deleteSendEntry,
                     restoreSendEntry: restoreSendEntry,
+                    deleteAttachmentEntry: deleteAttachmentEntry,
+                    restoreAttachmentEntry: restoreAttachmentEntry,
                     refreshExtendedParityEntries: refreshExtendedParityEntries
                 )
             }
@@ -5393,6 +5464,22 @@ struct AppRootView: View {
     private func restoreSendEntry(_ entry: LocalSendEntry) {
         do {
             try session.restoreSendEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteAttachmentEntry(_ entry: LocalAttachmentMetadata) {
+        do {
+            try session.deleteAttachmentEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreAttachmentEntry(_ entry: LocalAttachmentMetadata) {
+        do {
+            try session.restoreAttachmentEntry(entry)
         } catch {
             // AppSessionModel owns user-visible failure state.
         }
