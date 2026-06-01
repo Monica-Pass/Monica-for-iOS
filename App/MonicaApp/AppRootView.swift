@@ -10,6 +10,7 @@ import Foundation
 import LocalAuthentication
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SecurityQuestionOption: Identifiable, Sendable, Equatable {
     let id: Int
@@ -43,6 +44,30 @@ struct CSVImportPreview: Sendable, Equatable {
 
     var items: [VaultCSVItemDraft] { report.items }
     var issues: [VaultCSVImportIssue] { report.issues }
+}
+
+struct CSVExportDocument: FileDocument, Sendable {
+    static var readableContentTypes: [UTType] { [.commaSeparatedText] }
+
+    var text: String
+
+    init(text: String = "") {
+        self.text = text
+    }
+
+    init(configuration: ReadConfiguration) throws {
+        guard let data = configuration.file.regularFileContents,
+              let text = String(data: data, encoding: .utf8)
+        else {
+            self.text = ""
+            return
+        }
+        self.text = text
+    }
+
+    func fileWrapper(configuration: WriteConfiguration) throws -> FileWrapper {
+        FileWrapper(regularFileWithContents: Data(text.utf8))
+    }
 }
 
 enum FirstTimePasswordSetupStep: Sendable, Equatable {
@@ -2945,6 +2970,17 @@ final class AppSessionModel {
         return preview
     }
 
+    func previewCSVImport(from fileURL: URL) throws -> CSVImportPreview {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let csv = try String(contentsOf: fileURL, encoding: .utf8)
+        return previewCSVImport(csv)
+    }
+
     func confirmCSVImport(projectTitle: String) throws {
         recordUserActivity()
         entryOperationState = .running
@@ -2969,6 +3005,10 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    func csvExportDocument() throws -> CSVExportDocument {
+        CSVExportDocument(text: try exportCSV())
     }
 
     func exportCSV() throws -> String {

@@ -3,6 +3,7 @@ import MonicaStorage
 import MonicaSync
 import Observation
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsRootView: View {
     let environment: MonicaAppEnvironment
@@ -11,6 +12,10 @@ struct SettingsRootView: View {
     let mdbxBridge: String
     let refreshAutoFillIndex: () -> Void
     let runVerification: () -> Void
+
+    @State private var isCSVImporterPresented = false
+    @State private var isCSVExporterPresented = false
+    @State private var csvExportDocument = CSVExportDocument()
 
     private var autoLockSelection: Binding<AppAutoLockPolicy> {
         Binding {
@@ -142,6 +147,54 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "迁移") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    AndroidParityInfoRow(title: "CSV", value: session.entryOperationState.label)
+                    HStack(spacing: 12) {
+                        Button {
+                            isCSVImporterPresented = true
+                        } label: {
+                            Label("导入 CSV", systemImage: "square.and.arrow.down")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                        .disabled(session.vaultState != .unlocked)
+
+                        Button {
+                            do {
+                                csvExportDocument = try session.csvExportDocument()
+                                isCSVExporterPresented = true
+                            } catch {
+                                session.entryOperationState = .failed(error.localizedDescription)
+                            }
+                        } label: {
+                            Label("导出 CSV", systemImage: "square.and.arrow.up")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(session.vaultState != .unlocked)
+                    }
+
+                    if let preview = session.csvImportPreview {
+                        AndroidParityDivider()
+                        AndroidParityInfoRow(title: "可导入", value: "\(preview.items.count)")
+                        AndroidParityInfoRow(title: "问题", value: "\(preview.issues.count)")
+                        Button {
+                            do {
+                                try session.confirmCSVImport(projectTitle: "CSV 导入")
+                            } catch {
+                                // AppSessionModel owns user-visible failure state.
+                            }
+                        } label: {
+                            Label("确认导入", systemImage: "checkmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(preview.items.isEmpty)
+                    }
+                }
+            }
+
             AndroidParitySection(title: "技术检查") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "主存储", value: storageStrategy)
@@ -215,6 +268,35 @@ struct SettingsRootView: View {
                         .disabled(session.webDAVBackupState.isRunning || session.webDAVRestoreVaultPassword.isEmpty)
                     }
                 }
+            }
+        }
+        .fileImporter(
+            isPresented: $isCSVImporterPresented,
+            allowedContentTypes: [.commaSeparatedText],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                do {
+                    _ = try session.previewCSVImport(from: fileURL)
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                }
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
+        .fileExporter(
+            isPresented: $isCSVExporterPresented,
+            document: csvExportDocument,
+            contentType: .commaSeparatedText,
+            defaultFilename: "monica-vault.csv"
+        ) { result in
+            if case .failure(let error) = result {
+                session.entryOperationState = .failed(error.localizedDescription)
             }
         }
         .navigationTitle("设置")

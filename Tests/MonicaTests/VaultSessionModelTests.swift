@@ -1908,6 +1908,51 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("CSV 已导出 2 项"))
     }
 
+    func testCSVImportFileBuildsPreviewWithoutWritingVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let fileURL = directory.appendingPathComponent("android-export.csv")
+        let csv = VaultCSVCodec.exportItems([
+            .login(LocalLoginEntryDraft(
+                title: "GitHub",
+                username: "alice",
+                password: "secret-password",
+                url: "https://github.com"
+            ))
+        ])
+        try csv.write(to: fileURL, atomically: true, encoding: .utf8)
+
+        try unlockNewVault(model)
+        let preview = try model.previewCSVImport(from: fileURL)
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login])
+        XCTAssertTrue(preview.issues.isEmpty)
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertEqual(model.entryOperationState, .succeeded("CSV 预览：1 项可导入，0 个问题"))
+    }
+
+    func testCSVExportDocumentWrapsCurrentVaultCSVForFileExporter() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "secret-password"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        let document = try model.csvExportDocument()
+        let report = VaultCSVCodec.importItems(from: document.text)
+
+        XCTAssertEqual(CSVExportDocument.readableContentTypes, [.commaSeparatedText])
+        XCTAssertEqual(report.items.map(\.kind), [.login])
+        XCTAssertEqual(model.entryOperationState, .succeeded("CSV 已导出 1 项"))
+    }
+
     func testTotpEntryGeneratesCodeFromStoredSeed() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
