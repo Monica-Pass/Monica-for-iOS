@@ -701,6 +701,7 @@ final class AppSessionModel {
     var showFavoriteLoginEntriesOnly = false
     var loginEntries: [LocalLoginEntry] = []
     var deletedLoginEntries: [LocalLoginEntry] = []
+    var breachedPasswordSHA256Fingerprints: Set<String> = []
     private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
     private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
     var editingLoginEntryID: String?
@@ -1235,6 +1236,7 @@ final class AppSessionModel {
     var securityCenterRows: [AppSecurityCenterRow] {
         let weakPasswordCount = loginEntries.filter { Self.isWeakPassword($0.password) }.count
         let reusedPasswordCount = reusedPasswordEntryCount(in: loginEntries)
+        let breachedPasswordCount = breachedPasswordEntryCount(in: loginEntries)
         let duplicateLoginCount = duplicateLoginEntryCount(in: loginEntries)
         return [
             AppSecurityCenterRow(
@@ -1254,6 +1256,15 @@ final class AppSessionModel {
                     ? "当前登录条目未发现密码复用。"
                     : "建议为复用密码的登录条目分别设置唯一密码。",
                 systemImage: "rectangle.2.swap"
+            ),
+            AppSecurityCenterRow(
+                id: "breached-passwords",
+                title: "泄露风险",
+                value: itemCountLabel(breachedPasswordCount),
+                detail: breachedPasswordCount == 0
+                    ? "当前登录条目未命中本地泄露指纹库。"
+                    : "建议立即为命中泄露指纹的登录条目更换唯一密码。",
+                systemImage: "bolt.shield"
             ),
             AppSecurityCenterRow(
                 id: "duplicate-logins",
@@ -1324,6 +1335,25 @@ final class AppSessionModel {
                 !password.isEmpty && entries.count > 1
             }
             .reduce(0) { count, group in count + group.value.count }
+    }
+
+    private func breachedPasswordEntryCount(in entries: [LocalLoginEntry]) -> Int {
+        let fingerprints = Set(breachedPasswordSHA256Fingerprints.map { $0.lowercased() })
+        guard !fingerprints.isEmpty else {
+            return 0
+        }
+        return entries.filter { entry in
+            let password = entry.password.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !password.isEmpty else {
+                return false
+            }
+            return fingerprints.contains(Self.sha256Fingerprint(for: password))
+        }.count
+    }
+
+    private static func sha256Fingerprint(for value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     private func duplicateLoginEntryCount(in entries: [LocalLoginEntry]) -> Int {

@@ -1,4 +1,5 @@
 @testable import Monica
+import CryptoKit
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
@@ -486,12 +487,44 @@ final class VaultSessionModelTests: XCTestCase {
 
         let rows = model.securityCenterRows
 
-        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码", "重复项"])
+        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码", "泄露风险", "重复项"])
         XCTAssertEqual(rows[0].value, "1 项")
         XCTAssertEqual(rows[1].value, "2 项")
         XCTAssertEqual(rows[2].value, "0 项")
+        XCTAssertEqual(rows[3].value, "0 项")
         XCTAssertFalse(rows.map(\.detail).joined(separator: " ").contains("short"))
         XCTAssertFalse(rows.map(\.detail).joined(separator: " ").contains("RepeatedStrong1!"))
+    }
+
+    func testSecurityCenterSummarizesBreachedPasswordsWithoutLeakingSecrets() {
+        let breachedPassword = "KnownBreached1!"
+        let model = AppSessionModel()
+        model.breachedPasswordSHA256Fingerprints = [Self.sha256Fingerprint(for: breachedPassword)]
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: "Leaked",
+                username: "alice",
+                password: breachedPassword,
+                url: "https://leaked.example.com"
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "Safe",
+                username: "alice",
+                password: "UniqueStrong1!",
+                url: "https://safe.example.com"
+            )
+        ]
+
+        let breachedRow = model.securityCenterRows.first { $0.id == "breached-passwords" }
+
+        XCTAssertEqual(breachedRow?.title, "泄露风险")
+        XCTAssertEqual(breachedRow?.value, "1 项")
+        XCTAssertFalse(breachedRow?.detail.contains(breachedPassword) ?? true)
+        XCTAssertFalse(model.securityCenterRows.map(\.detail).joined(separator: " ").contains(breachedPassword))
     }
 
     func testSecurityCenterSummarizesDuplicateLoginEntries() {
@@ -525,11 +558,16 @@ final class VaultSessionModelTests: XCTestCase {
 
         let rows = model.securityCenterRows
 
-        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码", "重复项"])
+        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码", "泄露风险", "重复项"])
         let duplicateRow = rows.first { $0.id == "duplicate-logins" }
         XCTAssertEqual(duplicateRow?.value, "2 项")
         XCTAssertFalse(duplicateRow?.detail.contains("UniqueStrong1!") ?? true)
         XCTAssertFalse(duplicateRow?.detail.contains("OtherStrong1!") ?? true)
+    }
+
+    private static func sha256Fingerprint(for value: String) -> String {
+        let digest = SHA256.hash(data: Data(value.utf8))
+        return digest.map { String(format: "%02x", $0) }.joined()
     }
 
     func testSecurityCenterBuildsDuplicateLoginMergePreviewsWithoutLeakingSecrets() {
