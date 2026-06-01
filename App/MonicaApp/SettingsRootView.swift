@@ -151,6 +151,17 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "安全中心") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    ForEach(session.securityCenterRows) { row in
+                        AndroidParitySecurityCenterRow(row: row)
+                        if row.id != session.securityCenterRows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                }
+            }
+
             AndroidParitySection(title: "权限管理") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(session.permissionStatusRows) { row in
@@ -450,6 +461,37 @@ struct SettingsRootView: View {
         case .idle, .running, .succeeded:
             return AndroidParityPalette.textSecondary
         }
+    }
+}
+
+private struct AndroidParitySecurityCenterRow: View {
+    let row: AppSecurityCenterRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: row.systemImage)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .frame(width: 28, height: 28)
+                .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(row.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                    Spacer(minLength: 8)
+                    Text(row.value)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+                Text(row.detail)
+                    .font(.caption)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

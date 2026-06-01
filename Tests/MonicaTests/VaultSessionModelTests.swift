@@ -447,6 +447,52 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(rows[5].value, "空闲")
     }
 
+    func testSecurityCenterSummarizesWeakAndReusedPasswordsWithoutLeakingSecrets() {
+        let model = AppSessionModel()
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: "Short",
+                username: "alice",
+                password: "short",
+                url: "https://short.example.com"
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "GitHub",
+                username: "alice",
+                password: "RepeatedStrong1!",
+                url: "https://github.com"
+            ),
+            LocalLoginEntry(
+                id: "login-3",
+                projectID: "project-1",
+                title: "GitLab",
+                username: "alice",
+                password: "RepeatedStrong1!",
+                url: "https://gitlab.com"
+            ),
+            LocalLoginEntry(
+                id: "login-4",
+                projectID: "project-1",
+                title: "Bank",
+                username: "alice",
+                password: "UniqueStrong1!",
+                url: "https://bank.example.com"
+            )
+        ]
+
+        let rows = model.securityCenterRows
+
+        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码"])
+        XCTAssertEqual(rows[0].value, "1 项")
+        XCTAssertEqual(rows[1].value, "2 项")
+        XCTAssertFalse(rows.map(\.detail).joined(separator: " ").contains("short"))
+        XCTAssertFalse(rows.map(\.detail).joined(separator: " ").contains("RepeatedStrong1!"))
+    }
+
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

@@ -131,6 +131,14 @@ struct AppDeveloperDiagnosticRow: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+struct AppSecurityCenterRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+}
+
 enum AppDeveloperDiagnostics {
     @MainActor
     static func rows(
@@ -1185,6 +1193,62 @@ final class AppSessionModel {
                 detail: "保存受系统保护的本地解锁材料，不保存主密码。"
             )
         ]
+    }
+
+    var securityCenterRows: [AppSecurityCenterRow] {
+        let weakPasswordCount = loginEntries.filter { Self.isWeakPassword($0.password) }.count
+        let reusedPasswordCount = reusedPasswordEntryCount(in: loginEntries)
+        return [
+            AppSecurityCenterRow(
+                id: "weak-passwords",
+                title: "弱密码",
+                value: itemCountLabel(weakPasswordCount),
+                detail: weakPasswordCount == 0
+                    ? "当前登录条目未发现明显弱密码。"
+                    : "建议优先为这些登录条目生成更长且包含多类字符的密码。",
+                systemImage: "exclamationmark.shield"
+            ),
+            AppSecurityCenterRow(
+                id: "reused-passwords",
+                title: "复用密码",
+                value: itemCountLabel(reusedPasswordCount),
+                detail: reusedPasswordCount == 0
+                    ? "当前登录条目未发现密码复用。"
+                    : "建议为复用密码的登录条目分别设置唯一密码。",
+                systemImage: "rectangle.2.swap"
+            )
+        ]
+    }
+
+    private static func isWeakPassword(_ password: String) -> Bool {
+        let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.count >= 12 else {
+            return true
+        }
+        let scalars = trimmed.unicodeScalars
+        let hasLowercase = scalars.contains { CharacterSet.lowercaseLetters.contains($0) }
+        let hasUppercase = scalars.contains { CharacterSet.uppercaseLetters.contains($0) }
+        let hasDigit = scalars.contains { CharacterSet.decimalDigits.contains($0) }
+        let hasSymbol = scalars.contains {
+            !CharacterSet.alphanumerics.contains($0)
+                && !CharacterSet.whitespacesAndNewlines.contains($0)
+        }
+        return !(hasLowercase && hasUppercase && hasDigit && hasSymbol)
+    }
+
+    private func reusedPasswordEntryCount(in entries: [LocalLoginEntry]) -> Int {
+        let grouped = Dictionary(grouping: entries) { entry in
+            entry.password.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return grouped
+            .filter { password, entries in
+                !password.isEmpty && entries.count > 1
+            }
+            .reduce(0) { count, group in count + group.value.count }
+    }
+
+    private func itemCountLabel(_ count: Int) -> String {
+        "\(count) 项"
     }
 
     var isFirstTimeVaultSetup: Bool {
