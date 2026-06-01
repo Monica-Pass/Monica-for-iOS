@@ -139,6 +139,25 @@ struct AppSecurityCenterRow: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+private struct DuplicateLoginEntryKey: Hashable {
+    let title: String
+    let username: String
+    let url: String
+
+    init?(entry: LocalLoginEntry) {
+        title = Self.normalized(entry.title)
+        username = Self.normalized(entry.username)
+        url = Self.normalized(entry.url)
+        guard !title.isEmpty || !username.isEmpty || !url.isEmpty else {
+            return nil
+        }
+    }
+
+    private static func normalized(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
 enum AppDeveloperDiagnostics {
     @MainActor
     static func rows(
@@ -1198,6 +1217,7 @@ final class AppSessionModel {
     var securityCenterRows: [AppSecurityCenterRow] {
         let weakPasswordCount = loginEntries.filter { Self.isWeakPassword($0.password) }.count
         let reusedPasswordCount = reusedPasswordEntryCount(in: loginEntries)
+        let duplicateLoginCount = duplicateLoginEntryCount(in: loginEntries)
         return [
             AppSecurityCenterRow(
                 id: "weak-passwords",
@@ -1216,6 +1236,15 @@ final class AppSessionModel {
                     ? "当前登录条目未发现密码复用。"
                     : "建议为复用密码的登录条目分别设置唯一密码。",
                 systemImage: "rectangle.2.swap"
+            ),
+            AppSecurityCenterRow(
+                id: "duplicate-logins",
+                title: "重复项",
+                value: itemCountLabel(duplicateLoginCount),
+                detail: duplicateLoginCount == 0
+                    ? "当前登录条目未发现明显重复项。"
+                    : "建议检查这些登录条目，确认是否需要合并或保留。",
+                systemImage: "doc.on.doc"
             )
         ]
     }
@@ -1244,6 +1273,15 @@ final class AppSessionModel {
             .filter { password, entries in
                 !password.isEmpty && entries.count > 1
             }
+            .reduce(0) { count, group in count + group.value.count }
+    }
+
+    private func duplicateLoginEntryCount(in entries: [LocalLoginEntry]) -> Int {
+        let grouped = Dictionary(grouping: entries.compactMap(DuplicateLoginEntryKey.init(entry:))) { key in
+            key
+        }
+        return grouped
+            .filter { _, keys in keys.count > 1 }
             .reduce(0) { count, group in count + group.value.count }
     }
 

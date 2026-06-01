@@ -486,11 +486,50 @@ final class VaultSessionModelTests: XCTestCase {
 
         let rows = model.securityCenterRows
 
-        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码"])
+        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码", "重复项"])
         XCTAssertEqual(rows[0].value, "1 项")
         XCTAssertEqual(rows[1].value, "2 项")
+        XCTAssertEqual(rows[2].value, "0 项")
         XCTAssertFalse(rows.map(\.detail).joined(separator: " ").contains("short"))
         XCTAssertFalse(rows.map(\.detail).joined(separator: " ").contains("RepeatedStrong1!"))
+    }
+
+    func testSecurityCenterSummarizesDuplicateLoginEntries() {
+        let model = AppSessionModel()
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: " GitHub ",
+                username: "Alice",
+                password: "UniqueStrong1!",
+                url: "https://github.com"
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "github",
+                username: "alice",
+                password: "OtherStrong1!",
+                url: " https://github.com "
+            ),
+            LocalLoginEntry(
+                id: "login-3",
+                projectID: "project-1",
+                title: "GitLab",
+                username: "alice",
+                password: "ThirdStrong1!",
+                url: "https://gitlab.com"
+            )
+        ]
+
+        let rows = model.securityCenterRows
+
+        XCTAssertEqual(rows.map(\.title), ["弱密码", "复用密码", "重复项"])
+        let duplicateRow = rows.first { $0.id == "duplicate-logins" }
+        XCTAssertEqual(duplicateRow?.value, "2 项")
+        XCTAssertFalse(duplicateRow?.detail.contains("UniqueStrong1!") ?? true)
+        XCTAssertFalse(duplicateRow?.detail.contains("OtherStrong1!") ?? true)
     }
 
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
