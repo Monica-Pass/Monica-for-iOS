@@ -1762,6 +1762,146 @@ final class VaultSessionModelTests: XCTestCase {
         }
     }
 
+    func testExtendedEntryOperationsAppendRedactedTimelineEvents() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+
+        try unlockNewVault(model)
+
+        model.passkeyTitle = "Joyin"
+        model.passkeyRelyingPartyID = "github.com"
+        model.passkeyUsername = "joyin"
+        model.passkeyUserHandle = "github-user-handle"
+        model.passkeyCredentialID = "credential-1"
+        model.passkeyPublicKeyCOSE = "public-key-cose"
+        model.passkeyPrivateKeyReference = "keychain://passkeys/github/credential-1"
+        try model.createPasskeyEntry(projectTitle: "Personal")
+        let createdPasskey = try XCTUnwrap(model.passkeyEntries.first)
+        model.selectPasskeyEntryForEditing(createdPasskey)
+        model.editingPasskeyTitle = "Joyin Work"
+        model.editingPasskeyUsername = "joyin@example.com"
+        model.editingPasskeyUserHandle = "github-work-user-handle"
+        model.editingPasskeyCredentialID = "credential-2"
+        model.editingPasskeyPublicKeyCOSE = "rotated-public-key-cose"
+        model.editingPasskeyPrivateKeyReference = "keychain://passkeys/github/credential-2"
+        try model.updateSelectedPasskeyEntry()
+        try model.deleteSelectedPasskeyEntry()
+        try model.restorePasskeyEntry(try XCTUnwrap(model.deletedPasskeyEntries.first))
+
+        model.sshKeyTitle = "Production deploy key"
+        model.sshKeyUsername = "deploy"
+        model.sshKeyHost = "prod.example.com"
+        model.sshKeyPublicKey = "ssh-ed25519 AAAA"
+        model.sshKeyPrivateKeyReference = "keychain://ssh/prod"
+        model.sshKeyPassphraseHint = "hardware key"
+        try model.createSshKeyEntry(projectTitle: "Personal")
+        let createdSshKey = try XCTUnwrap(model.sshKeyEntries.first)
+        model.selectSshKeyEntryForEditing(createdSshKey)
+        model.editingSshKeyTitle = "Production deploy key rotated"
+        model.editingSshKeyHost = "prod.internal.example.com"
+        model.editingSshKeyPublicKey = "ssh-ed25519 BBBB"
+        model.editingSshKeyPrivateKeyReference = "keychain://ssh/prod-rotated"
+        try model.updateSelectedSshKeyEntry()
+        try model.deleteSelectedSshKeyEntry()
+        try model.restoreSshKeyEntry(try XCTUnwrap(model.deletedSshKeyEntries.first))
+
+        model.apiTokenTitle = "Tiga API token"
+        model.apiTokenIssuer = "Tiga"
+        model.apiTokenAccountName = "joyin"
+        model.apiTokenToken = "sk-secret"
+        model.apiTokenScopes = "sync,read"
+        try model.createApiTokenEntry(projectTitle: "Personal")
+        let createdApiToken = try XCTUnwrap(model.apiTokenEntries.first)
+        model.selectApiTokenEntryForEditing(createdApiToken)
+        model.editingApiTokenTitle = "Tiga write token"
+        model.editingApiTokenAccountName = "joyin@example.com"
+        model.editingApiTokenToken = "sk-rotated"
+        model.editingApiTokenScopes = "sync,write"
+        try model.updateSelectedApiTokenEntry()
+        try model.deleteSelectedApiTokenEntry()
+        try model.restoreApiTokenEntry(try XCTUnwrap(model.deletedApiTokenEntries.first))
+
+        model.wifiTitle = "Studio Wi-Fi"
+        model.wifiSSID = "Monica Studio"
+        model.wifiSecurityType = "WPA2"
+        model.wifiPassword = "wifi-secret"
+        try model.createWifiEntry(projectTitle: "Personal")
+        let createdWifi = try XCTUnwrap(model.wifiEntries.first)
+        model.selectWifiEntryForEditing(createdWifi)
+        model.editingWifiTitle = "Studio Wi-Fi 6"
+        model.editingWifiSSID = "Monica Studio 6"
+        model.editingWifiSecurityType = "WPA3"
+        model.editingWifiPassword = "rotated-wifi-secret"
+        try model.updateSelectedWifiEntry()
+        try model.deleteSelectedWifiEntry()
+        try model.restoreWifiEntry(try XCTUnwrap(model.deletedWifiEntries.first))
+
+        model.sendTitle = "One-time send"
+        model.sendBody = "share once"
+        model.sendExpiresAt = "2026-06-02"
+        model.sendMaxViews = 1
+        try model.createSendEntry(projectTitle: "Personal")
+        let createdSend = try XCTUnwrap(model.sendEntries.first)
+        model.selectSendEntryForEditing(createdSend)
+        model.editingSendTitle = "One-time send rotated"
+        model.editingSendBody = "share twice"
+        model.editingSendMaxViews = 2
+        try model.updateSelectedSendEntry()
+        try model.deleteSelectedSendEntry()
+        try model.restoreSendEntry(try XCTUnwrap(model.deletedSendEntries.first))
+
+        let events = model.operationTimelineEvents
+
+        XCTAssertEqual(events.map(\.action), [
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created,
+            .restored, .deleted, .updated, .created
+        ])
+        XCTAssertEqual(events.map(\.itemKind), [
+            .send, .send, .send, .send,
+            .wifi, .wifi, .wifi, .wifi,
+            .apiToken, .apiToken, .apiToken, .apiToken,
+            .sshKey, .sshKey, .sshKey, .sshKey,
+            .passkey, .passkey, .passkey, .passkey
+        ])
+        XCTAssertEqual(events.map(\.itemTitle), [
+            "One-time send rotated", "One-time send rotated", "One-time send rotated", "One-time send",
+            "Studio Wi-Fi 6", "Studio Wi-Fi 6", "Studio Wi-Fi 6", "Studio Wi-Fi",
+            "Tiga write token", "Tiga write token", "Tiga write token", "Tiga API token",
+            "Production deploy key rotated", "Production deploy key rotated", "Production deploy key rotated", "Production deploy key",
+            "Joyin Work", "Joyin Work", "Joyin Work", "Joyin"
+        ])
+
+        let timelineText = events.map { "\($0.title) \($0.detail)" }.joined(separator: " ")
+        [
+            "joyin@example.com",
+            "github-user-handle",
+            "github-work-user-handle",
+            "credential-1",
+            "credential-2",
+            "public-key-cose",
+            "rotated-public-key-cose",
+            "keychain://passkeys/github/credential-1",
+            "keychain://passkeys/github/credential-2",
+            "ssh-ed25519 AAAA",
+            "ssh-ed25519 BBBB",
+            "keychain://ssh/prod",
+            "keychain://ssh/prod-rotated",
+            "sk-secret",
+            "sk-rotated",
+            "sync,read",
+            "sync,write",
+            "wifi-secret",
+            "rotated-wifi-secret",
+            "share once",
+            "share twice"
+        ].forEach { secret in
+            XCTAssertFalse(timelineText.contains(secret))
+        }
+    }
+
     func testCreateUpdateDeleteAndRestoreNoteEntryInActiveVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

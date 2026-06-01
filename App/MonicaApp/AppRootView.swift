@@ -3161,6 +3161,12 @@ final class AppSessionModel {
             passkeyPrivateKeyReference = ""
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: project.id)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .passkey,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3211,6 +3217,12 @@ final class AppSessionModel {
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
             selectPasskeyEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .passkey,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3261,6 +3273,12 @@ final class AppSessionModel {
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
             clearEditingPasskeyEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .passkey,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3285,6 +3303,12 @@ final class AppSessionModel {
             )
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .passkey,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3316,6 +3340,12 @@ final class AppSessionModel {
             sshKeyPrivateKeyReference = ""
             sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: project.id)
             deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .sshKey,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3364,6 +3394,12 @@ final class AppSessionModel {
             sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
             deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
             selectSshKeyEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .sshKey,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3410,6 +3446,12 @@ final class AppSessionModel {
             sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
             deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
             clearEditingSshKeyEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .sshKey,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3431,6 +3473,12 @@ final class AppSessionModel {
             let restored = try entryRepository.restoreSshKeyEntry(projectID: projectID, entryID: entry.id)
             sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
             deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .sshKey,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3462,6 +3510,12 @@ final class AppSessionModel {
             apiTokenToken = ""
             apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: project.id)
             deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .apiToken,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3510,6 +3564,12 @@ final class AppSessionModel {
             apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
             deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
             selectApiTokenEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .apiToken,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3556,6 +3616,12 @@ final class AppSessionModel {
             apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
             deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
             clearEditingApiTokenEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .apiToken,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3577,6 +3643,12 @@ final class AppSessionModel {
             let restored = try entryRepository.restoreApiTokenEntry(projectID: projectID, entryID: entry.id)
             apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
             deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .apiToken,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3607,6 +3679,12 @@ final class AppSessionModel {
             wifiPassword = ""
             wifiEntries = try entryRepository.listWifiEntries(projectID: project.id)
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .wifi,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3653,6 +3731,12 @@ final class AppSessionModel {
             wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
             selectWifiEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .wifi,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3699,6 +3783,12 @@ final class AppSessionModel {
             wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
             clearEditingWifiEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .wifi,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3720,6 +3810,12 @@ final class AppSessionModel {
             let restored = try entryRepository.restoreWifiEntry(projectID: projectID, entryID: entry.id)
             wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .wifi,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3749,6 +3845,12 @@ final class AppSessionModel {
             sendBody = ""
             sendEntries = try entryRepository.listSendEntries(projectID: project.id)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .send,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3793,6 +3895,12 @@ final class AppSessionModel {
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
             selectSendEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .send,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3839,6 +3947,12 @@ final class AppSessionModel {
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
             clearEditingSendEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .send,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
             entryOperationState = .succeeded("已删除 \(deletedTitle)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3860,6 +3974,12 @@ final class AppSessionModel {
             let restored = try entryRepository.restoreSendEntry(projectID: projectID, entryID: entry.id)
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .send,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
             entryOperationState = .succeeded("已恢复 \(restored.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
