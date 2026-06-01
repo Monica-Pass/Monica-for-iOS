@@ -4001,6 +4001,12 @@ final class AppSessionModel {
             try entryRepository.deleteAttachmentMetadata(projectID: projectID, attachmentID: entry.id)
             attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
             deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .attachmentRef,
+                itemID: entry.id,
+                itemTitle: entry.fileName
+            )
             entryOperationState = .succeeded("已删除 \(entry.fileName)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -4022,6 +4028,12 @@ final class AppSessionModel {
             let restored = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: entry.id)
             attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
             deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .attachmentRef,
+                itemID: restored.id,
+                itemTitle: restored.fileName
+            )
             entryOperationState = .succeeded("已恢复 \(restored.fileName)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)

@@ -2952,6 +2952,48 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 contract.pdf"))
     }
 
+    func testAttachmentReferenceDeleteAndRestoreAppendRedactedTimelineEvents() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
+            "attachments/attachments_meta.json": #"""
+            {"version":1,"entries":[{"parentPasswordId":42,"fileName":"contract.pdf","mimeType":"application/pdf","sizeBytes":2048,"sha256Hex":"abc123","wrappedCek":"wrapped-key","localPath":"attachment-1.enc","createdAt":1710000000000,"updatedAt":1710000001000}]}
+            """#,
+            "attachments/attachment-1.enc": "ciphertext"
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewAndroidBackupImport(backup)
+        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+
+        let attachment = try XCTUnwrap(model.attachmentEntries.first)
+        try model.deleteAttachmentEntry(attachment)
+        try model.restoreAttachmentEntry(try XCTUnwrap(model.deletedAttachmentEntries.first))
+
+        let events = model.operationTimelineEvents
+
+        XCTAssertEqual(events.map(\.action), [.restored, .deleted])
+        XCTAssertEqual(events.map(\.itemKind), [.attachmentRef, .attachmentRef])
+        XCTAssertEqual(events.map(\.itemTitle), ["contract.pdf", "contract.pdf"])
+        XCTAssertEqual(events.map(\.itemID), [attachment.id, attachment.id])
+
+        let timelineText = events.map { "\($0.title) \($0.detail)" }.joined(separator: " ")
+        [
+            "abc123",
+            "wrapped-key",
+            "attachment-1.enc",
+            "ciphertext",
+            "secret-password"
+        ].forEach { secret in
+            XCTAssertFalse(timelineText.contains(secret))
+        }
+    }
+
     func testFileAndroidBackupAttachmentBlobStoreWritesSanitizedEncryptedBlob() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
