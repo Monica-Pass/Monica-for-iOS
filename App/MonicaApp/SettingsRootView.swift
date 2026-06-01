@@ -160,6 +160,16 @@ struct SettingsRootView: View {
                         }
                     }
                 }
+                if !session.duplicateLoginMergePreviews.isEmpty {
+                    AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                        ForEach(session.duplicateLoginMergePreviews) { preview in
+                            AndroidParityDuplicateLoginPreviewRow(preview: preview)
+                            if preview.id != session.duplicateLoginMergePreviews.last?.id {
+                                AndroidParityDivider()
+                            }
+                        }
+                    }
+                }
             }
 
             AndroidParitySection(title: "权限管理") {
@@ -489,6 +499,41 @@ private struct AndroidParitySecurityCenterRow: View {
                     .font(.caption)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private struct AndroidParityDuplicateLoginPreviewRow: View {
+    let preview: AppDuplicateLoginMergePreview
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "arrow.triangle.merge")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .frame(width: 28, height: 28)
+                .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 8) {
+                    Text(preview.title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                    Spacer(minLength: 8)
+                    Text(preview.entryCountLabel)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+                Text(preview.detail)
+                    .font(.caption)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("\(preview.username) · \(preview.url)")
+                    .font(.caption2)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .lineLimit(2)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -139,6 +139,17 @@ struct AppSecurityCenterRow: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let username: String
+    let url: String
+    let entryCountLabel: String
+    let primaryEntryID: String
+    let duplicateEntryIDs: [String]
+    let detail: String
+}
+
 private struct DuplicateLoginEntryKey: Hashable {
     let title: String
     let username: String
@@ -1249,6 +1260,26 @@ final class AppSessionModel {
         ]
     }
 
+    var duplicateLoginMergePreviews: [AppDuplicateLoginMergePreview] {
+        let grouped = duplicateLoginGroups(in: loginEntries)
+        return grouped.map { key, entries in
+            let primary = entries[0]
+            let duplicateIDs = entries.dropFirst().map(\.id)
+            let title = primary.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            let displayTitle = title.isEmpty ? key.title : title
+            return AppDuplicateLoginMergePreview(
+                id: "duplicate-login-\(primary.id)",
+                title: displayTitle,
+                username: key.username,
+                url: key.url,
+                entryCountLabel: itemCountLabel(entries.count),
+                primaryEntryID: primary.id,
+                duplicateEntryIDs: duplicateIDs,
+                detail: "保留 \(displayTitle)，预览合并 \(duplicateIDs.count) 个重复条目。"
+            )
+        }
+    }
+
     private static func isWeakPassword(_ password: String) -> Bool {
         let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.count >= 12 else {
@@ -1277,12 +1308,24 @@ final class AppSessionModel {
     }
 
     private func duplicateLoginEntryCount(in entries: [LocalLoginEntry]) -> Int {
-        let grouped = Dictionary(grouping: entries.compactMap(DuplicateLoginEntryKey.init(entry:))) { key in
-            key
+        duplicateLoginGroups(in: entries)
+            .reduce(0) { count, group in count + group.entries.count }
+    }
+
+    private func duplicateLoginGroups(in entries: [LocalLoginEntry]) -> [(key: DuplicateLoginEntryKey, entries: [LocalLoginEntry])] {
+        var grouped: [DuplicateLoginEntryKey: [LocalLoginEntry]] = [:]
+        for entry in entries {
+            guard let key = DuplicateLoginEntryKey(entry: entry) else {
+                continue
+            }
+            grouped[key, default: []].append(entry)
         }
         return grouped
-            .filter { _, keys in keys.count > 1 }
-            .reduce(0) { count, group in count + group.value.count }
+            .filter { _, entries in entries.count > 1 }
+            .map { key, entries in (key: key, entries: entries) }
+            .sorted { lhs, rhs in
+                lhs.entries[0].id.localizedStandardCompare(rhs.entries[0].id) == .orderedAscending
+            }
     }
 
     private func itemCountLabel(_ count: Int) -> String {

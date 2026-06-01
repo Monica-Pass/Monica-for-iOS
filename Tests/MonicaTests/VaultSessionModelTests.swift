@@ -532,6 +532,49 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(duplicateRow?.detail.contains("OtherStrong1!") ?? true)
     }
 
+    func testSecurityCenterBuildsDuplicateLoginMergePreviewsWithoutLeakingSecrets() {
+        let model = AppSessionModel()
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: " GitHub ",
+                username: "Alice",
+                password: "UniqueStrong1!",
+                url: "https://github.com"
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "github",
+                username: "alice",
+                password: "OtherStrong1!",
+                url: " https://github.com "
+            ),
+            LocalLoginEntry(
+                id: "login-3",
+                projectID: "project-1",
+                title: "Bank",
+                username: "alice",
+                password: "BankStrong1!",
+                url: "https://bank.example.com"
+            )
+        ]
+
+        let previews = model.duplicateLoginMergePreviews
+
+        XCTAssertEqual(previews.count, 1)
+        XCTAssertEqual(previews[0].id, "duplicate-login-login-1")
+        XCTAssertEqual(previews[0].title, "GitHub")
+        XCTAssertEqual(previews[0].username, "alice")
+        XCTAssertEqual(previews[0].url, "https://github.com")
+        XCTAssertEqual(previews[0].entryCountLabel, "2 项")
+        XCTAssertEqual(previews[0].primaryEntryID, "login-1")
+        XCTAssertEqual(previews[0].duplicateEntryIDs, ["login-2"])
+        XCTAssertFalse(previews[0].detail.contains("UniqueStrong1!"))
+        XCTAssertFalse(previews[0].detail.contains("OtherStrong1!"))
+    }
+
     func testCreateLocalVaultUsesDefaultNameWhenLockScreenNameIsBlank() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
