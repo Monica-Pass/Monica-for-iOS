@@ -47,6 +47,18 @@ struct AndroidParityVaultHomeView: View {
     let setSelectedPasskeyFavorite: (Bool) -> Void
     let deletePasskeyEntry: () -> Void
     let restorePasskeyEntry: (LocalPasskeyEntry) -> Void
+    let setSelectedSshKeyFavorite: (Bool) -> Void
+    let deleteSshKeyEntry: () -> Void
+    let restoreSshKeyEntry: (LocalSshKeyEntry) -> Void
+    let setSelectedApiTokenFavorite: (Bool) -> Void
+    let deleteApiTokenEntry: () -> Void
+    let restoreApiTokenEntry: (LocalApiTokenEntry) -> Void
+    let setSelectedWifiFavorite: (Bool) -> Void
+    let deleteWifiEntry: () -> Void
+    let restoreWifiEntry: (LocalWifiEntry) -> Void
+    let setSelectedSendFavorite: (Bool) -> Void
+    let deleteSendEntry: () -> Void
+    let restoreSendEntry: (LocalSendEntry) -> Void
     let refreshExtendedParityEntries: () -> Void
 
     @State private var isVaultImporterPresented = false
@@ -137,8 +149,16 @@ struct AndroidParityVaultHomeView: View {
             passkeyList
         case .identity:
             identityList
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
-            AndroidParityEmptyCard(title: "\(itemKind.displayName) 已进入存储接口，界面将在后续批次接入。", systemImage: "shippingbox")
+        case .sshKey:
+            sshKeyList
+        case .apiToken:
+            apiTokenList
+        case .wifi:
+            wifiList
+        case .send:
+            sendList
+        case .attachmentRef:
+            AndroidParityEmptyCard(title: "附件引用等待附件内容层接入。", systemImage: "paperclip")
         }
     }
 
@@ -259,13 +279,105 @@ struct AndroidParityVaultHomeView: View {
                 AndroidParityInfoRow(title: "SSH 密钥", value: "\(session.sshKeyEntries.count) 条")
                 AndroidParityInfoRow(title: "API Token", value: "\(session.apiTokenEntries.count) 条")
                 AndroidParityInfoRow(title: "Wi-Fi", value: "\(session.wifiEntries.count) 条")
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)], spacing: 10) {
+                    extendedAddButton(.sshKey)
+                    extendedAddButton(.apiToken)
+                    extendedAddButton(.wifi)
+                    extendedAddButton(.send)
+                }
                 Button(action: refreshExtendedParityEntries) {
                     Label("刷新扩展条目", systemImage: "arrow.clockwise")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
+            extendedPasskeySections
             deletedPasskeyRows
+        }
+    }
+
+    private var sshKeyList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredSshKeyEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidSshKeyListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredSshKeyEntries.isEmpty {
+                emptyList("没有匹配的 SSH 密钥", icon: "key.fill")
+            }
+            deletedSshKeyRows
+        }
+    }
+
+    private var apiTokenList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredApiTokenEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidApiTokenListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredApiTokenEntries.isEmpty {
+                emptyList("没有匹配的 API Token", icon: "text.badge.key")
+            }
+            deletedApiTokenRows
+        }
+    }
+
+    private var wifiList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredWifiEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidWifiListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredWifiEntries.isEmpty {
+                emptyList("没有匹配的 Wi-Fi", icon: "wifi")
+            }
+            deletedWifiRows
+        }
+    }
+
+    private var sendList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredSendEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: {
+                    AndroidSendListCard(entry: entry)
+                }
+                .buttonStyle(.plain)
+            }
+            if session.filteredSendEntries.isEmpty {
+                emptyList("没有匹配的 Send", icon: "paperplane.fill")
+            }
+            deletedSendRows
+        }
+    }
+
+    private var extendedPasskeySections: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredSshKeyEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: { AndroidSshKeyListCard(entry: entry) }
+                    .buttonStyle(.plain)
+            }
+            ForEach(session.filteredApiTokenEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: { AndroidApiTokenListCard(entry: entry) }
+                    .buttonStyle(.plain)
+            }
+            ForEach(session.filteredWifiEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: { AndroidWifiListCard(entry: entry) }
+                    .buttonStyle(.plain)
+            }
+            ForEach(session.filteredSendEntries) { entry in
+                Button { session.presentEditEditor(for: entry) } label: { AndroidSendListCard(entry: entry) }
+                    .buttonStyle(.plain)
+            }
+            deletedSshKeyRows
+            deletedApiTokenRows
+            deletedWifiRows
+            deletedSendRows
         }
     }
 
@@ -344,6 +456,46 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    @ViewBuilder private var deletedSshKeyRows: some View {
+        if !session.deletedSshKeyEntries.isEmpty {
+            restoreSection("已删除 SSH 密钥") {
+                ForEach(session.deletedSshKeyEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.host) { restoreSshKeyEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedApiTokenRows: some View {
+        if !session.deletedApiTokenEntries.isEmpty {
+            restoreSection("已删除 API Token") {
+                ForEach(session.deletedApiTokenEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.issuer) { restoreApiTokenEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedWifiRows: some View {
+        if !session.deletedWifiEntries.isEmpty {
+            restoreSection("已删除 Wi-Fi") {
+                ForEach(session.deletedWifiEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.ssid) { restoreWifiEntry(entry) }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedSendRows: some View {
+        if !session.deletedSendEntries.isEmpty {
+            restoreSection("已删除 Send") {
+                ForEach(session.deletedSendEntries) { entry in
+                    restoreButton(title: entry.title, subtitle: entry.expiresAt) { restoreSendEntry(entry) }
+                }
+            }
+        }
+    }
+
     private var largeTitle: String {
         itemKind == .passkey ? "通行密钥" : (session.activeVaultName ?? "Monica")
     }
@@ -367,7 +519,11 @@ struct AndroidParityVaultHomeView: View {
                 case .card: return session.cardSearchQuery
                 case .identity: return session.identitySearchQuery
                 case .passkey: return session.passkeySearchQuery
-                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return ""
+                case .sshKey: return session.sshKeySearchQuery
+                case .apiToken: return session.apiTokenSearchQuery
+                case .wifi: return session.wifiSearchQuery
+                case .send: return session.sendSearchQuery
+                case .attachmentRef: return ""
                 }
             },
             set: { value in
@@ -380,7 +536,11 @@ struct AndroidParityVaultHomeView: View {
                     session.identitySearchQuery = value
                 case .identity: session.identitySearchQuery = value
                 case .passkey: session.passkeySearchQuery = value
-                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+                case .sshKey: session.sshKeySearchQuery = value
+                case .apiToken: session.apiTokenSearchQuery = value
+                case .wifi: session.wifiSearchQuery = value
+                case .send: session.sendSearchQuery = value
+                case .attachmentRef: break
                 }
             }
         )
@@ -396,7 +556,11 @@ struct AndroidParityVaultHomeView: View {
                 case .card: return session.showFavoriteCardEntriesOnly || session.showFavoriteIdentityEntriesOnly
                 case .identity: return session.showFavoriteIdentityEntriesOnly
                 case .passkey: return session.showFavoritePasskeyEntriesOnly
-                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return false
+                case .sshKey: return session.showFavoriteSshKeyEntriesOnly
+                case .apiToken: return session.showFavoriteApiTokenEntriesOnly
+                case .wifi: return session.showFavoriteWifiEntriesOnly
+                case .send: return session.showFavoriteSendEntriesOnly
+                case .attachmentRef: return false
                 }
             },
             set: { value in
@@ -409,7 +573,11 @@ struct AndroidParityVaultHomeView: View {
                     session.showFavoriteIdentityEntriesOnly = value
                 case .identity: session.showFavoriteIdentityEntriesOnly = value
                 case .passkey: session.showFavoritePasskeyEntriesOnly = value
-                case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+                case .sshKey: session.showFavoriteSshKeyEntriesOnly = value
+                case .apiToken: session.showFavoriteApiTokenEntriesOnly = value
+                case .wifi: session.showFavoriteWifiEntriesOnly = value
+                case .send: session.showFavoriteSendEntriesOnly = value
+                case .attachmentRef: break
                 }
             }
         )
@@ -428,7 +596,11 @@ struct AndroidParityVaultHomeView: View {
         case .card: setSelectedCardFavorite(favorite)
         case .identity: setSelectedIdentityFavorite(favorite)
         case .passkey: setSelectedPasskeyFavorite(favorite)
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+        case .sshKey: setSelectedSshKeyFavorite(favorite)
+        case .apiToken: setSelectedApiTokenFavorite(favorite)
+        case .wifi: setSelectedWifiFavorite(favorite)
+        case .send: setSelectedSendFavorite(favorite)
+        case .attachmentRef: break
         }
     }
 
@@ -441,7 +613,11 @@ struct AndroidParityVaultHomeView: View {
         case .card: deleteCardEntry()
         case .identity: deleteIdentityEntry()
         case .passkey: deletePasskeyEntry()
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: break
+        case .sshKey: deleteSshKeyEntry()
+        case .apiToken: deleteApiTokenEntry()
+        case .wifi: deleteWifiEntry()
+        case .send: deleteSendEntry()
+        case .attachmentRef: break
         }
         session.dismissPresentedEditor()
     }
@@ -481,6 +657,14 @@ struct AndroidParityVaultHomeView: View {
             .buttonStyle(.plain)
             .foregroundStyle(AndroidParityPalette.primary)
         }
+    }
+
+    private func extendedAddButton(_ kind: UnifiedVaultItemKind) -> some View {
+        Button { session.presentAddEditor(forItemKind: kind) } label: {
+            Label(kind.displayName, systemImage: kind.systemImage)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
     }
 }
 
@@ -785,6 +969,93 @@ private struct AndroidPasskeyListCard: View {
     private var providerTint: Color { providerName == "GitHub" ? .black : AndroidParityPalette.primary }
 }
 
+private struct AndroidSshKeyListCard: View {
+    let entry: LocalSshKeyEntry
+
+    var body: some View {
+        AndroidExtendedSecretListCard(
+            icon: "key.fill",
+            title: entry.title,
+            primary: [entry.username, entry.host].filter { !$0.isEmpty }.joined(separator: "@"),
+            secondary: entry.publicKey,
+            favorite: entry.favorite
+        )
+    }
+}
+
+private struct AndroidApiTokenListCard: View {
+    let entry: LocalApiTokenEntry
+
+    var body: some View {
+        AndroidExtendedSecretListCard(
+            icon: "text.badge.key",
+            title: entry.title,
+            primary: [entry.issuer, entry.accountName].filter { !$0.isEmpty }.joined(separator: " / "),
+            secondary: entry.scopes,
+            favorite: entry.favorite
+        )
+    }
+}
+
+private struct AndroidWifiListCard: View {
+    let entry: LocalWifiEntry
+
+    var body: some View {
+        AndroidExtendedSecretListCard(
+            icon: "wifi",
+            title: entry.title,
+            primary: entry.ssid,
+            secondary: entry.hidden ? "\(entry.securityType) / 隐藏网络" : entry.securityType,
+            favorite: entry.favorite
+        )
+    }
+}
+
+private struct AndroidSendListCard: View {
+    let entry: LocalSendEntry
+
+    var body: some View {
+        AndroidExtendedSecretListCard(
+            icon: "paperplane.fill",
+            title: entry.title,
+            primary: entry.expiresAt.isEmpty ? "不过期" : entry.expiresAt,
+            secondary: "最多查看 \(entry.maxViews) 次",
+            favorite: entry.favorite
+        )
+    }
+}
+
+private struct AndroidExtendedSecretListCard: View {
+    let icon: String
+    let title: String
+    let primary: String
+    let secondary: String
+    let favorite: Bool
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
+            HStack(alignment: .top, spacing: 18) {
+                AndroidParityIconTile(systemImage: icon, fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(title.isEmpty ? "未命名" : title)
+                        .font(.subheadline.weight(.semibold))
+                    Text(primary.isEmpty ? "未填写" : primary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    Text(secondary.isEmpty ? "无备注" : secondary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Image(systemName: favorite ? "heart.fill" : "chevron.down")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(favorite ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
+            }
+        }
+    }
+}
+
 struct AddEditVaultItemView: View {
     @Bindable var session: AppSessionModel
     let mode: VaultItemEditorMode
@@ -915,7 +1186,11 @@ struct AddEditVaultItemView: View {
             case .card: cardFields
             case .identity: identityFields
             case .passkey: passkeyFields
-            case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+            case .sshKey: sshKeyFields
+            case .apiToken: apiTokenFields
+            case .wifi: wifiFields
+            case .send: sendFields
+            case .attachmentRef:
                 Text("该类型当前只支持列表展示。")
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
@@ -1018,6 +1293,57 @@ struct AddEditVaultItemView: View {
         }
     }
 
+    private var sshKeyFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.sshKeyTitle : $session.editingSshKeyTitle)
+            field(icon: "person.fill", title: "用户名", text: mode.isAdding ? $session.sshKeyUsername : $session.editingSshKeyUsername)
+            field(icon: "network", title: "主机", text: mode.isAdding ? $session.sshKeyHost : $session.editingSshKeyHost)
+            field(icon: "key.fill", title: "公钥", text: mode.isAdding ? $session.sshKeyPublicKey : $session.editingSshKeyPublicKey)
+            secureField(icon: "lock.shield.fill", title: "私钥引用", text: mode.isAdding ? $session.sshKeyPrivateKeyReference : $session.editingSshKeyPrivateKeyReference)
+            field(icon: "text.bubble.fill", title: "口令提示", text: mode.isAdding ? $session.sshKeyPassphraseHint : $session.editingSshKeyPassphraseHint)
+            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.sshKeyNotes : $session.editingSshKeyNotes)
+        }
+    }
+
+    private var apiTokenFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.apiTokenTitle : $session.editingApiTokenTitle)
+            field(icon: "building.2.fill", title: "签发方", text: mode.isAdding ? $session.apiTokenIssuer : $session.editingApiTokenIssuer)
+            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.apiTokenAccountName : $session.editingApiTokenAccountName)
+            secureField(icon: "text.badge.key", title: "Token", text: mode.isAdding ? $session.apiTokenToken : $session.editingApiTokenToken)
+            field(icon: "scope", title: "权限范围", text: mode.isAdding ? $session.apiTokenScopes : $session.editingApiTokenScopes)
+            field(icon: "calendar", title: "过期时间", text: mode.isAdding ? $session.apiTokenExpiresAt : $session.editingApiTokenExpiresAt)
+            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.apiTokenNotes : $session.editingApiTokenNotes)
+        }
+    }
+
+    private var wifiFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.wifiTitle : $session.editingWifiTitle)
+            field(icon: "wifi", title: "SSID", text: mode.isAdding ? $session.wifiSSID : $session.editingWifiSSID)
+            field(icon: "lock.shield.fill", title: "安全类型", text: mode.isAdding ? $session.wifiSecurityType : $session.editingWifiSecurityType)
+            secureField(icon: "lock.fill", title: "密码", text: mode.isAdding ? $session.wifiPassword : $session.editingWifiPassword)
+            Toggle("隐藏网络", isOn: mode.isAdding ? $session.wifiHidden : $session.editingWifiHidden)
+                .font(.subheadline.weight(.semibold))
+                .tint(AndroidParityPalette.primary)
+            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.wifiNotes : $session.editingWifiNotes)
+        }
+    }
+
+    private var sendFields: some View {
+        VStack(spacing: 18) {
+            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.sendTitle : $session.editingSendTitle)
+            secureField(icon: "text.alignleft", title: "内容", text: mode.isAdding ? $session.sendBody : $session.editingSendBody)
+            field(icon: "calendar", title: "过期时间", text: mode.isAdding ? $session.sendExpiresAt : $session.editingSendExpiresAt)
+            Stepper(value: mode.isAdding ? $session.sendMaxViews : $session.editingSendMaxViews, in: 1...999) {
+                Text("最多查看 \(mode.isAdding ? session.sendMaxViews : session.editingSendMaxViews) 次")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .tint(AndroidParityPalette.primary)
+            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.sendNotes : $session.editingSendNotes)
+        }
+    }
+
     private func field(icon: String, title: String, text: Binding<String>) -> some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
@@ -1076,7 +1402,11 @@ struct AddEditVaultItemView: View {
         case .card: return session.editingCardFavorite
         case .identity: return session.editingIdentityFavorite
         case .passkey: return session.editingPasskeyFavorite
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return false
+        case .sshKey: return session.editingSshKeyFavorite
+        case .apiToken: return session.editingApiTokenFavorite
+        case .wifi: return session.editingWifiFavorite
+        case .send: return session.editingSendFavorite
+        case .attachmentRef: return false
         }
     }
 }

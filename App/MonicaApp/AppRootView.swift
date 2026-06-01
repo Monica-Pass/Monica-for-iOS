@@ -448,12 +448,78 @@ final class AppSessionModel {
     var editingPasskeyFavorite = false
     var sshKeyEntries: [LocalSshKeyEntry] = []
     var deletedSshKeyEntries: [LocalSshKeyEntry] = []
+    var sshKeyTitle = ""
+    var sshKeyUsername = ""
+    var sshKeyHost = ""
+    var sshKeyPublicKey = ""
+    var sshKeyPrivateKeyReference = ""
+    var sshKeyPassphraseHint = ""
+    var sshKeyNotes = ""
+    var sshKeySearchQuery = ""
+    var showFavoriteSshKeyEntriesOnly = false
+    var editingSshKeyEntryID: String?
+    var editingSshKeyTitle = ""
+    var editingSshKeyUsername = ""
+    var editingSshKeyHost = ""
+    var editingSshKeyPublicKey = ""
+    var editingSshKeyPrivateKeyReference = ""
+    var editingSshKeyPassphraseHint = ""
+    var editingSshKeyNotes = ""
+    var editingSshKeyFavorite = false
     var apiTokenEntries: [LocalApiTokenEntry] = []
     var deletedApiTokenEntries: [LocalApiTokenEntry] = []
+    var apiTokenTitle = ""
+    var apiTokenIssuer = ""
+    var apiTokenAccountName = ""
+    var apiTokenToken = ""
+    var apiTokenScopes = ""
+    var apiTokenExpiresAt = ""
+    var apiTokenNotes = ""
+    var apiTokenSearchQuery = ""
+    var showFavoriteApiTokenEntriesOnly = false
+    var editingApiTokenEntryID: String?
+    var editingApiTokenTitle = ""
+    var editingApiTokenIssuer = ""
+    var editingApiTokenAccountName = ""
+    var editingApiTokenToken = ""
+    var editingApiTokenScopes = ""
+    var editingApiTokenExpiresAt = ""
+    var editingApiTokenNotes = ""
+    var editingApiTokenFavorite = false
     var wifiEntries: [LocalWifiEntry] = []
     var deletedWifiEntries: [LocalWifiEntry] = []
+    var wifiTitle = ""
+    var wifiSSID = ""
+    var wifiSecurityType = "WPA2"
+    var wifiPassword = ""
+    var wifiHidden = false
+    var wifiNotes = ""
+    var wifiSearchQuery = ""
+    var showFavoriteWifiEntriesOnly = false
+    var editingWifiEntryID: String?
+    var editingWifiTitle = ""
+    var editingWifiSSID = ""
+    var editingWifiSecurityType = "WPA2"
+    var editingWifiPassword = ""
+    var editingWifiHidden = false
+    var editingWifiNotes = ""
+    var editingWifiFavorite = false
     var sendEntries: [LocalSendEntry] = []
     var deletedSendEntries: [LocalSendEntry] = []
+    var sendTitle = ""
+    var sendBody = ""
+    var sendExpiresAt = ""
+    var sendMaxViews = 1
+    var sendNotes = ""
+    var sendSearchQuery = ""
+    var showFavoriteSendEntriesOnly = false
+    var editingSendEntryID: String?
+    var editingSendTitle = ""
+    var editingSendBody = ""
+    var editingSendExpiresAt = ""
+    var editingSendMaxViews = 1
+    var editingSendNotes = ""
+    var editingSendFavorite = false
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -648,6 +714,68 @@ final class AppSessionModel {
                 || entry.username.localizedCaseInsensitiveContains(query)
                 || entry.notes.localizedCaseInsensitiveContains(query)
             }
+    }
+
+    var filteredSshKeyEntries: [LocalSshKeyEntry] {
+        let query = sshKeySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filteredFavoriteEntries(
+            sshKeyEntries,
+            query: query,
+            favoritesOnly: showFavoriteSshKeyEntriesOnly,
+            isFavorite: { $0.favorite }
+        ) { entry, query in
+            entry.title.localizedCaseInsensitiveContains(query)
+                || entry.username.localizedCaseInsensitiveContains(query)
+                || entry.host.localizedCaseInsensitiveContains(query)
+                || entry.publicKey.localizedCaseInsensitiveContains(query)
+                || entry.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var filteredApiTokenEntries: [LocalApiTokenEntry] {
+        let query = apiTokenSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filteredFavoriteEntries(
+            apiTokenEntries,
+            query: query,
+            favoritesOnly: showFavoriteApiTokenEntriesOnly,
+            isFavorite: { $0.favorite }
+        ) { entry, query in
+            entry.title.localizedCaseInsensitiveContains(query)
+                || entry.issuer.localizedCaseInsensitiveContains(query)
+                || entry.accountName.localizedCaseInsensitiveContains(query)
+                || entry.scopes.localizedCaseInsensitiveContains(query)
+                || entry.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var filteredWifiEntries: [LocalWifiEntry] {
+        let query = wifiSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filteredFavoriteEntries(
+            wifiEntries,
+            query: query,
+            favoritesOnly: showFavoriteWifiEntriesOnly,
+            isFavorite: { $0.favorite }
+        ) { entry, query in
+            entry.title.localizedCaseInsensitiveContains(query)
+                || entry.ssid.localizedCaseInsensitiveContains(query)
+                || entry.securityType.localizedCaseInsensitiveContains(query)
+                || entry.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var filteredSendEntries: [LocalSendEntry] {
+        let query = sendSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filteredFavoriteEntries(
+            sendEntries,
+            query: query,
+            favoritesOnly: showFavoriteSendEntriesOnly,
+            isFavorite: { $0.favorite }
+        ) { entry, query in
+            entry.title.localizedCaseInsensitiveContains(query)
+                || entry.body.localizedCaseInsensitiveContains(query)
+                || entry.expiresAt.localizedCaseInsensitiveContains(query)
+                || entry.notes.localizedCaseInsensitiveContains(query)
+        }
     }
 
     var isFirstTimeVaultSetup: Bool {
@@ -1038,6 +1166,11 @@ final class AppSessionModel {
         isFabMenuPresented = false
     }
 
+    func presentAddEditor(forItemKind itemKind: UnifiedVaultItemKind) {
+        presentedEditorMode = .add(itemKind)
+        isFabMenuPresented = false
+    }
+
     func presentEditEditor(for entry: LocalLoginEntry) {
         selectLoginEntryForEditing(entry)
         presentedEditorMode = .edit(VaultItemRoute(kind: .login, entryID: entry.id))
@@ -1066,6 +1199,26 @@ final class AppSessionModel {
     func presentEditEditor(for entry: LocalPasskeyEntry) {
         selectPasskeyEntryForEditing(entry)
         presentedEditorMode = .edit(VaultItemRoute(kind: .passkey, entryID: entry.id))
+    }
+
+    func presentEditEditor(for entry: LocalSshKeyEntry) {
+        selectSshKeyEntryForEditing(entry)
+        presentedEditorMode = .edit(VaultItemRoute(kind: .sshKey, entryID: entry.id))
+    }
+
+    func presentEditEditor(for entry: LocalApiTokenEntry) {
+        selectApiTokenEntryForEditing(entry)
+        presentedEditorMode = .edit(VaultItemRoute(kind: .apiToken, entryID: entry.id))
+    }
+
+    func presentEditEditor(for entry: LocalWifiEntry) {
+        selectWifiEntryForEditing(entry)
+        presentedEditorMode = .edit(VaultItemRoute(kind: .wifi, entryID: entry.id))
+    }
+
+    func presentEditEditor(for entry: LocalSendEntry) {
+        selectSendEntryForEditing(entry)
+        presentedEditorMode = .edit(VaultItemRoute(kind: .send, entryID: entry.id))
     }
 
     func dismissPresentedEditor() {
@@ -1100,7 +1253,15 @@ final class AppSessionModel {
             try createIdentityEntry(projectTitle: projectTitle)
         case .passkey:
             try createPasskeyEntry(projectTitle: projectTitle)
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+        case .sshKey:
+            try createSshKeyEntry(projectTitle: projectTitle)
+        case .apiToken:
+            try createApiTokenEntry(projectTitle: projectTitle)
+        case .wifi:
+            try createWifiEntry(projectTitle: projectTitle)
+        case .send:
+            try createSendEntry(projectTitle: projectTitle)
+        case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
     }
@@ -1119,7 +1280,15 @@ final class AppSessionModel {
             try updateSelectedIdentityEntry()
         case .passkey:
             try updateSelectedPasskeyEntry()
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+        case .sshKey:
+            try updateSelectedSshKeyEntry()
+        case .apiToken:
+            try updateSelectedApiTokenEntry()
+        case .wifi:
+            try updateSelectedWifiEntry()
+        case .send:
+            try updateSelectedSendEntry()
+        case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
     }
@@ -2158,6 +2327,581 @@ final class AppSessionModel {
         }
     }
 
+    func createSshKeyEntry(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            let entry = try entryRepository.createSshKeyEntry(
+                projectID: project.id,
+                draft: LocalSshKeyEntryDraft(
+                    title: sshKeyTitle,
+                    username: sshKeyUsername,
+                    host: sshKeyHost,
+                    publicKey: sshKeyPublicKey,
+                    privateKeyReference: sshKeyPrivateKeyReference,
+                    passphraseHint: sshKeyPassphraseHint,
+                    notes: sshKeyNotes
+                )
+            )
+            sshKeyPrivateKeyReference = ""
+            sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: project.id)
+            deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: project.id)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func selectSshKeyEntryForEditing(_ entry: LocalSshKeyEntry) {
+        recordUserActivity()
+        editingSshKeyEntryID = entry.id
+        editingSshKeyTitle = entry.title
+        editingSshKeyUsername = entry.username
+        editingSshKeyHost = entry.host
+        editingSshKeyPublicKey = entry.publicKey
+        editingSshKeyPrivateKeyReference = entry.privateKeyReference
+        editingSshKeyPassphraseHint = entry.passphraseHint
+        editingSshKeyNotes = entry.notes
+        editingSshKeyFavorite = entry.favorite
+    }
+
+    func updateSelectedSshKeyEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingSshKeyEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let entry = try entryRepository.updateSshKeyEntry(
+                projectID: projectID,
+                entryID: entryID,
+                draft: LocalSshKeyEntryDraft(
+                    title: editingSshKeyTitle,
+                    username: editingSshKeyUsername,
+                    host: editingSshKeyHost,
+                    publicKey: editingSshKeyPublicKey,
+                    privateKeyReference: editingSshKeyPrivateKeyReference,
+                    passphraseHint: editingSshKeyPassphraseHint,
+                    notes: editingSshKeyNotes
+                )
+            )
+            sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
+            deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+            selectSshKeyEntryForEditing(entry)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func setSelectedSshKeyFavorite(_ favorite: Bool) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingSshKeyEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let updated = try entryRepository.setSshKeyEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
+            sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
+            selectSshKeyEntryForEditing(updated)
+            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteSelectedSshKeyEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingSshKeyEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let deletedTitle = editingSshKeyTitle
+            try entryRepository.deleteSshKeyEntry(projectID: projectID, entryID: entryID)
+            sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
+            deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+            clearEditingSshKeyEntry()
+            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func restoreSshKeyEntry(_ entry: LocalSshKeyEntry) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let restored = try entryRepository.restoreSshKeyEntry(projectID: projectID, entryID: entry.id)
+            sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
+            deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+            entryOperationState = .succeeded("已恢复 \(restored.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func createApiTokenEntry(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            let entry = try entryRepository.createApiTokenEntry(
+                projectID: project.id,
+                draft: LocalApiTokenEntryDraft(
+                    title: apiTokenTitle,
+                    issuer: apiTokenIssuer,
+                    accountName: apiTokenAccountName,
+                    token: apiTokenToken,
+                    scopes: apiTokenScopes,
+                    expiresAt: apiTokenExpiresAt,
+                    notes: apiTokenNotes
+                )
+            )
+            apiTokenToken = ""
+            apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: project.id)
+            deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: project.id)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func selectApiTokenEntryForEditing(_ entry: LocalApiTokenEntry) {
+        recordUserActivity()
+        editingApiTokenEntryID = entry.id
+        editingApiTokenTitle = entry.title
+        editingApiTokenIssuer = entry.issuer
+        editingApiTokenAccountName = entry.accountName
+        editingApiTokenToken = entry.token
+        editingApiTokenScopes = entry.scopes
+        editingApiTokenExpiresAt = entry.expiresAt
+        editingApiTokenNotes = entry.notes
+        editingApiTokenFavorite = entry.favorite
+    }
+
+    func updateSelectedApiTokenEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingApiTokenEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let entry = try entryRepository.updateApiTokenEntry(
+                projectID: projectID,
+                entryID: entryID,
+                draft: LocalApiTokenEntryDraft(
+                    title: editingApiTokenTitle,
+                    issuer: editingApiTokenIssuer,
+                    accountName: editingApiTokenAccountName,
+                    token: editingApiTokenToken,
+                    scopes: editingApiTokenScopes,
+                    expiresAt: editingApiTokenExpiresAt,
+                    notes: editingApiTokenNotes
+                )
+            )
+            apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
+            deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
+            selectApiTokenEntryForEditing(entry)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func setSelectedApiTokenFavorite(_ favorite: Bool) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingApiTokenEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let updated = try entryRepository.setApiTokenEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
+            apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
+            selectApiTokenEntryForEditing(updated)
+            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteSelectedApiTokenEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingApiTokenEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let deletedTitle = editingApiTokenTitle
+            try entryRepository.deleteApiTokenEntry(projectID: projectID, entryID: entryID)
+            apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
+            deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
+            clearEditingApiTokenEntry()
+            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func restoreApiTokenEntry(_ entry: LocalApiTokenEntry) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let restored = try entryRepository.restoreApiTokenEntry(projectID: projectID, entryID: entry.id)
+            apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
+            deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
+            entryOperationState = .succeeded("已恢复 \(restored.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func createWifiEntry(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            let entry = try entryRepository.createWifiEntry(
+                projectID: project.id,
+                draft: LocalWifiEntryDraft(
+                    title: wifiTitle,
+                    ssid: wifiSSID,
+                    securityType: wifiSecurityType,
+                    password: wifiPassword,
+                    hidden: wifiHidden,
+                    notes: wifiNotes
+                )
+            )
+            wifiPassword = ""
+            wifiEntries = try entryRepository.listWifiEntries(projectID: project.id)
+            deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: project.id)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func selectWifiEntryForEditing(_ entry: LocalWifiEntry) {
+        recordUserActivity()
+        editingWifiEntryID = entry.id
+        editingWifiTitle = entry.title
+        editingWifiSSID = entry.ssid
+        editingWifiSecurityType = entry.securityType
+        editingWifiPassword = entry.password
+        editingWifiHidden = entry.hidden
+        editingWifiNotes = entry.notes
+        editingWifiFavorite = entry.favorite
+    }
+
+    func updateSelectedWifiEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingWifiEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let entry = try entryRepository.updateWifiEntry(
+                projectID: projectID,
+                entryID: entryID,
+                draft: LocalWifiEntryDraft(
+                    title: editingWifiTitle,
+                    ssid: editingWifiSSID,
+                    securityType: editingWifiSecurityType,
+                    password: editingWifiPassword,
+                    hidden: editingWifiHidden,
+                    notes: editingWifiNotes
+                )
+            )
+            wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
+            deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+            selectWifiEntryForEditing(entry)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func setSelectedWifiFavorite(_ favorite: Bool) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingWifiEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let updated = try entryRepository.setWifiEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
+            wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
+            selectWifiEntryForEditing(updated)
+            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteSelectedWifiEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingWifiEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let deletedTitle = editingWifiTitle
+            try entryRepository.deleteWifiEntry(projectID: projectID, entryID: entryID)
+            wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
+            deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+            clearEditingWifiEntry()
+            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func restoreWifiEntry(_ entry: LocalWifiEntry) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let restored = try entryRepository.restoreWifiEntry(projectID: projectID, entryID: entry.id)
+            wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
+            deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+            entryOperationState = .succeeded("已恢复 \(restored.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func createSendEntry(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            let entry = try entryRepository.createSendEntry(
+                projectID: project.id,
+                draft: LocalSendEntryDraft(
+                    title: sendTitle,
+                    body: sendBody,
+                    expiresAt: sendExpiresAt,
+                    maxViews: sendMaxViews,
+                    notes: sendNotes
+                )
+            )
+            sendBody = ""
+            sendEntries = try entryRepository.listSendEntries(projectID: project.id)
+            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: project.id)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func selectSendEntryForEditing(_ entry: LocalSendEntry) {
+        recordUserActivity()
+        editingSendEntryID = entry.id
+        editingSendTitle = entry.title
+        editingSendBody = entry.body
+        editingSendExpiresAt = entry.expiresAt
+        editingSendMaxViews = entry.maxViews
+        editingSendNotes = entry.notes
+        editingSendFavorite = entry.favorite
+    }
+
+    func updateSelectedSendEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingSendEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let entry = try entryRepository.updateSendEntry(
+                projectID: projectID,
+                entryID: entryID,
+                draft: LocalSendEntryDraft(
+                    title: editingSendTitle,
+                    body: editingSendBody,
+                    expiresAt: editingSendExpiresAt,
+                    maxViews: editingSendMaxViews,
+                    notes: editingSendNotes
+                )
+            )
+            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
+            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            selectSendEntryForEditing(entry)
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func setSelectedSendFavorite(_ favorite: Bool) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingSendEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let updated = try entryRepository.setSendEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
+            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
+            selectSendEntryForEditing(updated)
+            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteSelectedSendEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingSendEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let deletedTitle = editingSendTitle
+            try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
+            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
+            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            clearEditingSendEntry()
+            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func restoreSendEntry(_ entry: LocalSendEntry) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let restored = try entryRepository.restoreSendEntry(projectID: projectID, entryID: entry.id)
+            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
+            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            entryOperationState = .succeeded("已恢复 \(restored.title)")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func refreshExtendedParityEntries() throws {
         recordUserActivity()
         entryOperationState = .running
@@ -2704,12 +3448,28 @@ final class AppSessionModel {
     private func clearExtendedParityEntries() {
         sshKeyEntries = []
         deletedSshKeyEntries = []
+        sshKeySearchQuery = ""
+        showFavoriteSshKeyEntriesOnly = false
+        sshKeyPrivateKeyReference = ""
+        clearEditingSshKeyEntry()
         apiTokenEntries = []
         deletedApiTokenEntries = []
+        apiTokenSearchQuery = ""
+        showFavoriteApiTokenEntriesOnly = false
+        apiTokenToken = ""
+        clearEditingApiTokenEntry()
         wifiEntries = []
         deletedWifiEntries = []
+        wifiSearchQuery = ""
+        showFavoriteWifiEntriesOnly = false
+        wifiPassword = ""
+        clearEditingWifiEntry()
         sendEntries = []
         deletedSendEntries = []
+        sendSearchQuery = ""
+        showFavoriteSendEntriesOnly = false
+        sendBody = ""
+        clearEditingSendEntry()
     }
 
     private func requireActiveVaultSession() throws -> LocalVaultSession {
@@ -2718,6 +3478,18 @@ final class AppSessionModel {
             throw AppWebDAVBackupError.vaultLocked
         }
         return activeVaultSession
+    }
+
+    private func ensureActiveProject(
+        projectTitle: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalVaultProject {
+        if let activeProject {
+            return activeProject
+        }
+        let project = try entryRepository.createProject(title: projectTitle)
+        activeProject = project
+        return project
     }
 
     private func makeWebDAVEndpoint() throws -> WebDAVEndpoint {
@@ -2905,6 +3677,51 @@ final class AppSessionModel {
         editingPasskeyPrivateKeyReference = ""
         editingPasskeyNotes = ""
         editingPasskeyFavorite = false
+    }
+
+    func clearEditingSshKeyEntry() {
+        editingSshKeyEntryID = nil
+        editingSshKeyTitle = ""
+        editingSshKeyUsername = ""
+        editingSshKeyHost = ""
+        editingSshKeyPublicKey = ""
+        editingSshKeyPrivateKeyReference = ""
+        editingSshKeyPassphraseHint = ""
+        editingSshKeyNotes = ""
+        editingSshKeyFavorite = false
+    }
+
+    func clearEditingApiTokenEntry() {
+        editingApiTokenEntryID = nil
+        editingApiTokenTitle = ""
+        editingApiTokenIssuer = ""
+        editingApiTokenAccountName = ""
+        editingApiTokenToken = ""
+        editingApiTokenScopes = ""
+        editingApiTokenExpiresAt = ""
+        editingApiTokenNotes = ""
+        editingApiTokenFavorite = false
+    }
+
+    func clearEditingWifiEntry() {
+        editingWifiEntryID = nil
+        editingWifiTitle = ""
+        editingWifiSSID = ""
+        editingWifiSecurityType = "WPA2"
+        editingWifiPassword = ""
+        editingWifiHidden = false
+        editingWifiNotes = ""
+        editingWifiFavorite = false
+    }
+
+    func clearEditingSendEntry() {
+        editingSendEntryID = nil
+        editingSendTitle = ""
+        editingSendBody = ""
+        editingSendExpiresAt = ""
+        editingSendMaxViews = 1
+        editingSendNotes = ""
+        editingSendFavorite = false
     }
 
     private func serviceIdentifiers(for urlString: String) -> [String] {
@@ -3540,6 +4357,18 @@ struct AppRootView: View {
                     setSelectedPasskeyFavorite: setSelectedPasskeyFavorite,
                     deletePasskeyEntry: deletePasskeyEntry,
                     restorePasskeyEntry: restorePasskeyEntry,
+                    setSelectedSshKeyFavorite: setSelectedSshKeyFavorite,
+                    deleteSshKeyEntry: deleteSshKeyEntry,
+                    restoreSshKeyEntry: restoreSshKeyEntry,
+                    setSelectedApiTokenFavorite: setSelectedApiTokenFavorite,
+                    deleteApiTokenEntry: deleteApiTokenEntry,
+                    restoreApiTokenEntry: restoreApiTokenEntry,
+                    setSelectedWifiFavorite: setSelectedWifiFavorite,
+                    deleteWifiEntry: deleteWifiEntry,
+                    restoreWifiEntry: restoreWifiEntry,
+                    setSelectedSendFavorite: setSelectedSendFavorite,
+                    deleteSendEntry: deleteSendEntry,
+                    restoreSendEntry: restoreSendEntry,
                     refreshExtendedParityEntries: refreshExtendedParityEntries
                 )
             }
@@ -3888,6 +4717,102 @@ struct AppRootView: View {
     private func restorePasskeyEntry(_ entry: LocalPasskeyEntry) {
         do {
             try session.restorePasskeyEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedSshKeyFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedSshKeyFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteSshKeyEntry() {
+        do {
+            try session.deleteSelectedSshKeyEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreSshKeyEntry(_ entry: LocalSshKeyEntry) {
+        do {
+            try session.restoreSshKeyEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedApiTokenFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedApiTokenFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteApiTokenEntry() {
+        do {
+            try session.deleteSelectedApiTokenEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreApiTokenEntry(_ entry: LocalApiTokenEntry) {
+        do {
+            try session.restoreApiTokenEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedWifiFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedWifiFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteWifiEntry() {
+        do {
+            try session.deleteSelectedWifiEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreWifiEntry(_ entry: LocalWifiEntry) {
+        do {
+            try session.restoreWifiEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedSendFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedSendFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteSendEntry() {
+        do {
+            try session.deleteSelectedSendEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreSendEntry(_ entry: LocalSendEntry) {
+        do {
+            try session.restoreSendEntry(entry)
         } catch {
             // AppSessionModel owns user-visible failure state.
         }

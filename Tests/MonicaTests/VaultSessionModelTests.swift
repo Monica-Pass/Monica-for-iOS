@@ -7,6 +7,15 @@ import XCTest
 
 @MainActor
 final class VaultSessionModelTests: XCTestCase {
+    private func unlockNewVault(_ model: AppSessionModel) throws {
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+    }
+
     func testAndroidParityCoreTabsAreFirstClassDestinations() {
         XCTAssertEqual(
             MonicaAppTab.phaseOneAndroidParityTabs,
@@ -1595,6 +1604,235 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.deletedSendEntries.isEmpty)
     }
 
+    func testCreateUpdateFavoriteDeleteAndRestoreSshKeyEntryInActiveVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+
+        try unlockNewVault(model)
+
+        model.sshKeyTitle = "Production deploy key"
+        model.sshKeyUsername = "deploy"
+        model.sshKeyHost = "prod.example.com"
+        model.sshKeyPublicKey = "ssh-ed25519 AAAA"
+        model.sshKeyPrivateKeyReference = "keychain://ssh/prod"
+        model.sshKeyPassphraseHint = "hardware key"
+        model.sshKeyNotes = "Android parity SSH metadata"
+        try model.createSshKeyEntry(projectTitle: "Personal")
+
+        XCTAssertEqual(model.entryOperationState, .succeeded("Production deploy key"))
+        XCTAssertEqual(model.sshKeyEntries.first?.host, "prod.example.com")
+        XCTAssertEqual(model.sshKeyPrivateKeyReference, "")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.privateKeyReference, "keychain://ssh/prod")
+
+        model.sshKeySearchQuery = "prod"
+        XCTAssertEqual(model.filteredSshKeyEntries.map(\.title), ["Production deploy key"])
+
+        let created = try XCTUnwrap(model.sshKeyEntries.first)
+        model.selectSshKeyEntryForEditing(created)
+        model.editingSshKeyTitle = "Production deploy key rotated"
+        model.editingSshKeyUsername = "deploy"
+        model.editingSshKeyHost = "prod.internal.example.com"
+        model.editingSshKeyPublicKey = "ssh-ed25519 BBBB"
+        model.editingSshKeyPrivateKeyReference = "keychain://ssh/prod-rotated"
+        model.editingSshKeyPassphraseHint = "rotated"
+        model.editingSshKeyNotes = "Rotated on iOS"
+        try model.updateSelectedSshKeyEntry()
+
+        XCTAssertEqual(model.sshKeyEntries.first?.id, created.id)
+        XCTAssertEqual(model.sshKeyEntries.first?.publicKey, "ssh-ed25519 BBBB")
+        XCTAssertEqual(engine.updatedSshKeyEntries.first?.entryID, created.id)
+
+        try model.setSelectedSshKeyFavorite(true)
+
+        XCTAssertEqual(model.sshKeyEntries.first?.favorite, true)
+        XCTAssertEqual(model.editingSshKeyFavorite, true)
+        XCTAssertEqual(engine.favoritedSshKeyEntries.first?.entryID, created.id)
+
+        try model.deleteSelectedSshKeyEntry()
+
+        XCTAssertTrue(model.sshKeyEntries.isEmpty)
+        XCTAssertEqual(model.deletedSshKeyEntries.first?.id, created.id)
+        XCTAssertNil(model.editingSshKeyEntryID)
+        XCTAssertEqual(model.editingSshKeyPrivateKeyReference, "")
+        XCTAssertEqual(engine.deletedSshKeyEntries.first?.entryID, created.id)
+
+        let deleted = try XCTUnwrap(model.deletedSshKeyEntries.first)
+        try model.restoreSshKeyEntry(deleted)
+
+        XCTAssertEqual(model.sshKeyEntries.first?.id, created.id)
+        XCTAssertTrue(model.deletedSshKeyEntries.isEmpty)
+        XCTAssertEqual(engine.restoredSshKeyEntries.first?.entryID, created.id)
+
+        model.lockLocalVault()
+
+        XCTAssertTrue(model.sshKeyEntries.isEmpty)
+        XCTAssertEqual(model.sshKeySearchQuery, "")
+        XCTAssertNil(model.editingSshKeyEntryID)
+        XCTAssertEqual(model.editingSshKeyPrivateKeyReference, "")
+    }
+
+    func testCreateUpdateFavoriteDeleteAndRestoreApiTokenEntryInActiveVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+
+        try unlockNewVault(model)
+
+        model.apiTokenTitle = "Tiga API token"
+        model.apiTokenIssuer = "Tiga"
+        model.apiTokenAccountName = "joyin"
+        model.apiTokenToken = "sk-secret"
+        model.apiTokenScopes = "sync,read"
+        model.apiTokenExpiresAt = "2031-01-01"
+        model.apiTokenNotes = "Keep secret"
+        try model.createApiTokenEntry(projectTitle: "Personal")
+
+        XCTAssertEqual(model.apiTokenEntries.first?.issuer, "Tiga")
+        XCTAssertEqual(model.apiTokenToken, "")
+        XCTAssertEqual(engine.createdApiTokenEntries.first?.draft.token, "sk-secret")
+
+        model.apiTokenSearchQuery = "sync"
+        XCTAssertEqual(model.filteredApiTokenEntries.map(\.title), ["Tiga API token"])
+
+        let created = try XCTUnwrap(model.apiTokenEntries.first)
+        model.selectApiTokenEntryForEditing(created)
+        model.editingApiTokenTitle = "Tiga write token"
+        model.editingApiTokenIssuer = "Tiga"
+        model.editingApiTokenAccountName = "joyin@example.com"
+        model.editingApiTokenToken = "sk-rotated"
+        model.editingApiTokenScopes = "sync,write"
+        model.editingApiTokenExpiresAt = "2032-01-01"
+        model.editingApiTokenNotes = "Rotated on iOS"
+        try model.updateSelectedApiTokenEntry()
+
+        XCTAssertEqual(model.apiTokenEntries.first?.accountName, "joyin@example.com")
+        XCTAssertEqual(engine.updatedApiTokenEntries.first?.entryID, created.id)
+
+        try model.setSelectedApiTokenFavorite(true)
+        XCTAssertEqual(model.apiTokenEntries.first?.favorite, true)
+        XCTAssertEqual(model.editingApiTokenFavorite, true)
+
+        try model.deleteSelectedApiTokenEntry()
+        XCTAssertTrue(model.apiTokenEntries.isEmpty)
+        XCTAssertEqual(model.deletedApiTokenEntries.first?.id, created.id)
+        XCTAssertEqual(model.editingApiTokenToken, "")
+
+        let deleted = try XCTUnwrap(model.deletedApiTokenEntries.first)
+        try model.restoreApiTokenEntry(deleted)
+
+        XCTAssertEqual(model.apiTokenEntries.first?.id, created.id)
+        XCTAssertTrue(model.deletedApiTokenEntries.isEmpty)
+
+        model.lockLocalVault()
+        XCTAssertEqual(model.apiTokenSearchQuery, "")
+        XCTAssertEqual(model.editingApiTokenToken, "")
+    }
+
+    func testCreateUpdateFavoriteDeleteAndRestoreWifiEntryInActiveVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+
+        try unlockNewVault(model)
+
+        model.wifiTitle = "Studio Wi-Fi"
+        model.wifiSSID = "Monica Studio"
+        model.wifiSecurityType = "WPA2"
+        model.wifiPassword = "wifi-secret"
+        model.wifiHidden = true
+        model.wifiNotes = "Main office"
+        try model.createWifiEntry(projectTitle: "Personal")
+
+        XCTAssertEqual(model.wifiEntries.first?.ssid, "Monica Studio")
+        XCTAssertEqual(model.wifiPassword, "")
+        XCTAssertEqual(engine.createdWifiEntries.first?.draft.hidden, true)
+
+        model.wifiSearchQuery = "studio"
+        XCTAssertEqual(model.filteredWifiEntries.map(\.title), ["Studio Wi-Fi"])
+
+        let created = try XCTUnwrap(model.wifiEntries.first)
+        model.selectWifiEntryForEditing(created)
+        model.editingWifiTitle = "Studio Wi-Fi 6"
+        model.editingWifiSSID = "Monica Studio 6"
+        model.editingWifiSecurityType = "WPA3"
+        model.editingWifiPassword = "rotated-wifi-secret"
+        model.editingWifiHidden = false
+        model.editingWifiNotes = "Rotated on iOS"
+        try model.updateSelectedWifiEntry()
+
+        XCTAssertEqual(model.wifiEntries.first?.securityType, "WPA3")
+        XCTAssertEqual(engine.updatedWifiEntries.first?.entryID, created.id)
+
+        try model.setSelectedWifiFavorite(true)
+        XCTAssertEqual(model.wifiEntries.first?.favorite, true)
+        XCTAssertEqual(model.editingWifiFavorite, true)
+
+        try model.deleteSelectedWifiEntry()
+        XCTAssertTrue(model.wifiEntries.isEmpty)
+        XCTAssertEqual(model.deletedWifiEntries.first?.id, created.id)
+        XCTAssertEqual(model.editingWifiPassword, "")
+
+        let deleted = try XCTUnwrap(model.deletedWifiEntries.first)
+        try model.restoreWifiEntry(deleted)
+
+        XCTAssertEqual(model.wifiEntries.first?.id, created.id)
+        XCTAssertTrue(model.deletedWifiEntries.isEmpty)
+
+        model.lockLocalVault()
+        XCTAssertEqual(model.wifiSearchQuery, "")
+        XCTAssertEqual(model.editingWifiPassword, "")
+    }
+
+    func testCreateUpdateFavoriteDeleteAndRestoreSendEntryInActiveVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+
+        try unlockNewVault(model)
+
+        model.sendTitle = "One-time send"
+        model.sendBody = "share once"
+        model.sendExpiresAt = "2026-06-02"
+        model.sendMaxViews = 1
+        model.sendNotes = "MVP metadata"
+        try model.createSendEntry(projectTitle: "Personal")
+
+        XCTAssertEqual(model.sendEntries.first?.title, "One-time send")
+        XCTAssertEqual(model.sendBody, "")
+        XCTAssertEqual(engine.createdSendEntries.first?.draft.maxViews, 1)
+
+        model.sendSearchQuery = "once"
+        XCTAssertEqual(model.filteredSendEntries.map(\.title), ["One-time send"])
+
+        let created = try XCTUnwrap(model.sendEntries.first)
+        model.selectSendEntryForEditing(created)
+        model.editingSendTitle = "One-time send rotated"
+        model.editingSendBody = "share twice"
+        model.editingSendExpiresAt = "2026-06-03"
+        model.editingSendMaxViews = 2
+        model.editingSendNotes = "Rotated on iOS"
+        try model.updateSelectedSendEntry()
+
+        XCTAssertEqual(model.sendEntries.first?.maxViews, 2)
+        XCTAssertEqual(engine.updatedSendEntries.first?.entryID, created.id)
+
+        try model.setSelectedSendFavorite(true)
+        XCTAssertEqual(model.sendEntries.first?.favorite, true)
+        XCTAssertEqual(model.editingSendFavorite, true)
+
+        try model.deleteSelectedSendEntry()
+        XCTAssertTrue(model.sendEntries.isEmpty)
+        XCTAssertEqual(model.deletedSendEntries.first?.id, created.id)
+        XCTAssertEqual(model.editingSendBody, "")
+
+        let deleted = try XCTUnwrap(model.deletedSendEntries.first)
+        try model.restoreSendEntry(deleted)
+
+        XCTAssertEqual(model.sendEntries.first?.id, created.id)
+        XCTAssertTrue(model.deletedSendEntries.isEmpty)
+
+        model.lockLocalVault()
+        XCTAssertEqual(model.sendSearchQuery, "")
+        XCTAssertEqual(model.editingSendBody, "")
+    }
+
     func testTotpEntryGeneratesCodeFromStoredSeed() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
@@ -2666,6 +2904,26 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var favoritedPasskeyEntries: [RecordedFavoriteEntryCall] = []
     private(set) var deletedPasskeyEntries: [RecordedEntryMutationCall] = []
     private(set) var restoredPasskeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdSshKeyEntries: [RecordedSshKeyEntryCall] = []
+    private(set) var updatedSshKeyEntries: [RecordedUpdatedSshKeyEntryCall] = []
+    private(set) var favoritedSshKeyEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var deletedSshKeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredSshKeyEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdApiTokenEntries: [RecordedApiTokenEntryCall] = []
+    private(set) var updatedApiTokenEntries: [RecordedUpdatedApiTokenEntryCall] = []
+    private(set) var favoritedApiTokenEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var deletedApiTokenEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredApiTokenEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdWifiEntries: [RecordedWifiEntryCall] = []
+    private(set) var updatedWifiEntries: [RecordedUpdatedWifiEntryCall] = []
+    private(set) var favoritedWifiEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var deletedWifiEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredWifiEntries: [RecordedEntryMutationCall] = []
+    private(set) var createdSendEntries: [RecordedSendEntryCall] = []
+    private(set) var updatedSendEntries: [RecordedUpdatedSendEntryCall] = []
+    private(set) var favoritedSendEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var deletedSendEntries: [RecordedEntryMutationCall] = []
+    private(set) var restoredSendEntries: [RecordedEntryMutationCall] = []
     private var loginEntries: [String: [LocalLoginEntry]] = [:]
     private var deletedEntries: [String: [LocalLoginEntry]] = [:]
     private var noteEntries: [String: [LocalNoteEntry]] = [:]
@@ -3625,6 +3883,381 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         return entry
     }
 
+    func createSshKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalSshKeyEntryDraft
+    ) throws -> LocalSshKeyEntry {
+        let entry = LocalSshKeyEntry(
+            id: "ssh-\(createdSshKeyEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            username: draft.username,
+            host: draft.host,
+            publicKey: draft.publicKey,
+            privateKeyReference: draft.privateKeyReference,
+            passphraseHint: draft.passphraseHint,
+            notes: draft.notes
+        )
+        createdSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        sshKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func updateSshKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalSshKeyEntryDraft
+    ) throws -> LocalSshKeyEntry {
+        let currentFavorite = sshKeyEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalSshKeyEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            username: draft.username,
+            host: draft.host,
+            publicKey: draft.publicKey,
+            privateKeyReference: draft.privateKeyReference,
+            passphraseHint: draft.passphraseHint,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        updatedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        sshKeyEntries[projectID, default: []] = sshKeyEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setSshKeyEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalSshKeyEntry {
+        favoritedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = sshKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalSshKeyEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            username: current.username,
+            host: current.host,
+            publicKey: current.publicKey,
+            privateKeyReference: current.privateKeyReference,
+            passphraseHint: current.passphraseHint,
+            notes: current.notes,
+            favorite: favorite
+        )
+        sshKeyEntries[projectID, default: []] = sshKeyEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteSshKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = sshKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        sshKeyEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedSshKeys[projectID, default: []].append(entry)
+    }
+
+    func restoreSshKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalSshKeyEntry {
+        restoredSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedSshKeys[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedSshKeys[projectID, default: []].removeAll { $0.id == entryID }
+        sshKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createApiTokenEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalApiTokenEntryDraft
+    ) throws -> LocalApiTokenEntry {
+        let entry = LocalApiTokenEntry(
+            id: "api-token-\(createdApiTokenEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            issuer: draft.issuer,
+            accountName: draft.accountName,
+            token: draft.token,
+            scopes: draft.scopes,
+            expiresAt: draft.expiresAt,
+            notes: draft.notes
+        )
+        createdApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        apiTokenEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func updateApiTokenEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalApiTokenEntryDraft
+    ) throws -> LocalApiTokenEntry {
+        let currentFavorite = apiTokenEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalApiTokenEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            issuer: draft.issuer,
+            accountName: draft.accountName,
+            token: draft.token,
+            scopes: draft.scopes,
+            expiresAt: draft.expiresAt,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        updatedApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        apiTokenEntries[projectID, default: []] = apiTokenEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setApiTokenEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalApiTokenEntry {
+        favoritedApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = apiTokenEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalApiTokenEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            issuer: current.issuer,
+            accountName: current.accountName,
+            token: current.token,
+            scopes: current.scopes,
+            expiresAt: current.expiresAt,
+            notes: current.notes,
+            favorite: favorite
+        )
+        apiTokenEntries[projectID, default: []] = apiTokenEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteApiTokenEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = apiTokenEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        apiTokenEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedApiTokens[projectID, default: []].append(entry)
+    }
+
+    func restoreApiTokenEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalApiTokenEntry {
+        restoredApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedApiTokens[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedApiTokens[projectID, default: []].removeAll { $0.id == entryID }
+        apiTokenEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createWifiEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalWifiEntryDraft
+    ) throws -> LocalWifiEntry {
+        let entry = LocalWifiEntry(
+            id: "wifi-\(createdWifiEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            ssid: draft.ssid,
+            securityType: draft.securityType,
+            password: draft.password,
+            hidden: draft.hidden,
+            notes: draft.notes
+        )
+        createdWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        wifiEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func updateWifiEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalWifiEntryDraft
+    ) throws -> LocalWifiEntry {
+        let currentFavorite = wifiEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalWifiEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            ssid: draft.ssid,
+            securityType: draft.securityType,
+            password: draft.password,
+            hidden: draft.hidden,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        updatedWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        wifiEntries[projectID, default: []] = wifiEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setWifiEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalWifiEntry {
+        favoritedWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = wifiEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalWifiEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            ssid: current.ssid,
+            securityType: current.securityType,
+            password: current.password,
+            hidden: current.hidden,
+            notes: current.notes,
+            favorite: favorite
+        )
+        wifiEntries[projectID, default: []] = wifiEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteWifiEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = wifiEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        wifiEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedWifi[projectID, default: []].append(entry)
+    }
+
+    func restoreWifiEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalWifiEntry {
+        restoredWifiEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedWifi[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedWifi[projectID, default: []].removeAll { $0.id == entryID }
+        wifiEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createSendEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalSendEntryDraft
+    ) throws -> LocalSendEntry {
+        let entry = LocalSendEntry(
+            id: "send-\(createdSendEntries.count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            body: draft.body,
+            expiresAt: draft.expiresAt,
+            maxViews: draft.maxViews,
+            notes: draft.notes
+        )
+        createdSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
+        sendEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func updateSendEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalSendEntryDraft
+    ) throws -> LocalSendEntry {
+        let currentFavorite = sendEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalSendEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            body: draft.body,
+            expiresAt: draft.expiresAt,
+            maxViews: draft.maxViews,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        updatedSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
+        sendEntries[projectID, default: []] = sendEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setSendEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalSendEntry {
+        favoritedSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, favorite: favorite))
+        guard let current = sendEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalSendEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            body: current.body,
+            expiresAt: current.expiresAt,
+            maxViews: current.maxViews,
+            notes: current.notes,
+            favorite: favorite
+        )
+        sendEntries[projectID, default: []] = sendEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteSendEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        deletedSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = sendEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        sendEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedSends[projectID, default: []].append(entry)
+    }
+
+    func restoreSendEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalSendEntry {
+        restoredSendEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID))
+        guard let entry = deletedSends[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedSends[projectID, default: []].removeAll { $0.id == entryID }
+        sendEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
     func listSshKeyEntries(
         in handle: LocalVaultHandle,
         projectID: String
@@ -3792,6 +4425,58 @@ private struct RecordedUpdatedPasskeyEntryCall {
     let projectID: String
     let entryID: String
     let draft: LocalPasskeyEntryDraft
+}
+
+private struct RecordedSshKeyEntryCall {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalSshKeyEntryDraft
+}
+
+private struct RecordedUpdatedSshKeyEntryCall {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalSshKeyEntryDraft
+}
+
+private struct RecordedApiTokenEntryCall {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalApiTokenEntryDraft
+}
+
+private struct RecordedUpdatedApiTokenEntryCall {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalApiTokenEntryDraft
+}
+
+private struct RecordedWifiEntryCall {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalWifiEntryDraft
+}
+
+private struct RecordedUpdatedWifiEntryCall {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalWifiEntryDraft
+}
+
+private struct RecordedSendEntryCall {
+    let vaultID: String
+    let projectID: String
+    let draft: LocalSendEntryDraft
+}
+
+private struct RecordedUpdatedSendEntryCall {
+    let vaultID: String
+    let projectID: String
+    let entryID: String
+    let draft: LocalSendEntryDraft
 }
 
 private struct RecordedEntryMutationCall {
