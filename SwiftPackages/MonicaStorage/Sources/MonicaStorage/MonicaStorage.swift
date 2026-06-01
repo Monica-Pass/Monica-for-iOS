@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import MonicaMDBX
+import ZIPFoundation
 
 public enum MonicaStorageBaseline {
     public static let primaryStore = "MDBX"
@@ -202,6 +203,497 @@ public struct VaultCSVImportReport: Sendable, Equatable {
     public init(items: [VaultCSVItemDraft], issues: [VaultCSVImportIssue]) {
         self.items = items
         self.issues = issues
+    }
+}
+
+public enum AndroidBackupIssueCode: Sendable, Equatable {
+    case malformedZip
+    case unsafeEntryPath
+    case unsupportedEntry
+    case malformedJSON
+}
+
+public struct AndroidBackupImportIssue: Sendable, Equatable {
+    public let entryPath: String
+    public let code: AndroidBackupIssueCode
+    public let message: String
+
+    public init(entryPath: String, code: AndroidBackupIssueCode, message: String) {
+        self.entryPath = entryPath
+        self.code = code
+        self.message = message
+    }
+}
+
+public struct AndroidBackupImportReport: Sendable, Equatable {
+    public let items: [VaultCSVItemDraft]
+    public let issues: [AndroidBackupImportIssue]
+
+    public init(items: [VaultCSVItemDraft], issues: [AndroidBackupImportIssue]) {
+        self.items = items
+        self.issues = issues
+    }
+}
+
+public enum AndroidBackupCodec {
+    public static func importItems(from zipData: Data) throws -> AndroidBackupImportReport {
+        let archive = try Archive(data: zipData, accessMode: .read)
+        var orderedItems: [(order: Int, index: Int, item: VaultCSVItemDraft)] = []
+        var issues: [AndroidBackupImportIssue] = []
+        var index = 0
+
+        for entry in archive where entry.type == .file {
+            let path = normalizedPath(entry.path)
+            guard isSafeEntryPath(path) else {
+                issues.append(issue(entryPath: entry.path, code: .unsafeEntryPath, detail: "ZIP 条目路径不安全"))
+                continue
+            }
+            guard path.hasSuffix(".json"), let kind = kind(for: path) else {
+                continue
+            }
+
+            var data = Data()
+            _ = try archive.extract(entry) { chunk in
+                data.append(chunk)
+            }
+            guard let item = parseItem(kind: kind, data: data, path: path, issues: &issues) else {
+                continue
+            }
+            orderedItems.append((order: order(for: path, kind: kind), index: index, item: item))
+            index += 1
+        }
+
+        let items = orderedItems
+            .sorted { lhs, rhs in
+                if lhs.order == rhs.order {
+                    return lhs.index < rhs.index
+                }
+                return lhs.order < rhs.order
+            }
+            .map(\.item)
+        return AndroidBackupImportReport(items: items, issues: issues)
+    }
+
+    public static func exportItems(_ items: [VaultCSVItemDraft], folderName: String = "Imported") throws -> Data {
+        var entries: [String: String] = [:]
+        for (index, item) in items.enumerated() {
+            let id = index + 1
+            let timestamp = 1_797_000_000_000 + id
+            let path = entryPath(for: item, folderName: folderName, id: id, timestamp: timestamp)
+            entries[path] = try jsonString(for: item, id: id, timestamp: timestamp, folderName: folderName)
+        }
+        return try exportZip(entries: entries)
+    }
+
+    public static func exportZip(entries: [String: String]) throws -> Data {
+        let archive = try Archive(data: Data(), accessMode: .create)
+        for path in entries.keys.sorted() {
+            guard let content = entries[path] else { continue }
+            let data = Data(content.utf8)
+            try archive.addEntry(
+                with: path,
+                type: .file,
+                uncompressedSize: Int64(data.count),
+                compressionMethod: .deflate
+            ) { position, size in
+                let start = Int(position)
+                guard start < data.count else { return Data() }
+                let end = min(start + size, data.count)
+                return data.subdata(in: start..<end)
+            }
+        }
+        return archive.data ?? Data()
+    }
+
+    public static func inspectEntryNames(in zipData: Data) throws -> [String] {
+        let archive = try Archive(data: zipData, accessMode: .read)
+        return archive.map(\.path)
+    }
+
+    private enum BackupKind {
+        case password
+        case totp
+        case note
+        case card
+        case identity
+        case passkey
+    }
+
+    private static func kind(for path: String) -> BackupKind? {
+        switch true {
+        case path.contains("/passwords/") || path.hasPrefix("passwords/"):
+            return .password
+        case path.contains("/authenticators/") || path.hasPrefix("authenticators/") || path.contains("/totp/") || path.hasPrefix("totp/"):
+            return .totp
+        case path.contains("/notes/") || path.hasPrefix("notes/"):
+            return .note
+        case path.contains("/bank_cards/") || path.hasPrefix("bank_cards/"):
+            return .card
+        case path.contains("/documents/") || path.hasPrefix("documents/"):
+            return .identity
+        case path.contains("/passkeys/") || path.hasPrefix("passkeys/"):
+            return .passkey
+        default:
+            return nil
+        }
+    }
+
+    private static func order(for path: String, kind: BackupKind) -> Int {
+        let fileName = path.split(separator: "/").last.map(String.init) ?? path
+        if let firstNumber = fileName.split(whereSeparator: { !$0.isNumber }).compactMap({ Int($0) }).first {
+            return firstNumber
+        }
+        return 1_000_000 + kindPriority(kind)
+    }
+
+    private static func kindPriority(_ kind: BackupKind) -> Int {
+        switch kind {
+        case .password: return 0
+        case .totp: return 1
+        case .note: return 2
+        case .card: return 3
+        case .identity: return 4
+        case .passkey: return 5
+        }
+    }
+
+    private static func parseItem(
+        kind: BackupKind,
+        data: Data,
+        path: String,
+        issues: inout [AndroidBackupImportIssue]
+    ) -> VaultCSVItemDraft? {
+        do {
+            let object = try JSONObject(data: data)
+            switch kind {
+            case .password:
+                return .login(LocalLoginEntryDraft(
+                    title: object.string("title"),
+                    username: object.string("username"),
+                    password: object.string("password"),
+                    url: object.string("website")
+                ))
+            case .totp:
+                let itemData = try object.nestedObject("itemData")
+                return .totp(LocalTotpEntryDraft(
+                    title: object.string("title"),
+                    secret: itemData.string("secret"),
+                    issuer: itemData.string("issuer"),
+                    accountName: itemData.string("accountName"),
+                    period: UInt32(itemData.int("period", defaultValue: 30)),
+                    digits: UInt32(itemData.int("digits", defaultValue: 6)),
+                    algorithm: itemData.string("algorithm", defaultValue: "SHA1"),
+                    otpType: itemData.string("otpType", defaultValue: "TOTP"),
+                    counter: UInt64(itemData.int("counter", defaultValue: 0))
+                ))
+            case .note:
+                return .note(LocalNoteEntryDraft(
+                    title: object.string("title"),
+                    body: object.string("itemData", defaultValue: object.string("notes"))
+                ))
+            case .card:
+                let itemData = try object.nestedObject("itemData")
+                return .card(LocalCardEntryDraft(
+                    title: object.string("title"),
+                    cardholderName: itemData.string("cardholderName"),
+                    number: itemData.string("cardNumber", defaultValue: itemData.string("number")),
+                    expiryMonth: itemData.string("expiryMonth", defaultValue: itemData.string("expMonth")),
+                    expiryYear: itemData.string("expiryYear", defaultValue: itemData.string("expYear")),
+                    cvv: itemData.string("cvv", defaultValue: itemData.string("code")),
+                    issuer: itemData.string("bankName", defaultValue: object.string("issuer")),
+                    network: itemData.string("brand"),
+                    notes: object.string("notes")
+                ))
+            case .identity:
+                let itemData = try object.nestedObject("itemData")
+                return .identity(LocalIdentityEntryDraft(
+                    title: object.string("title"),
+                    documentType: itemData.string("documentType"),
+                    fullName: itemData.string("fullName"),
+                    documentNumber: itemData.string("documentNumber", defaultValue: itemData.string("passportNumber", defaultValue: itemData.string("licenseNumber"))),
+                    issuer: itemData.string("issuedBy", defaultValue: itemData.string("issuingAuthority")),
+                    country: itemData.string("country", defaultValue: itemData.string("nationality")),
+                    issueDate: itemData.string("issuedDate", defaultValue: itemData.string("issueDate")),
+                    expiryDate: itemData.string("expiryDate"),
+                    notes: object.string("notes")
+                ))
+            case .passkey:
+                return .passkey(LocalPasskeyEntryDraft(
+                    title: object.string("rpName", defaultValue: object.string("rpId")),
+                    relyingPartyID: object.string("rpId"),
+                    username: object.string("userName", defaultValue: object.string("userDisplayName")),
+                    userHandle: object.string("userId"),
+                    credentialID: object.string("credentialId"),
+                    publicKeyCOSE: object.string("publicKey"),
+                    privateKeyReference: object.string("privateKeyAlias"),
+                    notes: object.string("notes")
+                ))
+            }
+        } catch {
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 备份 JSON 无法解析"))
+            return nil
+        }
+    }
+
+    private static func entryPath(for item: VaultCSVItemDraft, folderName: String, id: Int, timestamp: Int) -> String {
+        let folder = safeFolderName(folderName)
+        switch item {
+        case .login:
+            return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
+        case .totp:
+            return "folders/\(folder)/authenticators/totp_\(id)_\(timestamp).json"
+        case .note:
+            return "folders/\(folder)/notes/note_\(id)_\(timestamp).json"
+        case .card:
+            return "folders/\(folder)/bank_cards/bank_card_\(id)_\(timestamp).json"
+        case .identity:
+            return "folders/\(folder)/documents/document_\(id)_\(timestamp).json"
+        case .passkey(let draft):
+            return "folders/\(folder)/passkeys/passkey_\(safeFileComponent(draft.credentialID.isEmpty ? String(id) : draft.credentialID)).json"
+        case .sshKey:
+            return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
+        case .apiToken:
+            return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
+        case .wifi:
+            return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
+        case .send:
+            return "folders/\(folder)/notes/note_\(id)_\(timestamp).json"
+        }
+    }
+
+    private static func jsonString(for item: VaultCSVItemDraft, id: Int, timestamp: Int, folderName: String) throws -> String {
+        let object: [String: Any]
+        switch item {
+        case .login(let draft):
+            object = passwordObject(id: id, timestamp: timestamp, folderName: folderName, title: draft.title, username: draft.username, password: draft.password, website: draft.url)
+        case .totp(let draft):
+            object = [
+                "id": id,
+                "title": draft.title,
+                "itemData": jsonStringObject([
+                    "secret": draft.secret,
+                    "issuer": draft.issuer,
+                    "accountName": draft.accountName,
+                    "period": Int(draft.period),
+                    "digits": Int(draft.digits),
+                    "algorithm": draft.algorithm,
+                    "otpType": draft.otpType,
+                    "counter": Int(draft.counter)
+                ]),
+                "notes": "",
+                "isFavorite": false,
+                "createdAt": timestamp,
+                "updatedAt": timestamp,
+                "categoryName": folderName
+            ]
+        case .note(let draft):
+            object = secureItemObject(id: id, timestamp: timestamp, folderName: folderName, itemType: "NOTE", title: draft.title, itemData: draft.body, notes: "")
+        case .card(let draft):
+            object = secureItemObject(
+                id: id,
+                timestamp: timestamp,
+                folderName: folderName,
+                itemType: "BANK_CARD",
+                title: draft.title,
+                itemData: jsonStringObject([
+                    "cardNumber": draft.number,
+                    "cardholderName": draft.cardholderName,
+                    "expiryMonth": draft.expiryMonth,
+                    "expiryYear": draft.expiryYear,
+                    "cvv": draft.cvv,
+                    "bankName": draft.issuer,
+                    "brand": draft.network
+                ]),
+                notes: draft.notes
+            )
+        case .identity(let draft):
+            object = secureItemObject(
+                id: id,
+                timestamp: timestamp,
+                folderName: folderName,
+                itemType: "DOCUMENT",
+                title: draft.title,
+                itemData: jsonStringObject([
+                    "documentType": draft.documentType,
+                    "documentNumber": draft.documentNumber,
+                    "fullName": draft.fullName,
+                    "issuedDate": draft.issueDate,
+                    "expiryDate": draft.expiryDate,
+                    "issuedBy": draft.issuer,
+                    "country": draft.country
+                ]),
+                notes: draft.notes
+            )
+        case .passkey(let draft):
+            object = [
+                "credentialId": draft.credentialID,
+                "rpId": draft.relyingPartyID,
+                "rpName": draft.title,
+                "userId": draft.userHandle,
+                "userName": draft.username,
+                "userDisplayName": draft.username,
+                "publicKeyAlgorithm": -7,
+                "publicKey": draft.publicKeyCOSE,
+                "privateKeyAlias": draft.privateKeyReference,
+                "createdAt": timestamp,
+                "lastUsedAt": timestamp,
+                "useCount": 0,
+                "isDiscoverable": true,
+                "isUserVerificationRequired": true,
+                "transports": "internal",
+                "aaguid": "",
+                "signCount": 0,
+                "notes": draft.notes,
+                "passkeyMode": "LEGACY",
+                "categoryName": folderName
+            ]
+        case .sshKey(let draft):
+            object = passwordObject(id: id, timestamp: timestamp, folderName: folderName, title: draft.title, username: draft.username, password: draft.privateKeyReference, website: draft.host, notes: draft.notes, sshKeyData: draft.publicKey)
+        case .apiToken(let draft):
+            object = passwordObject(id: id, timestamp: timestamp, folderName: folderName, title: draft.title, username: draft.accountName, password: draft.token, website: draft.issuer, notes: draft.notes, loginType: "API_TOKEN")
+        case .wifi(let draft):
+            object = passwordObject(id: id, timestamp: timestamp, folderName: folderName, title: draft.title, username: draft.ssid, password: draft.password, website: "", notes: draft.notes, loginType: "WIFI", wifiMetadata: jsonStringObject(["ssid": draft.ssid, "securityType": draft.securityType, "hidden": draft.hidden]))
+        case .send(let draft):
+            object = secureItemObject(id: id, timestamp: timestamp, folderName: folderName, itemType: "NOTE", title: draft.title, itemData: draft.body, notes: draft.notes)
+        }
+        return jsonStringObject(object)
+    }
+
+    private static func passwordObject(
+        id: Int,
+        timestamp: Int,
+        folderName: String,
+        title: String,
+        username: String,
+        password: String,
+        website: String,
+        notes: String = "",
+        loginType: String = "PASSWORD",
+        sshKeyData: String = "",
+        wifiMetadata: String = ""
+    ) -> [String: Any] {
+        [
+            "id": id,
+            "title": title,
+            "username": username,
+            "password": password,
+            "website": website,
+            "notes": notes,
+            "isFavorite": false,
+            "categoryName": folderName,
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
+            "authenticatorKey": "",
+            "passkeyBindings": "",
+            "sshKeyData": sshKeyData,
+            "loginType": loginType,
+            "wifiMetadata": wifiMetadata,
+            "customFields": []
+        ]
+    }
+
+    private static func secureItemObject(
+        id: Int,
+        timestamp: Int,
+        folderName: String,
+        itemType: String,
+        title: String,
+        itemData: String,
+        notes: String
+    ) -> [String: Any] {
+        [
+            "id": id,
+            "itemType": itemType,
+            "title": title,
+            "itemData": itemData,
+            "notes": notes,
+            "isFavorite": false,
+            "imagePaths": "",
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
+            "categoryName": folderName
+        ]
+    }
+
+    private static func jsonStringObject(_ object: [String: Any]) -> String {
+        let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        return data.flatMap { String(data: $0, encoding: .utf8) } ?? "{}"
+    }
+
+    private static func normalizedPath(_ path: String) -> String {
+        path.replacingOccurrences(of: "\\", with: "/")
+    }
+
+    private static func isSafeEntryPath(_ path: String) -> Bool {
+        !path.split(separator: "/").contains("..") && !path.hasPrefix("/")
+    }
+
+    private static func safeFolderName(_ value: String) -> String {
+        safeFileComponent(value.isEmpty ? "Imported" : value)
+    }
+
+    private static func safeFileComponent(_ value: String) -> String {
+        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-_ ."))
+        return String(value.unicodeScalars.map { allowed.contains($0) ? Character($0) : "_" })
+    }
+
+    private static func issue(entryPath: String, code: AndroidBackupIssueCode, detail: String) -> AndroidBackupImportIssue {
+        AndroidBackupImportIssue(entryPath: entryPath, code: code, message: "\(entryPath)：\(detail)")
+    }
+}
+
+private struct JSONObject {
+    private let values: [String: Any]
+
+    init(data: Data) throws {
+        let decoded = try JSONSerialization.jsonObject(with: data)
+        guard let values = decoded as? [String: Any] else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        self.values = values
+    }
+
+    init(jsonString: String) throws {
+        try self.init(data: Data(jsonString.utf8))
+    }
+
+    func string(_ key: String, defaultValue: String = "") -> String {
+        switch values[key] {
+        case let value as String:
+            return value
+        case let value as NSNumber:
+            return value.stringValue
+        default:
+            return defaultValue
+        }
+    }
+
+    func int(_ key: String, defaultValue: Int) -> Int {
+        switch values[key] {
+        case let value as Int:
+            return value
+        case let value as NSNumber:
+            return value.intValue
+        case let value as String:
+            return Int(value) ?? defaultValue
+        default:
+            return defaultValue
+        }
+    }
+
+    func nestedObject(_ key: String) throws -> JSONObject {
+        switch values[key] {
+        case let value as [String: Any]:
+            return JSONObject(values: value)
+        case let value as String:
+            return try JSONObject(jsonString: value)
+        default:
+            return JSONObject(values: [:])
+        }
+    }
+
+    private init(values: [String: Any]) {
+        self.values = values
     }
 }
 

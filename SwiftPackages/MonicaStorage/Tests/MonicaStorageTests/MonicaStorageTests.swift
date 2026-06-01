@@ -234,6 +234,93 @@ import MonicaStorage
     #expect(!issueText.contains("sk-hidden"))
 }
 
+@Test func androidBackupCodecImportsCurrentZipFolderLayout() throws {
+    let entries: [String: String] = [
+        "folders/Work/passwords/password_1_1000.json": #"{"id":1,"title":"GitHub","username":"alice","password":"p,ass","website":"https://github.com","isFavorite":true,"authenticatorKey":"JBSWY3DPEHPK3PXP","categoryName":"Work"}"#,
+        "folders/Work/authenticators/totp_2_1000.json": #"{"id":2,"title":"GitHub 2FA","itemData":"{\"secret\":\"JBSWY3DPEHPK3PXP\",\"issuer\":\"GitHub\",\"accountName\":\"alice\",\"period\":30,\"digits\":6,\"algorithm\":\"SHA1\",\"otpType\":\"TOTP\",\"counter\":0}","notes":"primary","categoryName":"Work"}"#,
+        "folders/Personal/notes/note_3_1000.json": #"{"id":3,"title":"Recovery","itemData":"backup codes","notes":"note fallback","categoryName":"Personal"}"#,
+        "folders/Finance/bank_cards/bank_card_4_1000.json": #"{"id":4,"itemType":"BANK_CARD","title":"Everyday Visa","itemData":"{\"cardNumber\":\"4111111111111111\",\"cardholderName\":\"Alice Example\",\"expiryMonth\":\"12\",\"expiryYear\":\"2031\",\"cvv\":\"123\",\"bankName\":\"Monica Bank\",\"brand\":\"Visa\"}","notes":"main card","categoryName":"Finance"}"#,
+        "folders/Personal/documents/document_5_1000.json": #"{"id":5,"itemType":"DOCUMENT","title":"Passport","itemData":"{\"documentType\":\"PASSPORT\",\"documentNumber\":\"P1234567\",\"fullName\":\"Alice Example\",\"issuedDate\":\"2024-01-01\",\"expiryDate\":\"2034-01-01\",\"issuedBy\":\"Monica Authority\",\"country\":\"US\"}","notes":"travel","categoryName":"Personal"}"#,
+        "folders/Work/passkeys/passkey_credential-id.json": #"{"credentialId":"credential-id","rpId":"github.com","rpName":"GitHub","userId":"user-handle","userName":"alice","userDisplayName":"Alice Example","publicKey":"public-key-cose","privateKeyAlias":"keychain://passkeys/github","notes":"synced metadata","categoryName":"Work"}"#
+    ]
+    let backup = try AndroidBackupCodec.exportZip(entries: entries)
+
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(report.issues.isEmpty)
+    #expect(report.items.map(\.kind) == [.login, .totp, .note, .card, .identity, .passkey])
+
+    guard case .login(let login) = report.items[0] else {
+        Issue.record("Expected login")
+        return
+    }
+    #expect(login.title == "GitHub")
+    #expect(login.username == "alice")
+    #expect(login.password == "p,ass")
+    #expect(login.url == "https://github.com")
+
+    guard case .totp(let totp) = report.items[1] else {
+        Issue.record("Expected TOTP")
+        return
+    }
+    #expect(totp.secret == "JBSWY3DPEHPK3PXP")
+    #expect(totp.issuer == "GitHub")
+    #expect(totp.accountName == "alice")
+
+    guard case .note(let note) = report.items[2] else {
+        Issue.record("Expected note")
+        return
+    }
+    #expect(note.body == "backup codes")
+
+    guard case .card(let card) = report.items[3] else {
+        Issue.record("Expected card")
+        return
+    }
+    #expect(card.cardholderName == "Alice Example")
+    #expect(card.number == "4111111111111111")
+    #expect(card.issuer == "Monica Bank")
+    #expect(card.network == "Visa")
+
+    guard case .identity(let identity) = report.items[4] else {
+        Issue.record("Expected identity")
+        return
+    }
+    #expect(identity.documentType == "PASSPORT")
+    #expect(identity.documentNumber == "P1234567")
+    #expect(identity.issuer == "Monica Authority")
+
+    guard case .passkey(let passkey) = report.items[5] else {
+        Issue.record("Expected passkey")
+        return
+    }
+    #expect(passkey.relyingPartyID == "github.com")
+    #expect(passkey.username == "alice")
+    #expect(passkey.credentialID == "credential-id")
+}
+
+@Test func androidBackupCodecExportsAndroidFolderLayoutAndRoundTrips() throws {
+    let items: [VaultCSVItemDraft] = [
+        .login(LocalLoginEntryDraft(title: "GitHub", username: "alice", password: "p,ass", url: "https://github.com")),
+        .note(LocalNoteEntryDraft(title: "Recovery", body: "backup codes")),
+        .totp(LocalTotpEntryDraft(title: "GitHub 2FA", secret: "JBSWY3DPEHPK3PXP", issuer: "GitHub", accountName: "alice", period: 30, digits: 6, algorithm: "SHA1", otpType: "TOTP", counter: 0)),
+        .card(LocalCardEntryDraft(title: "Everyday Visa", cardholderName: "Alice Example", number: "4111111111111111", expiryMonth: "12", expiryYear: "2031", cvv: "123", issuer: "Monica Bank", network: "Visa", notes: "main card")),
+        .identity(LocalIdentityEntryDraft(title: "Passport", documentType: "PASSPORT", fullName: "Alice Example", documentNumber: "P1234567", issuer: "Monica Authority", country: "US", issueDate: "2024-01-01", expiryDate: "2034-01-01", notes: "travel"))
+    ]
+
+    let backup = try AndroidBackupCodec.exportItems(items)
+    let entries = try AndroidBackupCodec.inspectEntryNames(in: backup)
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(entries.contains { $0.hasPrefix("folders/Imported/passwords/password_") })
+    #expect(entries.contains { $0.hasPrefix("folders/Imported/authenticators/totp_") })
+    #expect(entries.contains { $0.hasPrefix("folders/Imported/notes/note_") })
+    #expect(entries.contains { $0.hasPrefix("folders/Imported/bank_cards/bank_card_") })
+    #expect(entries.contains { $0.hasPrefix("folders/Imported/documents/document_") })
+    #expect(report.issues.isEmpty)
+    #expect(report.items == items)
+}
+
 @Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])

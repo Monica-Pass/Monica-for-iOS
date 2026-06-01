@@ -12,10 +12,11 @@ let package = Package(
         .library(name: "MonicaStorage", targets: ["MonicaStorage"])
     ],
     dependencies: [
-        .package(path: "../MonicaMDBX")
+        .package(path: "../MonicaMDBX"),
+        .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.20")
     ],
     targets: [
-        .target(name: "MonicaStorage", dependencies: ["MonicaMDBX"]),
+        .target(name: "MonicaStorage", dependencies: ["MonicaMDBX", "ZIPFoundation"]),
         .testTarget(name: "MonicaStorageTests", dependencies: ["MonicaStorage"])
     ]
 )
