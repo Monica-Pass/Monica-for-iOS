@@ -633,7 +633,24 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
     let sourceGroupID: String?
     let sourceGroupPath: String
     let importedLoginEntryID: String
+    let importedTotpEntryID: String?
     let importedProjectID: String
+
+    init(
+        sourceEntryID: String,
+        sourceGroupID: String?,
+        sourceGroupPath: String,
+        importedLoginEntryID: String,
+        importedTotpEntryID: String? = nil,
+        importedProjectID: String
+    ) {
+        self.sourceEntryID = sourceEntryID
+        self.sourceGroupID = sourceGroupID
+        self.sourceGroupPath = sourceGroupPath
+        self.importedLoginEntryID = importedLoginEntryID
+        self.importedTotpEntryID = importedTotpEntryID
+        self.importedProjectID = importedProjectID
+    }
 }
 
 struct CSVExportDocument: FileDocument, Sendable {
@@ -5550,6 +5567,7 @@ final class AppSessionModel {
 
             var firstImportedProject: LocalVaultProject?
             var importedReferences: [AppKeePassImportedEntryReference] = []
+            var importedTotpPlaceholderCount = 0
             for candidate in plan.candidates {
                 let project = try ensureKeePassImportProject(
                     baseTitle: projectTitle,
@@ -5568,12 +5586,24 @@ final class AppSessionModel {
                         url: candidate.url
                     )
                 )
+                let importedTotpEntryID: String?
+                if candidate.hasTotp {
+                    let importedTotpEntry = try entryRepository.createTotpEntry(
+                        projectID: project.id,
+                        draft: keePassTotpPlaceholderDraft(for: candidate)
+                    )
+                    importedTotpEntryID = importedTotpEntry.id
+                    importedTotpPlaceholderCount += 1
+                } else {
+                    importedTotpEntryID = nil
+                }
                 importedReferences.append(
                     AppKeePassImportedEntryReference(
                         sourceEntryID: candidate.id,
                         sourceGroupID: candidate.groupID,
                         sourceGroupPath: candidate.groupPath,
                         importedLoginEntryID: importedEntry.id,
+                        importedTotpEntryID: importedTotpEntryID,
                         importedProjectID: project.id
                     )
                 )
@@ -5590,7 +5620,10 @@ final class AppSessionModel {
             clearKeePassImportState(preservingLastMetadataImportReferences: true)
             let pendingSummary = plan.pendingCapabilitySummary
             let pendingText = pendingSummary.isEmpty ? "，秘密字段待 KDBX 解码器接入" : "；\(pendingSummary)"
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(pendingText)")
+            let totpPlaceholderText = importedTotpPlaceholderCount > 0
+                ? "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项"
+                : ""
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(totpPlaceholderText)\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6447,6 +6480,34 @@ final class AppSessionModel {
             return base
         }
         return ([base] + components).joined(separator: " / ")
+    }
+
+    private func keePassTotpPlaceholderDraft(
+        for candidate: KeePassReadOnlyImportCandidate
+    ) -> LocalTotpEntryDraft {
+        let title = candidate.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let baseTitle = title.isEmpty ? "KeePass TOTP" : title
+        return LocalTotpEntryDraft(
+            title: keePassTotpPlaceholderTitle(from: baseTitle),
+            secret: "",
+            issuer: baseTitle,
+            accountName: candidate.username,
+            period: 30,
+            digits: 6,
+            algorithm: "SHA1",
+            otpType: "TOTP",
+            counter: 0
+        )
+    }
+
+    private func keePassTotpPlaceholderTitle(from baseTitle: String) -> String {
+        let lowercased = baseTitle.lowercased()
+        if lowercased.contains("totp") ||
+            lowercased.contains("2fa") ||
+            lowercased.contains("authenticator") {
+            return baseTitle
+        }
+        return "\(baseTitle) TOTP"
     }
 
     private func createCSVImportedItem(
