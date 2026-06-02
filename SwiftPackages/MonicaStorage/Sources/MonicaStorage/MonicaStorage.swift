@@ -497,19 +497,134 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
     }
 }
 
+public struct KeePassKdbxBlockStreamContext: Sendable, Equatable {
+    public let formatVersion: KeePassKdbxFormatVersion
+    public let streamStartBytes: Data?
+
+    public init(formatVersion: KeePassKdbxFormatVersion, streamStartBytes: Data?) {
+        self.formatVersion = formatVersion
+        self.streamStartBytes = streamStartBytes?.isEmpty == false ? streamStartBytes : nil
+    }
+}
+
+public protocol KeePassKdbxBlockStreamDecoder: Sendable {
+    func decodeBlockStream(_ decryptedPayload: Data, context: KeePassKdbxBlockStreamContext) throws -> Data
+}
+
+public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecoder {
+    public init() {}
+
+    public func decodeBlockStream(_ decryptedPayload: Data, context: KeePassKdbxBlockStreamContext) throws -> Data {
+        switch context.formatVersion {
+        case .kdbx3:
+            return try decodeKdbx3HashedBlockStream(decryptedPayload, streamStartBytes: context.streamStartBytes)
+        case .kdbx4:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC block stream 解码尚未接入"
+            )
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX block stream 尚未接入"
+            )
+        }
+    }
+
+    private func decodeKdbx3HashedBlockStream(_ decryptedPayload: Data, streamStartBytes: Data?) throws -> Data {
+        guard let streamStartBytes, !streamStartBytes.isEmpty else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX stream start bytes 缺失；请确认文件未损坏。"
+            )
+        }
+        guard decryptedPayload.count >= streamStartBytes.count,
+              Data(decryptedPayload[decryptedPayload.startIndex..<decryptedPayload.startIndex + streamStartBytes.count]) == streamStartBytes else {
+            throw KeePassOperationError(
+                code: .invalidCredential,
+                message: "KDBX stream start 校验失败；请确认数据库密码或密钥文件。"
+            )
+        }
+
+        var offset = streamStartBytes.count
+        var expectedBlockIndex: UInt32 = 0
+        var decoded = Data()
+        while true {
+            let blockIndex = try readLittleEndianUInt32(from: decryptedPayload, offset: &offset)
+            guard blockIndex == expectedBlockIndex else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KDBX block index 无效；请确认文件未损坏。"
+                )
+            }
+            let expectedHash = try readBytes(from: decryptedPayload, offset: &offset, count: 32)
+            let blockLength = try readLittleEndianUInt32(from: decryptedPayload, offset: &offset)
+            if blockLength == 0 {
+                guard expectedHash == Data(repeating: 0x00, count: 32) else {
+                    throw KeePassOperationError(
+                        code: .formatUnsupported,
+                        message: "KDBX block terminator 无效；请确认文件未损坏。"
+                    )
+                }
+                guard offset == decryptedPayload.count else {
+                    throw KeePassOperationError(
+                        code: .formatUnsupported,
+                        message: "KDBX block stream 末尾无效；请确认文件未损坏。"
+                    )
+                }
+                return decoded
+            }
+            let block = try readBytes(from: decryptedPayload, offset: &offset, count: Int(blockLength))
+            guard Data(SHA256.hash(data: block)) == expectedHash else {
+                throw KeePassOperationError(
+                    code: .invalidCredential,
+                    message: "KDBX block hash 校验失败；请确认数据库密码、密钥文件或文件完整性。"
+                )
+            }
+            decoded.append(block)
+            expectedBlockIndex += 1
+        }
+    }
+
+    private func readLittleEndianUInt32(from data: Data, offset: inout Int) throws -> UInt32 {
+        let bytes = try readBytes(from: data, offset: &offset, count: 4)
+        var value: UInt32 = 0
+        for byteOffset in 0..<4 {
+            value |= UInt32(bytes[bytes.startIndex + byteOffset]) << UInt32(byteOffset * 8)
+        }
+        return value
+    }
+
+    private func readBytes(from data: Data, offset: inout Int, count: Int) throws -> Data {
+        guard count >= 0,
+              offset >= 0,
+              offset + count <= data.count else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX block stream 无法解析；请确认文件未损坏。"
+            )
+        }
+        defer { offset += count }
+        return Data(data[offset..<offset + count])
+    }
+}
+
 public struct DefaultKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
     private let keyDeriver: any KeePassKdbxKeyDeriver
     private let masterKeyComposer: any KeePassKdbxMasterKeyComposer
     private let payloadCipher: any KeePassKdbxPayloadCipher
+    private let blockStreamDecoder: any KeePassKdbxBlockStreamDecoder
 
     public init(
         keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
         masterKeyComposer: any KeePassKdbxMasterKeyComposer = DefaultKeePassKdbxMasterKeyComposer(),
-        payloadCipher: any KeePassKdbxPayloadCipher = DefaultKeePassKdbxPayloadCipher()
+        payloadCipher: any KeePassKdbxPayloadCipher = DefaultKeePassKdbxPayloadCipher(),
+        blockStreamDecoder: any KeePassKdbxBlockStreamDecoder = DefaultKeePassKdbxBlockStreamDecoder()
     ) {
         self.keyDeriver = keyDeriver
         self.masterKeyComposer = masterKeyComposer
         self.payloadCipher = payloadCipher
+        self.blockStreamDecoder = blockStreamDecoder
     }
 
     public func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
@@ -524,15 +639,18 @@ public struct DefaultKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
                 message: "KDBX cipher 参数缺失；请确认文件未损坏。"
             )
         }
-        _ = try payloadCipher.decryptPayload(
+        let decryptedPayload = try payloadCipher.decryptPayload(
             context.envelope.encryptedPayload,
             cipher: cipher,
             masterKey: masterKey,
             cryptoInputs: context.cryptoInputs
         )
-        throw KeePassOperationError(
-            code: .formatUnsupported,
-            message: "KDBX block stream 解码尚未接入"
+        return try blockStreamDecoder.decodeBlockStream(
+            decryptedPayload,
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: context.envelope.headerSummary.formatVersion,
+                streamStartBytes: context.cryptoInputs.streamStartBytes
+            )
         )
     }
 }

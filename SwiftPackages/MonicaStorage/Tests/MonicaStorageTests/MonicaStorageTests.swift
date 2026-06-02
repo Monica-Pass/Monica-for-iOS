@@ -344,6 +344,54 @@ import MonicaStorage
     #expect(decrypted == expectedPlaintext)
 }
 
+@Test func keepPassKdbx3BlockStreamDecoderValidatesStreamStartAndHashesBlocksWithoutLeakingSecrets() throws {
+    let streamStartBytes = Data("stream-start-secret".utf8)
+    let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
+    let decryptedBlockStream = makeKdbx3HashedBlockStream(
+        streamStartBytes: streamStartBytes,
+        blocks: [xmlPayload]
+    )
+
+    let decoded = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(
+        decryptedBlockStream,
+        context: KeePassKdbxBlockStreamContext(
+            formatVersion: .kdbx3,
+            streamStartBytes: streamStartBytes
+        )
+    )
+
+    #expect(decoded == xmlPayload)
+
+    var tampered = decryptedBlockStream
+    let firstBlockDataOffset = streamStartBytes.count + 4 + 32 + 4
+    tampered[firstBlockDataOffset] ^= 0x01
+    #expect(throws: KeePassOperationError.self) {
+        _ = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(
+            tampered,
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: .kdbx3,
+                streamStartBytes: streamStartBytes
+            )
+        )
+    }
+
+    do {
+        _ = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(
+            Data("wrong-start".utf8) + decryptedBlockStream,
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: .kdbx3,
+                streamStartBytes: streamStartBytes
+            )
+        )
+        Issue.record("Expected stream start validation to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .invalidCredential)
+        #expect(!error.message.contains("stream-start-secret"))
+        #expect(!error.message.contains("secret xml"))
+        #expect(!error.message.contains(Data(SHA256.hash(data: xmlPayload)).map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
 @Test func defaultKeePassPayloadDecryptorUsesAesCipherBeforeBlockDecodeWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
@@ -428,7 +476,7 @@ import MonicaStorage
         Issue.record("Expected block stream decoder to remain unsupported")
     } catch let error as KeePassOperationError {
         #expect(error.code == .formatUnsupported)
-        #expect(error.message == "KDBX block stream 解码尚未接入")
+        #expect(error.message == "KDBX4 HMAC block stream 解码尚未接入")
         #expect(!error.message.contains("decrypted-block-stream-secret"))
         #expect(!error.message.contains("encrypted-payload-secret"))
         #expect(!error.message.contains("password-key-secret"))
@@ -438,6 +486,99 @@ import MonicaStorage
     #expect(payloadCipher.calls.count == 1)
     #expect(payloadCipher.calls.first?.cipher == .aes256)
     #expect(payloadCipher.calls.first?.payload == encryptedPayload)
+}
+
+@Test func defaultKeePassPayloadDecryptorDecodesKdbx3BlockStreamToXmlPayload() throws {
+    final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
+        func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
+            KeePassKdbxDerivedKey(
+                algorithm: .aesKdf,
+                material: Data(repeating: 0x11, count: 32),
+                rounds: 1
+            )
+        }
+    }
+
+    final class FixedMasterKeyComposer: KeePassKdbxMasterKeyComposer, @unchecked Sendable {
+        func composeMasterKey(
+            from derivedKey: KeePassKdbxDerivedKey,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> KeePassKdbxMasterKeyMaterial {
+            KeePassKdbxMasterKeyMaterial(
+                algorithm: derivedKey.algorithm,
+                material: Data(repeating: 0x22, count: 32)
+            )
+        }
+    }
+
+    final class FixedPayloadCipher: KeePassKdbxPayloadCipher, @unchecked Sendable {
+        let decryptedPayload: Data
+
+        init(decryptedPayload: Data) {
+            self.decryptedPayload = decryptedPayload
+        }
+
+        func decryptPayload(
+            _ encryptedPayload: Data,
+            cipher: KeePassKdbxCipherAlgorithm,
+            masterKey: KeePassKdbxMasterKeyMaterial,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> Data {
+            decryptedPayload
+        }
+    }
+
+    let streamStartBytes = Data(repeating: 0xA6, count: 32)
+    let xmlPayload = Data("<KeePassFile><Root /></KeePassFile>".utf8)
+    let decryptedBlockStream = makeKdbx3HashedBlockStream(
+        streamStartBytes: streamStartBytes,
+        blocks: [xmlPayload]
+    )
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .aesKdf,
+        aesKdf: KeePassKdbxAesKdfParameters(seed: Data(repeating: 0xA5, count: 32), rounds: 1)
+    )
+    let encryptedPayload = Data("encrypted-payload-secret".utf8)
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "kdbx3.kdbx",
+        candidateLabel: "password-only",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 3,
+                minorVersion: 1,
+                formatVersion: .kdbx3,
+                cryptoSummary: KeePassKdbxCryptoSummary(
+                    cipher: .aes256,
+                    compression: KeePassKdbxCompressionAlgorithm.none,
+                    kdf: .aesKdf
+                ),
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerByteRange: 0..<0,
+            encryptedPayload: encryptedPayload
+        ),
+        kdfParameters: kdfParameters,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xB5, count: 32),
+            encryptionIV: Data(repeating: 0xC5, count: 16),
+            streamStartBytes: streamStartBytes
+        ),
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: Data("password-key-secret".utf8),
+            keyFileKey: nil,
+            compositeKey: Data(SHA256.hash(data: Data("composite-key-secret".utf8)))
+        )
+    )
+    let decryptor = DefaultKeePassKdbxPayloadDecryptor(
+        keyDeriver: FixedKeyDeriver(),
+        masterKeyComposer: FixedMasterKeyComposer(),
+        payloadCipher: FixedPayloadCipher(decryptedPayload: decryptedBlockStream)
+    )
+
+    let decrypted = try decryptor.decryptPayload(context)
+
+    #expect(decrypted == xmlPayload)
 }
 
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
@@ -951,7 +1092,7 @@ import MonicaStorage
         Issue.record("Expected payload decryptor to remain unsupported")
     } catch let error as KeePassOperationError {
         #expect(error.code == .formatUnsupported)
-        #expect(error.message == "KDBX block stream 解码尚未接入")
+        #expect(error.message == "KDBX4 HMAC block stream 解码尚未接入")
         #expect(!error.message.contains("derived-key-secret"))
         #expect(!error.message.contains("password-key-secret"))
         #expect(!error.message.contains("key-file-secret"))
@@ -4892,6 +5033,21 @@ private func makeKdbxVariantDictionary(uuid: Data) -> Data {
     makeKdbxVariantDictionary(entries: [
         kdbxVariantByteArray(key: "$UUID", value: uuid)
     ])
+}
+
+private func makeKdbx3HashedBlockStream(streamStartBytes: Data, blocks: [Data]) -> Data {
+    var data = Data()
+    data.append(streamStartBytes)
+    for (index, block) in blocks.enumerated() {
+        data.append(littleEndianUInt32(UInt32(index)))
+        data.append(Data(SHA256.hash(data: block)))
+        data.append(littleEndianUInt32(UInt32(block.count)))
+        data.append(block)
+    }
+    data.append(littleEndianUInt32(UInt32(blocks.count)))
+    data.append(Data(repeating: 0x00, count: 32))
+    data.append(littleEndianUInt32(0))
+    return data
 }
 
 private func makeKdbxVariantDictionary(entries: [Data]) -> Data {
