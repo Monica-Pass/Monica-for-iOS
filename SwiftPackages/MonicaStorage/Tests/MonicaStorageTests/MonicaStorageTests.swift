@@ -137,6 +137,136 @@ import MonicaStorage
     #expect(!result.displaySummary.contains("key-file-secret"))
 }
 
+@Test func keePassXMLReadOnlySnapshotReaderParsesGroupsEntriesFieldsTotpAndAttachments() throws {
+    let xml = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeePassFile>
+      <Meta>
+        <RecycleBinUUID>trash-group-uuid</RecycleBinUUID>
+        <Binaries>
+          <Binary ID="0">ZGVjb2RlZCBhdHRhY2htZW50IHNlY3JldA==</Binary>
+        </Binaries>
+      </Meta>
+      <Root>
+        <Group>
+          <UUID>root-group-uuid</UUID>
+          <Name>Root</Name>
+          <Group>
+            <UUID>work-group-uuid</UUID>
+            <Name>Work</Name>
+            <Entry>
+              <UUID>entry-github-uuid</UUID>
+              <String><Key>Title</Key><Value>GitHub</Value></String>
+              <String><Key>UserName</Key><Value>alice</Value></String>
+              <String><Key>Password</Key><Value Protected="True">decoded login password</Value></String>
+              <String><Key>URL</Key><Value>https://github.com</Value></String>
+              <String><Key>Notes</Key><Value>decoded notes secret</Value></String>
+              <String><Key>otp</Key><Value>otpauth://totp/GitHub:alice@example.com?secret=JBSWY3DPEHPK3PXP&amp;issuer=GitHub&amp;period=45&amp;digits=8&amp;algorithm=SHA256</Value></String>
+              <String><Key>Recovery Code</Key><Value Protected="True">decoded recovery code</Value></String>
+              <Binary><Key>contract.txt</Key><Value Ref="0" /></Binary>
+            </Entry>
+          </Group>
+          <Group>
+            <UUID>trash-group-uuid</UUID>
+            <Name>Recycle Bin</Name>
+            <Entry>
+              <UUID>entry-trash-uuid</UUID>
+              <String><Key>Title</Key><Value>Deleted Login</Value></String>
+              <String><Key>UserName</Key><Value>bob</Value></String>
+              <String><Key>Password</Key><Value>deleted password</Value></String>
+            </Entry>
+          </Group>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """
+    let reader = KeePassXMLReadOnlySnapshotReader()
+
+    let snapshot = try reader.readSnapshot(
+        database: Data(xml.utf8),
+        sourceName: "decrypted.xml",
+        credentials: KeePassUnlockCredentials(password: "database-password", keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(snapshot.groupCount == 3)
+    #expect(snapshot.groups.map(\.path) == ["/", "/Work", "/Recycle Bin"])
+    #expect(snapshot.entries.count == 2)
+
+    let github = try #require(snapshot.entries.first { $0.id == "entry-github-uuid" })
+    #expect(github.title == "GitHub")
+    #expect(github.username == "alice")
+    #expect(github.url == "https://github.com")
+    #expect(github.groupPath == "/Work")
+    #expect(github.groupID == "work-group-uuid")
+    #expect(github.notes == "decoded notes secret")
+    #expect(github.hasPassword)
+    #expect(github.decodedPassword == "decoded login password")
+    #expect(github.hasTotp)
+    #expect(github.decodedTotp?.secret == "JBSWY3DPEHPK3PXP")
+    #expect(github.decodedTotp?.issuer == "GitHub")
+    #expect(github.decodedTotp?.accountName == "alice@example.com")
+    #expect(github.decodedTotp?.period == 45)
+    #expect(github.decodedTotp?.digits == 8)
+    #expect(github.decodedTotp?.algorithm == "SHA256")
+    #expect(github.customFields.map(\.title) == ["Recovery Code"])
+    #expect(github.customFields.first?.value == "decoded recovery code")
+    #expect(github.customFields.first?.isProtected == true)
+    #expect(github.attachments.first?.fileName == "contract.txt")
+    #expect(github.attachments.first?.decodedContent == Data("decoded attachment secret".utf8))
+
+    let deleted = try #require(snapshot.entries.first { $0.id == "entry-trash-uuid" })
+    #expect(deleted.groupPath == "/Recycle Bin")
+    #expect(deleted.isDeleted)
+
+    #expect(!snapshot.displaySummary.contains("database-password"))
+    #expect(!snapshot.displaySummary.contains("decoded login password"))
+    #expect(!snapshot.displaySummary.contains("decoded attachment secret"))
+}
+
+@Test func defaultKeePassDatabaseReaderParsesXMLButKeepsEncryptedKdbxUnsupported() throws {
+    let reader = DefaultKeePassDatabaseReader()
+    let xml = Data("""
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>root</UUID>
+          <Name>Root</Name>
+          <Entry>
+            <UUID>entry</UUID>
+            <String><Key>Title</Key><Value>GitHub</Value></String>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """.utf8)
+
+    let snapshot = try reader.readSnapshot(
+        database: xml,
+        sourceName: "decrypted.xml",
+        credentials: KeePassUnlockCredentials(password: "database-password", keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(snapshot.entryCount == 1)
+    #expect(snapshot.entries.first?.title == "GitHub")
+
+    let encryptedKdbxHeader = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x67, 0xFB, 0x4B, 0xB5,
+        0x00, 0x00, 0x04, 0x00
+    ])
+    #expect(throws: KeePassOperationError.self) {
+        _ = try reader.readSnapshot(
+            database: encryptedKdbxHeader,
+            sourceName: "personal.kdbx",
+            credentials: KeePassUnlockCredentials(
+                password: "database-password",
+                keyFile: Data("key-file-secret".utf8),
+                keyFileName: "personal.key"
+            )
+        )
+    }
+}
+
 @Test func keepPassReadOnlyImportPlannerBuildsPreviewOnlyPlanWithoutLeakingSecrets() throws {
     let snapshot = KeePassReadOnlySnapshot(
         sourceName: "personal.kdbx",

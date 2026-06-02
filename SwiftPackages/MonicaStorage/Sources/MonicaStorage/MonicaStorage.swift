@@ -579,6 +579,30 @@ public protocol KeePassDatabaseReader: Sendable {
     ) throws -> KeePassReadOnlySnapshot
 }
 
+public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
+    private let xmlReader = KeePassXMLReadOnlySnapshotReader()
+
+    public init() {}
+
+    public func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> KeePassReadOnlySnapshot {
+        if KeePassXMLReadOnlySnapshotReader.canRead(database) {
+            return try xmlReader.readSnapshot(
+                database: database,
+                sourceName: sourceName,
+                credentials: credentials
+            )
+        }
+        throw KeePassOperationError(
+            code: .formatUnsupported,
+            message: "KDBX 解码器尚未接入"
+        )
+    }
+}
+
 public struct UnsupportedKeePassDatabaseReader: KeePassDatabaseReader {
     public init() {}
 
@@ -591,6 +615,482 @@ public struct UnsupportedKeePassDatabaseReader: KeePassDatabaseReader {
             code: .formatUnsupported,
             message: "KDBX 解码器尚未接入"
         )
+    }
+}
+
+public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
+    public init() {}
+
+    public static func canRead(_ data: Data) -> Bool {
+        guard let prefix = String(data: data.prefix(512), encoding: .utf8) else {
+            return false
+        }
+        let trimmed = prefix.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("<?xml") || trimmed.hasPrefix("<KeePassFile")
+    }
+
+    public func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> KeePassReadOnlySnapshot {
+        let parser = KeePassXMLSnapshotParser()
+        do {
+            let parsed = try parser.parse(database)
+            return KeePassXMLSnapshotBuilder.build(
+                parsed,
+                sourceName: sourceName,
+                headerSummary: nil
+            )
+        } catch {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass XML 无法解析；请确认已提供解密后的 KDBX XML。"
+            )
+        }
+    }
+}
+
+private struct ParsedKeePassXML {
+    var rootGroups: [ParsedKeePassGroup] = []
+    var recycleBinUUID: String?
+    var binaries: [String: Data] = [:]
+}
+
+private struct ParsedKeePassGroup {
+    var uuid = ""
+    var name = ""
+    var groups: [ParsedKeePassGroup] = []
+    var entries: [ParsedKeePassEntry] = []
+}
+
+private struct ParsedKeePassEntry {
+    var uuid = ""
+    var strings: [ParsedKeePassStringField] = []
+    var binaries: [ParsedKeePassEntryBinary] = []
+}
+
+private struct ParsedKeePassStringField {
+    var key = ""
+    var value = ""
+    var isProtected = false
+}
+
+private struct ParsedKeePassEntryBinary {
+    var key = ""
+    var reference = ""
+}
+
+private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
+    private var parsed = ParsedKeePassXML()
+    private var groupStack: [ParsedKeePassGroup] = []
+    private var currentEntry: ParsedKeePassEntry?
+    private var currentString: ParsedKeePassStringField?
+    private var currentEntryBinary: ParsedKeePassEntryBinary?
+    private var currentMetaBinaryID: String?
+    private var currentText = ""
+    private var elementStack: [String] = []
+    private var parseFailure: Error?
+
+    func parse(_ data: Data) throws -> ParsedKeePassXML {
+        let parser = XMLParser(data: data)
+        parser.delegate = self
+        parser.shouldResolveExternalEntities = false
+        guard parser.parse(), parseFailure == nil else {
+            throw parseFailure ?? parser.parserError ?? KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass XML 无法解析"
+            )
+        }
+        return parsed
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didStartElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?,
+        attributes attributeDict: [String: String] = [:]
+    ) {
+        elementStack.append(elementName)
+        currentText = ""
+        switch elementName {
+        case "Group":
+            groupStack.append(ParsedKeePassGroup())
+        case "Entry":
+            currentEntry = ParsedKeePassEntry()
+        case "String":
+            if currentEntry != nil {
+                currentString = ParsedKeePassStringField()
+            }
+        case "Binary":
+            if currentEntry != nil {
+                currentEntryBinary = ParsedKeePassEntryBinary()
+            } else if isInsideMetaBinaries {
+                currentMetaBinaryID = attributeDict["ID"]
+            }
+        case "Value":
+            if currentString != nil {
+                currentString?.isProtected = attributeDict["Protected"].map(Self.boolValue) ?? false
+            }
+            if currentEntryBinary != nil {
+                currentEntryBinary?.reference = attributeDict["Ref"] ?? ""
+            }
+        default:
+            break
+        }
+    }
+
+    func parser(_ parser: XMLParser, foundCharacters string: String) {
+        currentText += string
+    }
+
+    func parser(
+        _ parser: XMLParser,
+        didEndElement elementName: String,
+        namespaceURI: String?,
+        qualifiedName qName: String?
+    ) {
+        defer {
+            if elementStack.last == elementName {
+                elementStack.removeLast()
+            }
+            currentText = ""
+        }
+
+        let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch elementName {
+        case "UUID":
+            if currentEntry != nil {
+                currentEntry?.uuid = text
+            } else if !groupStack.isEmpty {
+                groupStack[groupStack.count - 1].uuid = text
+            }
+        case "Name":
+            if currentEntry == nil, !groupStack.isEmpty {
+                groupStack[groupStack.count - 1].name = text
+            }
+        case "RecycleBinUUID":
+            parsed.recycleBinUUID = text.isEmpty ? nil : text
+        case "Key":
+            if currentString != nil {
+                currentString?.key = text
+            } else if currentEntryBinary != nil {
+                currentEntryBinary?.key = text
+            }
+        case "Value":
+            if currentString != nil {
+                currentString?.value = text
+            }
+        case "String":
+            if let field = currentString {
+                currentEntry?.strings.append(field)
+            }
+            currentString = nil
+        case "Binary":
+            if let binary = currentEntryBinary {
+                currentEntry?.binaries.append(binary)
+                currentEntryBinary = nil
+            } else if let id = currentMetaBinaryID {
+                parsed.binaries[id] = Data(base64Encoded: text) ?? Data()
+                currentMetaBinaryID = nil
+            }
+        case "Entry":
+            if let entry = currentEntry, !groupStack.isEmpty {
+                groupStack[groupStack.count - 1].entries.append(entry)
+            }
+            currentEntry = nil
+        case "Group":
+            guard let group = groupStack.popLast() else { return }
+            if groupStack.isEmpty {
+                parsed.rootGroups.append(group)
+            } else {
+                groupStack[groupStack.count - 1].groups.append(group)
+            }
+        default:
+            break
+        }
+    }
+
+    func parser(_ parser: XMLParser, parseErrorOccurred parseError: Error) {
+        parseFailure = parseError
+    }
+
+    private var isInsideMetaBinaries: Bool {
+        elementStack.contains("Meta") && elementStack.contains("Binaries")
+    }
+
+    private static func boolValue(_ value: String) -> Bool {
+        let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == "true" || normalized == "1" || normalized == "yes"
+    }
+}
+
+private enum KeePassXMLSnapshotBuilder {
+    static func build(
+        _ parsed: ParsedKeePassXML,
+        sourceName: String?,
+        headerSummary: KeePassHeaderSummary?
+    ) -> KeePassReadOnlySnapshot {
+        var groups: [KeePassReadOnlyGroup] = []
+        var entries: [KeePassReadOnlyEntry] = []
+        for root in parsed.rootGroups {
+            append(
+                group: root,
+                parentComponents: [],
+                isRootGroup: true,
+                parentDeleted: false,
+                parsed: parsed,
+                groups: &groups,
+                entries: &entries
+            )
+        }
+        return KeePassReadOnlySnapshot(
+            sourceName: sourceName,
+            headerSummary: headerSummary,
+            groups: groups,
+            entries: entries
+        )
+    }
+
+    private static func append(
+        group: ParsedKeePassGroup,
+        parentComponents: [String],
+        isRootGroup: Bool,
+        parentDeleted: Bool,
+        parsed: ParsedKeePassXML,
+        groups: inout [KeePassReadOnlyGroup],
+        entries: inout [KeePassReadOnlyEntry]
+    ) {
+        let title = group.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let components = isRootGroup ? [] : parentComponents + [title.isEmpty ? "Untitled" : title]
+        let path = components.isEmpty ? "/" : "/" + components.joined(separator: "/")
+        let isDeleted = parentDeleted || (!group.uuid.isEmpty && group.uuid == parsed.recycleBinUUID)
+        groups.append(
+            KeePassReadOnlyGroup(
+                id: group.uuid.isEmpty ? path : group.uuid,
+                title: title.isEmpty ? "Root" : title,
+                path: path,
+                depth: components.count
+            )
+        )
+
+        for entry in group.entries {
+            entries.append(readOnlyEntry(
+                entry,
+                groupPath: path,
+                groupID: group.uuid.isEmpty ? nil : group.uuid,
+                isDeleted: isDeleted,
+                binaries: parsed.binaries
+            ))
+        }
+        for child in group.groups {
+            append(
+                group: child,
+                parentComponents: components,
+                isRootGroup: false,
+                parentDeleted: isDeleted,
+                parsed: parsed,
+                groups: &groups,
+                entries: &entries
+            )
+        }
+    }
+
+    private static func readOnlyEntry(
+        _ entry: ParsedKeePassEntry,
+        groupPath: String,
+        groupID: String?,
+        isDeleted: Bool,
+        binaries: [String: Data]
+    ) -> KeePassReadOnlyEntry {
+        let title = firstFieldValue(entry, keys: ["Title", "Name"])
+        let username = firstFieldValue(entry, keys: ["UserName", "Username", "User", "Login"])
+        let password = firstFieldValue(entry, keys: ["Password", "Pass", "pass", "pwd", "PWD", "密码", "口令"])
+        let url = firstFieldValue(entry, keys: ["URL", "Url", "Website", "URI"])
+        let notes = firstFieldValue(entry, keys: ["Notes", "Note", "Comment"])
+        let decodedTotp = decodedTotp(from: entry, title: title, username: username, url: url)
+        let customFields = entry.strings.enumerated().compactMap { index, field -> KeePassReadOnlyCustomField? in
+            let key = field.key.trimmingCharacters(in: .whitespacesAndNewlines)
+            let value = field.value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !value.isEmpty, !isReservedPasswordField(key) else {
+                return nil
+            }
+            return KeePassReadOnlyCustomField(
+                title: key,
+                value: value,
+                isProtected: field.isProtected,
+                sortOrder: index
+            )
+        }
+        let attachments = entry.binaries.enumerated().map { index, binary in
+            let content = binaries[binary.reference]
+            return KeePassReadOnlyAttachment(
+                id: binary.reference.isEmpty ? "\(entry.uuid)-attachment-\(index)" : binary.reference,
+                fileName: binary.key.isEmpty ? "Attachment \(index + 1)" : binary.key,
+                mediaType: mediaType(for: binary.key),
+                originalSize: Int64(content?.count ?? 0),
+                contentHash: content.map { "sha256:" + sha256Hex($0) } ?? "",
+                decodedContent: content
+            )
+        }
+        return KeePassReadOnlyEntry(
+            id: entry.uuid.isEmpty ? UUID().uuidString : entry.uuid,
+            title: title.isEmpty ? "Untitled" : title,
+            username: username,
+            url: url,
+            groupPath: groupPath,
+            groupID: groupID,
+            notes: notes,
+            customFields: customFields,
+            hasPassword: !password.isEmpty,
+            decodedPassword: password.isEmpty ? nil : password,
+            hasTotp: decodedTotp != nil,
+            decodedTotp: decodedTotp,
+            attachmentCount: attachments.count,
+            isDeleted: isDeleted,
+            attachments: attachments
+        )
+    }
+
+    private static func firstFieldValue(_ entry: ParsedKeePassEntry, keys: [String]) -> String {
+        let wanted = Set(keys.map { $0.lowercased() })
+        return entry.strings.first { wanted.contains($0.key.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()) }?
+            .value
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    }
+
+    private static func decodedTotp(
+        from entry: ParsedKeePassEntry,
+        title: String,
+        username: String,
+        url: String
+    ) -> KeePassReadOnlyTotpSecret? {
+        let otp = firstFieldValue(entry, keys: ["otp"])
+        let seed = firstFieldValue(entry, keys: ["TOTP Seed", "TOTPSeed"])
+        let settings = firstFieldValue(entry, keys: ["TOTP Settings", "TOTPSettings"])
+        if let parsed = parseOtpAuthURI(otp, title: title, username: username) {
+            return parsed
+        }
+        let secret = normalizeTotpSecret(otp.contains("://") ? seed : (otp.isEmpty ? seed : otp))
+        guard !secret.isEmpty else {
+            return nil
+        }
+        let parsedSettings = parseTotpSettings(settings)
+        return KeePassReadOnlyTotpSecret(
+            secret: secret,
+            issuer: title.isEmpty ? nil : title,
+            accountName: username.isEmpty ? nil : username,
+            period: parsedSettings.period,
+            digits: parsedSettings.digits,
+            algorithm: parsedSettings.algorithm
+        )
+    }
+
+    private static func parseOtpAuthURI(
+        _ value: String,
+        title: String,
+        username: String
+    ) -> KeePassReadOnlyTotpSecret? {
+        guard value.lowercased().hasPrefix("otpauth://"),
+              let components = URLComponents(string: value) else {
+            return nil
+        }
+        var params: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            params[item.name.lowercased()] = item.value ?? ""
+        }
+        let secret = normalizeTotpSecret(params["secret"] ?? "")
+        guard !secret.isEmpty else {
+            return nil
+        }
+        let label = components.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let decodedLabel = label.removingPercentEncoding ?? label
+        let labelParts = decodedLabel.split(separator: ":", maxSplits: 1).map(String.init)
+        let issuer = params["issuer"].flatMap { $0.isEmpty ? nil : $0 }
+            ?? (labelParts.count == 2 ? labelParts[0] : nil)
+            ?? (title.isEmpty ? nil : title)
+        let account = (labelParts.count == 2 ? labelParts[1] : decodedLabel)
+        return KeePassReadOnlyTotpSecret(
+            secret: secret,
+            issuer: issuer,
+            accountName: account.isEmpty ? (username.isEmpty ? nil : username) : account,
+            period: UInt32(params["period"] ?? ""),
+            digits: UInt32(params["digits"] ?? ""),
+            algorithm: params["algorithm"]?.uppercased()
+        )
+    }
+
+    private static func parseTotpSettings(_ value: String) -> (period: UInt32?, digits: UInt32?, algorithm: String?) {
+        var period: UInt32?
+        var digits: UInt32?
+        var algorithm: String?
+        for pair in value.split(separator: ";") {
+            let parts = pair.split(separator: "=", maxSplits: 1).map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            guard parts.count == 2 else { continue }
+            switch parts[0].lowercased() {
+            case "period", "step":
+                period = UInt32(parts[1])
+            case "digits":
+                digits = UInt32(parts[1])
+            case "algorithm", "algo":
+                algorithm = parts[1].uppercased()
+            default:
+                continue
+            }
+        }
+        return (period, digits, algorithm)
+    }
+
+    private static func normalizeTotpSecret(_ value: String) -> String {
+        value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: " ", with: "")
+            .uppercased()
+    }
+
+    private static func isReservedPasswordField(_ key: String) -> Bool {
+        let normalized = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        if normalized.isEmpty || normalized.hasPrefix("_etm_") {
+            return true
+        }
+        let reserved = [
+            "Title", "Name",
+            "UserName", "Username", "User", "Login",
+            "Password", "Pass", "pass", "pwd", "PWD", "密码", "口令",
+            "URL", "Url", "Website", "URI",
+            "Notes", "Note", "Comment",
+            "otp", "TOTP Seed", "TOTP Settings",
+            "MonicaLocalId", "MonicaSecureItemId", "MonicaItemType", "MonicaItemData",
+            "MonicaImagePaths", "MonicaIsFavorite",
+            "MonicaPasskeyCredentialId", "MonicaPasskeyData", "MonicaPasskeyMode",
+            "MonicaSshAlgorithm", "MonicaSshKeySize", "MonicaSshPublicKey",
+            "MonicaSshPrivateKey", "MonicaSshFingerprint", "MonicaSshComment",
+            "MonicaSshFormat",
+            "SSID", "MonicaWifiData", "MonicaLoginType",
+            "KPEX_PASSKEY", "KPEX_USERNAME", "KPEX_PRIVATE_KEY", "KPEX_CREDENTIAL_ID",
+            "KPEX_USER_HANDLE", "KPEX_RELYING_PARTY", "KPEX_FLAG_BE", "KPEX_FLAG_BS"
+        ]
+        return Set(reserved.map { $0.lowercased() }).contains(normalized.lowercased())
+    }
+
+    private static func mediaType(for fileName: String) -> String {
+        switch URL(fileURLWithPath: fileName).pathExtension.lowercased() {
+        case "txt", "md", "csv", "json", "xml":
+            return "text/plain"
+        case "pdf":
+            return "application/pdf"
+        case "png":
+            return "image/png"
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        default:
+            return "application/octet-stream"
+        }
+    }
+
+    private static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
 

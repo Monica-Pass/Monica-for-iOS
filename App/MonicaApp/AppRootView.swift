@@ -1398,7 +1398,7 @@ final class AppSessionModel {
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
-        keePassDatabaseReader: any KeePassDatabaseReader = UnsupportedKeePassDatabaseReader(),
+        keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
         passwordGenerator: @escaping () throws -> String = {
