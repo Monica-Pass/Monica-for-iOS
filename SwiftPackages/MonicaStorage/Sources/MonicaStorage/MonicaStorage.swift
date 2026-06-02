@@ -2076,7 +2076,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                     database: decryptedPayload,
                     sourceName: sourceName,
                     credentials: credentials,
-                    headerSummary: context.envelope.headerSummary
+                    headerSummary: context.envelope.headerSummary,
+                    cryptoInputs: context.cryptoInputs
                 )
             }
             if let inflated = KeePassGzipPayloadInflator.inflate(decryptedPayload),
@@ -2085,7 +2086,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                     database: inflated,
                     sourceName: sourceName,
                     credentials: credentials,
-                    headerSummary: context.envelope.headerSummary
+                    headerSummary: context.envelope.headerSummary,
+                    cryptoInputs: context.cryptoInputs
                 )
             }
         }
@@ -2195,9 +2197,12 @@ public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
         database: Data,
         sourceName: String?,
         credentials: KeePassUnlockCredentials,
-        headerSummary: KeePassHeaderSummary?
+        headerSummary: KeePassHeaderSummary?,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs = .empty
     ) throws -> KeePassReadOnlySnapshot {
-        let parser = KeePassXMLSnapshotParser()
+        let parser = KeePassXMLSnapshotParser(
+            protectedValueDecoder: try KeePassProtectedValueStreamDecoder.make(from: cryptoInputs)
+        )
         do {
             let parsed = try parser.parse(database)
             return KeePassXMLSnapshotBuilder.build(
@@ -2211,6 +2216,164 @@ public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
                 message: "KeePass XML 无法解析；请确认已提供解密后的 KDBX XML。"
             )
         }
+    }
+}
+
+private final class KeePassProtectedValueStreamDecoder {
+    private static let salsa20IV = Data([0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A])
+
+    private let keyStream: KeePassInnerRandomKeyStream
+
+    private init(keyStream: KeePassInnerRandomKeyStream) {
+        self.keyStream = keyStream
+    }
+
+    static func make(from cryptoInputs: KeePassKdbxPayloadCryptoInputs) throws -> KeePassProtectedValueStreamDecoder? {
+        guard let innerRandomStreamKey = cryptoInputs.innerRandomStreamKey else {
+            return nil
+        }
+        switch cryptoInputs.innerRandomStreamAlgorithm {
+        case .none, .arc4Variant:
+            return nil
+        case .salsa20:
+            guard innerRandomStreamKey.count == SHA256.byteCount else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KeePass inner stream key 长度无效；请确认文件未损坏。"
+                )
+            }
+            let key = Data(SHA256.hash(data: innerRandomStreamKey))
+            return KeePassProtectedValueStreamDecoder(
+                keyStream: KeePassSalsa20KeyStream(key: key, iv: salsa20IV)
+            )
+        case .chacha20:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass ChaCha20 protected value stream 尚未接入"
+            )
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KeePass protected value stream 尚未接入"
+            )
+        }
+    }
+
+    func decode(_ protectedBase64: String) throws -> String {
+        let normalized = protectedBase64.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let encrypted = Data(base64Encoded: normalized) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass protected value 无法解析；请确认文件未损坏。"
+            )
+        }
+        let decrypted = keyStream.xor(encrypted)
+        guard let decoded = String(data: decrypted, encoding: .utf8) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass protected value 不是有效 UTF-8；请确认文件未损坏。"
+            )
+        }
+        return decoded
+    }
+}
+
+private protocol KeePassInnerRandomKeyStream: AnyObject {
+    func xor(_ data: Data) -> Data
+}
+
+private final class KeePassSalsa20KeyStream: KeePassInnerRandomKeyStream {
+    private let key: [UInt8]
+    private let iv: [UInt8]
+    private var blockIndex: UInt64 = 0
+    private var block = [UInt8]()
+    private var blockOffset = 0
+
+    init(key: Data, iv: Data) {
+        self.key = [UInt8](key)
+        self.iv = [UInt8](iv)
+    }
+
+    func xor(_ data: Data) -> Data {
+        var output = [UInt8]()
+        output.reserveCapacity(data.count)
+        for byte in data {
+            output.append(byte ^ nextByte())
+        }
+        return Data(output)
+    }
+
+    private func nextByte() -> UInt8 {
+        if blockOffset >= block.count {
+            block = Self.block(key: key, iv: iv, counter: blockIndex)
+            blockIndex += 1
+            blockOffset = 0
+        }
+        defer { blockOffset += 1 }
+        return block[blockOffset]
+    }
+
+    private static func block(key: [UInt8], iv: [UInt8], counter: UInt64) -> [UInt8] {
+        let constants = [UInt8]("expand 32-byte k".utf8)
+        var nonce = iv
+        nonce.append(contentsOf: littleEndianUInt64Bytes(counter))
+        let initial: [UInt32] = [
+            word(constants, 0),
+            word(key, 0), word(key, 4), word(key, 8), word(key, 12),
+            word(constants, 4),
+            word(nonce, 0), word(nonce, 4), word(nonce, 8), word(nonce, 12),
+            word(constants, 8),
+            word(key, 16), word(key, 20), word(key, 24), word(key, 28),
+            word(constants, 12)
+        ]
+        var state = initial
+        for _ in 0..<10 {
+            quarterRound(&state, 4, 8, 12, 0)
+            quarterRound(&state, 9, 13, 1, 5)
+            quarterRound(&state, 14, 2, 6, 10)
+            quarterRound(&state, 3, 7, 11, 15)
+            quarterRound(&state, 1, 2, 3, 0)
+            quarterRound(&state, 6, 7, 4, 5)
+            quarterRound(&state, 11, 8, 9, 10)
+            quarterRound(&state, 12, 13, 14, 15)
+        }
+        var output = [UInt8]()
+        output.reserveCapacity(64)
+        for index in 0..<16 {
+            output.append(contentsOf: littleEndianUInt32Bytes(state[index] &+ initial[index]))
+        }
+        return output
+    }
+
+    private static func quarterRound(_ state: inout [UInt32], _ a: Int, _ b: Int, _ c: Int, _ d: Int) {
+        state[a] ^= rotateLeft(state[d] &+ state[c], by: 7)
+        state[b] ^= rotateLeft(state[a] &+ state[d], by: 9)
+        state[c] ^= rotateLeft(state[b] &+ state[a], by: 13)
+        state[d] ^= rotateLeft(state[c] &+ state[b], by: 18)
+    }
+
+    private static func rotateLeft(_ value: UInt32, by shift: UInt32) -> UInt32 {
+        (value << shift) | (value >> (32 - shift))
+    }
+
+    private static func word(_ bytes: [UInt8], _ offset: Int) -> UInt32 {
+        UInt32(bytes[offset])
+            | (UInt32(bytes[offset + 1]) << 8)
+            | (UInt32(bytes[offset + 2]) << 16)
+            | (UInt32(bytes[offset + 3]) << 24)
+    }
+
+    private static func littleEndianUInt32Bytes(_ value: UInt32) -> [UInt8] {
+        [
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ]
+    }
+
+    private static func littleEndianUInt64Bytes(_ value: UInt64) -> [UInt8] {
+        (0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) }
     }
 }
 
@@ -2246,6 +2409,7 @@ private struct ParsedKeePassEntryBinary {
 
 private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
     private var parsed = ParsedKeePassXML()
+    private let protectedValueDecoder: KeePassProtectedValueStreamDecoder?
     private var groupStack: [ParsedKeePassGroup] = []
     private var currentEntry: ParsedKeePassEntry?
     private var currentString: ParsedKeePassStringField?
@@ -2254,6 +2418,10 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
     private var currentText = ""
     private var elementStack: [String] = []
     private var parseFailure: Error?
+
+    init(protectedValueDecoder: KeePassProtectedValueStreamDecoder? = nil) {
+        self.protectedValueDecoder = protectedValueDecoder
+    }
 
     func parse(_ data: Data) throws -> ParsedKeePassXML {
         let parser = XMLParser(data: data)
@@ -2343,7 +2511,16 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
             }
         case "Value":
             if currentString != nil {
-                currentString?.value = text
+                if currentString?.isProtected == true, let protectedValueDecoder {
+                    do {
+                        currentString?.value = try protectedValueDecoder.decode(text)
+                    } catch {
+                        parseFailure = error
+                        currentString?.value = ""
+                    }
+                } else {
+                    currentString?.value = text
+                }
             }
         case "String":
             if let field = currentString {

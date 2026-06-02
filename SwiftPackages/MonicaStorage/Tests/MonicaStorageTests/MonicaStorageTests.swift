@@ -1226,6 +1226,69 @@ import MonicaStorage
     #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func defaultKeePassDatabaseReaderDecodesKdbx3Salsa20ProtectedValuesWithoutLeakingSecrets() throws {
+    let password = "protected-password"
+    let transformSeed = Data(repeating: 0xA9, count: 32)
+    let transformRounds: UInt64 = 1
+    let masterSeed = Data(repeating: 0xB9, count: 32)
+    let encryptionIV = Data(repeating: 0xC9, count: 16)
+    let streamStartBytes = Data(repeating: 0xD9, count: 32)
+    let protectedStreamKey = Data(repeating: 0xE9, count: 32)
+    let protectedPasswordCiphertext = "Nk08LiY1j5itPBUT7sl27fU2M+aPV08BLQE="
+    let encryptedPayload = try decodeHexData("""
+    3edb
+    6f5e0829dec4c71f6eafb1dd6722921c0df258ee1f2f904cd9b2626d79ee4123
+    05901f080fc792100f0942647e95ad3d3a9aca17b931c3728e55d3a493aaea57
+    49d6233377bae4a98322330d0a85af22a5b3f41f266215847de2b283fa36e722
+    b0d406fbd2d90aae44c07708718ad99b9db863b0612deefd1c3ff1c2d3d92eb7
+    de2b7ded1a161dc2aada3a197fa51421eefc61406cfc87e280c386df16c5d43f
+    55c712d662fa61e8ccacfe628d4d3443e5de34938e43820f30ce189d5b5e0ac1
+    28c274467e9f4511aabb923fd748973d89ddd01a772aeeeb65537bbeb837e371
+    db90cf1894fd1ef7a4d0b951c7e5bbc1464def08d4b63cc3eb3d850144133214
+    f4d3ffa4d490be70dfd99b084082ce88f5a64b191a761a2e0bd5b97c756b1c85
+    0007422ac6d256c4bc0aa652c6bccae023e6c43fc8dae7b44e60cb748e11a760
+    ac1b077b4b8da0d03ccb5050bea691a4619623b4d18e9a91a2d9e7e1b22256f1
+    6c0c7d359ac6b7a4be89a110f0da383ec3aed31b3e379c29cedc2d95a91df871
+    685dfdfffc4cee272bce046084b960b3b8196a445021b3ddc04bc3352fcba2d5
+    0529a54589f4a5b9db03101f68357dd6f2e887e927bfcd4049007a007da66c51
+    49f725aa9f4b76b963be86f226cab1077ba2283713b8d2ac19dadb5598048ee3
+    2573c5ad72dd68c68544139443bf8b6f4da5a49cf1e2ee02a4c1979665bca521
+    6c48a7016ff70186e4abd694e569a5f16af2f334d592603e13f7976f8831a4fd
+    e8dd617cae4db848f310343058ceaaa60b3aa07c40857c9bb1b517295a992193
+    e90d297ce7e45fcf4002e858e8f4f44028703e424766ce328518dd5e1aaff361
+    c589e2ef6f93a286758074426b62
+    """)
+    let header = makeKdbx3Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: masterSeed,
+        transformSeed: transformSeed,
+        transformRounds: transformRounds,
+        encryptionIV: encryptionIV,
+        protectedStreamKey: protectedStreamKey,
+        streamStartBytes: streamStartBytes,
+        innerRandomStreamID: 2
+    )
+    let database = header + encryptedPayload
+    let reader = DefaultKeePassDatabaseReader()
+
+    let snapshot = try reader.readSnapshot(
+        database: database,
+        sourceName: "kdbx3-salsa20-protected-values.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    let entry = try #require(snapshot.entries.first)
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx3)
+    #expect(entry.title == "Protected GitHub")
+    #expect(entry.username == "dana")
+    #expect(entry.decodedPassword == "protected decoded password")
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains("protected decoded password"))
+    #expect(!snapshot.displaySummary.contains(protectedPasswordCiphertext))
+    #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func defaultKeePassDatabaseReaderDecryptsKdbx4AesKdfFixtureToSnapshotWithoutLeakingCredentials() throws {
     let password = "kdbx4-password"
     let transformSeed = Data(repeating: 0xA8, count: 32)
