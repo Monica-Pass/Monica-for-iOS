@@ -3639,6 +3639,78 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassConfirmImportImportsDecodedPasswordAndTotpSecretWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-uuid-github",
+                        title: "GitHub",
+                        username: "alice@example.com",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        groupID: "group-uuid-work",
+                        hasPassword: true,
+                        decodedPassword: "decoded-login-password",
+                        hasTotp: true,
+                        decodedTotp: KeePassReadOnlyTotpSecret(
+                            secret: "JBSWY3DPEHPK3PXP",
+                            issuer: "GitHub",
+                            accountName: "alice@example.com",
+                            period: 45,
+                            digits: 8,
+                            algorithm: "SHA256"
+                        ),
+                        attachmentCount: 0,
+                        isDeleted: false
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyImportPlan()
+
+        try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
+
+        XCTAssertEqual(engine.createdLoginEntries.count, 1)
+        XCTAssertEqual(engine.createdLoginEntries.first?.draft.password, "decoded-login-password")
+        XCTAssertEqual(engine.createdTotpEntries.count, 1)
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.secret, "JBSWY3DPEHPK3PXP")
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.issuer, "GitHub")
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.accountName, "alice@example.com")
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.period, 45)
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.digits, 8)
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.algorithm, "SHA256")
+        XCTAssertEqual(model.loginEntries.first?.password, "decoded-login-password")
+        XCTAssertEqual(model.totpEntries.first?.secret, "JBSWY3DPEHPK3PXP")
+        XCTAssertFalse(model.entryOperationState.label.contains("decoded-login-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("JBSWY3DPEHPK3PXP"))
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 已导入 1 项元数据，并导入 1 个密码字段，并导入 1 个 TOTP 密钥")
+        )
+    }
+
     func testKeePassConfirmImportCreatesAttachmentPlaceholdersForPendingAttachmentMetadata() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(

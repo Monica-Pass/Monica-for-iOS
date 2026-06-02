@@ -218,6 +218,31 @@ public struct KeePassReadOnlyAttachment: Sendable, Equatable, Identifiable {
     }
 }
 
+public struct KeePassReadOnlyTotpSecret: Sendable, Equatable {
+    public let secret: String
+    public let issuer: String?
+    public let accountName: String?
+    public let period: UInt32?
+    public let digits: UInt32?
+    public let algorithm: String?
+
+    public init(
+        secret: String,
+        issuer: String? = nil,
+        accountName: String? = nil,
+        period: UInt32? = nil,
+        digits: UInt32? = nil,
+        algorithm: String? = nil
+    ) {
+        self.secret = secret
+        self.issuer = issuer
+        self.accountName = accountName
+        self.period = period
+        self.digits = digits
+        self.algorithm = algorithm
+    }
+}
+
 public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let id: String
     public let title: String
@@ -229,6 +254,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let hasTotp: Bool
     public let attachmentCount: Int
     public let isDeleted: Bool
+    public let decodedPassword: String?
+    public let decodedTotp: KeePassReadOnlyTotpSecret?
     public let attachments: [KeePassReadOnlyAttachment]
 
     public init(
@@ -239,7 +266,9 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         groupPath: String,
         groupID: String? = nil,
         hasPassword: Bool,
+        decodedPassword: String? = nil,
         hasTotp: Bool,
+        decodedTotp: KeePassReadOnlyTotpSecret? = nil,
         attachmentCount: Int,
         isDeleted: Bool,
         attachments: [KeePassReadOnlyAttachment] = []
@@ -254,6 +283,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         self.hasTotp = hasTotp
         self.attachmentCount = max(attachmentCount, attachments.count)
         self.isDeleted = isDeleted
+        self.decodedPassword = decodedPassword
+        self.decodedTotp = decodedTotp
         self.attachments = attachments
     }
 }
@@ -324,6 +355,8 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
     public let hasTotp: Bool
     public let attachmentCount: Int
     public let isDeleted: Bool
+    public let decodedPassword: String?
+    public let decodedTotp: KeePassReadOnlyTotpSecret?
     public let attachments: [KeePassReadOnlyAttachment]
 
     public init(
@@ -335,7 +368,9 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         groupPath: String,
         groupID: String? = nil,
         hasPassword: Bool,
+        decodedPassword: String? = nil,
         hasTotp: Bool,
+        decodedTotp: KeePassReadOnlyTotpSecret? = nil,
         attachmentCount: Int,
         isDeleted: Bool = false,
         attachments: [KeePassReadOnlyAttachment] = []
@@ -351,6 +386,8 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         self.hasTotp = hasTotp
         self.attachmentCount = max(attachmentCount, attachments.count)
         self.isDeleted = isDeleted
+        self.decodedPassword = decodedPassword
+        self.decodedTotp = decodedTotp
         self.attachments = attachments
     }
 }
@@ -408,11 +445,11 @@ public struct KeePassReadOnlyImportPlan: Sendable, Equatable {
     }
 
     public var pendingPasswordCount: Int {
-        candidates.filter(\.hasPassword).count
+        candidates.filter { $0.hasPassword && $0.decodedPassword == nil }.count
     }
 
     public var pendingTotpCount: Int {
-        candidates.filter(\.hasTotp).count
+        candidates.filter { $0.hasTotp && $0.decodedTotp == nil }.count
     }
 
     public var pendingAttachmentCount: Int {
@@ -458,7 +495,9 @@ public enum KeePassReadOnlyImportPlanner {
                     groupPath: entry.groupPath,
                     groupID: entry.groupID,
                     hasPassword: entry.hasPassword,
+                    decodedPassword: entry.decodedPassword,
                     hasTotp: entry.hasTotp,
+                    decodedTotp: entry.decodedTotp,
                     attachmentCount: entry.attachmentCount,
                     isDeleted: entry.isDeleted,
                     attachments: entry.attachments

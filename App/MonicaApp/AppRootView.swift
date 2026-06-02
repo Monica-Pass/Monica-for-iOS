@@ -497,6 +497,13 @@ private struct DuplicateLoginEntryKey: Hashable {
     }
 }
 
+private extension String {
+    var nonBlankValue: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 enum AppDeveloperDiagnostics {
     @MainActor
     static func rows(
@@ -5574,6 +5581,8 @@ final class AppSessionModel {
             var firstImportedProject: LocalVaultProject?
             var importedReferences: [AppKeePassImportedEntryReference] = []
             var importedTotpPlaceholderCount = 0
+            var importedDecodedPasswordCount = 0
+            var importedDecodedTotpSecretCount = 0
             var importedAttachmentPlaceholderCount = 0
             var importedDeletedMetadataCount = 0
             for candidate in plan.candidates {
@@ -5590,18 +5599,25 @@ final class AppSessionModel {
                     draft: LocalLoginEntryDraft(
                         title: candidate.title,
                         username: candidate.username,
-                        password: "",
+                        password: candidate.decodedPassword ?? "",
                         url: candidate.url
                     )
                 )
+                if candidate.hasPassword && candidate.decodedPassword != nil {
+                    importedDecodedPasswordCount += 1
+                }
                 let importedTotpEntryID: String?
                 if candidate.hasTotp {
                     let importedTotpEntry = try entryRepository.createTotpEntry(
                         projectID: project.id,
-                        draft: keePassTotpPlaceholderDraft(for: candidate)
+                        draft: keePassTotpDraft(for: candidate)
                     )
                     importedTotpEntryID = importedTotpEntry.id
-                    importedTotpPlaceholderCount += 1
+                    if candidate.decodedTotp == nil {
+                        importedTotpPlaceholderCount += 1
+                    } else {
+                        importedDecodedTotpSecretCount += 1
+                    }
                     if candidate.isDeleted {
                         try entryRepository.deleteTotpEntry(
                             projectID: project.id,
@@ -5665,9 +5681,18 @@ final class AppSessionModel {
             keePassLastMetadataImportReferences = importedReferences
             clearKeePassImportState(preservingLastMetadataImportReferences: true)
             let pendingSummary = plan.pendingCapabilitySummary
-            let pendingText = pendingSummary.isEmpty ? "，秘密字段待 KDBX 解码器接入" : "；\(pendingSummary)"
+            let importedDecodedSecretCount = importedDecodedPasswordCount + importedDecodedTotpSecretCount
+            let pendingText = pendingSummary.isEmpty
+                ? (importedDecodedSecretCount > 0 ? "" : "，秘密字段待 KDBX 解码器接入")
+                : "；\(pendingSummary)"
             let totpPlaceholderText = importedTotpPlaceholderCount > 0
                 ? "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项"
+                : ""
+            let decodedPasswordText = importedDecodedPasswordCount > 0
+                ? "，并导入 \(importedDecodedPasswordCount) 个密码字段"
+                : ""
+            let decodedTotpText = importedDecodedTotpSecretCount > 0
+                ? "，并导入 \(importedDecodedTotpSecretCount) 个 TOTP 密钥"
                 : ""
             let attachmentPlaceholderText = importedAttachmentPlaceholderCount > 0
                 ? "，并创建 \(importedAttachmentPlaceholderCount) 个附件占位项"
@@ -5675,7 +5700,7 @@ final class AppSessionModel {
             let deletedText = importedDeletedMetadataCount > 0
                 ? "，并保留 \(importedDeletedMetadataCount) 项回收站元数据"
                 : ""
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6534,19 +6559,20 @@ final class AppSessionModel {
         return ([base] + components).joined(separator: " / ")
     }
 
-    private func keePassTotpPlaceholderDraft(
+    private func keePassTotpDraft(
         for candidate: KeePassReadOnlyImportCandidate
     ) -> LocalTotpEntryDraft {
         let title = candidate.title.trimmingCharacters(in: .whitespacesAndNewlines)
         let baseTitle = title.isEmpty ? "KeePass TOTP" : title
+        let decodedTotp = candidate.decodedTotp
         return LocalTotpEntryDraft(
             title: keePassTotpPlaceholderTitle(from: baseTitle),
-            secret: "",
-            issuer: baseTitle,
-            accountName: candidate.username,
-            period: 30,
-            digits: 6,
-            algorithm: "SHA1",
+            secret: decodedTotp?.secret ?? "",
+            issuer: decodedTotp?.issuer?.nonBlankValue ?? baseTitle,
+            accountName: decodedTotp?.accountName?.nonBlankValue ?? candidate.username,
+            period: decodedTotp?.period ?? 30,
+            digits: decodedTotp?.digits ?? 6,
+            algorithm: decodedTotp?.algorithm?.nonBlankValue ?? "SHA1",
             otpType: "TOTP",
             counter: 0
         )

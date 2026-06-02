@@ -154,7 +154,16 @@ import MonicaStorage
                 groupPath: "/Work",
                 groupID: "group-uuid-work",
                 hasPassword: true,
+                decodedPassword: "decoded-login-password",
                 hasTotp: true,
+                decodedTotp: KeePassReadOnlyTotpSecret(
+                    secret: "JBSWY3DPEHPK3PXP",
+                    issuer: "GitHub",
+                    accountName: "alice@example.com",
+                    period: 30,
+                    digits: 6,
+                    algorithm: "SHA1"
+                ),
                 attachmentCount: 2,
                 isDeleted: false,
                 attachments: [
@@ -199,6 +208,10 @@ import MonicaStorage
     #expect(plan.candidates.first?.groupPath == "/Work")
     #expect(plan.candidates.first?.groupID == "group-uuid-work")
     #expect(plan.candidates.first?.hasPassword == true)
+    #expect(plan.candidates.first?.decodedPassword == "decoded-login-password")
+    #expect(plan.candidates.first?.decodedTotp?.secret == "JBSWY3DPEHPK3PXP")
+    #expect(plan.candidates.first?.decodedTotp?.issuer == "GitHub")
+    #expect(plan.candidates.first?.decodedTotp?.accountName == "alice@example.com")
     #expect(plan.candidates.first?.isDeleted == false)
     #expect(plan.candidates.first?.attachments.map(\.fileName) == ["contract.pdf", "notes.txt"])
     #expect(plan.candidates.first?.attachments.map(\.contentHash) == ["sha256:contract", "sha256:notes"])
@@ -207,17 +220,73 @@ import MonicaStorage
     #expect(plan.candidates.last?.url == "https://deleted.example")
     #expect(plan.candidates.last?.groupID == "group-uuid-trash")
     #expect(plan.candidates.last?.isDeleted == true)
-    #expect(plan.pendingPasswordCount == 2)
-    #expect(plan.pendingTotpCount == 1)
+    #expect(plan.pendingPasswordCount == 1)
+    #expect(plan.pendingTotpCount == 0)
     #expect(plan.pendingAttachmentCount == 2)
-    #expect(plan.pendingCapabilitySummary == "待解码：2 个密码字段，1 个 TOTP，2 个附件")
+    #expect(plan.pendingCapabilitySummary == "待解码：1 个密码字段，2 个附件")
     #expect(plan.displaySummary == "KDBX 4，2 个可预览条目，0 个跳过")
     #expect(!plan.displaySummary.contains("group-uuid-work"))
     #expect(!plan.displaySummary.contains("group-uuid-trash"))
     #expect(!plan.pendingCapabilitySummary.contains("database-password"))
     #expect(!plan.pendingCapabilitySummary.contains("key-file-secret"))
+    #expect(!plan.pendingCapabilitySummary.contains("decoded-login-password"))
+    #expect(!plan.pendingCapabilitySummary.contains("JBSWY3DPEHPK3PXP"))
     #expect(!plan.displaySummary.contains("database-password"))
     #expect(!plan.displaySummary.contains("key-file-secret"))
+    #expect(!plan.displaySummary.contains("decoded-login-password"))
+    #expect(!plan.displaySummary.contains("JBSWY3DPEHPK3PXP"))
+}
+
+@Test func keepPassReadOnlyImportPlannerCarriesDecodedSecretsWithoutCountingThemPending() throws {
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "personal.kdbx",
+        headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+        groups: [
+            KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+            KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-decoded",
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com",
+                groupPath: "/Work",
+                groupID: "group-uuid-work",
+                hasPassword: true,
+                decodedPassword: "decoded-password-secret",
+                hasTotp: true,
+                decodedTotp: KeePassReadOnlyTotpSecret(secret: "JBSWY3DPEHPK3PXP"),
+                attachmentCount: 1,
+                isDeleted: false
+            ),
+            KeePassReadOnlyEntry(
+                id: "entry-pending",
+                title: "Bank",
+                username: "alice",
+                url: "https://bank.example",
+                groupPath: "/Work",
+                groupID: "group-uuid-work",
+                hasPassword: true,
+                hasTotp: true,
+                attachmentCount: 0,
+                isDeleted: false
+            )
+        ]
+    )
+
+    let plan = KeePassReadOnlyImportPlanner.plan(snapshot)
+
+    #expect(plan.candidates.first?.decodedPassword == "decoded-password-secret")
+    #expect(plan.candidates.first?.decodedTotp?.secret == "JBSWY3DPEHPK3PXP")
+    #expect(plan.pendingPasswordCount == 1)
+    #expect(plan.pendingTotpCount == 1)
+    #expect(plan.pendingAttachmentCount == 1)
+    #expect(plan.pendingCapabilitySummary == "待解码：1 个密码字段，1 个 TOTP，1 个附件")
+    #expect(!plan.displaySummary.contains("decoded-password-secret"))
+    #expect(!plan.pendingCapabilitySummary.contains("decoded-password-secret"))
+    #expect(!plan.displaySummary.contains("JBSWY3DPEHPK3PXP"))
+    #expect(!plan.pendingCapabilitySummary.contains("JBSWY3DPEHPK3PXP"))
 }
 
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
