@@ -168,6 +168,12 @@ struct AppAttachmentContentStatus: Sendable, Equatable {
     let detail: String
 }
 
+struct AppAttachmentPreviewFile: Sendable, Equatable {
+    let fileURL: URL
+    let displayFileName: String
+    let byteCount: Int
+}
+
 enum VaultDisplayCardDensity: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
     case comfortable
     case compact
@@ -1647,6 +1653,40 @@ final class AppSessionModel {
             )
             entryOperationState = .succeeded("附件密文已读取：\(entry.fileName) \(blob.count) 字节")
             return blob
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func materializeAttachmentPreview(
+        _ entry: LocalAttachmentMetadata,
+        contentEncryptionKey: Data
+    ) throws -> AppAttachmentPreviewFile {
+        recordUserActivity()
+        do {
+            let encryptedBlob = try loadAttachmentEncryptedBlob(entry)
+            let plaintext = try LocalAttachmentContentDecryptor.decryptAndroidLocalBlob(
+                encryptedBlob,
+                contentEncryptionKey: contentEncryptionKey
+            )
+            let displayFileName = sanitizedAttachmentPreviewFileName(entry.fileName)
+            let directoryURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("MonicaAttachmentPreviews", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: directoryURL,
+                withIntermediateDirectories: true
+            )
+            let fileURL = directoryURL.appendingPathComponent(displayFileName, isDirectory: false)
+            try plaintext.write(to: fileURL, options: [.atomic])
+            let preview = AppAttachmentPreviewFile(
+                fileURL: fileURL,
+                displayFileName: displayFileName,
+                byteCount: plaintext.count
+            )
+            entryOperationState = .succeeded("附件预览已准备：\(displayFileName) \(plaintext.count) 字节")
+            return preview
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6281,6 +6321,28 @@ final class AppSessionModel {
         if operationTimelineEvents.count > 50 {
             operationTimelineEvents.removeLast(operationTimelineEvents.count - 50)
         }
+    }
+
+    private func sanitizedAttachmentPreviewFileName(_ value: String) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? value
+        let sanitized = normalized.unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 46, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        return sanitized.isEmpty ? "attachment-\(UUID().uuidString).bin" : sanitized
     }
 
     private func clearOperationTimelineEvents() {

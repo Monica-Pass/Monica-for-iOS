@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CryptoKit
 import MonicaStorage
 
 @Test func storageBaselineDocumentsMdbxAsPrimaryStore() {
@@ -1664,6 +1665,45 @@ import MonicaStorage
     #expect(engine.restoredLoginEntries == [
         .init(vaultID: session.handle.vaultID, projectID: project.id, entryID: created.id)
     ])
+}
+
+@Test func localAttachmentContentDecryptorOpensAndroidEncryptedBlobWithRawCek() throws {
+    let cek = Data((0..<32).map(UInt8.init))
+    let nonceData = Data((100..<112).map(UInt8.init))
+    let plaintext = Data("contract body for preview".utf8)
+    let sealedBox = try AES.GCM.seal(
+        plaintext,
+        using: SymmetricKey(data: cek),
+        nonce: try AES.GCM.Nonce(data: nonceData)
+    )
+    let encryptedBlob = try #require(sealedBox.combined)
+
+    let decrypted = try LocalAttachmentContentDecryptor.decryptAndroidLocalBlob(
+        encryptedBlob,
+        contentEncryptionKey: cek
+    )
+
+    #expect(decrypted == plaintext)
+}
+
+@Test func localAttachmentContentDecryptorRejectsInvalidAndroidBlobWithoutLeakingSecrets() throws {
+    let cek = Data((0..<32).map(UInt8.init))
+    let secretBlob = Data("secret".utf8)
+
+    #expect(throws: LocalAttachmentContentCryptoError.invalidEncryptedBlob) {
+        _ = try LocalAttachmentContentDecryptor.decryptAndroidLocalBlob(
+            secretBlob,
+            contentEncryptionKey: cek
+        )
+    }
+    #expect(throws: LocalAttachmentContentCryptoError.invalidContentEncryptionKeyLength) {
+        _ = try LocalAttachmentContentDecryptor.decryptAndroidLocalBlob(
+            secretBlob,
+            contentEncryptionKey: Data(repeating: 1, count: 31)
+        )
+    }
+    #expect(!LocalAttachmentContentCryptoError.invalidEncryptedBlob.localizedDescription.contains("secret"))
+    #expect(!LocalAttachmentContentCryptoError.authenticationFailed.localizedDescription.contains("secret"))
 }
 
 @Test func encryptedAutoFillIndexStoreSavesAndLoadsEnvelope() throws {

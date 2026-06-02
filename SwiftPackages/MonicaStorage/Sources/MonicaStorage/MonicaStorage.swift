@@ -27,6 +27,66 @@ public protocol LocalAttachmentContentStore: Sendable {
     func encryptedBlobData(vaultID: String, localPath: String) throws -> Data
 }
 
+public enum LocalAttachmentContentCryptoError: Error, Sendable, Equatable, LocalizedError {
+    case invalidContentEncryptionKeyLength
+    case invalidEncryptedBlob
+    case authenticationFailed
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidContentEncryptionKeyLength:
+            return "附件内容密钥长度无效。"
+        case .invalidEncryptedBlob:
+            return "附件密文格式无效。"
+        case .authenticationFailed:
+            return "附件解密认证失败。"
+        }
+    }
+}
+
+public enum LocalAttachmentContentDecryptor {
+    public static let androidIVByteCount = 12
+    public static let androidContentEncryptionKeyByteCount = 32
+    public static let androidAuthenticationTagByteCount = 16
+
+    public static func decryptAndroidLocalBlob(
+        _ encryptedBlob: Data,
+        contentEncryptionKey: Data
+    ) throws -> Data {
+        guard contentEncryptionKey.count == androidContentEncryptionKeyByteCount else {
+            throw LocalAttachmentContentCryptoError.invalidContentEncryptionKeyLength
+        }
+        guard encryptedBlob.count >= androidIVByteCount + androidAuthenticationTagByteCount else {
+            throw LocalAttachmentContentCryptoError.invalidEncryptedBlob
+        }
+
+        let nonceData = encryptedBlob.prefix(androidIVByteCount)
+        let sealedPayload = encryptedBlob.dropFirst(androidIVByteCount)
+        guard sealedPayload.count >= androidAuthenticationTagByteCount else {
+            throw LocalAttachmentContentCryptoError.invalidEncryptedBlob
+        }
+
+        let ciphertext = sealedPayload.dropLast(androidAuthenticationTagByteCount)
+        let tag = sealedPayload.suffix(androidAuthenticationTagByteCount)
+
+        do {
+            let sealedBox = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: nonceData),
+                ciphertext: Data(ciphertext),
+                tag: Data(tag)
+            )
+            return try AES.GCM.open(
+                sealedBox,
+                using: SymmetricKey(data: contentEncryptionKey)
+            )
+        } catch is CryptoKitError {
+            throw LocalAttachmentContentCryptoError.authenticationFailed
+        } catch {
+            throw LocalAttachmentContentCryptoError.invalidEncryptedBlob
+        }
+    }
+}
+
 public struct FileLocalAttachmentContentStore: LocalAttachmentContentStore, @unchecked Sendable {
     private let baseDirectory: URL?
     private let fileManager: FileManager

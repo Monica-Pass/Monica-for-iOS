@@ -3497,6 +3497,72 @@ final class VaultSessionModelTests: XCTestCase {
         }
     }
 
+    func testAndroidBackupAttachmentPreviewMaterializesDecryptedTempFileWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        let cek = Data((0..<32).map(UInt8.init))
+        let nonceData = Data((100..<112).map(UInt8.init))
+        let plaintext = Data("sensitive contract plaintext".utf8)
+        let sealedBox = try AES.GCM.seal(
+            plaintext,
+            using: SymmetricKey(data: cek),
+            nonce: try AES.GCM.Nonce(data: nonceData)
+        )
+        let encryptedBlob = try XCTUnwrap(sealedBox.combined)
+
+        try unlockNewVault(model)
+        let attachment = LocalAttachmentMetadata(
+            id: "attachment-1",
+            projectID: "project-1",
+            entryID: "entry-1",
+            fileName: "../contract secret.pdf",
+            mediaType: "application/pdf",
+            originalSize: Int64(plaintext.count),
+            storedSize: Int64(encryptedBlob.count),
+            contentHash: "sha256:secret-hash",
+            storageMode: "android-backup-encrypted-blob",
+            source: "android-backup-local",
+            downloadState: "downloaded",
+            wrappedContentEncryptionKey: "wrapped-secret-key",
+            localPath: "../attachment-1.enc",
+            deleted: false
+        )
+        model.attachmentEntries = [attachment]
+        _ = try blobStore.saveEncryptedBlob(
+            encryptedBlob,
+            vaultID: "created-vault",
+            localPath: "../attachment-1.enc"
+        )
+
+        let preview = try model.materializeAttachmentPreview(
+            attachment,
+            contentEncryptionKey: cek
+        )
+        defer {
+            try? FileManager.default.removeItem(at: preview.fileURL.deletingLastPathComponent())
+        }
+
+        XCTAssertEqual(try Data(contentsOf: preview.fileURL), plaintext)
+        XCTAssertEqual(preview.displayFileName, "contract_secret.pdf")
+        XCTAssertEqual(preview.byteCount, plaintext.count)
+        XCTAssertTrue(preview.fileURL.lastPathComponent.hasSuffix(".pdf"))
+        XCTAssertFalse(preview.fileURL.lastPathComponent.contains(".."))
+        let leakedSecrets: [String] = [
+            "sha256:secret-hash",
+            "wrapped-secret-key",
+            "attachment-1.enc",
+            "sensitive contract plaintext"
+        ]
+        leakedSecrets.forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+            XCTAssertFalse(preview.displayFileName.contains(secret))
+        }
+    }
+
     func testAttachmentReferenceDeleteAndRestoreAppendRedactedTimelineEvents() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()
