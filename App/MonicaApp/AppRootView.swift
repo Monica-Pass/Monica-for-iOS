@@ -635,6 +635,7 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
     let importedLoginEntryID: String
     let importedTotpEntryID: String?
     let importedProjectID: String
+    let importedAsDeleted: Bool
 
     init(
         sourceEntryID: String,
@@ -642,7 +643,8 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
         sourceGroupPath: String,
         importedLoginEntryID: String,
         importedTotpEntryID: String? = nil,
-        importedProjectID: String
+        importedProjectID: String,
+        importedAsDeleted: Bool = false
     ) {
         self.sourceEntryID = sourceEntryID
         self.sourceGroupID = sourceGroupID
@@ -650,6 +652,7 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
         self.importedLoginEntryID = importedLoginEntryID
         self.importedTotpEntryID = importedTotpEntryID
         self.importedProjectID = importedProjectID
+        self.importedAsDeleted = importedAsDeleted
     }
 }
 
@@ -5568,6 +5571,7 @@ final class AppSessionModel {
             var firstImportedProject: LocalVaultProject?
             var importedReferences: [AppKeePassImportedEntryReference] = []
             var importedTotpPlaceholderCount = 0
+            var importedDeletedMetadataCount = 0
             for candidate in plan.candidates {
                 let project = try ensureKeePassImportProject(
                     baseTitle: projectTitle,
@@ -5594,8 +5598,21 @@ final class AppSessionModel {
                     )
                     importedTotpEntryID = importedTotpEntry.id
                     importedTotpPlaceholderCount += 1
+                    if candidate.isDeleted {
+                        try entryRepository.deleteTotpEntry(
+                            projectID: project.id,
+                            entryID: importedTotpEntry.id
+                        )
+                    }
                 } else {
                     importedTotpEntryID = nil
+                }
+                if candidate.isDeleted {
+                    try entryRepository.deleteLoginEntry(
+                        projectID: project.id,
+                        entryID: importedEntry.id
+                    )
+                    importedDeletedMetadataCount += 1
                 }
                 importedReferences.append(
                     AppKeePassImportedEntryReference(
@@ -5604,7 +5621,8 @@ final class AppSessionModel {
                         sourceGroupPath: candidate.groupPath,
                         importedLoginEntryID: importedEntry.id,
                         importedTotpEntryID: importedTotpEntryID,
-                        importedProjectID: project.id
+                        importedProjectID: project.id,
+                        importedAsDeleted: candidate.isDeleted
                     )
                 )
             }
@@ -5623,7 +5641,10 @@ final class AppSessionModel {
             let totpPlaceholderText = importedTotpPlaceholderCount > 0
                 ? "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项"
                 : ""
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(totpPlaceholderText)\(pendingText)")
+            let deletedText = importedDeletedMetadataCount > 0
+                ? "，并保留 \(importedDeletedMetadataCount) 项回收站元数据"
+                : ""
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(totpPlaceholderText)\(deletedText)\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error

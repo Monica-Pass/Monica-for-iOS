@@ -298,6 +298,7 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
     public let hasPassword: Bool
     public let hasTotp: Bool
     public let attachmentCount: Int
+    public let isDeleted: Bool
 
     public init(
         id: String,
@@ -309,7 +310,8 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         groupID: String? = nil,
         hasPassword: Bool,
         hasTotp: Bool,
-        attachmentCount: Int
+        attachmentCount: Int,
+        isDeleted: Bool = false
     ) {
         self.id = id
         self.kind = kind
@@ -321,6 +323,7 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
         self.attachmentCount = attachmentCount
+        self.isDeleted = isDeleted
     }
 }
 
@@ -372,6 +375,10 @@ public struct KeePassReadOnlyImportPlan: Sendable, Equatable {
         skipped.count
     }
 
+    public var deletedCandidateCount: Int {
+        candidates.filter(\.isDeleted).count
+    }
+
     public var pendingPasswordCount: Int {
         candidates.filter(\.hasPassword).count
     }
@@ -410,22 +417,9 @@ public struct KeePassReadOnlyImportPlan: Sendable, Equatable {
 public enum KeePassReadOnlyImportPlanner {
     public static func plan(_ snapshot: KeePassReadOnlySnapshot) -> KeePassReadOnlyImportPlan {
         var candidates: [KeePassReadOnlyImportCandidate] = []
-        var skipped: [KeePassReadOnlyImportSkippedEntry] = []
+        let skipped: [KeePassReadOnlyImportSkippedEntry] = []
 
         for entry in snapshot.entries {
-            if entry.isDeleted {
-                skipped.append(
-                    KeePassReadOnlyImportSkippedEntry(
-                        id: entry.id,
-                        title: entry.title,
-                        groupPath: entry.groupPath,
-                        groupID: entry.groupID,
-                        reason: .deletedEntry
-                    )
-                )
-                continue
-            }
-
             candidates.append(
                 KeePassReadOnlyImportCandidate(
                     id: entry.id,
@@ -437,7 +431,8 @@ public enum KeePassReadOnlyImportPlanner {
                     groupID: entry.groupID,
                     hasPassword: entry.hasPassword,
                     hasTotp: entry.hasTotp,
-                    attachmentCount: entry.attachmentCount
+                    attachmentCount: entry.attachmentCount,
+                    isDeleted: entry.isDeleted
                 )
             )
         }
