@@ -156,6 +156,22 @@ struct AppVaultQuickFilterRow: Sendable, Equatable, Identifiable {
     let isSelected: Bool
 }
 
+struct AppLoginStackedGroup: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let preview: String
+    let systemImage: String
+    let entryIDs: [String]
+}
+
+private struct AppLoginStackedGroupKey: Hashable {
+    let title: String
+    let normalized: String
+    let isWebsite: Bool
+}
+
 enum AppOperationTimelineAction: String, Sendable, Equatable {
     case created
     case updated
@@ -770,6 +786,7 @@ final class AppSessionModel {
     var loginURL = ""
     var loginSearchQuery = ""
     var showFavoriteLoginEntriesOnly = false
+    var isLoginStackedGroupModeEnabled = false
     var loginEntries: [LocalLoginEntry] = []
     var deletedLoginEntries: [LocalLoginEntry] = []
     var breachedPasswordSHA256Fingerprints: Set<String> = []
@@ -1093,6 +1110,38 @@ final class AppSessionModel {
             entry.title.localizedCaseInsensitiveContains(query)
                 || entry.username.localizedCaseInsensitiveContains(query)
                 || entry.url.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var loginStackedGroups: [AppLoginStackedGroup] {
+        let grouped = Dictionary(grouping: filteredLoginEntries) { entry in
+            loginStackedGroupKey(for: entry)
+        }
+        return grouped.map { key, entries in
+            let titles = entries
+                .map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            let usernames = entries
+                .map { $0.username.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            return AppLoginStackedGroup(
+                id: "login-stack-\(key.normalized)",
+                title: key.title,
+                value: itemCountLabel(entries.count),
+                detail: usernames.prefix(3).joined(separator: " / "),
+                preview: titles.prefix(3).joined(separator: " / "),
+                systemImage: key.isWebsite ? "globe" : "textformat",
+                entryIDs: entries.map(\.id)
+            )
+        }
+        .sorted { lhs, rhs in
+            if lhs.entryIDs.count != rhs.entryIDs.count {
+                return lhs.entryIDs.count > rhs.entryIDs.count
+            }
+            if lhs.systemImage != rhs.systemImage {
+                return lhs.systemImage == "globe"
+            }
+            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
         }
     }
 
@@ -1652,6 +1701,36 @@ final class AppSessionModel {
         "\(count) 项"
     }
 
+    private func loginStackedGroupKey(for entry: LocalLoginEntry) -> AppLoginStackedGroupKey {
+        if let host = normalizedLoginHost(from: entry.url) {
+            return AppLoginStackedGroupKey(
+                title: host,
+                normalized: host,
+                isWebsite: true
+            )
+        }
+        let title = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let fallbackTitle = title.isEmpty ? "未命名" : title
+        return AppLoginStackedGroupKey(
+            title: fallbackTitle,
+            normalized: fallbackTitle.lowercased(),
+            isWebsite: false
+        )
+    }
+
+    private func normalizedLoginHost(from url: String) -> String? {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        let candidate = trimmed.contains("://") ? trimmed : "https://\(trimmed)"
+        guard let host = URLComponents(string: candidate)?.host?.lowercased() else {
+            return nil
+        }
+        let normalizedHost = host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
+        return normalizedHost.isEmpty ? nil : normalizedHost
+    }
+
     var isFirstTimeVaultSetup: Bool {
         rememberedVaultDescriptor == nil
     }
@@ -1792,6 +1871,7 @@ final class AppSessionModel {
 
     private func resetVaultQuickFilters() {
         selectedVaultQuickFilterID = "all"
+        isLoginStackedGroupModeEnabled = false
         clearVaultSearchQueries()
         setAllFavoriteFilters(false)
     }

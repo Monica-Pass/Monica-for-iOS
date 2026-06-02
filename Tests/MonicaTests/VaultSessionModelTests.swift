@@ -1665,6 +1665,78 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.vaultQuickFilterRows.map(\.id).contains("all"))
     }
 
+    func testLoginStackedGroupsSummarizeFilteredEntriesWithoutLeakingPasswords() throws {
+        let model = AppSessionModel()
+        model.loginEntries = [
+            LocalLoginEntry(
+                id: "login-1",
+                projectID: "project-1",
+                title: "GitHub Work",
+                username: "alice@example.com",
+                password: "github-secret-one",
+                url: "https://github.com/org/repo",
+                favorite: true
+            ),
+            LocalLoginEntry(
+                id: "login-2",
+                projectID: "project-1",
+                title: "GitHub Personal",
+                username: "alice-personal",
+                password: "github-secret-two",
+                url: "https://www.github.com/settings"
+            ),
+            LocalLoginEntry(
+                id: "login-3",
+                projectID: "project-1",
+                title: "Linear",
+                username: "product@example.com",
+                password: "linear-secret",
+                url: "https://linear.app/team"
+            ),
+            LocalLoginEntry(
+                id: "login-4",
+                projectID: "project-1",
+                title: "银行账户",
+                username: "primary",
+                password: "bank-secret",
+                url: ""
+            )
+        ]
+
+        let groups = model.loginStackedGroups
+
+        XCTAssertEqual(groups.map(\.title), ["github.com", "linear.app", "银行账户"])
+        XCTAssertEqual(groups.first?.value, "2 项")
+        XCTAssertEqual(groups.first?.entryIDs, ["login-1", "login-2"])
+        XCTAssertEqual(groups.first?.preview, "GitHub Work / GitHub Personal")
+        XCTAssertFalse(groups.map(\.detail).joined().contains("github-secret"))
+        XCTAssertFalse(groups.map(\.preview).joined().contains("linear-secret"))
+
+        model.loginSearchQuery = "linear"
+        XCTAssertEqual(model.loginStackedGroups.map(\.title), ["linear.app"])
+
+        model.loginSearchQuery = ""
+        model.showFavoriteLoginEntriesOnly = true
+        XCTAssertEqual(model.loginStackedGroups.map(\.title), ["github.com"])
+        XCTAssertEqual(model.loginStackedGroups.first?.entryIDs, ["login-1"])
+    }
+
+    func testLoginStackedGroupModeResetsWhenVaultLocks() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        try unlockNewVault(model)
+
+        model.isLoginStackedGroupModeEnabled = true
+        model.loginSearchQuery = "github"
+        model.lockLocalVault()
+
+        XCTAssertFalse(model.isLoginStackedGroupModeEnabled)
+        XCTAssertTrue(model.loginStackedGroups.isEmpty)
+    }
+
     func testGenerateSelectedLoginPasswordFillsEditingDraftWithoutSavingEntry() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

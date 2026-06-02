@@ -78,6 +78,8 @@ struct AndroidParityVaultHomeView: View {
             selectedAction: $session.expandedToolbarAction,
             searchText: searchBinding,
             favoritesOnly: favoritesBinding,
+            stackedGroupMode: $session.isLoginStackedGroupModeEnabled,
+            showsStackedGroupModeToggle: itemKind == .login,
             quickFilterRows: session.vaultQuickFilterRows,
             onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
@@ -184,14 +186,26 @@ struct AndroidParityVaultHomeView: View {
 
     private var passwordList: some View {
         VStack(spacing: 14) {
-            ForEach(session.filteredLoginEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidPasswordListCard(entry: entry)
+            if session.isLoginStackedGroupModeEnabled {
+                ForEach(session.loginStackedGroups) { group in
+                    Button { session.loginSearchQuery = group.title } label: {
+                        AndroidPasswordStackedGroupCard(group: group)
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
-            }
-            if session.filteredLoginEntries.isEmpty {
-                emptyList("没有匹配的密码", icon: "lock.fill")
+                if session.loginStackedGroups.isEmpty {
+                    emptyList("没有匹配的分组", icon: "square.stack.3d.up.fill")
+                }
+            } else {
+                ForEach(session.filteredLoginEntries) { entry in
+                    Button { session.presentEditEditor(for: entry) } label: {
+                        AndroidPasswordListCard(entry: entry)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if session.filteredLoginEntries.isEmpty {
+                    emptyList("没有匹配的密码", icon: "lock.fill")
+                }
             }
             deletedLoginRows
         }
@@ -716,6 +730,8 @@ struct AndroidParityModuleChrome<Content: View>: View {
     @Binding var selectedAction: AndroidParityToolbarAction?
     @Binding var searchText: String
     @Binding var favoritesOnly: Bool
+    @Binding var stackedGroupMode: Bool
+    let showsStackedGroupModeToggle: Bool
     let quickFilterRows: [AppVaultQuickFilterRow]
     let onQuickFilter: (String) -> Void
     let onOpenVault: () -> Void
@@ -779,6 +795,11 @@ struct AndroidParityModuleChrome<Content: View>: View {
             Toggle("仅显示收藏", isOn: $favoritesOnly)
                 .font(.headline.weight(.heavy))
                 .tint(AndroidParityPalette.primary)
+            if showsStackedGroupModeToggle {
+                Toggle("堆叠分组", isOn: $stackedGroupMode)
+                    .font(.headline.weight(.heavy))
+                    .tint(AndroidParityPalette.primary)
+            }
         }
     }
 
@@ -856,6 +877,46 @@ private struct AndroidPasswordListCard: View {
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
         }
+    }
+}
+
+private struct AndroidPasswordStackedGroupCard: View {
+    let group: AppLoginStackedGroup
+
+    var body: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
+            HStack(alignment: .top, spacing: 18) {
+                AndroidParityIconTile(systemImage: group.systemImage, fill: AndroidParityPalette.primaryContainer)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text(group.title)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Text(group.value)
+                            .font(.caption.weight(.heavy))
+                            .padding(.horizontal, 8)
+                            .frame(height: 24)
+                            .background(AndroidParityPalette.primaryContainer, in: Capsule(style: .continuous))
+                    }
+                    Text(group.preview.isEmpty ? "未命名条目" : group.preview)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .lineLimit(2)
+                    if !group.detail.isEmpty {
+                        Text(group.detail)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.heavy))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+        }
+        .accessibilityLabel("\(group.title)，\(group.value)")
+        .accessibilityHint("打开该分组的密码条目")
     }
 }
 
