@@ -3326,6 +3326,65 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 只读预览：KDBX 4，2 个分组，1 个条目"))
     }
 
+    func testKeePassReadOnlyTreePreviewAttemptsCredentialCandidatesWithoutLeakingInvalidSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-1",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: false
+                    )
+                ]
+            )
+        )
+        reader.queuedResults = [
+            .failure(
+                KeePassOperationError(
+                    code: .invalidCredential,
+                    message: "bad database-password key-file-secret"
+                )
+            ),
+            .success(reader.snapshot)
+        ]
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+
+        let snapshot = try model.previewKeePassReadOnlyTree()
+
+        XCTAssertEqual(snapshot.entryCount, 1)
+        XCTAssertEqual(reader.requests.map { $0.credentials.candidateLabel }, ["raw/password+key", "sha256(raw)/password+key"])
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 只读预览：KDBX 4，0 个分组，1 个条目"))
+    }
+
     func testKeePassReadOnlyImportPlanUsesSnapshotWithoutWritingVaultOrLeakingSecrets() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(
@@ -5814,6 +5873,7 @@ private final class RecordingKeePassDatabaseReader: KeePassDatabaseReader, @unch
     private(set) var requests: [Request] = []
     var snapshot: KeePassReadOnlySnapshot
     var error: Error?
+    var queuedResults: [Result<KeePassReadOnlySnapshot, Error>] = []
 
     init(snapshot: KeePassReadOnlySnapshot) {
         self.snapshot = snapshot
@@ -5831,6 +5891,14 @@ private final class RecordingKeePassDatabaseReader: KeePassDatabaseReader, @unch
                 credentials: credentials
             )
         )
+        if !queuedResults.isEmpty {
+            switch queuedResults.removeFirst() {
+            case let .success(snapshot):
+                return snapshot
+            case let .failure(error):
+                throw error
+            }
+        }
         if let error {
             throw error
         }

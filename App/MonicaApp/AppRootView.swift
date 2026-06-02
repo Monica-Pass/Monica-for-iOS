@@ -5574,7 +5574,8 @@ final class AppSessionModel {
 
         do {
             _ = try prepareKeePassUnlockPreflight()
-            let snapshot = try keePassDatabaseReader.readSnapshot(
+            let reader = KeePassCandidateTryingDatabaseReader(baseReader: keePassDatabaseReader)
+            let snapshot = try reader.readSnapshot(
                 database: databaseData,
                 sourceName: keePassPendingDatabaseName,
                 credentials: KeePassUnlockCredentials(

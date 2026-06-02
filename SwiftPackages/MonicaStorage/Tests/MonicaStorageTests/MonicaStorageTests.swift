@@ -129,6 +129,132 @@ import MonicaStorage
     #expect(!message.contains(rawKey.base64EncodedString()))
 }
 
+@Test func keePassCandidateTryingDatabaseReaderAttemptsCandidatesUntilSnapshotSucceedsWithoutLeakingSecrets() throws {
+    final class AttemptRecordingReader: KeePassDatabaseReader, @unchecked Sendable {
+        struct Request: Equatable {
+            let label: String?
+            let password: String
+            let keyMaterial: Data?
+        }
+
+        var requests: [Request] = []
+        var failuresBeforeSuccess = 1
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-1",
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com",
+                    groupPath: "/",
+                    hasPassword: true,
+                    hasTotp: false,
+                    attachmentCount: 0,
+                    isDeleted: false
+                )
+            ]
+        )
+
+        func readSnapshot(
+            database: Data,
+            sourceName: String?,
+            credentials: KeePassUnlockCredentials
+        ) throws -> KeePassReadOnlySnapshot {
+            requests.append(
+                Request(
+                    label: credentials.candidateLabel,
+                    password: credentials.password,
+                    keyMaterial: credentials.keyFile
+                )
+            )
+            if requests.count <= failuresBeforeSuccess {
+                throw KeePassOperationError(
+                    code: .invalidCredential,
+                    message: "invalid candidate"
+                )
+            }
+            return snapshot
+        }
+    }
+
+    let baseReader = AttemptRecordingReader()
+    let reader = KeePassCandidateTryingDatabaseReader(baseReader: baseReader)
+    let keyFile = Data("key-file-secret".utf8)
+
+    let snapshot = try reader.readSnapshot(
+        database: Data([0x03, 0xD9, 0xA2, 0x9A]),
+        sourceName: "personal.kdbx",
+        credentials: KeePassUnlockCredentials(
+            password: "database-password",
+            keyFile: keyFile,
+            keyFileName: "personal.key"
+        )
+    )
+
+    #expect(snapshot.entryCount == 1)
+    #expect(baseReader.requests.map(\.label) == ["raw/password+key", "sha256(raw)/password+key"])
+    #expect(baseReader.requests.map(\.password) == ["database-password", "database-password"])
+    #expect(baseReader.requests.first?.keyMaterial == keyFile)
+    #expect(baseReader.requests.last?.keyMaterial == Data(SHA256.hash(data: keyFile)))
+}
+
+@Test func keePassCandidateTryingDatabaseReaderSummarizesInvalidCandidatesWithoutLeakingSecrets() throws {
+    final class AlwaysInvalidReader: KeePassDatabaseReader, @unchecked Sendable {
+        var labels: [String] = []
+
+        func readSnapshot(
+            database: Data,
+            sourceName: String?,
+            credentials: KeePassUnlockCredentials
+        ) throws -> KeePassReadOnlySnapshot {
+            if let label = credentials.candidateLabel {
+                labels.append(label)
+            }
+            throw KeePassOperationError(
+                code: .invalidCredential,
+                message: "bad password database-password key-file-secret"
+            )
+        }
+    }
+
+    let baseReader = AlwaysInvalidReader()
+    let reader = KeePassCandidateTryingDatabaseReader(baseReader: baseReader)
+
+    #expect(throws: KeePassOperationError.self) {
+        _ = try reader.readSnapshot(
+            database: Data([0x03, 0xD9, 0xA2, 0x9A]),
+            sourceName: "personal.kdbx",
+            credentials: KeePassUnlockCredentials(
+                password: "database-password",
+                keyFile: Data("key-file-secret".utf8),
+                keyFileName: "personal.key"
+            )
+        )
+    }
+    #expect(baseReader.labels == ["raw/password+key", "sha256(raw)/password+key"])
+
+    do {
+        _ = try reader.readSnapshot(
+            database: Data([0x03, 0xD9, 0xA2, 0x9A]),
+            sourceName: "personal.kdbx",
+            credentials: KeePassUnlockCredentials(
+                password: "database-password",
+                keyFile: Data("key-file-secret".utf8),
+                keyFileName: "personal.key"
+            )
+        )
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .invalidCredential)
+        #expect(error.message.contains("raw/password+key"))
+        #expect(error.message.contains("sha256(raw)/password+key"))
+        #expect(!error.message.contains("database-password"))
+        #expect(!error.message.contains("key-file-secret"))
+    }
+}
+
 @Test func keepPassDatabaseReaderBuildsReadOnlySnapshotAndKeepsCredentialsOutOfSummary() throws {
     struct RecordingReader: KeePassDatabaseReader {
         var snapshot: KeePassReadOnlySnapshot

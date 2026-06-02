@@ -167,11 +167,18 @@ public struct KeePassUnlockCredentials: Sendable, Equatable {
     public let password: String
     public let keyFile: Data?
     public let keyFileName: String?
+    public let candidateLabel: String?
 
-    public init(password: String, keyFile: Data?, keyFileName: String?) {
+    public init(
+        password: String,
+        keyFile: Data?,
+        keyFileName: String?,
+        candidateLabel: String? = nil
+    ) {
         self.password = password
         self.keyFile = keyFile
         self.keyFileName = keyFileName?.sanitizedKeePassFileName
+        self.candidateLabel = candidateLabel
     }
 
     public var hasPassword: Bool {
@@ -744,6 +751,54 @@ public protocol KeePassDatabaseReader: Sendable {
         sourceName: String?,
         credentials: KeePassUnlockCredentials
     ) throws -> KeePassReadOnlySnapshot
+}
+
+public struct KeePassCandidateTryingDatabaseReader: KeePassDatabaseReader {
+    private let baseReader: any KeePassDatabaseReader
+
+    public init(baseReader: any KeePassDatabaseReader) {
+        self.baseReader = baseReader
+    }
+
+    public func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> KeePassReadOnlySnapshot {
+        let candidates = credentials.credentialCandidates
+        guard !candidates.isEmpty else {
+            return try baseReader.readSnapshot(
+                database: database,
+                sourceName: sourceName,
+                credentials: credentials
+            )
+        }
+
+        var attemptedLabels: [String] = []
+        for candidate in candidates {
+            attemptedLabels.append(candidate.label)
+            let attemptCredentials = KeePassUnlockCredentials(
+                password: candidate.password,
+                keyFile: candidate.keyMaterial,
+                keyFileName: credentials.keyFileName,
+                candidateLabel: candidate.label
+            )
+            do {
+                return try baseReader.readSnapshot(
+                    database: database,
+                    sourceName: sourceName,
+                    credentials: attemptCredentials
+                )
+            } catch let error as KeePassOperationError where error.code == .invalidCredential {
+                continue
+            }
+        }
+
+        throw KeePassOperationError(
+            code: .invalidCredential,
+            message: KeePassCredentialSupport.invalidCredentialMessage(attemptedLabels: attemptedLabels)
+        )
+    }
 }
 
 public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
