@@ -5639,6 +5639,7 @@ final class AppSessionModel {
             var importedDecodedTotpSecretCount = 0
             var importedAttachmentPlaceholderCount = 0
             var importedDecodedAttachmentContentCount = 0
+            var importedNotesFieldCount = 0
             var importedDeletedMetadataCount = 0
             for candidate in plan.candidates {
                 let project = try ensureKeePassImportProject(
@@ -5655,9 +5656,14 @@ final class AppSessionModel {
                         title: candidate.title,
                         username: candidate.username,
                         password: candidate.decodedPassword ?? "",
-                        url: candidate.url
+                        url: candidate.url,
+                        notes: keePassLoginNotes(for: candidate)
                     )
                 )
+                if !candidate.notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ||
+                    !candidate.customFields.isEmpty {
+                    importedNotesFieldCount += 1
+                }
                 if candidate.hasPassword && candidate.decodedPassword != nil {
                     importedDecodedPasswordCount += 1
                 }
@@ -5761,6 +5767,7 @@ final class AppSessionModel {
             let importedDecodedContentCount = importedDecodedPasswordCount
                 + importedDecodedTotpSecretCount
                 + importedDecodedAttachmentContentCount
+                + importedNotesFieldCount
             let pendingText = pendingSummary.isEmpty
                 ? (importedDecodedContentCount > 0 ? "" : "，秘密字段待 KDBX 解码器接入")
                 : "；\(pendingSummary)"
@@ -5776,13 +5783,16 @@ final class AppSessionModel {
             let decodedAttachmentText = importedDecodedAttachmentContentCount > 0
                 ? "，并导入 \(importedDecodedAttachmentContentCount) 个附件内容"
                 : ""
+            let notesFieldText = importedNotesFieldCount > 0
+                ? "，并导入 \(importedNotesFieldCount) 项备注/自定义字段"
+                : ""
             let attachmentPlaceholderText = importedAttachmentPlaceholderCount > 0
                 ? "，并创建 \(importedAttachmentPlaceholderCount) 个附件占位项"
                 : ""
             let deletedText = importedDeletedMetadataCount > 0
                 ? "，并保留 \(importedDeletedMetadataCount) 项回收站元数据"
                 : ""
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(decodedAttachmentText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(decodedAttachmentText)\(notesFieldText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6658,6 +6668,24 @@ final class AppSessionModel {
             otpType: "TOTP",
             counter: 0
         )
+    }
+
+    private func keePassLoginNotes(for candidate: KeePassReadOnlyImportCandidate) -> String {
+        var sections: [String] = []
+        let notes = candidate.notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !notes.isEmpty {
+            sections.append(notes)
+        }
+        let fieldLines = candidate.customFields
+            .filter { !$0.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { field in
+                let title = field.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                return "\(title): \(field.value)"
+            }
+        if !fieldLines.isEmpty {
+            sections.append((["KeePass 字段："] + fieldLines).joined(separator: "\n"))
+        }
+        return sections.joined(separator: "\n\n")
     }
 
     private func keePassTotpPlaceholderTitle(from baseTitle: String) -> String {

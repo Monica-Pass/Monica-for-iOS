@@ -54,6 +54,7 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
     public let username: String
     public let password: String
     public let url: String
+    public let notes: String
     public let favorite: Bool
 }
 
@@ -153,14 +154,16 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String = ""
     ) throws -> MonicaMDBXLoginEntry {
         let entry = try rawVault.createLoginEntry(
             projectId: projectID,
             title: title,
             username: username,
             password: password,
-            url: url
+            url: url,
+            notes: notes
         )
         return MonicaMDBXLoginEntry(raw: entry)
     }
@@ -179,7 +182,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String = ""
     ) throws -> MonicaMDBXLoginEntry {
         let entry = try rawVault.updateLoginEntry(
             projectId: projectID,
@@ -187,7 +191,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             title: title,
             username: username,
             password: password,
-            url: url
+            url: url,
+            notes: notes
         )
         return MonicaMDBXLoginEntry(raw: entry)
     }
@@ -745,6 +750,7 @@ fileprivate struct LoginEntryRecord {
     let username: String
     let password: String
     let url: String
+    let notes: String
     let favorite: Bool
 }
 
@@ -880,6 +886,7 @@ fileprivate extension LoginEntryRecord {
             username: MDBXBusinessPayload.string(payload, "username"),
             password: MDBXBusinessPayload.string(payload, "password"),
             url: MDBXBusinessPayload.string(payload, "website"),
+            notes: MDBXBusinessPayload.string(payload, "notes"),
             favorite: MDBXBusinessPayload.bool(payload, "favorite")
         )
     }
@@ -978,13 +985,15 @@ fileprivate extension MdbxVault {
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String
     ) throws -> LoginEntryRecord {
         let payload = try MDBXBusinessPayload.jsonString([
             "kind": "password",
             "username": username,
             "password": password,
             "website": url,
+            "notes": notes,
             "favorite": false
         ])
         return try LoginEntryRecord(raw: createEntry(
@@ -1009,7 +1018,8 @@ fileprivate extension MdbxVault {
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String
     ) throws -> LoginEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "login")
         let payload = try MDBXBusinessPayload.jsonString([
@@ -1017,6 +1027,7 @@ fileprivate extension MdbxVault {
             "username": username,
             "password": password,
             "website": url,
+            "notes": notes,
             "favorite": favorite
         ])
         return try LoginEntryRecord(raw: updateEntry(
@@ -1337,6 +1348,7 @@ extension MonicaMDBXLoginEntry {
             username: raw.username,
             password: raw.password,
             url: raw.url,
+            notes: raw.notes,
             favorite: raw.favorite
         )
     }
@@ -1441,7 +1453,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String = ""
     ) throws -> MonicaMDBXLoginEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
@@ -1460,7 +1473,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String = ""
     ) throws -> MonicaMDBXLoginEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }

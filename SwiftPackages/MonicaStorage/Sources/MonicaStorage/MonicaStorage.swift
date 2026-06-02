@@ -246,6 +246,28 @@ public struct KeePassReadOnlyTotpSecret: Sendable, Equatable {
     }
 }
 
+public struct KeePassReadOnlyCustomField: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let title: String
+    public let value: String
+    public let isProtected: Bool
+    public let sortOrder: Int
+
+    public init(
+        title: String,
+        value: String,
+        isProtected: Bool,
+        sortOrder: Int = 0
+    ) {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        self.title = trimmedTitle
+        self.value = value
+        self.isProtected = isProtected
+        self.sortOrder = sortOrder
+        self.id = "\(sortOrder):\(trimmedTitle)"
+    }
+}
+
 public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let id: String
     public let title: String
@@ -253,6 +275,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let url: String
     public let groupPath: String
     public let groupID: String?
+    public let notes: String
+    public let customFields: [KeePassReadOnlyCustomField]
     public let hasPassword: Bool
     public let hasTotp: Bool
     public let attachmentCount: Int
@@ -268,6 +292,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         url: String,
         groupPath: String,
         groupID: String? = nil,
+        notes: String = "",
+        customFields: [KeePassReadOnlyCustomField] = [],
         hasPassword: Bool,
         decodedPassword: String? = nil,
         hasTotp: Bool,
@@ -282,6 +308,15 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         self.url = url
         self.groupPath = groupPath
         self.groupID = groupID
+        self.notes = notes
+        self.customFields = customFields
+            .filter { !$0.title.isEmpty }
+            .sorted { lhs, rhs in
+                if lhs.sortOrder == rhs.sortOrder {
+                    return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+                }
+                return lhs.sortOrder < rhs.sortOrder
+            }
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
         self.attachmentCount = max(attachmentCount, attachments.count)
@@ -354,6 +389,8 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
     public let url: String
     public let groupPath: String
     public let groupID: String?
+    public let notes: String
+    public let customFields: [KeePassReadOnlyCustomField]
     public let hasPassword: Bool
     public let hasTotp: Bool
     public let attachmentCount: Int
@@ -370,6 +407,8 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         url: String,
         groupPath: String,
         groupID: String? = nil,
+        notes: String = "",
+        customFields: [KeePassReadOnlyCustomField] = [],
         hasPassword: Bool,
         decodedPassword: String? = nil,
         hasTotp: Bool,
@@ -385,6 +424,15 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         self.url = url
         self.groupPath = groupPath
         self.groupID = groupID
+        self.notes = notes
+        self.customFields = customFields
+            .filter { !$0.title.isEmpty }
+            .sorted { lhs, rhs in
+                if lhs.sortOrder == rhs.sortOrder {
+                    return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
+                }
+                return lhs.sortOrder < rhs.sortOrder
+            }
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
         self.attachmentCount = max(attachmentCount, attachments.count)
@@ -501,6 +549,8 @@ public enum KeePassReadOnlyImportPlanner {
                     url: entry.url,
                     groupPath: entry.groupPath,
                     groupID: entry.groupID,
+                    notes: entry.notes,
+                    customFields: entry.customFields,
                     hasPassword: entry.hasPassword,
                     decodedPassword: entry.decodedPassword,
                     hasTotp: entry.hasTotp,
@@ -1667,6 +1717,7 @@ public enum AndroidBackupCodec {
             let url = csvValue("url", row: row, headerIndex: headerIndex, fallback: csvValue("website", row: row, headerIndex: headerIndex))
             let username = csvValue("username", row: row, headerIndex: headerIndex, fallback: csvValue("user name", row: row, headerIndex: headerIndex))
             let password = csvValue("password", row: row, headerIndex: headerIndex)
+            let notes = csvValue("notes", row: row, headerIndex: headerIndex, fallback: csvValue("note", row: row, headerIndex: headerIndex))
 
             guard !title.isEmpty || !url.isEmpty || !username.isEmpty else {
                 return nil
@@ -1676,7 +1727,8 @@ public enum AndroidBackupCodec {
                 title: title.isEmpty ? url.isEmpty ? username : url : title,
                 username: username,
                 password: password,
-                url: url
+                url: url,
+                notes: notes
             ))
         }
     }
@@ -1845,7 +1897,8 @@ public enum AndroidBackupCodec {
                     title: object.string("title"),
                     username: object.string("username"),
                     password: object.string("password"),
-                    url: object.string("website")
+                    url: object.string("website"),
+                    notes: object.string("notes")
                 ))
             case .totp:
                 let itemData = try object.nestedObject("itemData")
@@ -2365,7 +2418,8 @@ public enum VaultCSVCodec {
                 title: title,
                 username: record.value("username"),
                 password: record.value("password"),
-                url: record.value("url")
+                url: record.value("url"),
+                notes: record.value("notes")
             ))
         case .note:
             return .note(LocalNoteEntryDraft(title: title, body: record.value("body")))
@@ -3441,17 +3495,20 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
     public let username: String
     public let password: String
     public let url: String
+    public let notes: String
 
     public init(
         title: String,
         username: String,
         password: String,
-        url: String
+        url: String,
+        notes: String = ""
     ) {
         self.title = title
         self.username = username
         self.password = password
         self.url = url
+        self.notes = notes
     }
 }
 
@@ -3462,6 +3519,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
     public let username: String
     public let password: String
     public let url: String
+    public let notes: String
     public let favorite: Bool
 
     public init(
@@ -3471,6 +3529,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         username: String,
         password: String,
         url: String,
+        notes: String = "",
         favorite: Bool = false
     ) {
         self.id = id
@@ -3479,6 +3538,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         self.username = username
         self.password = password
         self.url = url
+        self.notes = notes
         self.favorite = favorite
     }
 }
@@ -5502,7 +5562,8 @@ public struct LocalVaultEntryRepository {
             title: normalizedTitle,
             username: draft.username,
             password: draft.password,
-            url: draft.url
+            url: draft.url,
+            notes: draft.notes
         )
     }
 
@@ -5828,7 +5889,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             title: draft.title,
             username: draft.username,
             password: draft.password,
-            url: draft.url
+            url: draft.url,
+            notes: draft.notes
         )
         return LocalLoginEntry(entry)
     }
@@ -5854,7 +5916,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             title: draft.title,
             username: draft.username,
             password: draft.password,
-            url: draft.url
+            url: draft.url,
+            notes: draft.notes
         )
         return LocalLoginEntry(entry)
     }
@@ -6831,6 +6894,7 @@ private extension LocalLoginEntry {
             username: entry.username,
             password: entry.password,
             url: entry.url,
+            notes: entry.notes,
             favorite: entry.favorite
         )
     }

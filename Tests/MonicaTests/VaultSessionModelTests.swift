@@ -3711,6 +3711,87 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassConfirmImportImportsNotesAndCustomFieldsWithoutLeakingValues() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-uuid-github",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        groupID: "group-uuid-work",
+                        notes: "decoded KeePass notes secret",
+                        customFields: [
+                            KeePassReadOnlyCustomField(
+                                title: "Recovery Code",
+                                value: "decoded recovery code secret",
+                                isProtected: true,
+                                sortOrder: 2
+                            ),
+                            KeePassReadOnlyCustomField(
+                                title: "Environment",
+                                value: "Production",
+                                isProtected: false,
+                                sortOrder: 1
+                            )
+                        ],
+                        hasPassword: false,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: false
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyImportPlan()
+
+        try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
+
+        let expectedNotes = """
+        decoded KeePass notes secret
+
+        KeePass 字段：
+        Environment: Production
+        Recovery Code: decoded recovery code secret
+        """
+        XCTAssertEqual(engine.createdLoginEntries.first?.draft.notes, expectedNotes)
+        XCTAssertEqual(model.loginEntries.first?.notes, expectedNotes)
+        [
+            "decoded KeePass notes secret",
+            "decoded recovery code secret",
+            "Production",
+            "database-password"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 已导入 1 项元数据，并导入 1 项备注/自定义字段")
+        )
+    }
+
     func testKeePassConfirmImportCreatesAttachmentPlaceholdersForPendingAttachmentMetadata() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(
@@ -6262,7 +6343,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             title: draft.title,
             username: draft.username,
             password: draft.password,
-            url: draft.url
+            url: draft.url,
+            notes: draft.notes
         )
         createdLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
@@ -6294,6 +6376,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             username: draft.username,
             password: draft.password,
             url: draft.url,
+            notes: draft.notes,
             favorite: currentFavorite
         )
         updatedLoginEntries.append(
@@ -6329,6 +6412,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             username: current.username,
             password: current.password,
             url: current.url,
+            notes: current.notes,
             favorite: favorite
         )
         loginEntries[projectID, default: []] = loginEntries[projectID, default: []].map {

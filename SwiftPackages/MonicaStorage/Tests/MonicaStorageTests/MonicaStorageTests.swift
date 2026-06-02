@@ -340,6 +340,57 @@ import MonicaStorage
     #expect(!plan.pendingCapabilitySummary.contains("decoded attachment bytes"))
 }
 
+@Test func keepPassReadOnlyImportPlannerCarriesNotesAndCustomFieldsWithoutLeakingValues() throws {
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "personal.kdbx",
+        headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+        groups: [
+            KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+            KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-fields",
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com",
+                groupPath: "/Work",
+                groupID: "group-uuid-work",
+                notes: "decoded KeePass notes secret",
+                customFields: [
+                    KeePassReadOnlyCustomField(
+                        title: "Recovery Code",
+                        value: "decoded recovery code secret",
+                        isProtected: true,
+                        sortOrder: 2
+                    ),
+                    KeePassReadOnlyCustomField(
+                        title: "Environment",
+                        value: "Production",
+                        isProtected: false,
+                        sortOrder: 1
+                    )
+                ],
+                hasPassword: false,
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: false
+            )
+        ]
+    )
+
+    let plan = KeePassReadOnlyImportPlanner.plan(snapshot)
+
+    #expect(plan.candidates.first?.notes == "decoded KeePass notes secret")
+    #expect(plan.candidates.first?.customFields.map(\.title) == ["Environment", "Recovery Code"])
+    #expect(plan.candidates.first?.customFields.first?.value == "Production")
+    #expect(plan.candidates.first?.customFields.last?.isProtected == true)
+    #expect(!plan.displaySummary.contains("decoded KeePass notes secret"))
+    #expect(!plan.displaySummary.contains("decoded recovery code secret"))
+    #expect(!plan.pendingCapabilitySummary.contains("decoded KeePass notes secret"))
+    #expect(!plan.pendingCapabilitySummary.contains("decoded recovery code secret"))
+}
+
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
     let login = UnifiedVaultItem(
         id: "login-1",
@@ -1017,6 +1068,47 @@ import MonicaStorage
         .init(vaultID: session.handle.vaultID, title: "Personal")
     ])
     #expect(engine.createdLoginEntries.first?.projectID == project.id)
+}
+
+@Test func loginEntryRepositoryPreservesLoginNotes() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+
+    let project = try entryRepository.createProject(title: "Personal")
+    let entry = try entryRepository.createLoginEntry(
+        projectID: project.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub",
+            username: "alice",
+            password: "correct horse battery staple",
+            url: "https://github.com",
+            notes: "KeePass notes should survive"
+        )
+    )
+    let updated = try entryRepository.updateLoginEntry(
+        projectID: project.id,
+        entryID: entry.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub Work",
+            username: "alice",
+            password: "correct horse battery staple",
+            url: "https://github.com/work",
+            notes: "Updated login notes"
+        )
+    )
+
+    #expect(entry.notes == "KeePass notes should survive")
+    #expect(updated.notes == "Updated login notes")
+    #expect(try entryRepository.listLoginEntries(projectID: project.id) == [updated])
+    #expect(engine.createdLoginEntries.first?.draft.notes == "KeePass notes should survive")
+    #expect(engine.updatedLoginEntries.first?.draft.notes == "Updated login notes")
 }
 
 @Test func entryRepositoryListsRenamesAndDeletesEmptyProjects() throws {
@@ -2749,7 +2841,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             title: draft.title,
             username: draft.username,
             password: draft.password,
-            url: draft.url
+            url: draft.url,
+            notes: draft.notes
         )
         createdLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
@@ -2777,7 +2870,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             title: draft.title,
             username: draft.username,
             password: draft.password,
-            url: draft.url
+            url: draft.url,
+            notes: draft.notes
         )
         updatedLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
@@ -2812,6 +2906,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             username: current.username,
             password: current.password,
             url: current.url,
+            notes: current.notes,
             favorite: favorite
         )
         loginEntries[projectID, default: []] = loginEntries[projectID, default: []].map {
