@@ -3563,6 +3563,106 @@ final class VaultSessionModelTests: XCTestCase {
         }
     }
 
+    func testAttachmentQuickLookPreviewUsesInjectedContentKeyAndCleansTemporaryFile() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let cek = Data((0..<32).map(UInt8.init))
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore,
+            attachmentContentEncryptionKeyProvider: { attachment in
+                XCTAssertEqual(attachment.fileName, "contract.pdf")
+                return cek
+            }
+        )
+        let nonceData = Data((120..<132).map(UInt8.init))
+        let plaintext = Data("quicklook plaintext".utf8)
+        let sealedBox = try AES.GCM.seal(
+            plaintext,
+            using: SymmetricKey(data: cek),
+            nonce: try AES.GCM.Nonce(data: nonceData)
+        )
+        let encryptedBlob = try XCTUnwrap(sealedBox.combined)
+
+        try unlockNewVault(model)
+        let attachment = LocalAttachmentMetadata(
+            id: "attachment-1",
+            projectID: "project-1",
+            entryID: "entry-1",
+            fileName: "contract.pdf",
+            mediaType: "application/pdf",
+            originalSize: Int64(plaintext.count),
+            storedSize: Int64(encryptedBlob.count),
+            contentHash: "sha256:quicklook-secret-hash",
+            storageMode: "android-backup-encrypted-blob",
+            source: "android-backup-local",
+            downloadState: "downloaded",
+            wrappedContentEncryptionKey: "wrapped-quicklook-secret-key",
+            localPath: "attachment-1.enc",
+            deleted: false
+        )
+        model.attachmentEntries = [attachment]
+        _ = try blobStore.saveEncryptedBlob(
+            encryptedBlob,
+            vaultID: "created-vault",
+            localPath: "attachment-1.enc"
+        )
+
+        try model.presentAttachmentQuickLookPreview(attachment)
+
+        let previewURL = try XCTUnwrap(model.attachmentQuickLookPreviewURL)
+        XCTAssertEqual(try Data(contentsOf: previewURL), plaintext)
+        XCTAssertEqual(previewURL.lastPathComponent, "contract.pdf")
+        XCTAssertFalse(model.entryOperationState.label.contains("sha256:quicklook-secret-hash"))
+        XCTAssertFalse(model.entryOperationState.label.contains("wrapped-quicklook-secret-key"))
+        XCTAssertFalse(model.entryOperationState.label.contains("attachment-1.enc"))
+        XCTAssertFalse(model.entryOperationState.label.contains("quicklook plaintext"))
+
+        model.dismissAttachmentQuickLookPreview()
+
+        XCTAssertNil(model.attachmentQuickLookPreviewURL)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: previewURL.path))
+    }
+
+    func testAttachmentQuickLookPreviewWithoutContentKeyProviderUsesRedactedFailure() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+
+        try unlockNewVault(model)
+        let attachment = LocalAttachmentMetadata(
+            id: "attachment-1",
+            projectID: "project-1",
+            entryID: "entry-1",
+            fileName: "contract.pdf",
+            mediaType: "application/pdf",
+            originalSize: 128,
+            storedSize: 96,
+            contentHash: "sha256:missing-key-secret-hash",
+            storageMode: "android-backup-encrypted-blob",
+            source: "android-backup-local",
+            downloadState: "downloaded",
+            wrappedContentEncryptionKey: "wrapped-missing-key-secret",
+            localPath: "attachment-1.enc",
+            deleted: false
+        )
+
+        XCTAssertThrowsError(try model.presentAttachmentQuickLookPreview(attachment))
+
+        XCTAssertNil(model.attachmentQuickLookPreviewURL)
+        XCTAssertTrue(model.entryOperationState.label.contains("附件内容密钥尚未可用"))
+        [
+            "sha256:missing-key-secret-hash",
+            "wrapped-missing-key-secret",
+            "attachment-1.enc"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+    }
+
     func testAttachmentReferenceDeleteAndRestoreAppendRedactedTimelineEvents() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()

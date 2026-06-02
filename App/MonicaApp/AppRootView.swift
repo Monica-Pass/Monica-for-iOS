@@ -174,6 +174,20 @@ struct AppAttachmentPreviewFile: Sendable, Equatable {
     let byteCount: Int
 }
 
+enum AppAttachmentPreviewError: Error, Sendable, Equatable, LocalizedError {
+    case contentEncryptionKeyUnavailable
+    case previewFailed
+
+    var errorDescription: String? {
+        switch self {
+        case .contentEncryptionKeyUnavailable:
+            return "附件内容密钥尚未可用。"
+        case .previewFailed:
+            return "附件预览准备失败。"
+        }
+    }
+}
+
 enum VaultDisplayCardDensity: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
     case comfortable
     case compact
@@ -1227,6 +1241,7 @@ final class AppSessionModel {
     var attachmentEntries: [LocalAttachmentMetadata] = []
     var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
     var attachmentSearchQuery = ""
+    var attachmentQuickLookPreviewURL: URL?
     var vaultProjects: [LocalVaultProject] = []
     var selectedVaultQuickFilterID = "all"
     var selectedVaultBatchItemIDs: Set<String> = []
@@ -1291,6 +1306,7 @@ final class AppSessionModel {
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
+    private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let passwordGenerator: () throws -> String
     private var activeVaultSession: LocalVaultSession?
     private var activeEntryRepository: LocalVaultEntryRepository?
@@ -1319,6 +1335,7 @@ final class AppSessionModel {
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
+        attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
         passwordGenerator: @escaping () throws -> String = {
             try PasswordGenerator.generate()
@@ -1343,6 +1360,7 @@ final class AppSessionModel {
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
+        self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.passwordGenerator = passwordGenerator
         self.autoLockPolicy = autoLockPolicy
         self.notificationPermissionState = notificationPermissionStatusProvider()
@@ -1691,6 +1709,56 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    func presentAttachmentQuickLookPreview(_ entry: LocalAttachmentMetadata) throws {
+        recordUserActivity()
+        dismissAttachmentQuickLookPreview()
+
+        guard let attachmentContentEncryptionKeyProvider else {
+            let error = AppAttachmentPreviewError.contentEncryptionKeyUnavailable
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+
+        let contentEncryptionKey: Data
+        do {
+            contentEncryptionKey = try attachmentContentEncryptionKeyProvider(entry)
+        } catch {
+            let previewError = AppAttachmentPreviewError.contentEncryptionKeyUnavailable
+            entryOperationState = .failed(previewError.localizedDescription)
+            throw previewError
+        }
+
+        do {
+            let preview = try materializeAttachmentPreview(
+                entry,
+                contentEncryptionKey: contentEncryptionKey
+            )
+            attachmentQuickLookPreviewURL = preview.fileURL
+            entryOperationState = .succeeded("附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节")
+        } catch let error as LocalAttachmentContentStoreError {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        } catch let error as LocalAttachmentContentCryptoError {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        } catch let error as AppWebDAVBackupError {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        } catch {
+            let previewError = AppAttachmentPreviewError.previewFailed
+            entryOperationState = .failed(previewError.localizedDescription)
+            throw previewError
+        }
+    }
+
+    func dismissAttachmentQuickLookPreview() {
+        guard let previewURL = attachmentQuickLookPreviewURL else {
+            return
+        }
+        attachmentQuickLookPreviewURL = nil
+        try? FileManager.default.removeItem(at: previewURL.deletingLastPathComponent())
     }
 
     var vaultQuickFilterRows: [AppVaultQuickFilterRow] {
@@ -5881,6 +5949,7 @@ final class AppSessionModel {
         webDAVRestoreVaultPassword = ""
         downloadedWebDAVRestoreBackup = nil
         clearPendingAndroidEncryptedBackup()
+        dismissAttachmentQuickLookPreview()
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
@@ -6034,6 +6103,7 @@ final class AppSessionModel {
         attachmentEntries = []
         deletedAttachmentEntries = []
         attachmentSearchQuery = ""
+        dismissAttachmentQuickLookPreview()
     }
 
     private func requireActiveVaultSession() throws -> LocalVaultSession {

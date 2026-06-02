@@ -1,5 +1,6 @@
 import MonicaStorage
 import Observation
+import QuickLook
 import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
@@ -141,6 +142,7 @@ struct AndroidParityVaultHomeView: View {
                 onCancel: { isTotpScannerPresented = false }
             )
         }
+        .quickLookPreview(attachmentQuickLookPreviewBinding)
         .onReceive(timer) { value in
             now = value
         }
@@ -421,12 +423,18 @@ struct AndroidParityVaultHomeView: View {
                 if session.isVaultBatchSelectionActive {
                     Button { session.toggleVaultBatchItemSelection(entry.id, for: .attachmentRef) } label: {
                         batchSelectableCard(id: entry.id) {
-                            AndroidAttachmentListCard(entry: entry) {}
+                            AndroidAttachmentListCard(entry: entry, showsActions: false, preview: {}) {}
                         }
                     }
                     .buttonStyle(.plain)
                 } else {
                     AndroidAttachmentListCard(entry: entry) {
+                        do {
+                            try session.presentAttachmentQuickLookPreview(entry)
+                        } catch {
+                            // AppSessionModel owns user-visible failure state.
+                        }
+                    } delete: {
                         deleteAttachmentEntry(entry)
                     }
                 }
@@ -624,6 +632,19 @@ struct AndroidParityVaultHomeView: View {
             get: { session.presentedEditorMode != nil },
             set: { isPresented in
                 if !isPresented { session.dismissPresentedEditor() }
+            }
+        )
+    }
+
+    private var attachmentQuickLookPreviewBinding: Binding<URL?> {
+        Binding(
+            get: { session.attachmentQuickLookPreviewURL },
+            set: { newValue in
+                if newValue == nil {
+                    session.dismissAttachmentQuickLookPreview()
+                } else {
+                    session.attachmentQuickLookPreviewURL = newValue
+                }
             }
         )
     }
@@ -1460,6 +1481,8 @@ private struct AndroidSendListCard: View {
 
 private struct AndroidAttachmentListCard: View {
     let entry: LocalAttachmentMetadata
+    var showsActions = true
+    let preview: () -> Void
     let delete: () -> Void
 
     var body: some View {
@@ -1478,12 +1501,23 @@ private struct AndroidAttachmentListCard: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                Button(role: .destructive, action: delete) {
-                    Image(systemName: "trash")
-                        .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                if showsActions {
+                    HStack(spacing: 12) {
+                        Button(action: preview) {
+                            Image(systemName: "eye")
+                                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(AndroidParityPalette.primary)
+
+                        Button(role: .destructive, action: delete) {
+                            Image(systemName: "trash")
+                                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(.red)
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.red)
             }
         }
     }
