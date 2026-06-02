@@ -3264,7 +3264,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
         XCTAssertEqual(
             model.entryOperationState,
-            .succeeded("KeePass 解锁输入已准备：KDBX 4，密码 + 密钥文件")
+            .succeeded("KeePass 解锁输入已准备：KDBX 4，密码 + 密钥文件（2 种 key 解析）")
         )
     }
 

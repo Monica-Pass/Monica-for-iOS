@@ -67,21 +67,30 @@ public struct KeePassCredentialSummary: Sendable, Equatable {
     public let hasPassword: Bool
     public let hasKeyFile: Bool
     public let keyFileName: String?
+    public let keyFileCandidateCount: Int
 
-    public init(hasPassword: Bool, hasKeyFile: Bool, keyFileName: String?) {
+    public init(
+        hasPassword: Bool,
+        hasKeyFile: Bool,
+        keyFileName: String?,
+        keyFileCandidateCount: Int = 0
+    ) {
         self.hasPassword = hasPassword
         self.hasKeyFile = hasKeyFile
         self.keyFileName = keyFileName
+        self.keyFileCandidateCount = keyFileCandidateCount
     }
 
     public var displayName: String {
         switch (hasPassword, hasKeyFile) {
         case (true, true):
-            return "密码 + 密钥文件"
+            let count = keyFileCandidateCount > 0 ? "（\(keyFileCandidateCount) 种 key 解析）" : ""
+            return "密码 + 密钥文件\(count)"
         case (true, false):
             return "密码"
         case (false, true):
-            return "密钥文件"
+            let count = keyFileCandidateCount > 0 ? "（\(keyFileCandidateCount) 种 key 解析）" : ""
+            return "密钥文件\(count)"
         case (false, false):
             return "未提供凭据"
         }
@@ -177,8 +186,166 @@ public struct KeePassUnlockCredentials: Sendable, Equatable {
         KeePassCredentialSummary(
             hasPassword: hasPassword,
             hasKeyFile: hasKeyFile,
-            keyFileName: keyFileName
+            keyFileName: keyFileName,
+            keyFileCandidateCount: credentialCandidates.count
         )
+    }
+
+    public var credentialCandidates: [KeePassCredentialCandidate] {
+        KeePassCredentialSupport.buildCredentialCandidates(password: password, keyFile: keyFile)
+    }
+}
+
+public struct KeePassCredentialCandidate: Sendable, Equatable, Identifiable {
+    public let label: String
+    public let password: String
+    public let keyMaterial: Data?
+
+    public var id: String {
+        label
+    }
+
+    public init(label: String, password: String, keyMaterial: Data?) {
+        self.label = label
+        self.password = password
+        self.keyMaterial = keyMaterial
+    }
+}
+
+public struct KeePassKeyFileMaterial: Sendable, Equatable, Identifiable {
+    public let label: String
+    public let key: Data
+
+    public var id: String {
+        label
+    }
+
+    public init(label: String, key: Data) {
+        self.label = label
+        self.key = key
+    }
+
+    public static func buildVariants(from rawBytes: Data) -> [KeePassKeyFileMaterial] {
+        var variants: [KeePassKeyFileMaterial] = []
+        var seenHashes = Set<String>()
+
+        func append(_ label: String, _ key: Data?) {
+            guard let key, !key.isEmpty else { return }
+            let hash = KeePassCredentialSupport.sha256Hex(key)
+            guard seenHashes.insert(hash).inserted else { return }
+            variants.append(KeePassKeyFileMaterial(label: label, key: key))
+        }
+
+        append("raw", rawBytes)
+        if let text = String(data: rawBytes, encoding: .utf8) {
+            append("xml-data", xmlDataKey(from: text))
+            append("hex-text", hexTextKey(from: text))
+        }
+        append("sha256(raw)", Data(SHA256.hash(data: rawBytes)))
+        return variants
+    }
+
+    private static func xmlDataKey(from content: String) -> Data? {
+        guard let startRange = content.range(of: "<Data", options: [.caseInsensitive]),
+              let startClose = content[startRange.upperBound...].firstIndex(of: ">"),
+              let endRange = content[startClose...].range(of: "</Data>", options: [.caseInsensitive]) else {
+            return nil
+        }
+        let rawValue = content[content.index(after: startClose)..<endRange.lowerBound]
+        let compact = rawValue.filter { !$0.isWhitespace }
+        return decodeCompactKeyData(String(compact))
+    }
+
+    private static func hexTextKey(from content: String) -> Data? {
+        let compact = String(content.filter { !$0.isWhitespace })
+        guard compact.count == 64, compact.allSatisfy(\.isHexDigit) else {
+            return nil
+        }
+        return decodeHex(compact)
+    }
+
+    private static func decodeCompactKeyData(_ compact: String) -> Data? {
+        if compact.count == 64, compact.allSatisfy(\.isHexDigit) {
+            return decodeHex(compact)
+        }
+        return Data(base64Encoded: compact)
+    }
+
+    private static func decodeHex(_ value: String) -> Data? {
+        guard value.count.isMultiple(of: 2),
+              value.allSatisfy(\.isHexDigit) else {
+            return nil
+        }
+        var output = Data()
+        var index = value.startIndex
+        while index < value.endIndex {
+            let next = value.index(index, offsetBy: 2)
+            guard let byte = UInt8(value[index..<next], radix: 16) else {
+                return nil
+            }
+            output.append(byte)
+            index = next
+        }
+        return output
+    }
+}
+
+public enum KeePassCredentialSupport {
+    public static func buildCredentialCandidates(
+        password: String,
+        keyFile: Data?
+    ) -> [KeePassCredentialCandidate] {
+        guard let keyFile, !keyFile.isEmpty else {
+            return [
+                KeePassCredentialCandidate(
+                    label: "password-only",
+                    password: password,
+                    keyMaterial: nil
+                )
+            ]
+        }
+
+        var candidates: [KeePassCredentialCandidate] = []
+        var seen = Set<String>()
+        let materials = KeePassKeyFileMaterial.buildVariants(from: keyFile)
+
+        func append(label: String, password: String, key: Data) {
+            let signature = "\(label):\(sha256Hex(key)):\(password.count)"
+            guard seen.insert(signature).inserted else { return }
+            candidates.append(
+                KeePassCredentialCandidate(
+                    label: label,
+                    password: password,
+                    keyMaterial: key
+                )
+            )
+        }
+
+        for material in materials {
+            if password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                append(label: "\(material.label)/key-only", password: "", key: material.key)
+                append(label: "\(material.label)/empty-password+key", password: "", key: material.key)
+            } else {
+                append(label: "\(material.label)/password+key", password: password, key: material.key)
+            }
+        }
+
+        return candidates
+    }
+
+    public static func invalidCredentialMessage(attemptedLabels: [String]) -> String {
+        var seen = Set<String>()
+        let distinct = attemptedLabels.filter { seen.insert($0).inserted }
+        guard !distinct.isEmpty else {
+            return "数据库密码或密钥文件不正确"
+        }
+        let concise = distinct.prefix(4).joined(separator: ", ")
+        let suffix = distinct.count > 4 ? " 等\(distinct.count)种组合" : ""
+        return "数据库密码或密钥文件不正确（已尝试: \(concise)\(suffix)）"
+    }
+
+    public static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
     }
 }
 
@@ -1191,7 +1358,10 @@ public enum KeePassFormatInspector {
         let credentials = KeePassCredentialSummary(
             hasPassword: !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
             hasKeyFile: keyFile?.isEmpty == false,
-            keyFileName: keyFileName?.sanitizedKeePassFileName
+            keyFileName: keyFileName?.sanitizedKeePassFileName,
+            keyFileCandidateCount: keyFile.map {
+                KeePassCredentialSupport.buildCredentialCandidates(password: password, keyFile: $0).count
+            } ?? 0
         )
 
         if let issue = report.issue {

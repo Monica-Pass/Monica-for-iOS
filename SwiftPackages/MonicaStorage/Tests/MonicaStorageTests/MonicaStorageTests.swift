@@ -77,7 +77,56 @@ import MonicaStorage
     #expect(ready.credentials.hasPassword)
     #expect(ready.credentials.hasKeyFile)
     #expect(ready.credentials.keyFileName == "personal.key")
+    #expect(ready.credentials.keyFileCandidateCount > 0)
+    #expect(ready.credentials.displayName == "密码 + 密钥文件（2 种 key 解析）")
     #expect(ready.issue == nil)
+}
+
+@Test func keepPassCredentialSupportBuildsAndroidCompatibleKeyFileCandidatesWithoutLeakingMaterial() throws {
+    let rawKey = Data((1...32).map(UInt8.init))
+    let xml = Data("""
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeyFile><Key><Data>\(rawKey.base64EncodedString())</Data></Key></KeyFile>
+    """.utf8)
+    let hex = Data("00112233445566778899AABBCCDDEEFF00112233445566778899AABBCCDDEEFF".utf8)
+
+    let xmlMaterials = KeePassKeyFileMaterial.buildVariants(from: xml)
+    #expect(xmlMaterials.map(\.label).contains("xml-data"))
+    #expect(xmlMaterials.map(\.label).contains("raw"))
+    #expect(xmlMaterials.map(\.label).contains("sha256(raw)"))
+    #expect(xmlMaterials.first { $0.label == "xml-data" }?.key == rawKey)
+
+    let hexMaterials = KeePassKeyFileMaterial.buildVariants(from: hex)
+    #expect(hexMaterials.first { $0.label == "hex-text" }?.key.count == 32)
+
+    let keyOnlyCredentials = KeePassUnlockCredentials(
+        password: "",
+        keyFile: xml,
+        keyFileName: "../personal.key"
+    )
+    let keyOnlyLabels = keyOnlyCredentials.credentialCandidates.map(\.label)
+    #expect(keyOnlyLabels.contains("xml-data/key-only"))
+    #expect(keyOnlyLabels.contains("xml-data/empty-password+key"))
+    #expect(keyOnlyCredentials.summary.keyFileCandidateCount == keyOnlyLabels.count)
+    #expect(keyOnlyCredentials.summary.keyFileName == "personal.key")
+    #expect(!keyOnlyCredentials.summary.displayName.contains(rawKey.base64EncodedString()))
+
+    let passwordAndKeyCredentials = KeePassUnlockCredentials(
+        password: "database-password",
+        keyFile: xml,
+        keyFileName: "personal.key"
+    )
+    let passwordAndKeyLabels = passwordAndKeyCredentials.credentialCandidates.map(\.label)
+    #expect(passwordAndKeyLabels.contains("xml-data/password+key"))
+    #expect(!passwordAndKeyLabels.contains("xml-data/key-only"))
+
+    let message = KeePassCredentialSupport.invalidCredentialMessage(
+        attemptedLabels: ["raw/password+key", "xml-data/password+key", "sha256(raw)/password+key"]
+    )
+    #expect(message.contains("已尝试"))
+    #expect(message.contains("xml-data/password+key"))
+    #expect(!message.contains("database-password"))
+    #expect(!message.contains(rawKey.base64EncodedString()))
 }
 
 @Test func keepPassDatabaseReaderBuildsReadOnlySnapshotAndKeepsCredentialsOutOfSummary() throws {
