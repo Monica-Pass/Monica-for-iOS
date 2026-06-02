@@ -186,6 +186,54 @@ import MonicaStorage
     #expect(!context.displaySummary.contains("encrypted-payload-bytes"))
 }
 
+@Test func keepPassKdbxAesKdfDeriverTransformsCompositeKeyWithoutLeakingSecrets() throws {
+    let seed = try decodeHexData("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+    let plaintextBlock = try decodeHexData("00112233445566778899aabbccddeeff")
+    let expectedCipherBlock = try decodeHexData("8ea2b7ca516745bfeafc49904b496089")
+    var compositeKey = Data()
+    compositeKey.append(plaintextBlock)
+    compositeKey.append(plaintextBlock)
+    var transformedKey = Data()
+    transformedKey.append(expectedCipherBlock)
+    transformedKey.append(expectedCipherBlock)
+
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .aesKdf,
+        aesKdf: KeePassKdbxAesKdfParameters(seed: seed, rounds: 1)
+    )
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "aes-kdf.kdbx",
+        candidateLabel: "fixture/password+key",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerByteRange: 0..<0,
+            encryptedPayload: Data("encrypted-payload-bytes".utf8)
+        ),
+        kdfParameters: kdfParameters,
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: nil,
+            keyFileKey: nil,
+            compositeKey: compositeKey
+        )
+    )
+
+    let derived = try DefaultKeePassKdbxKeyDeriver().deriveKey(from: context)
+
+    #expect(derived.algorithm == .aesKdf)
+    #expect(derived.material == Data(SHA256.hash(data: transformedKey)))
+    #expect(derived.displaySummary == "AES-KDF，rounds 1，derived key 32 bytes")
+    #expect(!derived.displaySummary.contains(seed.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains(compositeKey.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains(derived.material.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains("encrypted-payload-bytes"))
+}
+
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
     let kdbx4 = Data([
         0x03, 0xD9, 0xA2, 0x9A,
@@ -639,6 +687,64 @@ import MonicaStorage
     #expect(!context.displaySummary.contains("key-file-secret"))
     #expect(!context.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
     #expect(!context.displaySummary.contains("encrypted-payload-bytes"))
+}
+
+@Test func unsupportedKeePassPayloadDecryptorDerivesKdfBeforePayloadDecodeWithoutLeakingSecrets() throws {
+    final class RecordingKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
+        var contexts: [KeePassKdbxDecryptInputContext] = []
+
+        func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
+            contexts.append(context)
+            return KeePassKdbxDerivedKey(
+                algorithm: .aesKdf,
+                material: Data(SHA256.hash(data: Data("derived-key-secret".utf8))),
+                rounds: 1
+            )
+        }
+    }
+
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .aesKdf,
+        aesKdf: KeePassKdbxAesKdfParameters(seed: Data(repeating: 0xA5, count: 32), rounds: 1)
+    )
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "aes-kdf.kdbx",
+        candidateLabel: "raw/password+key",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerByteRange: 0..<0,
+            encryptedPayload: Data("encrypted-payload-bytes".utf8)
+        ),
+        kdfParameters: kdfParameters,
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: Data("password-key-secret".utf8),
+            keyFileKey: Data("key-file-secret".utf8),
+            compositeKey: Data(SHA256.hash(data: Data("composite-key-secret".utf8)))
+        )
+    )
+    let keyDeriver = RecordingKeyDeriver()
+    let decryptor = UnsupportedKeePassKdbxPayloadDecryptor(keyDeriver: keyDeriver)
+
+    do {
+        _ = try decryptor.decryptPayload(context)
+        Issue.record("Expected payload decryptor to remain unsupported")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(error.message == "KDBX payload 解密尚未接入")
+        #expect(!error.message.contains("derived-key-secret"))
+        #expect(!error.message.contains("password-key-secret"))
+        #expect(!error.message.contains("key-file-secret"))
+        #expect(!error.message.contains("composite-key-secret"))
+        #expect(!error.message.contains("encrypted-payload-bytes"))
+    }
+
+    #expect(keyDeriver.contexts.map(\.candidateLabel) == ["raw/password+key"])
 }
 
 @Test func defaultKeePassDatabaseReaderInflatesGzipKeePassXMLWithoutLeakingCredentials() throws {
@@ -4590,6 +4696,24 @@ private func kdbxVariantUInt64(key: String, value: UInt64) -> Data {
     data.append(keyData)
     data.append(littleEndianUInt32(UInt32(MemoryLayout<UInt64>.size)))
     data.append(littleEndianUInt64(value))
+    return data
+}
+
+private func decodeHexData(_ value: String) throws -> Data {
+    guard value.count.isMultiple(of: 2),
+          value.allSatisfy(\.isHexDigit) else {
+        throw KeePassOperationError(code: .formatUnsupported, message: "invalid test hex")
+    }
+    var data = Data()
+    var index = value.startIndex
+    while index < value.endIndex {
+        let next = value.index(index, offsetBy: 2)
+        guard let byte = UInt8(value[index..<next], radix: 16) else {
+            throw KeePassOperationError(code: .formatUnsupported, message: "invalid test hex")
+        }
+        data.append(byte)
+        index = next
+    }
     return data
 }
 
