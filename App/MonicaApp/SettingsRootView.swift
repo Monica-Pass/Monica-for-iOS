@@ -400,6 +400,9 @@ struct SettingsRootView: View {
                         AndroidParityInfoRow(title: "状态", value: keePassPreviewStatusText(preview.status))
                         if let headerSummary = preview.headerSummary {
                             AndroidParityInfoRow(title: "KDBX 版本", value: headerSummary.displayName)
+                            if let cryptoSummary = headerSummary.cryptoSummary {
+                                AndroidParityInfoRow(title: "KDBX 加密", value: cryptoSummary.displaySummary)
+                            }
                         }
                         SecureField("数据库密码", text: $session.keePassUnlockPassword)
                             .textContentType(.password)

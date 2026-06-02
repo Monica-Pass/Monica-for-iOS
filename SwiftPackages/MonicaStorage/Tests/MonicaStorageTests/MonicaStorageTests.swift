@@ -43,6 +43,26 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassFormatInspectorSummarizesKdbx4PublicCryptoHeaderWithoutSecrets() throws {
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        kdfParameters: makeKdbxVariantDictionary(
+            uuid: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])
+        )
+    )
+
+    let report = KeePassFormatInspector.inspect(header, sourceName: "personal.kdbx")
+
+    #expect(report.headerSummary?.displayName == "KDBX 4")
+    #expect(report.headerSummary?.cryptoSummary?.cipher == .aes256)
+    #expect(report.headerSummary?.cryptoSummary?.compression == .gzip)
+    #expect(report.headerSummary?.cryptoSummary?.kdf == .argon2id)
+    #expect(report.headerSummary?.cryptoSummary?.displaySummary == "AES-256，GZip，Argon2id")
+    #expect(!report.headerSummary!.cryptoSummary!.displaySummary.contains("database-password"))
+    #expect(!report.headerSummary!.cryptoSummary!.displaySummary.contains("key-file-secret"))
+}
+
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
     let kdbx4 = Data([
         0x03, 0xD9, 0xA2, 0x9A,
@@ -4293,4 +4313,50 @@ private struct RecordedAttachmentMutationCall: Equatable {
     let vaultID: String
     let projectID: String
     let attachmentID: String
+}
+
+private func makeKdbx4Header(
+    cipherID: Data,
+    compressionFlags: Data,
+    kdfParameters: Data
+) -> Data {
+    var data = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x67, 0xFB, 0x4B, 0xB5,
+        0x00, 0x00, 0x04, 0x00
+    ])
+    data.append(kdbx4HeaderField(id: 2, value: cipherID))
+    data.append(kdbx4HeaderField(id: 3, value: compressionFlags))
+    data.append(kdbx4HeaderField(id: 11, value: kdfParameters))
+    data.append(kdbx4HeaderField(id: 0, value: Data([0x0D, 0x0A, 0x0D, 0x0A])))
+    return data
+}
+
+private func kdbx4HeaderField(id: UInt8, value: Data) -> Data {
+    var field = Data([id])
+    field.append(littleEndianUInt32(UInt32(value.count)))
+    field.append(value)
+    return field
+}
+
+private func makeKdbxVariantDictionary(uuid: Data) -> Data {
+    var data = Data([0x00, 0x01])
+    data.append(kdbxVariantByteArray(key: "$UUID", value: uuid))
+    data.append(Data([0x00]))
+    return data
+}
+
+private func kdbxVariantByteArray(key: String, value: Data) -> Data {
+    var data = Data([0x42])
+    let keyData = Data(key.utf8)
+    data.append(littleEndianUInt32(UInt32(keyData.count)))
+    data.append(keyData)
+    data.append(littleEndianUInt32(UInt32(value.count)))
+    data.append(value)
+    return data
+}
+
+private func littleEndianUInt32(_ value: UInt32) -> Data {
+    var little = value.littleEndian
+    return Data(bytes: &little, count: MemoryLayout<UInt32>.size)
 }

@@ -3213,6 +3213,26 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 预览：KDBX 数据库，等待密码或密钥文件解锁"))
     }
 
+    func testKeePassImportPreviewCarriesPublicCryptoSummaryWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let kdbx = makeKdbx4Header(
+            cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+            compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+            kdfParameters: makeKdbxVariantDictionary(
+                uuid: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])
+            )
+        )
+
+        try unlockNewVault(model)
+        let preview = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+
+        XCTAssertEqual(preview.headerSummary?.cryptoSummary?.displaySummary, "AES-256，GZip，Argon2id")
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertFalse(preview.headerSummary!.cryptoSummary!.displaySummary.contains("database-password"))
+        XCTAssertFalse(preview.headerSummary!.cryptoSummary!.displaySummary.contains("key-file-secret"))
+    }
+
     func testKeePassImportPreviewRejectsLegacyKdbWithReadableMessage() throws {
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
         let legacyKdb = Data([
@@ -7957,4 +7977,50 @@ private struct RecordedEntryMutationCall {
     let vaultID: String
     let projectID: String
     let entryID: String
+}
+
+private func makeKdbx4Header(
+    cipherID: Data,
+    compressionFlags: Data,
+    kdfParameters: Data
+) -> Data {
+    var data = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x67, 0xFB, 0x4B, 0xB5,
+        0x00, 0x00, 0x04, 0x00
+    ])
+    data.append(kdbx4HeaderField(id: 2, value: cipherID))
+    data.append(kdbx4HeaderField(id: 3, value: compressionFlags))
+    data.append(kdbx4HeaderField(id: 11, value: kdfParameters))
+    data.append(kdbx4HeaderField(id: 0, value: Data([0x0D, 0x0A, 0x0D, 0x0A])))
+    return data
+}
+
+private func kdbx4HeaderField(id: UInt8, value: Data) -> Data {
+    var field = Data([id])
+    field.append(littleEndianUInt32(UInt32(value.count)))
+    field.append(value)
+    return field
+}
+
+private func makeKdbxVariantDictionary(uuid: Data) -> Data {
+    var data = Data([0x00, 0x01])
+    data.append(kdbxVariantByteArray(key: "$UUID", value: uuid))
+    data.append(Data([0x00]))
+    return data
+}
+
+private func kdbxVariantByteArray(key: String, value: Data) -> Data {
+    var data = Data([0x42])
+    let keyData = Data(key.utf8)
+    data.append(littleEndianUInt32(UInt32(keyData.count)))
+    data.append(keyData)
+    data.append(littleEndianUInt32(UInt32(value.count)))
+    data.append(value)
+    return data
+}
+
+private func littleEndianUInt32(_ value: UInt32) -> Data {
+    var little = value.littleEndian
+    return Data(bytes: &little, count: MemoryLayout<UInt32>.size)
 }
