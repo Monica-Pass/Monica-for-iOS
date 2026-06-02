@@ -491,6 +491,18 @@ struct SettingsRootView: View {
                                     value: skipped.reason.displayName
                                 )
                             }
+                            Button {
+                                do {
+                                    try session.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
+                                } catch {
+                                    // AppSessionModel owns user-visible failure state.
+                                }
+                            } label: {
+                                Label("确认导入元数据", systemImage: "checkmark.circle")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                            .disabled(plan.candidateCount == 0)
                         }
                     }
 

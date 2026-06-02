@@ -5523,6 +5523,43 @@ final class AppSessionModel {
         }
     }
 
+    func confirmKeePassReadOnlyImport(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let plan: KeePassReadOnlyImportPlan
+            if let existingPlan = keePassReadOnlyImportPlan {
+                plan = existingPlan
+            } else {
+                plan = try previewKeePassReadOnlyImportPlan()
+            }
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            for candidate in plan.candidates {
+                _ = try entryRepository.createLoginEntry(
+                    projectID: project.id,
+                    draft: LocalLoginEntryDraft(
+                        title: candidate.title,
+                        username: candidate.username,
+                        password: "",
+                        url: candidate.url
+                    )
+                )
+            }
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            clearKeePassImportState()
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据，秘密字段待 KDBX 解码器接入")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func importKeePassKeyFile(from fileURL: URL) throws {
         let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
         defer {
