@@ -3458,6 +3458,45 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 contract.pdf"))
     }
 
+    func testAndroidBackupAttachmentContentCanBeLoadedFromLocalBlobStoreWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret-password","website":"https://github.com","categoryName":"Work"}"#,
+            "attachments/attachments_meta.json": #"""
+            {"version":1,"entries":[{"parentPasswordId":42,"fileName":"contract.pdf","mimeType":"application/pdf","sizeBytes":2048,"sha256Hex":"abc123","wrappedCek":"wrapped-key","localPath":"attachment-1.enc","createdAt":1710000000000,"updatedAt":1710000001000}]}
+            """#,
+            "attachments/attachment-1.enc": "ciphertext"
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewAndroidBackupImport(backup)
+        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+
+        let attachment = try XCTUnwrap(model.attachmentEntries.first)
+        let status = model.attachmentContentStatus(for: attachment)
+        let blob = try model.loadAttachmentEncryptedBlob(attachment)
+
+        XCTAssertEqual(status.state, .available)
+        XCTAssertEqual(status.value, "10 字节")
+        XCTAssertEqual(status.detail, "附件密文已保存在本机，可进入预览恢复流程。")
+        XCTAssertEqual(blob, Data("ciphertext".utf8))
+        [
+            "abc123",
+            "wrapped-key",
+            "attachment-1.enc",
+            "ciphertext",
+            "secret-password"
+        ].forEach { secret in
+            XCTAssertFalse(status.detail.contains(secret))
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+    }
+
     func testAttachmentReferenceDeleteAndRestoreAppendRedactedTimelineEvents() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()
@@ -3517,6 +3556,11 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(relativePath, "___attachment-1.enc")
         XCTAssertEqual(
             try Data(contentsOf: directory.appendingPathComponent("created-vault").appendingPathComponent(relativePath)),
+            Data("ciphertext".utf8)
+        )
+        XCTAssertTrue(store.encryptedBlobExists(vaultID: "created-vault", localPath: relativePath))
+        XCTAssertEqual(
+            try store.encryptedBlobData(vaultID: "created-vault", localPath: relativePath),
             Data("ciphertext".utf8)
         )
     }
@@ -4569,7 +4613,7 @@ private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @un
     }
 }
 
-private final class RecordingAndroidBackupAttachmentBlobStore: AndroidBackupAttachmentBlobStore {
+private final class RecordingAndroidBackupAttachmentBlobStore: AndroidBackupAttachmentBlobStore, @unchecked Sendable {
     private(set) var savedBlobs: [RecordedAndroidBackupAttachmentBlob] = []
 
     func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String {
@@ -4581,6 +4625,21 @@ private final class RecordingAndroidBackupAttachmentBlobStore: AndroidBackupAtta
             )
         )
         return localPath
+    }
+
+    func encryptedBlobExists(vaultID: String, localPath: String) -> Bool {
+        savedBlobs.contains {
+            $0.vaultID == vaultID && $0.localPath == localPath
+        }
+    }
+
+    func encryptedBlobData(vaultID: String, localPath: String) throws -> Data {
+        guard let blob = savedBlobs.first(where: {
+            $0.vaultID == vaultID && $0.localPath == localPath
+        }) else {
+            throw LocalAttachmentContentStoreError.missingBlob(localPath)
+        }
+        return blob.data
     }
 }
 

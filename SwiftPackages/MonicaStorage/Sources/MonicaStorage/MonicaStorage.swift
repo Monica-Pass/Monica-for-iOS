@@ -7,6 +7,111 @@ public enum MonicaStorageBaseline {
     public static let primaryStore = "MDBX"
 }
 
+public enum LocalAttachmentContentStoreError: Error, Sendable, Equatable, LocalizedError {
+    case missingLocalPath
+    case missingBlob(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingLocalPath:
+            return "附件缺少本地密文路径。"
+        case .missingBlob:
+            return "附件密文尚未保存在本机。"
+        }
+    }
+}
+
+public protocol LocalAttachmentContentStore: Sendable {
+    func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String
+    func encryptedBlobExists(vaultID: String, localPath: String) -> Bool
+    func encryptedBlobData(vaultID: String, localPath: String) throws -> Data
+}
+
+public struct FileLocalAttachmentContentStore: LocalAttachmentContentStore, @unchecked Sendable {
+    private let baseDirectory: URL?
+    private let fileManager: FileManager
+
+    public init(baseDirectory: URL? = nil, fileManager: FileManager = .default) {
+        self.baseDirectory = baseDirectory
+        self.fileManager = fileManager
+    }
+
+    public func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String {
+        let vaultDirectory = try storageRoot()
+            .appendingPathComponent(sanitizedPathComponent(vaultID), isDirectory: true)
+        try fileManager.createDirectory(at: vaultDirectory, withIntermediateDirectories: true)
+
+        let relativePath = sanitizedPathComponent(localPath)
+        let fileURL = vaultDirectory.appendingPathComponent(relativePath, isDirectory: false)
+        try data.write(to: fileURL, options: [.atomic])
+        return relativePath
+    }
+
+    public func encryptedBlobExists(vaultID: String, localPath: String) -> Bool {
+        guard let fileURL = try? encryptedBlobURL(vaultID: vaultID, localPath: localPath) else {
+            return false
+        }
+        return fileManager.isReadableFile(atPath: fileURL.path)
+    }
+
+    public func encryptedBlobData(vaultID: String, localPath: String) throws -> Data {
+        let fileURL = try encryptedBlobURL(vaultID: vaultID, localPath: localPath)
+        guard fileManager.isReadableFile(atPath: fileURL.path) else {
+            throw LocalAttachmentContentStoreError.missingBlob(localPath)
+        }
+        return try Data(contentsOf: fileURL)
+    }
+
+    private func encryptedBlobURL(vaultID: String, localPath: String) throws -> URL {
+        let relativePath = sanitizedPathComponent(localPath)
+        guard !relativePath.isEmpty else {
+            throw LocalAttachmentContentStoreError.missingLocalPath
+        }
+        return try storageRoot()
+            .appendingPathComponent(sanitizedPathComponent(vaultID), isDirectory: true)
+            .appendingPathComponent(relativePath, isDirectory: false)
+    }
+
+    private func storageRoot() throws -> URL {
+        if let baseDirectory {
+            return baseDirectory
+        }
+        guard let applicationSupport = fileManager.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            return FileManager.default.temporaryDirectory
+                .appendingPathComponent("Monica", isDirectory: true)
+                .appendingPathComponent("AttachmentContent", isDirectory: true)
+        }
+        return applicationSupport
+            .appendingPathComponent("Monica", isDirectory: true)
+            .appendingPathComponent("AttachmentContent", isDirectory: true)
+    }
+
+    private func sanitizedPathComponent(_ value: String) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? value
+        let sanitized = normalized.unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 46, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        return sanitized.isEmpty ? UUID().uuidString + ".enc" : sanitized
+    }
+}
+
 public enum VaultSource: String, Sendable, Equatable, CaseIterable {
     case mdbx
     case keepass

@@ -156,6 +156,18 @@ struct AppVaultQuickFilterRow: Sendable, Equatable, Identifiable {
     let isSelected: Bool
 }
 
+struct AppAttachmentContentStatus: Sendable, Equatable {
+    enum State: Sendable, Equatable {
+        case available
+        case missing
+        case unavailable
+    }
+
+    let state: State
+    let value: String
+    let detail: String
+}
+
 enum VaultDisplayCardDensity: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
     case comfortable
     case compact
@@ -623,68 +635,8 @@ struct AndroidBackupExportDocument: FileDocument, Sendable {
     }
 }
 
-protocol AndroidBackupAttachmentBlobStore {
-    func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String
-}
-
-struct FileAndroidBackupAttachmentBlobStore: AndroidBackupAttachmentBlobStore {
-    private let baseDirectory: URL?
-    private let fileManager: FileManager
-
-    init(baseDirectory: URL? = nil, fileManager: FileManager = .default) {
-        self.baseDirectory = baseDirectory
-        self.fileManager = fileManager
-    }
-
-    func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String {
-        let vaultDirectory = try storageRoot()
-            .appendingPathComponent(sanitizedPathComponent(vaultID), isDirectory: true)
-        try fileManager.createDirectory(at: vaultDirectory, withIntermediateDirectories: true)
-
-        let relativePath = sanitizedPathComponent(localPath)
-        let fileURL = vaultDirectory.appendingPathComponent(relativePath, isDirectory: false)
-        try data.write(to: fileURL, options: [.atomic])
-        return relativePath
-    }
-
-    private func storageRoot() throws -> URL {
-        if let baseDirectory {
-            return baseDirectory
-        }
-        guard let applicationSupport = fileManager.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first else {
-            return FileManager.default.temporaryDirectory
-                .appendingPathComponent("MonicaAndroidBackupAttachments", isDirectory: true)
-        }
-        return applicationSupport
-            .appendingPathComponent("Monica", isDirectory: true)
-            .appendingPathComponent("AndroidBackupAttachments", isDirectory: true)
-    }
-
-    private func sanitizedPathComponent(_ value: String) -> String {
-        let normalized = value
-            .replacingOccurrences(of: "\\", with: "/")
-            .split(separator: "/")
-            .last
-            .map(String.init) ?? value
-        let sanitized = normalized.unicodeScalars
-            .map { scalar -> String in
-                switch scalar.value {
-                case 48...57, 65...90, 97...122:
-                    String(scalar)
-                case 45, 46, 95:
-                    String(scalar)
-                default:
-                    "_"
-                }
-            }
-            .joined()
-            .trimmingCharacters(in: CharacterSet(charactersIn: "."))
-        return sanitized.isEmpty ? UUID().uuidString + ".enc" : sanitized
-    }
-}
+typealias AndroidBackupAttachmentBlobStore = LocalAttachmentContentStore
+typealias FileAndroidBackupAttachmentBlobStore = FileLocalAttachmentContentStore
 
 enum FirstTimePasswordSetupStep: Sendable, Equatable {
     case enterPassword
@@ -1648,6 +1600,56 @@ final class AppSessionModel {
                 || entry.contentHash.localizedCaseInsensitiveContains(query)
                 || (entry.entryID?.localizedCaseInsensitiveContains(query) ?? false)
                 || (entry.localPath?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    func attachmentContentStatus(for entry: LocalAttachmentMetadata) -> AppAttachmentContentStatus {
+        guard let vaultID = activeVaultSession?.handle.vaultID else {
+            return AppAttachmentContentStatus(
+                state: .unavailable,
+                value: "未解锁",
+                detail: "请先解锁保险库，再检查附件内容。"
+            )
+        }
+        guard entry.downloadState == "downloaded",
+              let localPath = entry.localPath,
+              !localPath.isEmpty else {
+            return AppAttachmentContentStatus(
+                state: .missing,
+                value: "待恢复",
+                detail: "附件密文尚未保存在本机。"
+            )
+        }
+        guard androidBackupAttachmentBlobStore.encryptedBlobExists(vaultID: vaultID, localPath: localPath) else {
+            return AppAttachmentContentStatus(
+                state: .missing,
+                value: "待恢复",
+                detail: "附件密文尚未保存在本机。"
+            )
+        }
+        return AppAttachmentContentStatus(
+            state: .available,
+            value: "\(entry.storedSize) 字节",
+            detail: "附件密文已保存在本机，可进入预览恢复流程。"
+        )
+    }
+
+    func loadAttachmentEncryptedBlob(_ entry: LocalAttachmentMetadata) throws -> Data {
+        recordUserActivity()
+        do {
+            let vaultSession = try requireActiveVaultSession()
+            guard let localPath = entry.localPath, !localPath.isEmpty else {
+                throw LocalAttachmentContentStoreError.missingLocalPath
+            }
+            let blob = try androidBackupAttachmentBlobStore.encryptedBlobData(
+                vaultID: vaultSession.handle.vaultID,
+                localPath: localPath
+            )
+            entryOperationState = .succeeded("附件密文已读取：\(entry.fileName) \(blob.count) 字节")
+            return blob
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
         }
     }
 
