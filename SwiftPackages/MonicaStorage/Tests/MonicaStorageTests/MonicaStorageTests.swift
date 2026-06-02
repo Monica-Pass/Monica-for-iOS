@@ -319,6 +319,127 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbxAesPayloadCipherDecryptsCbcPayloadWithoutLeakingSecrets() throws {
+    let masterKey = KeePassKdbxMasterKeyMaterial(
+        algorithm: .aesKdf,
+        material: try decodeHexData("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4")
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xA1, count: 32),
+        encryptionIV: try decodeHexData("000102030405060708090a0b0c0d0e0f"),
+        innerRandomStreamKey: Data(repeating: 0xB2, count: 32),
+        streamStartBytes: Data(repeating: 0xC3, count: 32),
+        innerRandomStreamID: 2
+    )
+    let encryptedPayload = try decodeHexData("f58c4c04d6e5f1ba779eabfb5f7bfbd6")
+
+    let decrypted = try DefaultKeePassKdbxPayloadCipher().decryptPayload(
+        encryptedPayload,
+        cipher: .aes256,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    let expectedPlaintext = try decodeHexData("6bc1bee22e409f96e93d7e117393172a")
+    #expect(decrypted == expectedPlaintext)
+}
+
+@Test func defaultKeePassPayloadDecryptorUsesAesCipherBeforeBlockDecodeWithoutLeakingSecrets() throws {
+    final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
+        func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
+            KeePassKdbxDerivedKey(
+                algorithm: .aesKdf,
+                material: Data(repeating: 0x11, count: 32),
+                rounds: 1
+            )
+        }
+    }
+
+    final class FixedMasterKeyComposer: KeePassKdbxMasterKeyComposer, @unchecked Sendable {
+        func composeMasterKey(
+            from derivedKey: KeePassKdbxDerivedKey,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> KeePassKdbxMasterKeyMaterial {
+            KeePassKdbxMasterKeyMaterial(
+                algorithm: derivedKey.algorithm,
+                material: try decodeHexData("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4")
+            )
+        }
+    }
+
+    final class RecordingPayloadCipher: KeePassKdbxPayloadCipher, @unchecked Sendable {
+        var calls: [(cipher: KeePassKdbxCipherAlgorithm, payload: Data)] = []
+
+        func decryptPayload(
+            _ encryptedPayload: Data,
+            cipher: KeePassKdbxCipherAlgorithm,
+            masterKey: KeePassKdbxMasterKeyMaterial,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> Data {
+            calls.append((cipher: cipher, payload: encryptedPayload))
+            return Data("decrypted-block-stream-secret".utf8)
+        }
+    }
+
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .aesKdf,
+        aesKdf: KeePassKdbxAesKdfParameters(seed: Data(repeating: 0xA5, count: 32), rounds: 1)
+    )
+    let encryptedPayload = Data("encrypted-payload-secret".utf8)
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "aes-payload.kdbx",
+        candidateLabel: "password-only",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                cryptoSummary: KeePassKdbxCryptoSummary(
+                    cipher: .aes256,
+                    compression: .gzip,
+                    kdf: .aesKdf
+                ),
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerByteRange: 0..<0,
+            encryptedPayload: encryptedPayload
+        ),
+        kdfParameters: kdfParameters,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xB5, count: 32),
+            encryptionIV: Data(repeating: 0xC5, count: 16)
+        ),
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: Data("password-key-secret".utf8),
+            keyFileKey: nil,
+            compositeKey: Data(SHA256.hash(data: Data("composite-key-secret".utf8)))
+        )
+    )
+    let payloadCipher = RecordingPayloadCipher()
+    let decryptor = DefaultKeePassKdbxPayloadDecryptor(
+        keyDeriver: FixedKeyDeriver(),
+        masterKeyComposer: FixedMasterKeyComposer(),
+        payloadCipher: payloadCipher
+    )
+
+    do {
+        _ = try decryptor.decryptPayload(context)
+        Issue.record("Expected block stream decoder to remain unsupported")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(error.message == "KDBX block stream 解码尚未接入")
+        #expect(!error.message.contains("decrypted-block-stream-secret"))
+        #expect(!error.message.contains("encrypted-payload-secret"))
+        #expect(!error.message.contains("password-key-secret"))
+        #expect(!error.message.contains("composite-key-secret"))
+    }
+
+    #expect(payloadCipher.calls.count == 1)
+    #expect(payloadCipher.calls.first?.cipher == .aes256)
+    #expect(payloadCipher.calls.first?.payload == encryptedPayload)
+}
+
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
     let kdbx4 = Data([
         0x03, 0xD9, 0xA2, 0x9A,
@@ -800,14 +921,22 @@ import MonicaStorage
                 majorVersion: 4,
                 minorVersion: 0,
                 formatVersion: .kdbx4,
+                cryptoSummary: KeePassKdbxCryptoSummary(
+                    cipher: .aes256,
+                    compression: .gzip,
+                    kdf: .aesKdf
+                ),
                 kdfParameters: kdfParameters
             ),
             headerFields: [:],
             headerByteRange: 0..<0,
-            encryptedPayload: Data("encrypted-payload-bytes".utf8)
+            encryptedPayload: Data(repeating: 0xD5, count: 16)
         ),
         kdfParameters: kdfParameters,
-        cryptoInputs: KeePassKdbxPayloadCryptoInputs(masterSeed: Data(repeating: 0xB5, count: 32)),
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xB5, count: 32),
+            encryptionIV: Data(repeating: 0xC5, count: 16)
+        ),
         credentialMaterial: KeePassKdbxCredentialMaterial(
             passwordKey: Data("password-key-secret".utf8),
             keyFileKey: Data("key-file-secret".utf8),
@@ -822,12 +951,11 @@ import MonicaStorage
         Issue.record("Expected payload decryptor to remain unsupported")
     } catch let error as KeePassOperationError {
         #expect(error.code == .formatUnsupported)
-        #expect(error.message == "KDBX payload 解密尚未接入")
+        #expect(error.message == "KDBX block stream 解码尚未接入")
         #expect(!error.message.contains("derived-key-secret"))
         #expect(!error.message.contains("password-key-secret"))
         #expect(!error.message.contains("key-file-secret"))
         #expect(!error.message.contains("composite-key-secret"))
-        #expect(!error.message.contains("encrypted-payload-bytes"))
     }
 
     #expect(keyDeriver.contexts.map(\.candidateLabel) == ["raw/password+key"])

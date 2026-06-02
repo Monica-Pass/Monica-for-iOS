@@ -453,28 +453,105 @@ public protocol KeePassKdbxPayloadDecryptor: Sendable {
     func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data
 }
 
-public struct UnsupportedKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
+public protocol KeePassKdbxPayloadCipher: Sendable {
+    func decryptPayload(
+        _ encryptedPayload: Data,
+        cipher: KeePassKdbxCipherAlgorithm,
+        masterKey: KeePassKdbxMasterKeyMaterial,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> Data
+}
+
+public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
+    public init() {}
+
+    public func decryptPayload(
+        _ encryptedPayload: Data,
+        cipher: KeePassKdbxCipherAlgorithm,
+        masterKey: KeePassKdbxMasterKeyMaterial,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> Data {
+        switch cipher {
+        case .aes256:
+            return try KeePassAES256CBC.decrypt(
+                encryptedPayload,
+                key: masterKey.material,
+                iv: cryptoInputs.encryptionIV
+            )
+        case .chacha20:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX ChaCha20 payload 解密尚未接入"
+            )
+        case .twofish:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish payload 解密尚未接入"
+            )
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX cipher 尚未接入"
+            )
+        }
+    }
+}
+
+public struct DefaultKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
     private let keyDeriver: any KeePassKdbxKeyDeriver
     private let masterKeyComposer: any KeePassKdbxMasterKeyComposer
+    private let payloadCipher: any KeePassKdbxPayloadCipher
+
+    public init(
+        keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
+        masterKeyComposer: any KeePassKdbxMasterKeyComposer = DefaultKeePassKdbxMasterKeyComposer(),
+        payloadCipher: any KeePassKdbxPayloadCipher = DefaultKeePassKdbxPayloadCipher()
+    ) {
+        self.keyDeriver = keyDeriver
+        self.masterKeyComposer = masterKeyComposer
+        self.payloadCipher = payloadCipher
+    }
+
+    public func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
+        let derivedKey = try keyDeriver.deriveKey(from: context)
+        let masterKey = try masterKeyComposer.composeMasterKey(
+            from: derivedKey,
+            cryptoInputs: context.cryptoInputs
+        )
+        guard let cipher = context.envelope.headerSummary.cryptoSummary?.cipher else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX cipher 参数缺失；请确认文件未损坏。"
+            )
+        }
+        _ = try payloadCipher.decryptPayload(
+            context.envelope.encryptedPayload,
+            cipher: cipher,
+            masterKey: masterKey,
+            cryptoInputs: context.cryptoInputs
+        )
+        throw KeePassOperationError(
+            code: .formatUnsupported,
+            message: "KDBX block stream 解码尚未接入"
+        )
+    }
+}
+
+public struct UnsupportedKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
+    private let decryptor: DefaultKeePassKdbxPayloadDecryptor
 
     public init(
         keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
         masterKeyComposer: any KeePassKdbxMasterKeyComposer = DefaultKeePassKdbxMasterKeyComposer()
     ) {
-        self.keyDeriver = keyDeriver
-        self.masterKeyComposer = masterKeyComposer
+        self.decryptor = DefaultKeePassKdbxPayloadDecryptor(
+            keyDeriver: keyDeriver,
+            masterKeyComposer: masterKeyComposer
+        )
     }
 
     public func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
-        let derivedKey = try keyDeriver.deriveKey(from: context)
-        _ = try masterKeyComposer.composeMasterKey(
-            from: derivedKey,
-            cryptoInputs: context.cryptoInputs
-        )
-        throw KeePassOperationError(
-            code: .formatUnsupported,
-            message: "KDBX payload 解密尚未接入"
-        )
+        try decryptor.decryptPayload(context)
     }
 }
 
@@ -629,6 +706,22 @@ private enum KeePassAES256ECB {
     private static let blockSize = 16
     private static let rounds = 14
 
+    static func decryptBlock(_ block: Data, key: Data) throws -> Data {
+        guard block.count == blockSize else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES block 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard key.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES key 长度无效；请确认文件未损坏。"
+            )
+        }
+        return Data(decryptBlock([UInt8](block), roundKeys: expandKey([UInt8](key))))
+    }
+
     static func transform(_ data: Data, key: Data, rounds: UInt64) throws -> Data {
         guard data.count == 32 else {
             throw KeePassOperationError(
@@ -663,6 +756,23 @@ private enum KeePassAES256ECB {
         subBytes(&state)
         shiftRows(&state)
         addRoundKey(&state, roundKeys: roundKeys, round: rounds)
+        return state
+    }
+
+    private static func decryptBlock(_ block: [UInt8], roundKeys: [UInt8]) -> [UInt8] {
+        var state = block
+        addRoundKey(&state, roundKeys: roundKeys, round: rounds)
+
+        for round in stride(from: rounds - 1, through: 1, by: -1) {
+            inverseShiftRows(&state)
+            inverseSubBytes(&state)
+            addRoundKey(&state, roundKeys: roundKeys, round: round)
+            inverseMixColumns(&state)
+        }
+
+        inverseShiftRows(&state)
+        inverseSubBytes(&state)
+        addRoundKey(&state, roundKeys: roundKeys, round: 0)
         return state
     }
 
@@ -738,6 +848,44 @@ private enum KeePassAES256ECB {
         }
     }
 
+    private static func inverseSubBytes(_ state: inout [UInt8]) {
+        for index in state.indices {
+            state[index] = inverseSBox[Int(state[index])]
+        }
+    }
+
+    private static func inverseShiftRows(_ state: inout [UInt8]) {
+        let original = state
+        state[1] = original[13]
+        state[5] = original[1]
+        state[9] = original[5]
+        state[13] = original[9]
+
+        state[2] = original[10]
+        state[6] = original[14]
+        state[10] = original[2]
+        state[14] = original[6]
+
+        state[3] = original[7]
+        state[7] = original[11]
+        state[11] = original[15]
+        state[15] = original[3]
+    }
+
+    private static func inverseMixColumns(_ state: inout [UInt8]) {
+        for column in 0..<4 {
+            let offset = column * 4
+            let a0 = state[offset]
+            let a1 = state[offset + 1]
+            let a2 = state[offset + 2]
+            let a3 = state[offset + 3]
+            state[offset] = multiply(0x0E, a0) ^ multiply(0x0B, a1) ^ multiply(0x0D, a2) ^ multiply(0x09, a3)
+            state[offset + 1] = multiply(0x09, a0) ^ multiply(0x0E, a1) ^ multiply(0x0B, a2) ^ multiply(0x0D, a3)
+            state[offset + 2] = multiply(0x0D, a0) ^ multiply(0x09, a1) ^ multiply(0x0E, a2) ^ multiply(0x0B, a3)
+            state[offset + 3] = multiply(0x0B, a0) ^ multiply(0x0D, a1) ^ multiply(0x09, a2) ^ multiply(0x0E, a3)
+        }
+    }
+
     private static func addRoundKey(_ state: inout [UInt8], roundKeys: [UInt8], round: Int) {
         let offset = round * blockSize
         for index in 0..<blockSize {
@@ -752,6 +900,20 @@ private enum KeePassAES256ECB {
 
     private static func multiply3(_ value: UInt8) -> UInt8 {
         multiply2(value) ^ value
+    }
+
+    private static func multiply(_ multiplier: UInt8, _ value: UInt8) -> UInt8 {
+        var result: UInt8 = 0
+        var factor = multiplier
+        var current = value
+        while factor > 0 {
+            if factor & 1 == 1 {
+                result ^= current
+            }
+            current = multiply2(current)
+            factor >>= 1
+        }
+        return result
     }
 
     private static let rcon: [UInt8] = [
@@ -776,6 +938,85 @@ private enum KeePassAES256ECB {
         0xE1, 0xF8, 0x98, 0x11, 0x69, 0xD9, 0x8E, 0x94, 0x9B, 0x1E, 0x87, 0xE9, 0xCE, 0x55, 0x28, 0xDF,
         0x8C, 0xA1, 0x89, 0x0D, 0xBF, 0xE6, 0x42, 0x68, 0x41, 0x99, 0x2D, 0x0F, 0xB0, 0x54, 0xBB, 0x16
     ]
+
+    private static let inverseSBox: [UInt8] = [
+        0x52, 0x09, 0x6A, 0xD5, 0x30, 0x36, 0xA5, 0x38, 0xBF, 0x40, 0xA3, 0x9E, 0x81, 0xF3, 0xD7, 0xFB,
+        0x7C, 0xE3, 0x39, 0x82, 0x9B, 0x2F, 0xFF, 0x87, 0x34, 0x8E, 0x43, 0x44, 0xC4, 0xDE, 0xE9, 0xCB,
+        0x54, 0x7B, 0x94, 0x32, 0xA6, 0xC2, 0x23, 0x3D, 0xEE, 0x4C, 0x95, 0x0B, 0x42, 0xFA, 0xC3, 0x4E,
+        0x08, 0x2E, 0xA1, 0x66, 0x28, 0xD9, 0x24, 0xB2, 0x76, 0x5B, 0xA2, 0x49, 0x6D, 0x8B, 0xD1, 0x25,
+        0x72, 0xF8, 0xF6, 0x64, 0x86, 0x68, 0x98, 0x16, 0xD4, 0xA4, 0x5C, 0xCC, 0x5D, 0x65, 0xB6, 0x92,
+        0x6C, 0x70, 0x48, 0x50, 0xFD, 0xED, 0xB9, 0xDA, 0x5E, 0x15, 0x46, 0x57, 0xA7, 0x8D, 0x9D, 0x84,
+        0x90, 0xD8, 0xAB, 0x00, 0x8C, 0xBC, 0xD3, 0x0A, 0xF7, 0xE4, 0x58, 0x05, 0xB8, 0xB3, 0x45, 0x06,
+        0xD0, 0x2C, 0x1E, 0x8F, 0xCA, 0x3F, 0x0F, 0x02, 0xC1, 0xAF, 0xBD, 0x03, 0x01, 0x13, 0x8A, 0x6B,
+        0x3A, 0x91, 0x11, 0x41, 0x4F, 0x67, 0xDC, 0xEA, 0x97, 0xF2, 0xCF, 0xCE, 0xF0, 0xB4, 0xE6, 0x73,
+        0x96, 0xAC, 0x74, 0x22, 0xE7, 0xAD, 0x35, 0x85, 0xE2, 0xF9, 0x37, 0xE8, 0x1C, 0x75, 0xDF, 0x6E,
+        0x47, 0xF1, 0x1A, 0x71, 0x1D, 0x29, 0xC5, 0x89, 0x6F, 0xB7, 0x62, 0x0E, 0xAA, 0x18, 0xBE, 0x1B,
+        0xFC, 0x56, 0x3E, 0x4B, 0xC6, 0xD2, 0x79, 0x20, 0x9A, 0xDB, 0xC0, 0xFE, 0x78, 0xCD, 0x5A, 0xF4,
+        0x1F, 0xDD, 0xA8, 0x33, 0x88, 0x07, 0xC7, 0x31, 0xB1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xEC, 0x5F,
+        0x60, 0x51, 0x7F, 0xA9, 0x19, 0xB5, 0x4A, 0x0D, 0x2D, 0xE5, 0x7A, 0x9F, 0x93, 0xC9, 0x9C, 0xEF,
+        0xA0, 0xE0, 0x3B, 0x4D, 0xAE, 0x2A, 0xF5, 0xB0, 0xC8, 0xEB, 0xBB, 0x3C, 0x83, 0x53, 0x99, 0x61,
+        0x17, 0x2B, 0x04, 0x7E, 0xBA, 0x77, 0xD6, 0x26, 0xE1, 0x69, 0x14, 0x63, 0x55, 0x21, 0x0C, 0x7D
+    ]
+}
+
+private enum KeePassAES256CBC {
+    private static let blockSize = 16
+
+    static func decrypt(_ data: Data, key: Data, iv: Data?) throws -> Data {
+        guard key.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES master key 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard let iv, iv.count == blockSize else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES IV 缺失或长度无效；请确认文件未损坏。"
+            )
+        }
+        guard !data.isEmpty, data.count.isMultiple(of: blockSize) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES payload 长度无效；请确认文件未损坏。"
+            )
+        }
+
+        var output = Data()
+        output.reserveCapacity(data.count)
+        var previousBlock = iv
+        var offset = 0
+        while offset < data.count {
+            let encryptedBlock = Data(data[offset..<offset + blockSize])
+            var decryptedBlock = try KeePassAES256ECB.decryptBlock(encryptedBlock, key: key)
+            for index in 0..<blockSize {
+                decryptedBlock[index] ^= previousBlock[index]
+            }
+            output.append(decryptedBlock)
+            previousBlock = encryptedBlock
+            offset += blockSize
+        }
+        return output.removingPKCS7Padding(blockSize: blockSize)
+    }
+}
+
+private extension Data {
+    func removingPKCS7Padding(blockSize: Int) -> Data {
+        guard let lastByte = self.last else {
+            return self
+        }
+        let paddingLength = Int(lastByte)
+        guard paddingLength > 0,
+              paddingLength <= blockSize,
+              paddingLength <= count else {
+            return self
+        }
+        let paddingStart = count - paddingLength
+        guard self[paddingStart..<count].allSatisfy({ $0 == lastByte }) else {
+            return self
+        }
+        return Data(self[0..<paddingStart])
+    }
 }
 
 public struct KeePassCredentialSummary: Sendable, Equatable {
@@ -1520,7 +1761,7 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
     private let xmlReader = KeePassXMLReadOnlySnapshotReader()
     private let payloadDecryptor: any KeePassKdbxPayloadDecryptor
 
-    public init(payloadDecryptor: any KeePassKdbxPayloadDecryptor = UnsupportedKeePassKdbxPayloadDecryptor()) {
+    public init(payloadDecryptor: any KeePassKdbxPayloadDecryptor = DefaultKeePassKdbxPayloadDecryptor()) {
         self.payloadDecryptor = payloadDecryptor
     }
 
