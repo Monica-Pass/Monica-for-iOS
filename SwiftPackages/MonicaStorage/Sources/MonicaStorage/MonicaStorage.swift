@@ -26,8 +26,66 @@ public enum KeePassContainerFormat: Sendable, Equatable {
 
 public enum KeePassImportStatus: Sendable, Equatable {
     case requiresCredentials
+    case readyToUnlock
     case unsupported
     case unknown
+}
+
+public enum KeePassKdbxFormatVersion: Sendable, Equatable {
+    case kdbx3
+    case kdbx4
+    case unknown
+}
+
+public struct KeePassHeaderSummary: Sendable, Equatable {
+    public let majorVersion: Int?
+    public let minorVersion: Int?
+    public let formatVersion: KeePassKdbxFormatVersion
+
+    public init(majorVersion: Int?, minorVersion: Int?, formatVersion: KeePassKdbxFormatVersion) {
+        self.majorVersion = majorVersion
+        self.minorVersion = minorVersion
+        self.formatVersion = formatVersion
+    }
+
+    public var displayName: String {
+        switch formatVersion {
+        case .kdbx3:
+            return "KDBX 3"
+        case .kdbx4:
+            return "KDBX 4"
+        case .unknown:
+            if let majorVersion {
+                return "KDBX \(majorVersion)"
+            }
+            return "KDBX"
+        }
+    }
+}
+
+public struct KeePassCredentialSummary: Sendable, Equatable {
+    public let hasPassword: Bool
+    public let hasKeyFile: Bool
+    public let keyFileName: String?
+
+    public init(hasPassword: Bool, hasKeyFile: Bool, keyFileName: String?) {
+        self.hasPassword = hasPassword
+        self.hasKeyFile = hasKeyFile
+        self.keyFileName = keyFileName
+    }
+
+    public var displayName: String {
+        switch (hasPassword, hasKeyFile) {
+        case (true, true):
+            return "密码 + 密钥文件"
+        case (true, false):
+            return "密码"
+        case (false, true):
+            return "密钥文件"
+        case (false, false):
+            return "未提供凭据"
+        }
+    }
 }
 
 public enum KeePassErrorCode: Sendable, Equatable {
@@ -53,17 +111,45 @@ public struct KeePassImportPreviewReport: Sendable, Equatable {
     public let format: KeePassContainerFormat
     public let status: KeePassImportStatus
     public let sourceName: String?
+    public let headerSummary: KeePassHeaderSummary?
     public let issue: KeePassImportIssue?
 
     public init(
         format: KeePassContainerFormat,
         status: KeePassImportStatus,
         sourceName: String?,
+        headerSummary: KeePassHeaderSummary?,
         issue: KeePassImportIssue?
     ) {
         self.format = format
         self.status = status
         self.sourceName = sourceName
+        self.headerSummary = headerSummary
+        self.issue = issue
+    }
+}
+
+public struct KeePassUnlockPreflightReport: Sendable, Equatable {
+    public let format: KeePassContainerFormat
+    public let status: KeePassImportStatus
+    public let sourceName: String?
+    public let headerSummary: KeePassHeaderSummary?
+    public let credentials: KeePassCredentialSummary
+    public let issue: KeePassImportIssue?
+
+    public init(
+        format: KeePassContainerFormat,
+        status: KeePassImportStatus,
+        sourceName: String?,
+        headerSummary: KeePassHeaderSummary?,
+        credentials: KeePassCredentialSummary,
+        issue: KeePassImportIssue?
+    ) {
+        self.format = format
+        self.status = status
+        self.sourceName = sourceName
+        self.headerSummary = headerSummary
+        self.credentials = credentials
         self.issue = issue
     }
 }
@@ -84,12 +170,15 @@ public struct KeePassOperationError: Error, Sendable, Equatable, LocalizedError 
 
 public enum KeePassFormatInspector {
     private static let kdbxSignature = Data([0x03, 0xD9, 0xA2, 0x9A, 0x67, 0xFB, 0x4B, 0xB5])
+    private static let kdbxVersionOffset = 8
+    private static let kdbxVersionByteCount = 4
     private static let legacyKdbSignatures = [
         Data([0x03, 0xD9, 0xA2, 0x9A, 0x65, 0xFB, 0x4B, 0xB5]),
         Data([0x03, 0xD9, 0xA2, 0x9A, 0x66, 0xFB, 0x4B, 0xB5])
     ]
     public static let legacyKdbUnsupportedMessage =
         "检测到旧版 .kdb（KeePass 1.x）数据库，当前仅支持 .kdbx。请先在 KeePassDX/KeePassXC 中另存为 .kdbx 后再导入。"
+    public static let missingCredentialsMessage = "请输入数据库密码或选择密钥文件"
 
     public static func detect(_ data: Data, sourceName: String? = nil) -> KeePassContainerFormat {
         if data.starts(with: kdbxSignature) {
@@ -112,6 +201,7 @@ public enum KeePassFormatInspector {
                 format: format,
                 status: .requiresCredentials,
                 sourceName: sourceName,
+                headerSummary: parseKdbxHeaderSummary(data),
                 issue: nil
             )
         case .legacyKdb:
@@ -119,6 +209,7 @@ public enum KeePassFormatInspector {
                 format: format,
                 status: .unsupported,
                 sourceName: sourceName,
+                headerSummary: nil,
                 issue: KeePassImportIssue(
                     code: .legacyKdbUnsupported,
                     message: legacyKdbUnsupportedMessage
@@ -129,6 +220,7 @@ public enum KeePassFormatInspector {
                 format: format,
                 status: .unknown,
                 sourceName: sourceName,
+                headerSummary: nil,
                 issue: KeePassImportIssue(
                     code: .formatUnsupported,
                     message: "数据库格式不支持或文件已损坏。"
@@ -147,12 +239,95 @@ public enum KeePassFormatInspector {
             throw KeePassOperationError(code: issue.code, message: issue.message)
         }
     }
+
+    public static func prepareUnlock(
+        _ data: Data,
+        sourceName: String? = nil,
+        password: String,
+        keyFile: Data?,
+        keyFileName: String?
+    ) -> KeePassUnlockPreflightReport {
+        let report = inspect(data, sourceName: sourceName)
+        let credentials = KeePassCredentialSummary(
+            hasPassword: !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+            hasKeyFile: keyFile?.isEmpty == false,
+            keyFileName: keyFileName?.sanitizedKeePassFileName
+        )
+
+        if let issue = report.issue {
+            return KeePassUnlockPreflightReport(
+                format: report.format,
+                status: report.status,
+                sourceName: report.sourceName,
+                headerSummary: report.headerSummary,
+                credentials: credentials,
+                issue: issue
+            )
+        }
+
+        guard credentials.hasPassword || credentials.hasKeyFile else {
+            return KeePassUnlockPreflightReport(
+                format: report.format,
+                status: .requiresCredentials,
+                sourceName: report.sourceName,
+                headerSummary: report.headerSummary,
+                credentials: credentials,
+                issue: KeePassImportIssue(code: .invalidCredential, message: missingCredentialsMessage)
+            )
+        }
+
+        return KeePassUnlockPreflightReport(
+            format: report.format,
+            status: .readyToUnlock,
+            sourceName: report.sourceName,
+            headerSummary: report.headerSummary,
+            credentials: credentials,
+            issue: nil
+        )
+    }
+
+    private static func parseKdbxHeaderSummary(_ data: Data) -> KeePassHeaderSummary? {
+        guard data.starts(with: kdbxSignature),
+              data.count >= kdbxVersionOffset + kdbxVersionByteCount else {
+            return nil
+        }
+        let versionBytes = data[kdbxVersionOffset..<kdbxVersionOffset + kdbxVersionByteCount]
+        var rawVersion: UInt32 = 0
+        for (offset, byte) in versionBytes.enumerated() {
+            rawVersion |= UInt32(byte) << UInt32(offset * 8)
+        }
+        let minor = Int(rawVersion & 0xFFFF)
+        let major = Int((rawVersion >> 16) & 0xFFFF)
+        let formatVersion: KeePassKdbxFormatVersion
+        switch major {
+        case 3:
+            formatVersion = .kdbx3
+        case 4:
+            formatVersion = .kdbx4
+        default:
+            formatVersion = .unknown
+        }
+        return KeePassHeaderSummary(
+            majorVersion: major == 0 ? nil : major,
+            minorVersion: minor,
+            formatVersion: formatVersion
+        )
+    }
 }
 
 private extension String {
     var isLikelyLegacyKdbExtension: Bool {
         let lower = lowercased()
         return lower.hasSuffix(".kdb") && !lower.hasSuffix(".kdbx")
+    }
+
+    var sanitizedKeePassFileName: String? {
+        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+        let name = URL(fileURLWithPath: trimmed).lastPathComponent
+        return name.isEmpty ? nil : name
     }
 }
 

@@ -620,9 +620,11 @@ struct AndroidBackupImportPreview: Sendable, Equatable {
 
 struct KeePassImportPreview: Sendable, Equatable {
     let report: KeePassImportPreviewReport
+    let unlockPreflight: KeePassUnlockPreflightReport?
 
     var format: KeePassContainerFormat { report.format }
     var status: KeePassImportStatus { report.status }
+    var headerSummary: KeePassHeaderSummary? { report.headerSummary }
     var issue: KeePassImportIssue? { report.issue }
 }
 
@@ -1277,6 +1279,11 @@ final class AppSessionModel {
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
+    var keePassPendingDatabaseData: Data?
+    var keePassPendingDatabaseName: String?
+    var keePassUnlockPassword = ""
+    var keePassKeyFileData: Data?
+    var keePassKeyFileName = ""
     var androidBackupDecryptPassword = ""
     var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
@@ -5328,7 +5335,7 @@ final class AppSessionModel {
         let preview = CSVImportPreview(report: report)
         csvImportPreview = preview
         androidBackupImportPreview = nil
-        keePassImportPreview = nil
+        clearKeePassImportState()
         entryOperationState = .succeeded("CSV 预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
         return preview
     }
@@ -5377,15 +5384,20 @@ final class AppSessionModel {
         recordUserActivity()
         let report = KeePassFormatInspector.inspect(data, sourceName: fileName)
         if let issue = report.issue {
-            keePassImportPreview = nil
+            clearKeePassImportState()
             csvImportPreview = nil
             androidBackupImportPreview = nil
             entryOperationState = .failed(issue.message)
             throw KeePassOperationError(code: issue.code, message: issue.message)
         }
 
-        let preview = KeePassImportPreview(report: report)
+        let preview = KeePassImportPreview(report: report, unlockPreflight: nil)
         keePassImportPreview = preview
+        keePassPendingDatabaseData = data
+        keePassPendingDatabaseName = fileName
+        keePassUnlockPassword = ""
+        keePassKeyFileData = nil
+        keePassKeyFileName = ""
         csvImportPreview = nil
         androidBackupImportPreview = nil
         clearPendingAndroidEncryptedBackup()
@@ -5404,6 +5416,64 @@ final class AppSessionModel {
         return try previewKeePassImport(data, fileName: fileURL.lastPathComponent)
     }
 
+    func prepareKeePassUnlockPreflight(
+        password: String? = nil,
+        keyFile: Data? = nil,
+        keyFileName: String? = nil
+    ) throws -> KeePassUnlockPreflightReport {
+        recordUserActivity()
+        guard let databaseData = keePassPendingDatabaseData else {
+            let message = "请先选择 KDBX 数据库文件"
+            entryOperationState = .failed(message)
+            throw KeePassOperationError(code: .formatUnsupported, message: message)
+        }
+
+        if let password {
+            keePassUnlockPassword = password
+        }
+        if let keyFile {
+            keePassKeyFileData = keyFile
+        }
+        if let keyFileName {
+            keePassKeyFileName = sanitizedKeePassFileName(keyFileName) ?? ""
+        }
+
+        let preflight = KeePassFormatInspector.prepareUnlock(
+            databaseData,
+            sourceName: keePassPendingDatabaseName,
+            password: password ?? keePassUnlockPassword,
+            keyFile: keyFile ?? keePassKeyFileData,
+            keyFileName: keyFileName ?? keePassKeyFileName
+        )
+
+        if let issue = preflight.issue {
+            entryOperationState = .failed(issue.message)
+            throw KeePassOperationError(code: issue.code, message: issue.message)
+        }
+
+        if let preview = keePassImportPreview {
+            keePassImportPreview = KeePassImportPreview(
+                report: preview.report,
+                unlockPreflight: preflight
+            )
+        }
+        let version = preflight.headerSummary?.displayName ?? preflight.format.displayName
+        entryOperationState = .succeeded("KeePass 解锁输入已准备：\(version)，\(preflight.credentials.displayName)")
+        return preflight
+    }
+
+    func importKeePassKeyFile(from fileURL: URL) throws {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        keePassKeyFileData = try Data(contentsOf: fileURL)
+        keePassKeyFileName = sanitizedKeePassFileName(fileURL.lastPathComponent) ?? "keyfile"
+        entryOperationState = .succeeded("KeePass 密钥文件已选择：\(keePassKeyFileName)")
+    }
+
     func previewAndroidBackupImport(
         _ data: Data,
         fileName: String? = nil,
@@ -5418,21 +5488,21 @@ final class AppSessionModel {
         if let encryptedIssue = report.issues.first(where: { $0.code == .encryptedBackupUnsupported }) {
             androidBackupImportPreview = nil
             csvImportPreview = nil
-            keePassImportPreview = nil
+            clearKeePassImportState()
             entryOperationState = .failed(encryptedIssue.message)
             throw AppAndroidBackupImportError.unsupportedEncryptedBackup(encryptedIssue.message)
         }
         if let decryptIssue = report.issues.first(where: { $0.code == .encryptedBackupDecryptionFailed }) {
             androidBackupImportPreview = nil
             csvImportPreview = nil
-            keePassImportPreview = nil
+            clearKeePassImportState()
             entryOperationState = .failed(decryptIssue.message)
             throw AppAndroidBackupImportError.encryptedBackupDecryptionFailed(decryptIssue.message)
         }
         let preview = AndroidBackupImportPreview(report: report)
         androidBackupImportPreview = preview
         csvImportPreview = nil
-        keePassImportPreview = nil
+        clearKeePassImportState()
         clearPendingAndroidEncryptedBackup()
         let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
         entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(attachmentText)，\(report.issues.count) 个问题")
@@ -6073,7 +6143,7 @@ final class AppSessionModel {
         clearExtendedParityEntries()
         csvImportPreview = nil
         androidBackupImportPreview = nil
-        keePassImportPreview = nil
+        clearKeePassImportState()
         entryOperationState = .idle
         clearOperationTimelineEvents()
     }
@@ -6126,12 +6196,22 @@ final class AppSessionModel {
         webDAVRestoreVaultPassword = ""
         downloadedWebDAVRestoreBackup = nil
         clearPendingAndroidEncryptedBackup()
+        clearKeePassImportState()
     }
 
     private func clearPendingAndroidEncryptedBackup() {
         pendingAndroidEncryptedBackupData = nil
         pendingAndroidEncryptedBackupFileName = nil
         androidBackupDecryptPassword = ""
+    }
+
+    private func clearKeePassImportState() {
+        keePassImportPreview = nil
+        keePassPendingDatabaseData = nil
+        keePassPendingDatabaseName = nil
+        keePassUnlockPassword = ""
+        keePassKeyFileData = nil
+        keePassKeyFileName = ""
     }
 
     private func clearExtendedParityEntries() {
@@ -6472,6 +6552,17 @@ final class AppSessionModel {
             .joined()
             .trimmingCharacters(in: CharacterSet(charactersIn: "."))
         return sanitized.isEmpty ? "attachment-\(UUID().uuidString).bin" : sanitized
+    }
+
+    private func sanitizedKeePassFileName(_ value: String) -> String? {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? value
+        let sanitized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized.isEmpty ? nil : sanitized
     }
 
     private func clearOperationTimelineEvents() {

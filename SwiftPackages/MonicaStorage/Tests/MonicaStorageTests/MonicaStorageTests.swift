@@ -43,6 +43,43 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
+    let kdbx4 = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x67, 0xFB, 0x4B, 0xB5,
+        0x00, 0x00, 0x04, 0x00
+    ])
+
+    let preview = KeePassFormatInspector.inspect(kdbx4, sourceName: "personal.kdbx")
+    #expect(preview.headerSummary?.formatVersion == .kdbx4)
+    #expect(preview.headerSummary?.displayName == "KDBX 4")
+
+    let missing = KeePassFormatInspector.prepareUnlock(
+        kdbx4,
+        sourceName: "personal.kdbx",
+        password: "   ",
+        keyFile: nil,
+        keyFileName: nil
+    )
+    #expect(missing.status == .requiresCredentials)
+    #expect(missing.issue?.code == .invalidCredential)
+    #expect(missing.issue?.message == "请输入数据库密码或选择密钥文件")
+
+    let ready = KeePassFormatInspector.prepareUnlock(
+        kdbx4,
+        sourceName: "personal.kdbx",
+        password: "database-password",
+        keyFile: Data([0x01, 0x02, 0x03]),
+        keyFileName: "../personal.key"
+    )
+    #expect(ready.status == .readyToUnlock)
+    #expect(ready.headerSummary?.formatVersion == .kdbx4)
+    #expect(ready.credentials.hasPassword)
+    #expect(ready.credentials.hasKeyFile)
+    #expect(ready.credentials.keyFileName == "personal.key")
+    #expect(ready.issue == nil)
+}
+
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
     let login = UnifiedVaultItem(
         id: "login-1",

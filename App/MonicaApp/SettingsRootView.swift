@@ -17,6 +17,7 @@ struct SettingsRootView: View {
     @State private var isCSVExporterPresented = false
     @State private var csvExportDocument = CSVExportDocument()
     @State private var isKeePassImporterPresented = false
+    @State private var isKeePassKeyFileImporterPresented = false
     @State private var isAndroidBackupImporterPresented = false
     @State private var isAndroidBackupExporterPresented = false
     @State private var isAndroidBackupPasswordPromptPresented = false
@@ -397,6 +398,42 @@ struct SettingsRootView: View {
                         AndroidParityDivider()
                         AndroidParityInfoRow(title: "KeePass 格式", value: preview.format.displayName)
                         AndroidParityInfoRow(title: "状态", value: keePassPreviewStatusText(preview.status))
+                        if let headerSummary = preview.headerSummary {
+                            AndroidParityInfoRow(title: "KDBX 版本", value: headerSummary.displayName)
+                        }
+                        SecureField("数据库密码", text: $session.keePassUnlockPassword)
+                            .textContentType(.password)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .padding(.vertical, 6)
+                        HStack(spacing: 12) {
+                            Button {
+                                isKeePassKeyFileImporterPresented = true
+                            } label: {
+                                Label("选择密钥文件", systemImage: "folder")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+
+                            Button {
+                                do {
+                                    _ = try session.prepareKeePassUnlockPreflight()
+                                } catch {
+                                    // AppSessionModel owns user-visible failure state.
+                                }
+                            } label: {
+                                Label("准备解锁", systemImage: "lock.open")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        }
+                        AndroidParityInfoRow(
+                            title: "密钥文件",
+                            value: session.keePassKeyFileName.isEmpty ? "未选择" : session.keePassKeyFileName
+                        )
+                        if let preflight = preview.unlockPreflight {
+                            AndroidParityInfoRow(title: "凭据", value: preflight.credentials.displayName)
+                        }
                     }
 
                     AndroidParityDivider()
@@ -619,6 +656,25 @@ struct SettingsRootView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
+        .fileImporter(
+            isPresented: $isKeePassKeyFileImporterPresented,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                do {
+                    try session.importKeePassKeyFile(from: fileURL)
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                }
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
         .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
             SecureField("备份密码", text: $session.androidBackupDecryptPassword)
             Button("取消", role: .cancel) {
@@ -657,6 +713,8 @@ struct SettingsRootView: View {
         switch status {
         case .requiresCredentials:
             return "等待密码或密钥文件"
+        case .readyToUnlock:
+            return "等待解锁"
         case .unsupported:
             return "暂不支持"
         case .unknown:

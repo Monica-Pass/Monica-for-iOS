@@ -3230,6 +3230,44 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassUnlockPreflightAcceptsPasswordAndKeyFileWithoutWritingVaultOrLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+        let keyFile = Data("key-file-secret".utf8)
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+
+        XCTAssertThrowsError(
+            try model.prepareKeePassUnlockPreflight(password: "   ", keyFile: nil, keyFileName: nil)
+        )
+        XCTAssertEqual(model.entryOperationState, .failed("请输入数据库密码或选择密钥文件"))
+
+        let preflight = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: keyFile,
+            keyFileName: "../personal.key"
+        )
+
+        XCTAssertEqual(preflight.status, .readyToUnlock)
+        XCTAssertEqual(preflight.credentials.keyFileName, "personal.key")
+        XCTAssertEqual(preflight.headerSummary?.displayName, "KDBX 4")
+        XCTAssertEqual(model.keePassImportPreview?.unlockPreflight?.status, .readyToUnlock)
+        XCTAssertEqual(model.keePassKeyFileName, "personal.key")
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 解锁输入已准备：KDBX 4，密码 + 密钥文件")
+        )
+    }
+
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
