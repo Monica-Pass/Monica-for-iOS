@@ -83,7 +83,8 @@ struct AndroidParityVaultHomeView: View {
             quickFilterRows: session.vaultQuickFilterRows,
             onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
-            onAdd: { session.presentAddEditor(for: tab) }
+            onAdd: { session.presentAddEditor(for: tab) },
+            batchBar: { batchActionBar }
         ) {
             if session.vaultState == .unlocked {
                 unlockedContent
@@ -201,14 +202,15 @@ struct AndroidParityVaultHomeView: View {
                 }
             } else {
                 ForEach(session.filteredLoginEntries) { entry in
-                    Button { session.presentEditEditor(for: entry) } label: {
-                        AndroidPasswordListCard(
-                            entry: entry,
-                            displayPreferences: session.vaultDisplayPreferences,
-                            appearancePreferences: session.appearancePreferences
-                        )
+                    batchAwareButton(id: entry.id, kind: .login, edit: { session.presentEditEditor(for: entry) }) {
+                        batchSelectableCard(id: entry.id) {
+                            AndroidPasswordListCard(
+                                entry: entry,
+                                displayPreferences: session.vaultDisplayPreferences,
+                                appearancePreferences: session.appearancePreferences
+                            )
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
                 if session.filteredLoginEntries.isEmpty {
                     emptyList("没有匹配的密码", icon: "lock.fill")
@@ -241,10 +243,11 @@ struct AndroidParityVaultHomeView: View {
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
             ForEach(session.filteredTotpEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidTotpListCard(entry: entry, code: totpCode(for: entry), remaining: session.totpTimeRemaining(for: entry, at: now))
+                batchAwareButton(id: entry.id, kind: .totp, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidTotpListCard(entry: entry, code: totpCode(for: entry), remaining: session.totpTimeRemaining(for: entry, at: now))
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredTotpEntries.isEmpty {
                 emptyList("没有匹配的验证码", icon: "shield.lefthalf.filled")
@@ -256,16 +259,18 @@ struct AndroidParityVaultHomeView: View {
     private var walletList: some View {
         VStack(spacing: 16) {
             ForEach(session.filteredCardEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidBankCardListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .card, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidBankCardListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             ForEach(session.filteredIdentityEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidIdentityListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .identity, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidIdentityListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredCardEntries.isEmpty && session.filteredIdentityEntries.isEmpty {
                 emptyList("没有匹配的卡片或证件", icon: "creditcard")
@@ -278,10 +283,11 @@ struct AndroidParityVaultHomeView: View {
     private var noteList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredNoteEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidNoteListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .note, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidNoteListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredNoteEntries.isEmpty {
                 emptyList("没有匹配的笔记", icon: "note.text")
@@ -293,10 +299,11 @@ struct AndroidParityVaultHomeView: View {
     private var passkeyList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredPasskeyEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidPasskeyListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .passkey, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidPasskeyListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredPasskeyEntries.isEmpty {
                 emptyList("没有匹配的通行密钥", icon: "key.horizontal.fill")
@@ -325,10 +332,11 @@ struct AndroidParityVaultHomeView: View {
     private var sshKeyList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSshKeyEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidSshKeyListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .sshKey, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidSshKeyListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredSshKeyEntries.isEmpty {
                 emptyList("没有匹配的 SSH 密钥", icon: "key.fill")
@@ -340,10 +348,11 @@ struct AndroidParityVaultHomeView: View {
     private var apiTokenList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredApiTokenEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidApiTokenListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .apiToken, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidApiTokenListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredApiTokenEntries.isEmpty {
                 emptyList("没有匹配的 API Token", icon: "text.badge.key")
@@ -355,10 +364,11 @@ struct AndroidParityVaultHomeView: View {
     private var wifiList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredWifiEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidWifiListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .wifi, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidWifiListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredWifiEntries.isEmpty {
                 emptyList("没有匹配的 Wi-Fi", icon: "wifi")
@@ -370,10 +380,11 @@ struct AndroidParityVaultHomeView: View {
     private var sendList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSendEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidSendListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .send, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidSendListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredSendEntries.isEmpty {
                 emptyList("没有匹配的 Send", icon: "paperplane.fill")
@@ -385,8 +396,17 @@ struct AndroidParityVaultHomeView: View {
     private var attachmentList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredAttachmentEntries) { entry in
-                AndroidAttachmentListCard(entry: entry) {
-                    deleteAttachmentEntry(entry)
+                if session.isVaultBatchSelectionActive {
+                    Button { session.toggleVaultBatchItemSelection(entry.id, for: .attachmentRef) } label: {
+                        batchSelectableCard(id: entry.id) {
+                            AndroidAttachmentListCard(entry: entry) {}
+                        }
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    AndroidAttachmentListCard(entry: entry) {
+                        deleteAttachmentEntry(entry)
+                    }
                 }
             }
             if session.filteredAttachmentEntries.isEmpty {
@@ -399,20 +419,24 @@ struct AndroidParityVaultHomeView: View {
     private var extendedPasskeySections: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSshKeyEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: { AndroidSshKeyListCard(entry: entry) }
-                    .buttonStyle(.plain)
+                batchAwareButton(id: entry.id, kind: .sshKey, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) { AndroidSshKeyListCard(entry: entry) }
+                }
             }
             ForEach(session.filteredApiTokenEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: { AndroidApiTokenListCard(entry: entry) }
-                    .buttonStyle(.plain)
+                batchAwareButton(id: entry.id, kind: .apiToken, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) { AndroidApiTokenListCard(entry: entry) }
+                }
             }
             ForEach(session.filteredWifiEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: { AndroidWifiListCard(entry: entry) }
-                    .buttonStyle(.plain)
+                batchAwareButton(id: entry.id, kind: .wifi, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) { AndroidWifiListCard(entry: entry) }
+                }
             }
             ForEach(session.filteredSendEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: { AndroidSendListCard(entry: entry) }
-                    .buttonStyle(.plain)
+                batchAwareButton(id: entry.id, kind: .send, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) { AndroidSendListCard(entry: entry) }
+                }
             }
             deletedSshKeyRows
             deletedApiTokenRows
@@ -424,10 +448,11 @@ struct AndroidParityVaultHomeView: View {
     private var identityList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredIdentityEntries) { entry in
-                Button { session.presentEditEditor(for: entry) } label: {
-                    AndroidIdentityListCard(entry: entry)
+                batchAwareButton(id: entry.id, kind: .identity, edit: { session.presentEditEditor(for: entry) }) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidIdentityListCard(entry: entry)
+                    }
                 }
-                .buttonStyle(.plain)
             }
             if session.filteredIdentityEntries.isEmpty {
                 emptyList("没有匹配的证件", icon: "person.text.rectangle")
@@ -440,7 +465,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedLoginEntries.isEmpty {
             restoreSection("最近删除") {
                 ForEach(session.deletedLoginEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.username) { restoreLoginEntry(entry) }
+                    restoreButton(id: entry.id, kind: .login, title: entry.title, subtitle: entry.username) {
+                        restoreLoginEntry(entry)
+                    }
                 }
             }
         }
@@ -450,7 +477,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedNoteEntries.isEmpty {
             restoreSection("已删除笔记") {
                 ForEach(session.deletedNoteEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.body) { restoreNoteEntry(entry) }
+                    restoreButton(id: entry.id, kind: .note, title: entry.title, subtitle: entry.body) {
+                        restoreNoteEntry(entry)
+                    }
                 }
             }
         }
@@ -460,7 +489,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedTotpEntries.isEmpty {
             restoreSection("已删除验证器") {
                 ForEach(session.deletedTotpEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.issuer) { restoreTotpEntry(entry) }
+                    restoreButton(id: entry.id, kind: .totp, title: entry.title, subtitle: entry.issuer) {
+                        restoreTotpEntry(entry)
+                    }
                 }
             }
         }
@@ -470,7 +501,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedCardEntries.isEmpty {
             restoreSection("已删除银行卡") {
                 ForEach(session.deletedCardEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: cardSummary(for: entry)) { restoreCardEntry(entry) }
+                    restoreButton(id: entry.id, kind: .card, title: entry.title, subtitle: cardSummary(for: entry)) {
+                        restoreCardEntry(entry)
+                    }
                 }
             }
         }
@@ -480,7 +513,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedIdentityEntries.isEmpty {
             restoreSection("已删除证件") {
                 ForEach(session.deletedIdentityEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: identitySummary(for: entry)) { restoreIdentityEntry(entry) }
+                    restoreButton(id: entry.id, kind: .identity, title: entry.title, subtitle: identitySummary(for: entry)) {
+                        restoreIdentityEntry(entry)
+                    }
                 }
             }
         }
@@ -490,7 +525,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedPasskeyEntries.isEmpty {
             restoreSection("已删除通行密钥") {
                 ForEach(session.deletedPasskeyEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.relyingPartyID) { restorePasskeyEntry(entry) }
+                    restoreButton(id: entry.id, kind: .passkey, title: entry.title, subtitle: entry.relyingPartyID) {
+                        restorePasskeyEntry(entry)
+                    }
                 }
             }
         }
@@ -500,7 +537,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedSshKeyEntries.isEmpty {
             restoreSection("已删除 SSH 密钥") {
                 ForEach(session.deletedSshKeyEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.host) { restoreSshKeyEntry(entry) }
+                    restoreButton(id: entry.id, kind: .sshKey, title: entry.title, subtitle: entry.host) {
+                        restoreSshKeyEntry(entry)
+                    }
                 }
             }
         }
@@ -510,7 +549,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedApiTokenEntries.isEmpty {
             restoreSection("已删除 API Token") {
                 ForEach(session.deletedApiTokenEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.issuer) { restoreApiTokenEntry(entry) }
+                    restoreButton(id: entry.id, kind: .apiToken, title: entry.title, subtitle: entry.issuer) {
+                        restoreApiTokenEntry(entry)
+                    }
                 }
             }
         }
@@ -520,7 +561,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedWifiEntries.isEmpty {
             restoreSection("已删除 Wi-Fi") {
                 ForEach(session.deletedWifiEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.ssid) { restoreWifiEntry(entry) }
+                    restoreButton(id: entry.id, kind: .wifi, title: entry.title, subtitle: entry.ssid) {
+                        restoreWifiEntry(entry)
+                    }
                 }
             }
         }
@@ -530,7 +573,9 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedSendEntries.isEmpty {
             restoreSection("已删除 Send") {
                 ForEach(session.deletedSendEntries) { entry in
-                    restoreButton(title: entry.title, subtitle: entry.expiresAt) { restoreSendEntry(entry) }
+                    restoreButton(id: entry.id, kind: .send, title: entry.title, subtitle: entry.expiresAt) {
+                        restoreSendEntry(entry)
+                    }
                 }
             }
         }
@@ -540,7 +585,7 @@ struct AndroidParityVaultHomeView: View {
         if !session.deletedAttachmentEntries.isEmpty {
             restoreSection("已删除附件引用") {
                 ForEach(session.deletedAttachmentEntries) { entry in
-                    restoreButton(title: entry.fileName, subtitle: attachmentSubtitle(for: entry)) {
+                    restoreButton(id: entry.id, kind: .attachmentRef, title: entry.fileName, subtitle: attachmentSubtitle(for: entry)) {
                         restoreAttachmentEntry(entry)
                     }
                 }
@@ -635,6 +680,102 @@ struct AndroidParityVaultHomeView: View {
         )
     }
 
+    private var batchActionKind: UnifiedVaultItemKind {
+        session.activeVaultBatchSelectionKind ?? itemKind
+    }
+
+    private var batchActionBar: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6), cornerRadius: 22) {
+            HStack(spacing: 10) {
+                Text(session.vaultBatchSelectionTitle)
+                    .font(.subheadline.weight(.heavy))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .lineLimit(1)
+                if session.isVaultBatchSelectionActive {
+                    Button {
+                        session.selectAllVisibleVaultBatchItems(for: batchActionKind)
+                    } label: {
+                        Image(systemName: "checklist.checked")
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.primary)
+                    Button {
+                        do {
+                            if session.isTrashQuickFilterSelected {
+                                try session.restoreSelectedVaultBatchItems()
+                            } else {
+                                try session.deleteSelectedVaultBatchItems()
+                            }
+                        } catch {
+                            // AppSessionModel owns user-visible failure state.
+                        }
+                    } label: {
+                        Image(systemName: session.isTrashQuickFilterSelected ? "arrow.uturn.backward.circle.fill" : "trash.circle.fill")
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(session.isTrashQuickFilterSelected ? AndroidParityPalette.primary : .red)
+                    .disabled(session.isTrashQuickFilterSelected ? !session.canRestoreSelectedVaultBatchItems : !session.canDeleteSelectedVaultBatchItems)
+                    Button {
+                        session.clearVaultBatchSelection()
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                } else {
+                    Button {
+                        session.enterVaultBatchSelection(for: itemKind)
+                    } label: {
+                        Image(systemName: "checkmark.circle")
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.primary)
+                }
+            }
+        }
+    }
+
+    private func batchAwareButton<Content: View>(
+        id: String,
+        kind: UnifiedVaultItemKind,
+        edit: @escaping () -> Void,
+        @ViewBuilder content: @escaping () -> Content
+    ) -> some View {
+        Button {
+            if session.isVaultBatchSelectionActive {
+                session.toggleVaultBatchItemSelection(id, for: kind)
+            } else {
+                edit()
+            }
+        } label: {
+            content()
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func batchSelectableCard<Content: View>(
+        id: String,
+        @ViewBuilder content: () -> Content
+    ) -> some View {
+        if session.isVaultBatchSelectionActive {
+            HStack(alignment: .center, spacing: 10) {
+                Image(systemName: session.selectedVaultBatchItemIDs.contains(id) ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .foregroundStyle(session.selectedVaultBatchItemIDs.contains(id) ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
+                    .frame(width: 30, height: 30)
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+
     private func savePresentedEditor() {
         do { try session.savePresentedEditor(projectTitle: session.activeVaultName ?? "个人") } catch {}
     }
@@ -711,14 +852,36 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
-    private func restoreButton(title: String, subtitle: String, action: @escaping () -> Void) -> some View {
-        AndroidParityEntryCard(icon: "arrow.uturn.backward", title: title, subtitle: subtitle) {
-            Button(action: action) {
-                Image(systemName: "arrow.uturn.backward.circle.fill")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+    @ViewBuilder
+    private func restoreButton(
+        id: String,
+        kind: UnifiedVaultItemKind,
+        title: String,
+        subtitle: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        if session.isVaultBatchSelectionActive {
+            Button {
+                session.toggleVaultBatchItemSelection(id, for: kind)
+            } label: {
+                batchSelectableCard(id: id) {
+                    AndroidParityEntryCard(icon: "arrow.uturn.backward", title: title, subtitle: subtitle) {
+                        Image(systemName: "arrow.uturn.backward.circle.fill")
+                            .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    }
+                }
             }
             .buttonStyle(.plain)
-            .foregroundStyle(AndroidParityPalette.primary)
+        } else {
+            AndroidParityEntryCard(icon: "arrow.uturn.backward", title: title, subtitle: subtitle) {
+                Button(action: action) {
+                    Image(systemName: "arrow.uturn.backward.circle.fill")
+                        .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AndroidParityPalette.primary)
+            }
         }
     }
 
@@ -731,7 +894,7 @@ struct AndroidParityVaultHomeView: View {
     }
 }
 
-struct AndroidParityModuleChrome<Content: View>: View {
+struct AndroidParityModuleChrome<BatchBar: View, Content: View>: View {
     let title: String
     let tab: MonicaAppTab
     @Binding var selectedAction: AndroidParityToolbarAction?
@@ -743,6 +906,7 @@ struct AndroidParityModuleChrome<Content: View>: View {
     let onQuickFilter: (String) -> Void
     let onOpenVault: () -> Void
     let onAdd: () -> Void
+    @ViewBuilder var batchBar: BatchBar
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -751,6 +915,7 @@ struct AndroidParityModuleChrome<Content: View>: View {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     header
                     quickFilterStrip
+                    batchBar
                     if selectedAction == .search { searchPanel }
                     content
                 }

@@ -1915,6 +1915,100 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.deletedLoginEntries.isEmpty)
     }
 
+    func testBatchSelectionDeletesAndRestoresCurrentFilteredLoginEntries() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "github-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.loginTitle = "GitLab"
+        model.loginUsername = "alice"
+        model.loginPassword = "gitlab-secret"
+        model.loginURL = "https://gitlab.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.loginTitle = "Bank"
+        model.loginUsername = "alice"
+        model.loginPassword = "bank-secret"
+        model.loginURL = "https://bank.example"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        model.loginSearchQuery = "git"
+        model.enterVaultBatchSelection(for: .login)
+        model.selectAllVisibleVaultBatchItems(for: .login)
+
+        XCTAssertEqual(model.vaultBatchSelectionTitle, "已选择 2 项")
+        XCTAssertEqual(model.selectedVaultBatchItemIDs.sorted(), ["entry-1", "entry-2"])
+        XCTAssertTrue(model.canDeleteSelectedVaultBatchItems)
+        XCTAssertFalse(model.canRestoreSelectedVaultBatchItems)
+
+        try model.deleteSelectedVaultBatchItems()
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank"])
+        XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["GitHub", "GitLab"])
+        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-1", "entry-2"])
+        XCTAssertFalse(model.isVaultBatchSelectionActive)
+        XCTAssertEqual(model.entryOperationState, .succeeded("已删除 2 项"))
+        XCTAssertEqual(model.operationTimelineEvents.prefix(2).map(\.action), [.deleted, .deleted])
+        XCTAssertFalse(model.operationTimelineEvents.map(\.detail).joined().contains("github-secret"))
+
+        model.applyVaultQuickFilter("trash")
+        model.enterVaultBatchSelection(for: .login)
+        model.selectAllVisibleVaultBatchItems(for: .login)
+
+        XCTAssertEqual(model.selectedVaultBatchItemIDs.sorted(), ["entry-1", "entry-2"])
+        XCTAssertFalse(model.canDeleteSelectedVaultBatchItems)
+        XCTAssertTrue(model.canRestoreSelectedVaultBatchItems)
+
+        try model.restoreSelectedVaultBatchItems()
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank", "GitHub", "GitLab"])
+        XCTAssertTrue(model.deletedLoginEntries.isEmpty)
+        XCTAssertEqual(engine.restoredLoginEntries.map(\.entryID), ["entry-1", "entry-2"])
+        XCTAssertFalse(model.isVaultBatchSelectionActive)
+        XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 2 项"))
+    }
+
+    func testBatchSelectionResetsWhenVaultLocks() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "github-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        model.enterVaultBatchSelection(for: .login)
+        model.toggleVaultBatchItemSelection(id: "entry-1")
+
+        model.lockLocalVault()
+
+        XCTAssertFalse(model.isVaultBatchSelectionActive)
+        XCTAssertTrue(model.selectedVaultBatchItemIDs.isEmpty)
+        XCTAssertEqual(model.vaultBatchSelectionTitle, "未选择")
+    }
+
     func testLoginEntryOperationsAppendRedactedTimelineEvents() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

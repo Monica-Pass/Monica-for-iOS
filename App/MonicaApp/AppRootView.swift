@@ -1265,6 +1265,8 @@ final class AppSessionModel {
     var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
     var attachmentSearchQuery = ""
     var selectedVaultQuickFilterID = "all"
+    var selectedVaultBatchItemIDs: Set<String> = []
+    private var vaultBatchSelectionKind: UnifiedVaultItemKind?
     var vaultDisplayPreferences: VaultDisplayPreferences
     var appearancePreferences: AppAppearancePreferences
     var mdbxVerificationState: MDBXVerificationState = .idle
@@ -1700,9 +1702,86 @@ final class AppSessionModel {
         guard vaultQuickFilterRows.contains(where: { $0.id == filterID }) else {
             return
         }
+        clearVaultBatchSelection()
         clearVaultSearchQueries()
         setAllFavoriteFilters(filterID == "favorites")
         selectedVaultQuickFilterID = filterID
+    }
+
+    var isVaultBatchSelectionActive: Bool {
+        vaultBatchSelectionKind != nil
+    }
+
+    var activeVaultBatchSelectionKind: UnifiedVaultItemKind? {
+        vaultBatchSelectionKind
+    }
+
+    var vaultBatchSelectionTitle: String {
+        if !isVaultBatchSelectionActive {
+            return "未选择"
+        }
+        return selectedVaultBatchItemIDs.isEmpty
+            ? "选择条目"
+            : "已选择 \(selectedVaultBatchItemIDs.count) 项"
+    }
+
+    var canDeleteSelectedVaultBatchItems: Bool {
+        isVaultBatchSelectionActive && !isTrashQuickFilterSelected && !selectedVaultBatchItemIDs.isEmpty
+    }
+
+    var canRestoreSelectedVaultBatchItems: Bool {
+        isVaultBatchSelectionActive && isTrashQuickFilterSelected && !selectedVaultBatchItemIDs.isEmpty
+    }
+
+    func enterVaultBatchSelection(for kind: UnifiedVaultItemKind) {
+        vaultBatchSelectionKind = kind
+        selectedVaultBatchItemIDs = selectedVaultBatchItemIDs.intersection(visibleVaultBatchItemIDs(for: kind))
+        recordUserActivity()
+    }
+
+    func clearVaultBatchSelection() {
+        vaultBatchSelectionKind = nil
+        selectedVaultBatchItemIDs = []
+    }
+
+    func toggleVaultBatchItemSelection(_ itemID: String, for kind: UnifiedVaultItemKind) {
+        if vaultBatchSelectionKind != kind {
+            selectedVaultBatchItemIDs = []
+            vaultBatchSelectionKind = kind
+        }
+        if selectedVaultBatchItemIDs.contains(itemID) {
+            selectedVaultBatchItemIDs.remove(itemID)
+        } else if visibleVaultBatchItemIDs(for: kind).contains(itemID) {
+            selectedVaultBatchItemIDs.insert(itemID)
+        }
+        recordUserActivity()
+    }
+
+    func toggleVaultBatchItemSelection(id itemID: String) {
+        guard let kind = vaultBatchSelectionKind else {
+            return
+        }
+        toggleVaultBatchItemSelection(itemID, for: kind)
+    }
+
+    func selectAllVisibleVaultBatchItems(for kind: UnifiedVaultItemKind) {
+        vaultBatchSelectionKind = kind
+        selectedVaultBatchItemIDs = visibleVaultBatchItemIDs(for: kind)
+        recordUserActivity()
+    }
+
+    func deleteSelectedVaultBatchItems() throws {
+        guard let kind = vaultBatchSelectionKind, canDeleteSelectedVaultBatchItems else {
+            return
+        }
+        try mutateSelectedVaultBatchItems(kind: kind, action: .deleted)
+    }
+
+    func restoreSelectedVaultBatchItems() throws {
+        guard let kind = vaultBatchSelectionKind, canRestoreSelectedVaultBatchItems else {
+            return
+        }
+        try mutateSelectedVaultBatchItems(kind: kind, action: .restored)
     }
 
     var vaultDisplayPreferenceRows: [AppVaultDisplayPreferenceRow] {
@@ -2209,6 +2288,232 @@ final class AppSessionModel {
             .map(\.element)
     }
 
+    private func visibleVaultBatchItemIDs(for kind: UnifiedVaultItemKind) -> Set<String> {
+        Set(visibleVaultBatchItemOrder(for: kind))
+    }
+
+    private func visibleVaultBatchItemOrder(for kind: UnifiedVaultItemKind) -> [String] {
+        if isTrashQuickFilterSelected {
+            switch kind {
+            case .login:
+                return deletedLoginEntries.map(\.id)
+            case .totp:
+                return deletedTotpEntries.map(\.id)
+            case .note:
+                return deletedNoteEntries.map(\.id)
+            case .card:
+                return deletedCardEntries.map(\.id)
+            case .identity:
+                return deletedIdentityEntries.map(\.id)
+            case .passkey:
+                return deletedPasskeyEntries.map(\.id)
+            case .sshKey:
+                return deletedSshKeyEntries.map(\.id)
+            case .apiToken:
+                return deletedApiTokenEntries.map(\.id)
+            case .wifi:
+                return deletedWifiEntries.map(\.id)
+            case .send:
+                return deletedSendEntries.map(\.id)
+            case .attachmentRef:
+                return deletedAttachmentEntries.map(\.id)
+            }
+        }
+
+        switch kind {
+        case .login:
+            return filteredLoginEntries.map(\.id)
+        case .totp:
+            return filteredTotpEntries.map(\.id)
+        case .note:
+            return filteredNoteEntries.map(\.id)
+        case .card:
+            return filteredCardEntries.map(\.id)
+        case .identity:
+            return filteredIdentityEntries.map(\.id)
+        case .passkey:
+            return filteredPasskeyEntries.map(\.id)
+        case .sshKey:
+            return filteredSshKeyEntries.map(\.id)
+        case .apiToken:
+            return filteredApiTokenEntries.map(\.id)
+        case .wifi:
+            return filteredWifiEntries.map(\.id)
+        case .send:
+            return filteredSendEntries.map(\.id)
+        case .attachmentRef:
+            return filteredAttachmentEntries.map(\.id)
+        }
+    }
+
+    private func mutateSelectedVaultBatchItems(
+        kind: UnifiedVaultItemKind,
+        action: AppOperationTimelineAction
+    ) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let orderedIDs = visibleVaultBatchItemOrder(for: kind)
+                .filter { selectedVaultBatchItemIDs.contains($0) }
+            guard !orderedIDs.isEmpty else {
+                clearVaultBatchSelection()
+                entryOperationState = .idle
+                return
+            }
+
+            let events: [(id: String, title: String)]
+            switch action {
+            case .deleted:
+                events = try deleteVaultBatchItems(
+                    kind: kind,
+                    ids: orderedIDs,
+                    projectID: projectID,
+                    entryRepository: entryRepository
+                )
+            case .restored:
+                events = try restoreVaultBatchItems(
+                    kind: kind,
+                    ids: orderedIDs,
+                    projectID: projectID,
+                    entryRepository: entryRepository
+                )
+            case .created, .updated:
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            try refreshAllEntryLists(projectID: projectID, entryRepository: entryRepository)
+            if kind == .login {
+                try refreshAutoFillEncryptedIndexIfConfigured()
+            }
+            for event in events {
+                appendOperationTimelineEvent(
+                    action: action,
+                    itemKind: kind,
+                    itemID: event.id,
+                    itemTitle: event.title
+                )
+            }
+            clearVaultBatchSelection()
+            let verb = action == .deleted ? "删除" : "恢复"
+            entryOperationState = .succeeded("已\(verb) \(events.count) 项")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    private func deleteVaultBatchItems(
+        kind: UnifiedVaultItemKind,
+        ids: [String],
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> [(id: String, title: String)] {
+        var events: [(id: String, title: String)] = []
+        for id in ids {
+            switch kind {
+            case .login:
+                guard let entry = loginEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteLoginEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .totp:
+                guard let entry = totpEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteTotpEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .note:
+                guard let entry = noteEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteNoteEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .card:
+                guard let entry = cardEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteCardEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .identity:
+                guard let entry = identityEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteIdentityEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .passkey:
+                guard let entry = passkeyEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deletePasskeyEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .sshKey:
+                guard let entry = sshKeyEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteSshKeyEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .apiToken:
+                guard let entry = apiTokenEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteApiTokenEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .wifi:
+                guard let entry = wifiEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteWifiEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .send:
+                guard let entry = sendEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteSendEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .attachmentRef:
+                guard let entry = attachmentEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteAttachmentMetadata(projectID: projectID, attachmentID: id)
+                events.append((id, entry.fileName))
+            }
+        }
+        return events
+    }
+
+    private func restoreVaultBatchItems(
+        kind: UnifiedVaultItemKind,
+        ids: [String],
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> [(id: String, title: String)] {
+        var events: [(id: String, title: String)] = []
+        for id in ids {
+            switch kind {
+            case .login:
+                let entry = try entryRepository.restoreLoginEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .totp:
+                let entry = try entryRepository.restoreTotpEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .note:
+                let entry = try entryRepository.restoreNoteEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .card:
+                let entry = try entryRepository.restoreCardEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .identity:
+                let entry = try entryRepository.restoreIdentityEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .passkey:
+                let entry = try entryRepository.restorePasskeyEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .sshKey:
+                let entry = try entryRepository.restoreSshKeyEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .apiToken:
+                let entry = try entryRepository.restoreApiTokenEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .wifi:
+                let entry = try entryRepository.restoreWifiEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .send:
+                let entry = try entryRepository.restoreSendEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .attachmentRef:
+                let entry = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: id)
+                events.append((id, entry.fileName))
+            }
+        }
+        return events
+    }
+
     private func clearVaultSearchQueries() {
         loginSearchQuery = ""
         noteSearchQuery = ""
@@ -2239,6 +2544,7 @@ final class AppSessionModel {
     private func resetVaultQuickFilters() {
         selectedVaultQuickFilterID = "all"
         isLoginStackedGroupModeEnabled = false
+        clearVaultBatchSelection()
         clearVaultSearchQueries()
         setAllFavoriteFilters(false)
     }
