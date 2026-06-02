@@ -636,6 +636,7 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
     let importedTotpEntryID: String?
     let importedProjectID: String
     let importedAsDeleted: Bool
+    let importedAttachmentEntryIDs: [String]
 
     init(
         sourceEntryID: String,
@@ -644,7 +645,8 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
         importedLoginEntryID: String,
         importedTotpEntryID: String? = nil,
         importedProjectID: String,
-        importedAsDeleted: Bool = false
+        importedAsDeleted: Bool = false,
+        importedAttachmentEntryIDs: [String] = []
     ) {
         self.sourceEntryID = sourceEntryID
         self.sourceGroupID = sourceGroupID
@@ -653,6 +655,7 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
         self.importedTotpEntryID = importedTotpEntryID
         self.importedProjectID = importedProjectID
         self.importedAsDeleted = importedAsDeleted
+        self.importedAttachmentEntryIDs = importedAttachmentEntryIDs
     }
 }
 
@@ -5571,6 +5574,7 @@ final class AppSessionModel {
             var firstImportedProject: LocalVaultProject?
             var importedReferences: [AppKeePassImportedEntryReference] = []
             var importedTotpPlaceholderCount = 0
+            var importedAttachmentPlaceholderCount = 0
             var importedDeletedMetadataCount = 0
             for candidate in plan.candidates {
                 let project = try ensureKeePassImportProject(
@@ -5607,6 +5611,29 @@ final class AppSessionModel {
                 } else {
                     importedTotpEntryID = nil
                 }
+                var importedAttachmentEntryIDs: [String] = []
+                for attachment in candidate.attachments {
+                    let importedAttachment = try entryRepository.createAttachmentMetadata(
+                        projectID: project.id,
+                        entryID: importedEntry.id,
+                        fileName: keePassAttachmentPlaceholderFileName(attachment),
+                        mediaType: attachment.mediaType,
+                        originalSize: attachment.originalSize,
+                        storedSize: 0,
+                        contentHash: attachment.contentHash,
+                        storageMode: "keepass-kdbx-placeholder",
+                        source: "KeePass",
+                        downloadState: "pending-kdbx-decode"
+                    )
+                    importedAttachmentEntryIDs.append(importedAttachment.id)
+                    importedAttachmentPlaceholderCount += 1
+                    if candidate.isDeleted {
+                        try entryRepository.deleteAttachmentMetadata(
+                            projectID: project.id,
+                            attachmentID: importedAttachment.id
+                        )
+                    }
+                }
                 if candidate.isDeleted {
                     try entryRepository.deleteLoginEntry(
                         projectID: project.id,
@@ -5622,7 +5649,8 @@ final class AppSessionModel {
                         importedLoginEntryID: importedEntry.id,
                         importedTotpEntryID: importedTotpEntryID,
                         importedProjectID: project.id,
-                        importedAsDeleted: candidate.isDeleted
+                        importedAsDeleted: candidate.isDeleted,
+                        importedAttachmentEntryIDs: importedAttachmentEntryIDs
                     )
                 )
             }
@@ -5641,10 +5669,13 @@ final class AppSessionModel {
             let totpPlaceholderText = importedTotpPlaceholderCount > 0
                 ? "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项"
                 : ""
+            let attachmentPlaceholderText = importedAttachmentPlaceholderCount > 0
+                ? "，并创建 \(importedAttachmentPlaceholderCount) 个附件占位项"
+                : ""
             let deletedText = importedDeletedMetadataCount > 0
                 ? "，并保留 \(importedDeletedMetadataCount) 项回收站元数据"
                 : ""
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(totpPlaceholderText)\(deletedText)\(pendingText)")
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6529,6 +6560,14 @@ final class AppSessionModel {
             return baseTitle
         }
         return "\(baseTitle) TOTP"
+    }
+
+    private func keePassAttachmentPlaceholderFileName(_ attachment: KeePassReadOnlyAttachment) -> String {
+        let trimmed = attachment.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return "KeePass Attachment"
+        }
+        return trimmed
     }
 
     private func createCSVImportedItem(

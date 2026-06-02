@@ -3639,6 +3639,130 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassConfirmImportCreatesAttachmentPlaceholdersForPendingAttachmentMetadata() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-uuid-github",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        groupID: "group-uuid-work",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 2,
+                        isDeleted: false,
+                        attachments: [
+                            KeePassReadOnlyAttachment(
+                                id: "attachment-uuid-contract",
+                                fileName: "contract.pdf",
+                                mediaType: "application/pdf",
+                                originalSize: 2048,
+                                contentHash: "sha256:contract"
+                            ),
+                            KeePassReadOnlyAttachment(
+                                id: "attachment-uuid-notes",
+                                fileName: "notes.txt",
+                                mediaType: "text/plain",
+                                originalSize: 512,
+                                contentHash: "sha256:notes"
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+        _ = try model.previewKeePassReadOnlyImportPlan()
+
+        try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
+
+        XCTAssertEqual(engine.createdLoginEntries.map(\.draft.title), ["GitHub"])
+        XCTAssertEqual(
+            engine.createdAttachmentMetadata,
+            [
+                RecordedAttachmentMetadataCall(
+                    vaultID: "created-vault",
+                    projectID: "project-1",
+                    entryID: "entry-1",
+                    fileName: "contract.pdf",
+                    mediaType: "application/pdf",
+                    originalSize: 2048,
+                    storedSize: 0,
+                    contentHash: "sha256:contract",
+                    storageMode: "keepass-kdbx-placeholder",
+                    source: "KeePass",
+                    downloadState: "pending-kdbx-decode",
+                    wrappedContentEncryptionKey: nil,
+                    localPath: nil
+                ),
+                RecordedAttachmentMetadataCall(
+                    vaultID: "created-vault",
+                    projectID: "project-1",
+                    entryID: "entry-1",
+                    fileName: "notes.txt",
+                    mediaType: "text/plain",
+                    originalSize: 512,
+                    storedSize: 0,
+                    contentHash: "sha256:notes",
+                    storageMode: "keepass-kdbx-placeholder",
+                    source: "KeePass",
+                    downloadState: "pending-kdbx-decode",
+                    wrappedContentEncryptionKey: nil,
+                    localPath: nil
+                )
+            ]
+        )
+        XCTAssertEqual(model.attachmentEntries.map(\.fileName), ["contract.pdf", "notes.txt"])
+        XCTAssertEqual(model.attachmentEntries.map(\.entryID), ["entry-1", "entry-1"])
+        XCTAssertEqual(
+            model.keePassLastMetadataImportReferences,
+            [
+                AppKeePassImportedEntryReference(
+                    sourceEntryID: "entry-uuid-github",
+                    sourceGroupID: "group-uuid-work",
+                    sourceGroupPath: "/Work",
+                    importedLoginEntryID: "entry-1",
+                    importedProjectID: "project-1",
+                    importedAttachmentEntryIDs: ["attachment-1", "attachment-2"]
+                )
+            ]
+        )
+        XCTAssertFalse(model.entryOperationState.label.contains("attachment-uuid-contract"))
+        XCTAssertFalse(model.entryOperationState.label.contains("attachment-uuid-notes"))
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 已导入 1 项元数据，并创建 2 个附件占位项；待解码：1 个密码字段，2 个附件")
+        )
+    }
+
     func testKeePassConfirmImportPreservesRecycleBinEntriesAsDeletedMetadata() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(

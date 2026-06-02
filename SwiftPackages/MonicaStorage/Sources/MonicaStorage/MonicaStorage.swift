@@ -196,6 +196,28 @@ public struct KeePassReadOnlyGroup: Sendable, Equatable, Identifiable {
     }
 }
 
+public struct KeePassReadOnlyAttachment: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let fileName: String
+    public let mediaType: String
+    public let originalSize: Int64
+    public let contentHash: String
+
+    public init(
+        id: String,
+        fileName: String,
+        mediaType: String = "application/octet-stream",
+        originalSize: Int64 = 0,
+        contentHash: String = ""
+    ) {
+        self.id = id
+        self.fileName = fileName
+        self.mediaType = mediaType
+        self.originalSize = originalSize
+        self.contentHash = contentHash
+    }
+}
+
 public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let id: String
     public let title: String
@@ -207,6 +229,7 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let hasTotp: Bool
     public let attachmentCount: Int
     public let isDeleted: Bool
+    public let attachments: [KeePassReadOnlyAttachment]
 
     public init(
         id: String,
@@ -218,7 +241,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         hasPassword: Bool,
         hasTotp: Bool,
         attachmentCount: Int,
-        isDeleted: Bool
+        isDeleted: Bool,
+        attachments: [KeePassReadOnlyAttachment] = []
     ) {
         self.id = id
         self.title = title
@@ -228,8 +252,9 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         self.groupID = groupID
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
-        self.attachmentCount = attachmentCount
+        self.attachmentCount = max(attachmentCount, attachments.count)
         self.isDeleted = isDeleted
+        self.attachments = attachments
     }
 }
 
@@ -299,6 +324,7 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
     public let hasTotp: Bool
     public let attachmentCount: Int
     public let isDeleted: Bool
+    public let attachments: [KeePassReadOnlyAttachment]
 
     public init(
         id: String,
@@ -311,7 +337,8 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         hasPassword: Bool,
         hasTotp: Bool,
         attachmentCount: Int,
-        isDeleted: Bool = false
+        isDeleted: Bool = false,
+        attachments: [KeePassReadOnlyAttachment] = []
     ) {
         self.id = id
         self.kind = kind
@@ -322,8 +349,9 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         self.groupID = groupID
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
-        self.attachmentCount = attachmentCount
+        self.attachmentCount = max(attachmentCount, attachments.count)
         self.isDeleted = isDeleted
+        self.attachments = attachments
     }
 }
 
@@ -432,7 +460,8 @@ public enum KeePassReadOnlyImportPlanner {
                     hasPassword: entry.hasPassword,
                     hasTotp: entry.hasTotp,
                     attachmentCount: entry.attachmentCount,
-                    isDeleted: entry.isDeleted
+                    isDeleted: entry.isDeleted,
+                    attachments: entry.attachments
                 )
             )
         }

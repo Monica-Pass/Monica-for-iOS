@@ -156,7 +156,23 @@ import MonicaStorage
                 hasPassword: true,
                 hasTotp: true,
                 attachmentCount: 2,
-                isDeleted: false
+                isDeleted: false,
+                attachments: [
+                    KeePassReadOnlyAttachment(
+                        id: "attachment-uuid-contract",
+                        fileName: "contract.pdf",
+                        mediaType: "application/pdf",
+                        originalSize: 2048,
+                        contentHash: "sha256:contract"
+                    ),
+                    KeePassReadOnlyAttachment(
+                        id: "attachment-uuid-notes",
+                        fileName: "notes.txt",
+                        mediaType: "text/plain",
+                        originalSize: 512,
+                        contentHash: "sha256:notes"
+                    )
+                ]
             ),
             KeePassReadOnlyEntry(
                 id: "entry-2",
@@ -184,6 +200,8 @@ import MonicaStorage
     #expect(plan.candidates.first?.groupID == "group-uuid-work")
     #expect(plan.candidates.first?.hasPassword == true)
     #expect(plan.candidates.first?.isDeleted == false)
+    #expect(plan.candidates.first?.attachments.map(\.fileName) == ["contract.pdf", "notes.txt"])
+    #expect(plan.candidates.first?.attachments.map(\.contentHash) == ["sha256:contract", "sha256:notes"])
     #expect(plan.candidates.last?.title == "Deleted")
     #expect(plan.candidates.last?.username == "bob")
     #expect(plan.candidates.last?.url == "https://deleted.example")
