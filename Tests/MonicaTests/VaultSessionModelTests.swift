@@ -3439,7 +3439,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
 
-        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass / Work"])
         XCTAssertEqual(engine.createdLoginEntries.count, 1)
         XCTAssertEqual(engine.createdLoginEntries.first?.draft.title, "GitHub")
         XCTAssertEqual(engine.createdLoginEntries.first?.draft.username, "alice")
@@ -3458,6 +3458,69 @@ final class VaultSessionModelTests: XCTestCase {
             model.entryOperationState,
             .succeeded("KeePass 已导入 1 项元数据；待解码：1 个密码字段，1 个 TOTP，2 个附件")
         )
+    }
+
+    func testKeePassConfirmImportMapsGroupPathsToVaultCategories() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1),
+                    KeePassReadOnlyGroup(id: "personal", title: "Personal", path: "/Personal", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-1",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: false
+                    ),
+                    KeePassReadOnlyEntry(
+                        id: "entry-2",
+                        title: "Bank",
+                        username: "alice",
+                        url: "https://bank.example",
+                        groupPath: "/Personal",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: false
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyImportPlan()
+
+        try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
+
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass / Work", "KeePass / Personal"])
+        XCTAssertEqual(model.vaultProjects.map(\.title), ["KeePass / Work", "KeePass / Personal"])
+        XCTAssertEqual(engine.createdLoginEntries.map(\.draft.title), ["GitHub", "Bank"])
+        XCTAssertEqual(engine.createdLoginEntries.map(\.projectID), ["project-1", "project-2"])
+        XCTAssertEqual(model.activeVaultCategoryTitle, "KeePass / Work")
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 已导入 2 项元数据；待解码：2 个密码字段"))
     }
 
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {

@@ -5538,8 +5538,16 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
-            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            var firstImportedProject: LocalVaultProject?
             for candidate in plan.candidates {
+                let project = try ensureKeePassImportProject(
+                    baseTitle: projectTitle,
+                    groupPath: candidate.groupPath,
+                    entryRepository: entryRepository
+                )
+                if firstImportedProject == nil {
+                    firstImportedProject = project
+                }
                 _ = try entryRepository.createLoginEntry(
                     projectID: project.id,
                     draft: LocalLoginEntryDraft(
@@ -5550,7 +5558,13 @@ final class AppSessionModel {
                     )
                 )
             }
-            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            if let firstImportedProject {
+                activeProject = firstImportedProject
+            }
+            if let activeProject {
+                try refreshAllEntryLists(projectID: activeProject.id, entryRepository: entryRepository)
+                selectedVaultQuickFilterID = "category-\(activeProject.id)"
+            }
             try refreshAutoFillEncryptedIndexIfConfigured()
             clearKeePassImportState()
             let pendingSummary = plan.pendingCapabilitySummary
@@ -6380,6 +6394,33 @@ final class AppSessionModel {
             vaultProjects.append(project)
         }
         return project
+    }
+
+    private func ensureKeePassImportProject(
+        baseTitle: String,
+        groupPath: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalVaultProject {
+        let title = keePassImportProjectTitle(baseTitle: baseTitle, groupPath: groupPath)
+        if let project = vaultProjects.first(where: { $0.title == title }) {
+            return project
+        }
+        let project = try entryRepository.createProject(title: title)
+        vaultProjects.append(project)
+        return project
+    }
+
+    private func keePassImportProjectTitle(baseTitle: String, groupPath: String) -> String {
+        let trimmedBase = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let base = trimmedBase.isEmpty ? "KeePass" : trimmedBase
+        let components = groupPath
+            .split(separator: "/")
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !components.isEmpty else {
+            return base
+        }
+        return ([base] + components).joined(separator: " / ")
     }
 
     private func createCSVImportedItem(
