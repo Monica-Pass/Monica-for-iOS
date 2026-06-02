@@ -318,17 +318,20 @@ public struct KeePassHeaderSummary: Sendable, Equatable {
 public struct KeePassKdbxPayloadEnvelope: Sendable, Equatable {
     public let headerSummary: KeePassHeaderSummary
     public let headerFields: [UInt8: Data]
+    public let headerBytes: Data?
     public let headerByteRange: Range<Int>
     public let encryptedPayload: Data
 
     public init(
         headerSummary: KeePassHeaderSummary,
         headerFields: [UInt8: Data],
+        headerBytes: Data? = nil,
         headerByteRange: Range<Int>,
         encryptedPayload: Data
     ) {
         self.headerSummary = headerSummary
         self.headerFields = headerFields
+        self.headerBytes = headerBytes?.isEmpty == false ? headerBytes : nil
         self.headerByteRange = headerByteRange
         self.encryptedPayload = encryptedPayload
     }
@@ -500,10 +503,12 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
 public struct KeePassKdbxBlockStreamContext: Sendable, Equatable {
     public let formatVersion: KeePassKdbxFormatVersion
     public let streamStartBytes: Data?
+    public let hmacBlockBaseKey: Data?
 
-    public init(formatVersion: KeePassKdbxFormatVersion, streamStartBytes: Data?) {
+    public init(formatVersion: KeePassKdbxFormatVersion, streamStartBytes: Data?, hmacBlockBaseKey: Data? = nil) {
         self.formatVersion = formatVersion
         self.streamStartBytes = streamStartBytes?.isEmpty == false ? streamStartBytes : nil
+        self.hmacBlockBaseKey = hmacBlockBaseKey?.isEmpty == false ? hmacBlockBaseKey : nil
     }
 }
 
@@ -519,10 +524,7 @@ public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecode
         case .kdbx3:
             return try decodeKdbx3HashedBlockStream(decryptedPayload, streamStartBytes: context.streamStartBytes)
         case .kdbx4:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "KDBX4 HMAC block stream 解码尚未接入"
-            )
+            return try decodeKdbx4HmacBlockStream(decryptedPayload, hmacBlockBaseKey: context.hmacBlockBaseKey)
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
@@ -586,6 +588,52 @@ public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecode
         }
     }
 
+    private func decodeKdbx4HmacBlockStream(_ hmacBlockStream: Data, hmacBlockBaseKey: Data?) throws -> Data {
+        guard let hmacBlockBaseKey, hmacBlockBaseKey.count == SHA512.byteCount else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC key 缺失；请确认文件未损坏。"
+            )
+        }
+
+        var offset = 0
+        var blockIndex: UInt64 = 0
+        var decoded = Data()
+        while true {
+            let expectedHmac = try readBytes(from: hmacBlockStream, offset: &offset, count: SHA256.byteCount)
+            let blockLength = try readLittleEndianUInt32(from: hmacBlockStream, offset: &offset)
+            let block = try readBytes(from: hmacBlockStream, offset: &offset, count: Int(blockLength))
+            let actualHmac = kdbx4BlockHmac(blockIndex: blockIndex, blockLength: blockLength, block: block, hmacBlockBaseKey: hmacBlockBaseKey)
+            guard actualHmac == expectedHmac else {
+                throw KeePassOperationError(
+                    code: .invalidCredential,
+                    message: "KDBX4 block HMAC 校验失败；请确认数据库密码、密钥文件或文件完整性。"
+                )
+            }
+            if blockLength == 0 {
+                guard offset == hmacBlockStream.count else {
+                    throw KeePassOperationError(
+                        code: .formatUnsupported,
+                        message: "KDBX4 block stream 末尾无效；请确认文件未损坏。"
+                    )
+                }
+                return decoded
+            }
+            decoded.append(block)
+            blockIndex += 1
+        }
+    }
+
+    private func kdbx4BlockHmac(blockIndex: UInt64, blockLength: UInt32, block: Data, hmacBlockBaseKey: Data) -> Data {
+        let blockKeyInput = littleEndianUInt64(blockIndex) + hmacBlockBaseKey
+        let blockKey = SymmetricKey(data: Data(SHA512.hash(data: blockKeyInput)))
+        var hmacInput = Data()
+        hmacInput.append(littleEndianUInt64(blockIndex))
+        hmacInput.append(littleEndianUInt32(blockLength))
+        hmacInput.append(block)
+        return Data(HMAC<SHA256>.authenticationCode(for: hmacInput, using: blockKey))
+    }
+
     private func readLittleEndianUInt32(from data: Data, offset: inout Int) throws -> UInt32 {
         let bytes = try readBytes(from: data, offset: &offset, count: 4)
         var value: UInt32 = 0
@@ -606,6 +654,19 @@ public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecode
         }
         defer { offset += count }
         return Data(data[offset..<offset + count])
+    }
+
+    private func littleEndianUInt32(_ value: UInt32) -> Data {
+        Data([
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ])
+    }
+
+    private func littleEndianUInt64(_ value: UInt64) -> Data {
+        Data((0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) })
     }
 }
 
@@ -639,12 +700,16 @@ public struct DefaultKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
                 message: "KDBX cipher 参数缺失；请确认文件未损坏。"
             )
         }
+        let cipherInput = try payloadCipherInput(from: context, derivedKey: derivedKey)
         let decryptedPayload = try payloadCipher.decryptPayload(
-            context.envelope.encryptedPayload,
+            cipherInput,
             cipher: cipher,
             masterKey: masterKey,
             cryptoInputs: context.cryptoInputs
         )
+        if context.envelope.headerSummary.formatVersion == .kdbx4 {
+            return decryptedPayload
+        }
         return try blockStreamDecoder.decodeBlockStream(
             decryptedPayload,
             context: KeePassKdbxBlockStreamContext(
@@ -652,6 +717,97 @@ public struct DefaultKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
                 streamStartBytes: context.cryptoInputs.streamStartBytes
             )
         )
+    }
+
+    private func payloadCipherInput(from context: KeePassKdbxDecryptInputContext, derivedKey: KeePassKdbxDerivedKey) throws -> Data {
+        guard context.envelope.headerSummary.formatVersion == .kdbx4 else {
+            return context.envelope.encryptedPayload
+        }
+        let hmacBlockBaseKey = try kdbx4HmacBlockBaseKey(from: context.cryptoInputs, derivedKey: derivedKey)
+        return try blockStreamDecoder.decodeBlockStream(
+            try kdbx4HmacBlockStreamPayload(
+                from: context.envelope.encryptedPayload,
+                headerBytes: context.envelope.headerBytes,
+                hmacBlockBaseKey: hmacBlockBaseKey
+            ),
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: .kdbx4,
+                streamStartBytes: nil,
+                hmacBlockBaseKey: hmacBlockBaseKey
+            )
+        )
+    }
+
+    private func kdbx4HmacBlockStreamPayload(
+        from payloadSection: Data,
+        headerBytes: Data?,
+        hmacBlockBaseKey: Data
+    ) throws -> Data {
+        let headerAuthenticationByteCount = SHA256.byteCount + SHA256.byteCount
+        guard payloadSection.count >= headerAuthenticationByteCount else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 header authentication bytes 缺失；请确认文件未损坏。"
+            )
+        }
+        if let headerBytes {
+            let headerHash = Data(payloadSection.prefix(SHA256.byteCount))
+            let headerHmacStart = payloadSection.startIndex + SHA256.byteCount
+            let headerHmacEnd = headerHmacStart + SHA256.byteCount
+            let headerHmac = Data(payloadSection[headerHmacStart..<headerHmacEnd])
+            guard Data(SHA256.hash(data: headerBytes)) == headerHash else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KDBX4 header hash 校验失败；请确认文件未损坏。"
+                )
+            }
+            let headerHmacKey = kdbx4HeaderHmacKey(hmacBlockBaseKey: hmacBlockBaseKey)
+            let expectedHmac = Data(HMAC<SHA256>.authenticationCode(for: headerBytes, using: SymmetricKey(data: headerHmacKey)))
+            guard expectedHmac == headerHmac else {
+                throw KeePassOperationError(
+                    code: .invalidCredential,
+                    message: "KDBX4 header HMAC 校验失败；请确认数据库密码、密钥文件或文件完整性。"
+                )
+            }
+        }
+        return Data(payloadSection.dropFirst(headerAuthenticationByteCount))
+    }
+
+    private func kdbx4HeaderHmacKey(hmacBlockBaseKey: Data) -> Data {
+        Data(SHA512.hash(data: littleEndianUInt64(UInt64.max) + hmacBlockBaseKey))
+    }
+
+    private func kdbx4HmacBlockBaseKey(
+        from cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        derivedKey: KeePassKdbxDerivedKey
+    ) throws -> Data {
+        guard let masterSeed = cryptoInputs.masterSeed else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC master seed 缺失；请确认文件未损坏。"
+            )
+        }
+        guard masterSeed.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC master seed 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard derivedKey.material.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC derived key 长度无效；请确认文件未损坏。"
+            )
+        }
+        var input = Data()
+        input.append(masterSeed)
+        input.append(derivedKey.material)
+        input.append(0x01)
+        return Data(SHA512.hash(data: input))
+    }
+
+    private func littleEndianUInt64(_ value: UInt64) -> Data {
+        Data((0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) })
     }
 }
 
@@ -2688,6 +2844,7 @@ public enum KeePassFormatInspector {
         return KeePassKdbxPayloadEnvelope(
             headerSummary: parsed.summary,
             headerFields: parsed.fields,
+            headerBytes: Data(data[0..<payloadStart]),
             headerByteRange: 0..<payloadStart,
             encryptedPayload: Data(data[payloadStart..<data.count])
         )

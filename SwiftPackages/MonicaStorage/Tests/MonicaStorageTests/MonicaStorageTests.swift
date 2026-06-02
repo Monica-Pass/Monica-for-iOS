@@ -77,6 +77,7 @@ import MonicaStorage
     #expect(envelope.headerSummary.displayName == "KDBX 4")
     #expect(envelope.headerSummary.cryptoSummary?.displaySummary == "AES-256，GZip，Argon2id")
     #expect(envelope.headerByteRange == 0..<header.count)
+    #expect(envelope.headerBytes == header)
     #expect(envelope.encryptedPayload == encryptedPayload)
     #expect(envelope.headerFields[2] == Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]))
     #expect(envelope.headerFields[3] == Data([0x01, 0x00, 0x00, 0x00]))
@@ -426,7 +427,47 @@ import MonicaStorage
     }
 }
 
-@Test func defaultKeePassPayloadDecryptorUsesAesCipherBeforeBlockDecodeWithoutLeakingSecrets() throws {
+@Test func keepPassKdbx4BlockStreamDecoderValidatesHmacBlocksWithoutLeakingSecrets() throws {
+    let hmacBaseKey = Data(SHA512.hash(data: Data("hmac-base-key-secret".utf8)))
+    let encryptedXMLPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
+    let hmacBlockStream = makeKdbx4HmacBlockStream(
+        hmacBaseKey: hmacBaseKey,
+        blocks: [encryptedXMLPayload]
+    )
+
+    let decoded = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(
+        hmacBlockStream,
+        context: KeePassKdbxBlockStreamContext(
+            formatVersion: .kdbx4,
+            streamStartBytes: nil,
+            hmacBlockBaseKey: hmacBaseKey
+        )
+    )
+
+    #expect(decoded == encryptedXMLPayload)
+
+    var tampered = hmacBlockStream
+    let firstBlockDataOffset = 32 + 4
+    tampered[firstBlockDataOffset] ^= 0x01
+    do {
+        _ = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(
+            tampered,
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: .kdbx4,
+                streamStartBytes: nil,
+                hmacBlockBaseKey: hmacBaseKey
+            )
+        )
+        Issue.record("Expected HMAC validation to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .invalidCredential)
+        #expect(!error.message.contains("hmac-base-key-secret"))
+        #expect(!error.message.contains("secret xml"))
+        #expect(!error.message.contains(hmacBaseKey.map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
+@Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
             KeePassKdbxDerivedKey(
@@ -463,11 +504,22 @@ import MonicaStorage
         }
     }
 
+    let derivedMaterial = Data(repeating: 0x11, count: 32)
+    let masterSeed = Data(repeating: 0xB5, count: 32)
+    var baseKeyInput = Data()
+    baseKeyInput.append(masterSeed)
+    baseKeyInput.append(derivedMaterial)
+    baseKeyInput.append(0x01)
+    let hmacBaseKey = Data(SHA512.hash(data: baseKeyInput))
     let kdfParameters = KeePassKdbxKdfParameters(
         algorithm: .aesKdf,
         aesKdf: KeePassKdbxAesKdfParameters(seed: Data(repeating: 0xA5, count: 32), rounds: 1)
     )
     let encryptedPayload = Data("encrypted-payload-secret".utf8)
+    let hmacBlockStream = makeKdbx4PayloadSection(
+        hmacBaseKey: hmacBaseKey,
+        blocks: [encryptedPayload]
+    )
     let context = KeePassKdbxDecryptInputContext(
         sourceName: "aes-payload.kdbx",
         candidateLabel: "password-only",
@@ -485,11 +537,11 @@ import MonicaStorage
             ),
             headerFields: [:],
             headerByteRange: 0..<0,
-            encryptedPayload: encryptedPayload
+            encryptedPayload: hmacBlockStream
         ),
         kdfParameters: kdfParameters,
         cryptoInputs: KeePassKdbxPayloadCryptoInputs(
-            masterSeed: Data(repeating: 0xB5, count: 32),
+            masterSeed: masterSeed,
             encryptionIV: Data(repeating: 0xC5, count: 16)
         ),
         credentialMaterial: KeePassKdbxCredentialMaterial(
@@ -505,21 +557,105 @@ import MonicaStorage
         payloadCipher: payloadCipher
     )
 
-    do {
-        _ = try decryptor.decryptPayload(context)
-        Issue.record("Expected block stream decoder to remain unsupported")
-    } catch let error as KeePassOperationError {
-        #expect(error.code == .formatUnsupported)
-        #expect(error.message == "KDBX4 HMAC block stream 解码尚未接入")
-        #expect(!error.message.contains("decrypted-block-stream-secret"))
-        #expect(!error.message.contains("encrypted-payload-secret"))
-        #expect(!error.message.contains("password-key-secret"))
-        #expect(!error.message.contains("composite-key-secret"))
-    }
+    let decodedPayload = try decryptor.decryptPayload(context)
 
+    #expect(decodedPayload == Data("decrypted-block-stream-secret".utf8))
     #expect(payloadCipher.calls.count == 1)
     #expect(payloadCipher.calls.first?.cipher == .aes256)
     #expect(payloadCipher.calls.first?.payload == encryptedPayload)
+}
+
+@Test func defaultKeePassPayloadDecryptorSkipsKdbx4HeaderHashAndHmacBeforeBlocks() throws {
+    final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
+        func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
+            KeePassKdbxDerivedKey(
+                algorithm: .aesKdf,
+                material: Data(repeating: 0x22, count: 32),
+                rounds: 1
+            )
+        }
+    }
+
+    final class FixedMasterKeyComposer: KeePassKdbxMasterKeyComposer, @unchecked Sendable {
+        func composeMasterKey(
+            from derivedKey: KeePassKdbxDerivedKey,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> KeePassKdbxMasterKeyMaterial {
+            KeePassKdbxMasterKeyMaterial(
+                algorithm: derivedKey.algorithm,
+                material: Data(repeating: 0x33, count: 32)
+            )
+        }
+    }
+
+    final class RecordingPayloadCipher: KeePassKdbxPayloadCipher, @unchecked Sendable {
+        var payloads: [Data] = []
+
+        func decryptPayload(
+            _ encryptedPayload: Data,
+            cipher: KeePassKdbxCipherAlgorithm,
+            masterKey: KeePassKdbxMasterKeyMaterial,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> Data {
+            payloads.append(encryptedPayload)
+            return Data("<KeePassFile />".utf8)
+        }
+    }
+
+    let masterSeed = Data(repeating: 0x44, count: 32)
+    let derivedMaterial = Data(repeating: 0x22, count: 32)
+    var baseKeyInput = Data()
+    baseKeyInput.append(masterSeed)
+    baseKeyInput.append(derivedMaterial)
+    baseKeyInput.append(0x01)
+    let hmacBaseKey = Data(SHA512.hash(data: baseKeyInput))
+    let encryptedPayload = Data("encrypted-kdbx4-payload-secret".utf8)
+    let headerBytes = Data("header bytes".utf8)
+    var kdbx4PayloadSection = Data(SHA256.hash(data: headerBytes))
+    kdbx4PayloadSection.append(kdbx4HeaderHmac(headerBytes: headerBytes, hmacBaseKey: hmacBaseKey))
+    kdbx4PayloadSection.append(makeKdbx4HmacBlockStream(hmacBaseKey: hmacBaseKey, blocks: [encryptedPayload]))
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .aesKdf,
+        aesKdf: KeePassKdbxAesKdfParameters(seed: Data(repeating: 0xA5, count: 32), rounds: 1)
+    )
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "kdbx4-prelude.kdbx",
+        candidateLabel: "password-only",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                cryptoSummary: KeePassKdbxCryptoSummary(cipher: .aes256, compression: KeePassKdbxCompressionAlgorithm.none, kdf: .aesKdf),
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerBytes: headerBytes,
+            headerByteRange: 0..<0,
+            encryptedPayload: kdbx4PayloadSection
+        ),
+        kdfParameters: kdfParameters,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: Data(repeating: 0x66, count: 16)
+        ),
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: Data("password-key-secret".utf8),
+            keyFileKey: nil,
+            compositeKey: Data(repeating: 0x77, count: 32)
+        )
+    )
+    let payloadCipher = RecordingPayloadCipher()
+    let decryptor = DefaultKeePassKdbxPayloadDecryptor(
+        keyDeriver: FixedKeyDeriver(),
+        masterKeyComposer: FixedMasterKeyComposer(),
+        payloadCipher: payloadCipher
+    )
+
+    let decoded = try decryptor.decryptPayload(context)
+
+    #expect(decoded == Data("<KeePassFile />".utf8))
+    #expect(payloadCipher.payloads == [encryptedPayload])
 }
 
 @Test func defaultKeePassPayloadDecryptorDecodesKdbx3BlockStreamToXmlPayload() throws {
@@ -1202,7 +1338,7 @@ import MonicaStorage
         Issue.record("Expected payload decryptor to remain unsupported")
     } catch let error as KeePassOperationError {
         #expect(error.code == .formatUnsupported)
-        #expect(error.message == "KDBX4 HMAC block stream 解码尚未接入")
+        #expect(error.message == "KDBX4 header authentication bytes 缺失；请确认文件未损坏。")
         #expect(!error.message.contains("derived-key-secret"))
         #expect(!error.message.contains("password-key-secret"))
         #expect(!error.message.contains("key-file-secret"))
@@ -5195,6 +5331,42 @@ private func makeKdbx3HashedBlockStream(streamStartBytes: Data, blocks: [Data]) 
     data.append(Data(repeating: 0x00, count: 32))
     data.append(littleEndianUInt32(0))
     return data
+}
+
+private func makeKdbx4HmacBlockStream(hmacBaseKey: Data, blocks: [Data]) -> Data {
+    var data = Data()
+    for (index, block) in blocks.enumerated() {
+        data.append(kdbx4BlockHmac(blockIndex: UInt64(index), block: block, hmacBaseKey: hmacBaseKey))
+        data.append(littleEndianUInt32(UInt32(block.count)))
+        data.append(block)
+    }
+    let terminator = Data()
+    data.append(kdbx4BlockHmac(blockIndex: UInt64(blocks.count), block: terminator, hmacBaseKey: hmacBaseKey))
+    data.append(littleEndianUInt32(0))
+    return data
+}
+
+private func makeKdbx4PayloadSection(hmacBaseKey: Data, blocks: [Data]) -> Data {
+    var data = Data()
+    data.append(Data(repeating: 0x00, count: SHA256.byteCount))
+    data.append(Data(repeating: 0x11, count: SHA256.byteCount))
+    data.append(makeKdbx4HmacBlockStream(hmacBaseKey: hmacBaseKey, blocks: blocks))
+    return data
+}
+
+private func kdbx4HeaderHmac(headerBytes: Data, hmacBaseKey: Data) -> Data {
+    let headerKey = SymmetricKey(data: Data(SHA512.hash(data: littleEndianUInt64(UInt64.max) + hmacBaseKey)))
+    return Data(HMAC<SHA256>.authenticationCode(for: headerBytes, using: headerKey))
+}
+
+private func kdbx4BlockHmac(blockIndex: UInt64, block: Data, hmacBaseKey: Data) -> Data {
+    let blockKeyInput = littleEndianUInt64(blockIndex) + hmacBaseKey
+    let blockKey = SymmetricKey(data: Data(SHA512.hash(data: blockKeyInput)))
+    var blockMacInput = Data()
+    blockMacInput.append(littleEndianUInt64(blockIndex))
+    blockMacInput.append(littleEndianUInt32(UInt32(block.count)))
+    blockMacInput.append(block)
+    return Data(HMAC<SHA256>.authenticationCode(for: blockMacInput, using: blockKey))
 }
 
 private func makeKdbxVariantDictionary(entries: [Data]) -> Data {
