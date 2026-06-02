@@ -202,19 +202,22 @@ public struct KeePassReadOnlyAttachment: Sendable, Equatable, Identifiable {
     public let mediaType: String
     public let originalSize: Int64
     public let contentHash: String
+    public let decodedContent: Data?
 
     public init(
         id: String,
         fileName: String,
         mediaType: String = "application/octet-stream",
         originalSize: Int64 = 0,
-        contentHash: String = ""
+        contentHash: String = "",
+        decodedContent: Data? = nil
     ) {
         self.id = id
         self.fileName = fileName
         self.mediaType = mediaType
         self.originalSize = originalSize
         self.contentHash = contentHash
+        self.decodedContent = decodedContent
     }
 }
 
@@ -453,7 +456,11 @@ public struct KeePassReadOnlyImportPlan: Sendable, Equatable {
     }
 
     public var pendingAttachmentCount: Int {
-        candidates.reduce(0) { $0 + $1.attachmentCount }
+        candidates.reduce(0) { total, candidate in
+            let unknownAttachmentCount = max(candidate.attachmentCount - candidate.attachments.count, 0)
+            let pendingKnownAttachmentCount = candidate.attachments.filter { $0.decodedContent == nil }.count
+            return total + unknownAttachmentCount + pendingKnownAttachmentCount
+        }
     }
 
     public var pendingCapabilitySummary: String {

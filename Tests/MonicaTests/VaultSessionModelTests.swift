@@ -3835,6 +3835,108 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassConfirmImportStoresDecodedAttachmentContentForPreviewWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let decodedContent = Data("decoded keepass attachment plaintext".utf8)
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-uuid-github",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        groupID: "group-uuid-work",
+                        hasPassword: false,
+                        hasTotp: false,
+                        attachmentCount: 1,
+                        isDeleted: false,
+                        attachments: [
+                            KeePassReadOnlyAttachment(
+                                id: "attachment-uuid-contract",
+                                fileName: "../contract secret.pdf",
+                                mediaType: "application/pdf",
+                                originalSize: Int64(decodedContent.count),
+                                contentHash: "sha256:decoded-secret",
+                                decodedContent: decodedContent
+                            )
+                        ]
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore,
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyImportPlan()
+
+        try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
+
+        XCTAssertEqual(blobStore.savedBlobs.count, 1)
+        XCTAssertEqual(blobStore.savedBlobs.first?.vaultID, "created-vault")
+        XCTAssertEqual(blobStore.savedBlobs.first?.data, decodedContent)
+        XCTAssertEqual(blobStore.savedBlobs.first?.localPath, "keepass-kdbx-attachment-attachment-uuid-contract-contract_secret.pdf")
+        XCTAssertEqual(
+            engine.createdAttachmentMetadata,
+            [
+                RecordedAttachmentMetadataCall(
+                    vaultID: "created-vault",
+                    projectID: "project-1",
+                    entryID: "entry-1",
+                    fileName: "contract_secret.pdf",
+                    mediaType: "application/pdf",
+                    originalSize: Int64(decodedContent.count),
+                    storedSize: Int64(decodedContent.count),
+                    contentHash: "sha256:decoded-secret",
+                    storageMode: "keepass-kdbx-decoded-content",
+                    source: "KeePass",
+                    downloadState: "downloaded",
+                    wrappedContentEncryptionKey: nil,
+                    localPath: "keepass-kdbx-attachment-attachment-uuid-contract-contract_secret.pdf"
+                )
+            ]
+        )
+        XCTAssertEqual(model.attachmentEntries.first?.storageMode, "keepass-kdbx-decoded-content")
+        XCTAssertEqual(model.attachmentEntries.first?.downloadState, "downloaded")
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 已导入 1 项元数据，并导入 1 个附件内容"))
+
+        let attachment = try XCTUnwrap(model.attachmentEntries.first)
+        try model.presentAttachmentQuickLookPreview(attachment)
+        defer {
+            model.dismissAttachmentQuickLookPreview()
+        }
+
+        let previewURL = try XCTUnwrap(model.attachmentQuickLookPreviewURL)
+        XCTAssertEqual(try Data(contentsOf: previewURL), decodedContent)
+        XCTAssertEqual(previewURL.lastPathComponent, "contract_secret.pdf")
+        [
+            "decoded keepass attachment plaintext",
+            "sha256:decoded-secret",
+            "database-password"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+    }
+
     func testKeePassConfirmImportPreservesRecycleBinEntriesAsDeletedMetadata() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(

@@ -289,6 +289,57 @@ import MonicaStorage
     #expect(!plan.pendingCapabilitySummary.contains("JBSWY3DPEHPK3PXP"))
 }
 
+@Test func keepPassReadOnlyImportPlannerCarriesDecodedAttachmentContentWithoutCountingItPending() throws {
+    let decodedContent = Data("decoded attachment bytes".utf8)
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "personal.kdbx",
+        headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+        groups: [
+            KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+            KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-decoded-attachment",
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com",
+                groupPath: "/Work",
+                groupID: "group-uuid-work",
+                hasPassword: false,
+                hasTotp: false,
+                attachmentCount: 2,
+                isDeleted: false,
+                attachments: [
+                    KeePassReadOnlyAttachment(
+                        id: "attachment-decoded",
+                        fileName: "contract.pdf",
+                        mediaType: "application/pdf",
+                        originalSize: Int64(decodedContent.count),
+                        contentHash: "sha256:decoded",
+                        decodedContent: decodedContent
+                    ),
+                    KeePassReadOnlyAttachment(
+                        id: "attachment-pending",
+                        fileName: "pending.txt",
+                        mediaType: "text/plain",
+                        originalSize: 128,
+                        contentHash: "sha256:pending"
+                    )
+                ]
+            )
+        ]
+    )
+
+    let plan = KeePassReadOnlyImportPlanner.plan(snapshot)
+
+    #expect(plan.candidates.first?.attachments.first?.decodedContent == decodedContent)
+    #expect(plan.pendingAttachmentCount == 1)
+    #expect(plan.pendingCapabilitySummary == "待解码：1 个附件")
+    #expect(!plan.displaySummary.contains("decoded attachment bytes"))
+    #expect(!plan.pendingCapabilitySummary.contains("decoded attachment bytes"))
+}
+
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
     let login = UnifiedVaultItem(
         id: "login-1",

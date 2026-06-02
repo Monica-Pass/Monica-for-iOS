@@ -1719,7 +1719,9 @@ final class AppSessionModel {
         return AppAttachmentContentStatus(
             state: .available,
             value: "\(entry.storedSize) 字节",
-            detail: "附件密文已保存在本机，可进入预览恢复流程。"
+            detail: entry.storageMode == "keepass-kdbx-decoded-content"
+                ? "KeePass 附件内容已保存在本机，可预览。"
+                : "附件密文已保存在本机，可进入预览恢复流程。"
         )
     }
 
@@ -1776,9 +1778,60 @@ final class AppSessionModel {
         }
     }
 
+    func materializeStoredAttachmentContentPreview(
+        _ entry: LocalAttachmentMetadata
+    ) throws -> AppAttachmentPreviewFile {
+        recordUserActivity()
+        do {
+            let content = try loadAttachmentEncryptedBlob(entry)
+            let displayFileName = sanitizedAttachmentPreviewFileName(entry.fileName)
+            let directoryURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent("MonicaAttachmentPreviews", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try FileManager.default.createDirectory(
+                at: directoryURL,
+                withIntermediateDirectories: true
+            )
+            let fileURL = directoryURL.appendingPathComponent(displayFileName, isDirectory: false)
+            try content.write(to: fileURL, options: [.atomic])
+            let preview = AppAttachmentPreviewFile(
+                fileURL: fileURL,
+                displayFileName: displayFileName,
+                byteCount: content.count
+            )
+            entryOperationState = .succeeded("附件预览已准备：\(displayFileName) \(content.count) 字节")
+            return preview
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func presentAttachmentQuickLookPreview(_ entry: LocalAttachmentMetadata) throws {
         recordUserActivity()
         dismissAttachmentQuickLookPreview()
+
+        if entry.storageMode == "keepass-kdbx-decoded-content" {
+            do {
+                let preview = try materializeStoredAttachmentContentPreview(entry)
+                attachmentQuickLookPreviewURL = preview.fileURL
+                appendOperationTimelineEvent(
+                    action: .viewed,
+                    itemKind: .attachmentRef,
+                    itemID: entry.id,
+                    itemTitle: preview.displayFileName
+                )
+                entryOperationState = .succeeded("附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节")
+                return
+            } catch let error as LocalAttachmentContentStoreError {
+                entryOperationState = .failed(error.localizedDescription)
+                throw error
+            } catch {
+                let previewError = AppAttachmentPreviewError.previewFailed
+                entryOperationState = .failed(previewError.localizedDescription)
+                throw previewError
+            }
+        }
 
         guard let attachmentContentEncryptionKeyProvider else {
             let error = AppAttachmentPreviewError.contentEncryptionKeyUnavailable
@@ -5577,6 +5630,7 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
+            let vaultSession = try requireActiveVaultSession()
 
             var firstImportedProject: LocalVaultProject?
             var importedReferences: [AppKeePassImportedEntryReference] = []
@@ -5584,6 +5638,7 @@ final class AppSessionModel {
             var importedDecodedPasswordCount = 0
             var importedDecodedTotpSecretCount = 0
             var importedAttachmentPlaceholderCount = 0
+            var importedDecodedAttachmentContentCount = 0
             var importedDeletedMetadataCount = 0
             for candidate in plan.candidates {
                 let project = try ensureKeePassImportProject(
@@ -5629,20 +5684,42 @@ final class AppSessionModel {
                 }
                 var importedAttachmentEntryIDs: [String] = []
                 for attachment in candidate.attachments {
+                    let attachmentFileName = keePassAttachmentFileName(attachment)
+                    let decodedAttachmentLocalPath: String?
+                    if let decodedContent = attachment.decodedContent {
+                        decodedAttachmentLocalPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
+                            decodedContent,
+                            vaultID: vaultSession.handle.vaultID,
+                            localPath: keePassDecodedAttachmentLocalPath(
+                                attachment,
+                                fileName: attachmentFileName
+                            )
+                        )
+                        importedDecodedAttachmentContentCount += 1
+                    } else {
+                        decodedAttachmentLocalPath = nil
+                    }
                     let importedAttachment = try entryRepository.createAttachmentMetadata(
                         projectID: project.id,
                         entryID: importedEntry.id,
-                        fileName: keePassAttachmentPlaceholderFileName(attachment),
+                        fileName: attachmentFileName,
                         mediaType: attachment.mediaType,
                         originalSize: attachment.originalSize,
-                        storedSize: 0,
+                        storedSize: Int64(attachment.decodedContent?.count ?? 0),
                         contentHash: attachment.contentHash,
-                        storageMode: "keepass-kdbx-placeholder",
+                        storageMode: decodedAttachmentLocalPath == nil
+                            ? "keepass-kdbx-placeholder"
+                            : "keepass-kdbx-decoded-content",
                         source: "KeePass",
-                        downloadState: "pending-kdbx-decode"
+                        downloadState: decodedAttachmentLocalPath == nil
+                            ? "pending-kdbx-decode"
+                            : "downloaded",
+                        localPath: decodedAttachmentLocalPath
                     )
                     importedAttachmentEntryIDs.append(importedAttachment.id)
-                    importedAttachmentPlaceholderCount += 1
+                    if decodedAttachmentLocalPath == nil {
+                        importedAttachmentPlaceholderCount += 1
+                    }
                     if candidate.isDeleted {
                         try entryRepository.deleteAttachmentMetadata(
                             projectID: project.id,
@@ -5681,9 +5758,11 @@ final class AppSessionModel {
             keePassLastMetadataImportReferences = importedReferences
             clearKeePassImportState(preservingLastMetadataImportReferences: true)
             let pendingSummary = plan.pendingCapabilitySummary
-            let importedDecodedSecretCount = importedDecodedPasswordCount + importedDecodedTotpSecretCount
+            let importedDecodedContentCount = importedDecodedPasswordCount
+                + importedDecodedTotpSecretCount
+                + importedDecodedAttachmentContentCount
             let pendingText = pendingSummary.isEmpty
-                ? (importedDecodedSecretCount > 0 ? "" : "，秘密字段待 KDBX 解码器接入")
+                ? (importedDecodedContentCount > 0 ? "" : "，秘密字段待 KDBX 解码器接入")
                 : "；\(pendingSummary)"
             let totpPlaceholderText = importedTotpPlaceholderCount > 0
                 ? "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项"
@@ -5694,13 +5773,16 @@ final class AppSessionModel {
             let decodedTotpText = importedDecodedTotpSecretCount > 0
                 ? "，并导入 \(importedDecodedTotpSecretCount) 个 TOTP 密钥"
                 : ""
+            let decodedAttachmentText = importedDecodedAttachmentContentCount > 0
+                ? "，并导入 \(importedDecodedAttachmentContentCount) 个附件内容"
+                : ""
             let attachmentPlaceholderText = importedAttachmentPlaceholderCount > 0
                 ? "，并创建 \(importedAttachmentPlaceholderCount) 个附件占位项"
                 : ""
             let deletedText = importedDeletedMetadataCount > 0
                 ? "，并保留 \(importedDeletedMetadataCount) 项回收站元数据"
                 : ""
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(decodedAttachmentText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6588,12 +6670,23 @@ final class AppSessionModel {
         return "\(baseTitle) TOTP"
     }
 
-    private func keePassAttachmentPlaceholderFileName(_ attachment: KeePassReadOnlyAttachment) -> String {
+    private func keePassAttachmentFileName(_ attachment: KeePassReadOnlyAttachment) -> String {
         let trimmed = attachment.fileName.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             return "KeePass Attachment"
         }
-        return trimmed
+        return sanitizedAttachmentPreviewFileName(trimmed)
+    }
+
+    private func keePassDecodedAttachmentLocalPath(
+        _ attachment: KeePassReadOnlyAttachment,
+        fileName: String
+    ) -> String {
+        let rawIdentifier = attachment.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = rawIdentifier.isEmpty ? UUID().uuidString : rawIdentifier
+        return sanitizedAttachmentPreviewFileName(
+            "keepass-kdbx-attachment-\(identifier)-\(fileName)"
+        )
     }
 
     private func createCSVImportedItem(
