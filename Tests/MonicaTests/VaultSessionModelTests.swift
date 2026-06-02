@@ -474,6 +474,59 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.vaultDisplayPreferences.showsTabLabels)
     }
 
+    func testAppearancePreferencesPersistAndSummarizeIOSThemeCustomization() throws {
+        let store = MemoryAppAppearancePreferenceStore()
+        let model = AppSessionModel(appearancePreferenceStore: store)
+
+        XCTAssertEqual(model.appearancePreferences.colorScheme, .system)
+        XCTAssertEqual(model.appearancePreferences.accentColor, .monica)
+        XCTAssertEqual(model.appearancePreferences.passwordListIconStyle, .color)
+        XCTAssertNil(model.appearancePreferences.swiftUIColorScheme)
+
+        model.updateAppearancePreferences(
+            AppAppearancePreferences(
+                colorScheme: .dark,
+                accentColor: .blue,
+                passwordListIconStyle: .hidden
+            )
+        )
+
+        XCTAssertEqual(store.preferences?.colorScheme, .dark)
+        XCTAssertEqual(model.appearancePreferenceRows.map(\.title), ["颜色模式", "强调色", "密码列表图标"])
+        XCTAssertEqual(model.appearancePreferenceRows.map(\.value), ["深色", "蓝色", "隐藏"])
+        XCTAssertEqual(model.appearancePreferences.swiftUIColorScheme, .dark)
+        XCTAssertEqual(model.appearancePreferences.swiftUIAccentColor, .blue)
+        XCTAssertFalse(model.appearancePreferences.showsPasswordListIcon)
+
+        let restored = AppSessionModel(appearancePreferenceStore: store)
+        XCTAssertEqual(restored.appearancePreferences.colorScheme, .dark)
+        XCTAssertEqual(restored.appearancePreferences.accentColor, .blue)
+        XCTAssertEqual(restored.appearancePreferences.passwordListIconStyle, .hidden)
+    }
+
+    func testAppearancePreferencesSurviveVaultLock() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            appearancePreferenceStore: MemoryAppAppearancePreferenceStore()
+        )
+
+        try unlockNewVault(model)
+        model.updateAppearancePreferences(
+            AppAppearancePreferences(
+                colorScheme: .light,
+                accentColor: .green,
+                passwordListIconStyle: .monochrome
+            )
+        )
+
+        model.lockLocalVault()
+
+        XCTAssertEqual(model.appearancePreferences.colorScheme, .light)
+        XCTAssertEqual(model.appearancePreferences.accentColor, .green)
+        XCTAssertEqual(model.appearancePreferences.passwordListIconStyle, .monochrome)
+    }
+
     func testDeveloperDiagnosticsExposeRedactedOperationalState() {
         let model = AppSessionModel()
         let environment = MonicaAppEnvironment(

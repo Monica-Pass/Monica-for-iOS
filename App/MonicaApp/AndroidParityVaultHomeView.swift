@@ -189,7 +189,10 @@ struct AndroidParityVaultHomeView: View {
             if session.isLoginStackedGroupModeEnabled {
                 ForEach(session.loginStackedGroups) { group in
                     Button { session.loginSearchQuery = group.title } label: {
-                        AndroidPasswordStackedGroupCard(group: group)
+                        AndroidPasswordStackedGroupCard(
+                            group: group,
+                            appearancePreferences: session.appearancePreferences
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -201,7 +204,8 @@ struct AndroidParityVaultHomeView: View {
                     Button { session.presentEditEditor(for: entry) } label: {
                         AndroidPasswordListCard(
                             entry: entry,
-                            preferences: session.vaultDisplayPreferences
+                            displayPreferences: session.vaultDisplayPreferences,
+                            appearancePreferences: session.appearancePreferences
                         )
                     }
                     .buttonStyle(.plain)
@@ -858,21 +862,28 @@ struct AndroidParityModuleChrome<Content: View>: View {
 
 private struct AndroidPasswordListCard: View {
     let entry: LocalLoginEntry
-    let preferences: VaultDisplayPreferences
+    let displayPreferences: VaultDisplayPreferences
+    let appearancePreferences: AppAppearancePreferences
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
-            HStack(alignment: .top, spacing: preferences.cardDensity == .compact ? 12 : 18) {
-                AndroidParityIconTile(systemImage: "lock.fill", fill: AndroidParityPalette.primaryContainer)
-                VStack(alignment: .leading, spacing: preferences.cardDensity.verticalSpacing) {
+            HStack(alignment: .top, spacing: displayPreferences.cardDensity == .compact ? 12 : 18) {
+                if appearancePreferences.showsPasswordListIcon {
+                    AndroidParityIconTile(
+                        systemImage: "lock.fill",
+                        fill: appearancePreferences.passwordListIconFill,
+                        tint: appearancePreferences.passwordListIconTint
+                    )
+                }
+                VStack(alignment: .leading, spacing: displayPreferences.cardDensity.verticalSpacing) {
                     Text(entry.title.isEmpty ? "未命名" : entry.title)
                         .font(.subheadline.weight(.semibold))
-                    if preferences.showsLoginUsername, !entry.username.isEmpty {
+                    if displayPreferences.showsLoginUsername, !entry.username.isEmpty {
                         Text(entry.username)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
-                    if preferences.showsLoginURL, !entry.url.isEmpty {
+                    if displayPreferences.showsLoginURL, !entry.url.isEmpty {
                         Text(entry.url)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
@@ -881,7 +892,7 @@ private struct AndroidPasswordListCard: View {
                 }
                 Spacer()
                 Image(systemName: "ellipsis")
-                    .font(.system(size: preferences.cardDensity.iconSize, weight: .semibold))
+                    .font(.system(size: displayPreferences.cardDensity.iconSize, weight: .semibold))
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
         }
@@ -890,11 +901,18 @@ private struct AndroidPasswordListCard: View {
 
 private struct AndroidPasswordStackedGroupCard: View {
     let group: AppLoginStackedGroup
+    let appearancePreferences: AppAppearancePreferences
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
             HStack(alignment: .top, spacing: 18) {
-                AndroidParityIconTile(systemImage: group.systemImage, fill: AndroidParityPalette.primaryContainer)
+                if appearancePreferences.showsPasswordListIcon {
+                    AndroidParityIconTile(
+                        systemImage: group.systemImage,
+                        fill: appearancePreferences.passwordListIconFill,
+                        tint: appearancePreferences.passwordListIconTint
+                    )
+                }
                 VStack(alignment: .leading, spacing: 8) {
                     HStack(spacing: 8) {
                         Text(group.title)

@@ -204,7 +204,145 @@ struct VaultDisplayPreferences: Sendable, Codable, Equatable {
     var showsTabLabels: Bool
 }
 
+enum AppAppearanceColorScheme: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .system:
+            "跟随系统"
+        case .light:
+            "浅色"
+        case .dark:
+            "深色"
+        }
+    }
+
+    var swiftUIColorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            nil
+        case .light:
+            .light
+        case .dark:
+            .dark
+        }
+    }
+}
+
+enum AppAppearanceAccentColor: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
+    case monica
+    case green
+    case blue
+    case orange
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .monica:
+            "Monica"
+        case .green:
+            "绿色"
+        case .blue:
+            "蓝色"
+        case .orange:
+            "橙色"
+        }
+    }
+
+    var swiftUIColor: Color {
+        switch self {
+        case .monica:
+            AndroidParityPalette.primary
+        case .green:
+            .green
+        case .blue:
+            .blue
+        case .orange:
+            .orange
+        }
+    }
+}
+
+enum AppPasswordListIconStyle: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
+    case color
+    case monochrome
+    case hidden
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .color:
+            "彩色"
+        case .monochrome:
+            "单色"
+        case .hidden:
+            "隐藏"
+        }
+    }
+}
+
+struct AppAppearancePreferences: Sendable, Codable, Equatable {
+    static let `default` = AppAppearancePreferences(
+        colorScheme: .system,
+        accentColor: .monica,
+        passwordListIconStyle: .color
+    )
+
+    var colorScheme: AppAppearanceColorScheme
+    var accentColor: AppAppearanceAccentColor
+    var passwordListIconStyle: AppPasswordListIconStyle
+
+    var swiftUIColorScheme: ColorScheme? {
+        colorScheme.swiftUIColorScheme
+    }
+
+    var swiftUIAccentColor: Color {
+        accentColor.swiftUIColor
+    }
+
+    var showsPasswordListIcon: Bool {
+        passwordListIconStyle != .hidden
+    }
+
+    var passwordListIconFill: Color {
+        switch passwordListIconStyle {
+        case .color:
+            AndroidParityPalette.primaryContainer
+        case .monochrome:
+            AndroidParityPalette.surface
+        case .hidden:
+            .clear
+        }
+    }
+
+    var passwordListIconTint: Color {
+        switch passwordListIconStyle {
+        case .color:
+            AndroidParityPalette.primary
+        case .monochrome:
+            AndroidParityPalette.textSecondary
+        case .hidden:
+            .clear
+        }
+    }
+}
+
 struct AppVaultDisplayPreferenceRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+}
+
+struct AppAppearancePreferenceRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
     let value: String
@@ -605,6 +743,11 @@ protocol VaultDisplayPreferenceStore: Sendable {
     func savePreferences(_ preferences: VaultDisplayPreferences)
 }
 
+protocol AppAppearancePreferenceStore: Sendable {
+    func loadPreferences() -> AppAppearancePreferences
+    func savePreferences(_ preferences: AppAppearancePreferences)
+}
+
 protocol BiometricUnlockAuthorizer: Sendable {
     func authenticate(reason: String) async throws
 }
@@ -815,6 +958,47 @@ final class MemoryVaultDisplayPreferenceStore: VaultDisplayPreferenceStore, @unc
     }
 
     func savePreferences(_ preferences: VaultDisplayPreferences) {
+        self.preferences = preferences
+    }
+}
+
+final class UserDefaultsAppAppearancePreferenceStore: AppAppearancePreferenceStore, @unchecked Sendable {
+    private let userDefaults: UserDefaults
+    private let key = "monica.appAppearancePreferences"
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func loadPreferences() -> AppAppearancePreferences {
+        guard let data = userDefaults.data(forKey: key),
+              let preferences = try? JSONDecoder().decode(AppAppearancePreferences.self, from: data)
+        else {
+            return .default
+        }
+        return preferences
+    }
+
+    func savePreferences(_ preferences: AppAppearancePreferences) {
+        guard let data = try? JSONEncoder().encode(preferences) else {
+            return
+        }
+        userDefaults.set(data, forKey: key)
+    }
+}
+
+final class MemoryAppAppearancePreferenceStore: AppAppearancePreferenceStore, @unchecked Sendable {
+    private(set) var preferences: AppAppearancePreferences?
+
+    init(preferences: AppAppearancePreferences? = nil) {
+        self.preferences = preferences
+    }
+
+    func loadPreferences() -> AppAppearancePreferences {
+        preferences ?? .default
+    }
+
+    func savePreferences(_ preferences: AppAppearancePreferences) {
         self.preferences = preferences
     }
 }
@@ -1082,6 +1266,7 @@ final class AppSessionModel {
     var attachmentSearchQuery = ""
     var selectedVaultQuickFilterID = "all"
     var vaultDisplayPreferences: VaultDisplayPreferences
+    var appearancePreferences: AppAppearancePreferences
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -1128,6 +1313,7 @@ final class AppSessionModel {
     private let rememberedVaultStore: any RememberedVaultStore
     private let biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore
     private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
+    private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let biometricUnlockAuthorizer: any BiometricUnlockAuthorizer
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
@@ -1155,6 +1341,7 @@ final class AppSessionModel {
         rememberedVaultStore: any RememberedVaultStore = MemoryRememberedVaultStore(),
         biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore = MemoryBiometricUnlockPreferenceStore(),
         vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore = MemoryVaultDisplayPreferenceStore(),
+        appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
         biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
         securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
@@ -1178,6 +1365,7 @@ final class AppSessionModel {
         self.rememberedVaultStore = rememberedVaultStore
         self.biometricUnlockPreferenceStore = biometricUnlockPreferenceStore
         self.vaultDisplayPreferenceStore = vaultDisplayPreferenceStore
+        self.appearancePreferenceStore = appearancePreferenceStore
         self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
@@ -1194,6 +1382,7 @@ final class AppSessionModel {
         self.notificationPermissionState = notificationPermissionStatusProvider()
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
+        self.appearancePreferences = appearancePreferenceStore.loadPreferences()
         if let remembered = try? rememberedVaultStore.load() {
             self.rememberedVaultDescriptor = LocalVaultDescriptor(
                 fileURL: remembered.fileURL,
@@ -1552,6 +1741,38 @@ final class AppSessionModel {
     func updateVaultDisplayPreferences(_ preferences: VaultDisplayPreferences) {
         vaultDisplayPreferences = preferences
         vaultDisplayPreferenceStore.savePreferences(preferences)
+        recordUserActivity()
+    }
+
+    var appearancePreferenceRows: [AppAppearancePreferenceRow] {
+        [
+            AppAppearancePreferenceRow(
+                id: "color-scheme",
+                title: "颜色模式",
+                value: appearancePreferences.colorScheme.label,
+                detail: "使用系统外观，或固定为浅色/深色。",
+                systemImage: "circle.lefthalf.filled"
+            ),
+            AppAppearancePreferenceRow(
+                id: "accent-color",
+                title: "强调色",
+                value: appearancePreferences.accentColor.label,
+                detail: "控制按钮、选择态和系统 tint 色。",
+                systemImage: "paintpalette"
+            ),
+            AppAppearancePreferenceRow(
+                id: "password-list-icon",
+                title: "密码列表图标",
+                value: appearancePreferences.passwordListIconStyle.label,
+                detail: "控制密码列表图标的显示方式。",
+                systemImage: "app.badge"
+            )
+        ]
+    }
+
+    func updateAppearancePreferences(_ preferences: AppAppearancePreferences) {
+        appearancePreferences = preferences
+        appearancePreferenceStore.savePreferences(preferences)
         recordUserActivity()
     }
 
@@ -6285,7 +6506,8 @@ struct AppRootView: View {
                 PrivacyShieldView()
             }
         }
-        .tint(AndroidParityPalette.primary)
+        .tint(session.appearancePreferences.swiftUIAccentColor)
+        .preferredColorScheme(session.appearancePreferences.swiftUIColorScheme)
         .simultaneousGesture(
             TapGesture().onEnded {
                 session.recordUserActivity()

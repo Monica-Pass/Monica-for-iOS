@@ -264,7 +264,8 @@ extension AppSessionModel {
         )
         guard let appGroupContainerURL else {
             return AppSessionModel(
-                vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore()
+                vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
+                appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore()
             )
         }
         let indexStore = FileAutoFillEncryptedIndexStore(appGroupContainerURL: appGroupContainerURL)
@@ -285,6 +286,7 @@ extension AppSessionModel {
             rememberedVaultStore: UserDefaultsRememberedVaultStore(),
             biometricUnlockPreferenceStore: UserDefaultsBiometricUnlockPreferenceStore(),
             vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
+            appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
             biometricUnlockAuthorizer: DeviceBiometricUnlockAuthorizer(),
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
             autoFillIndexStore: indexStore,

@@ -69,6 +69,36 @@ struct SettingsRootView: View {
         }
     }
 
+    private var colorSchemeSelection: Binding<AppAppearanceColorScheme> {
+        Binding {
+            session.appearancePreferences.colorScheme
+        } set: { colorScheme in
+            var preferences = session.appearancePreferences
+            preferences.colorScheme = colorScheme
+            session.updateAppearancePreferences(preferences)
+        }
+    }
+
+    private var accentColorSelection: Binding<AppAppearanceAccentColor> {
+        Binding {
+            session.appearancePreferences.accentColor
+        } set: { accentColor in
+            var preferences = session.appearancePreferences
+            preferences.accentColor = accentColor
+            session.updateAppearancePreferences(preferences)
+        }
+    }
+
+    private var passwordListIconStyleSelection: Binding<AppPasswordListIconStyle> {
+        Binding {
+            session.appearancePreferences.passwordListIconStyle
+        } set: { iconStyle in
+            var preferences = session.appearancePreferences
+            preferences.passwordListIconStyle = iconStyle
+            session.updateAppearancePreferences(preferences)
+        }
+    }
+
     var body: some View {
         AndroidParityScreen {
             AndroidParitySection(title: "应用") {
@@ -85,6 +115,27 @@ struct SettingsRootView: View {
                     Picker("自动锁定", selection: autoLockSelection) {
                         ForEach(AppAutoLockPolicy.presets) { policy in
                             Text(policy.label).tag(policy)
+                        }
+                    }
+                    Picker("颜色模式", selection: colorSchemeSelection) {
+                        ForEach(AppAppearanceColorScheme.allCases) { colorScheme in
+                            Text(colorScheme.label).tag(colorScheme)
+                        }
+                    }
+                    Picker("强调色", selection: accentColorSelection) {
+                        ForEach(AppAppearanceAccentColor.allCases) { accentColor in
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(accentColor.swiftUIColor)
+                                    .frame(width: 12, height: 12)
+                                Text(accentColor.label)
+                            }
+                            .tag(accentColor)
+                        }
+                    }
+                    Picker("密码列表图标", selection: passwordListIconStyleSelection) {
+                        ForEach(AppPasswordListIconStyle.allCases) { iconStyle in
+                            Text(iconStyle.label).tag(iconStyle)
                         }
                     }
                     AndroidParityDivider()
