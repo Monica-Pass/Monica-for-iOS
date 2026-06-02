@@ -1014,6 +1014,82 @@ import MonicaStorage
     }
 }
 
+@Test func defaultKeePassDatabaseReaderDecryptsKdbx3AesFixtureToSnapshotWithoutLeakingCredentials() throws {
+    let password = "database-password"
+    let transformSeed = Data(repeating: 0xA7, count: 32)
+    let transformRounds: UInt64 = 1
+    let masterSeed = Data(repeating: 0xB7, count: 32)
+    let encryptionIV = Data(repeating: 0xC7, count: 16)
+    let streamStartBytes = Data(repeating: 0xD7, count: 32)
+    let innerStreamKey = Data(repeating: 0xE7, count: 32)
+    _ = Data("""
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>root</UUID>
+          <Name>Root</Name>
+          <Entry>
+            <UUID>entry-1</UUID>
+            <String><Key>Title</Key><Value>GitHub</Value></String>
+            <String><Key>UserName</Key><Value>alice</Value></String>
+            <String><Key>Password</Key><Value>decoded-password-secret</Value></String>
+            <String><Key>URL</Key><Value>https://github.com</Value></String>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """.utf8)
+    let encryptedPayload = try decodeHexData("""
+    8075e305ddb80b5ac7de98243658f9f76cd881bb398de499bbb71d3442002f59
+    47ea644e3c6ca1cf122a1bd289572d38f7da89224b54affb2383aef588f60f85
+    703e94ffe092aa740a4996be3654d5cb065cf9a4e3b98fee879d1eb9029c36f3
+    452616bdf0363dcbd34728a410aba5355fec542fd3417d0586e635dec62ef1685
+    0cc20f950c8ba81ce141f43a3e499d94f787cddc2c8f38f87710d8de465655
+    87a1169d8faf52c0f388ff1fb6530a83f05a7add41a7bfd171ced08e58abc811
+    32c165d4b577855bd48c210c2037d7832f74cd63f59c941eef2a85da35a08ae
+    23e4d9e5ac59ba0fe0d6588422f99452419f1eb94a1df61c65e4764222fcc
+    d6db211e173230d36eaa2d29fd87b18a03c37038ef592203f396a9c99cdf03
+    94aaaa367d0f400bb9e0aee2ab38dc0f44be739b9635c70b3a13e9dbd812
+    7245af91bbc9922511d5188a8464934a70f8661ad04e0600c7303a6fe6bc386
+    34570b984f29bdb01df5830cdf4df3e86e20e8a2b69f1b30d9d307c323f9a
+    1cbf9fbe872c68d081bf8eec2f3a2c6362486bed18f1c21521eefdaebbd8a
+    069c1f07a70c4cf6953e8b68e613ec20ad8d5c4588a1f5d153ad130f2ba3e
+    5f2c626e8ac56148853af76bd7078b953d99bb05dc1571a78ff1b616efc7a1a
+    1f54736ea9a4749496734f8e52918aea1ee2755f741e3ccb28f8114073fbff
+    33074d3c4fef597251e769a8e141c1cbac04c158f270c24061d519a0eebe24
+    e4f67c44e8403acf3d59bf4da531fb5e8f9e86fa2d38d0380877b7193240a
+    54e31c8ed8d979d880a30ef2bafbf
+    """)
+    let header = makeKdbx3Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: masterSeed,
+        transformSeed: transformSeed,
+        transformRounds: transformRounds,
+        encryptionIV: encryptionIV,
+        protectedStreamKey: innerStreamKey,
+        streamStartBytes: streamStartBytes,
+        innerRandomStreamID: 2
+    )
+    let database = header + encryptedPayload
+    let reader = DefaultKeePassDatabaseReader()
+
+    let snapshot = try reader.readSnapshot(
+        database: database,
+        sourceName: "kdbx3-aes-fixture.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx3)
+    #expect(snapshot.headerSummary?.kdfParameters?.aesKdf?.rounds == transformRounds)
+    #expect(snapshot.entries.first?.title == "GitHub")
+    #expect(snapshot.entries.first?.username == "alice")
+    #expect(snapshot.entries.first?.decodedPassword == "decoded-password-secret")
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains("decoded-password-secret"))
+    #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func defaultKeePassDatabaseReaderBuildsKdbxDecryptInputBeforeCryptoDecode() throws {
     final class RecordingDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
         var contexts: [KeePassKdbxDecryptInputContext] = []
@@ -5161,15 +5237,16 @@ private func kdbxVariantUInt64(key: String, value: UInt64) -> Data {
 }
 
 private func decodeHexData(_ value: String) throws -> Data {
-    guard value.count.isMultiple(of: 2),
-          value.allSatisfy(\.isHexDigit) else {
+    let compactValue = String(value.filter { !$0.isWhitespace })
+    guard compactValue.count.isMultiple(of: 2),
+          compactValue.allSatisfy(\.isHexDigit) else {
         throw KeePassOperationError(code: .formatUnsupported, message: "invalid test hex")
     }
     var data = Data()
-    var index = value.startIndex
-    while index < value.endIndex {
-        let next = value.index(index, offsetBy: 2)
-        guard let byte = UInt8(value[index..<next], radix: 16) else {
+    var index = compactValue.startIndex
+    while index < compactValue.endIndex {
+        let next = compactValue.index(index, offsetBy: 2)
+        guard let byte = UInt8(compactValue[index..<next], radix: 16) else {
             throw KeePassOperationError(code: .formatUnsupported, message: "invalid test hex")
         }
         data.append(byte)

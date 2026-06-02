@@ -1919,7 +1919,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 return try xmlReader.readSnapshot(
                     database: decryptedPayload,
                     sourceName: sourceName,
-                    credentials: credentials
+                    credentials: credentials,
+                    headerSummary: context.envelope.headerSummary
                 )
             }
             if let inflated = KeePassGzipPayloadInflator.inflate(decryptedPayload),
@@ -1927,7 +1928,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 return try xmlReader.readSnapshot(
                     database: inflated,
                     sourceName: sourceName,
-                    credentials: credentials
+                    credentials: credentials,
+                    headerSummary: context.envelope.headerSummary
                 )
             }
         }
@@ -2025,13 +2027,27 @@ public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
         sourceName: String?,
         credentials: KeePassUnlockCredentials
     ) throws -> KeePassReadOnlySnapshot {
+        try readSnapshot(
+            database: database,
+            sourceName: sourceName,
+            credentials: credentials,
+            headerSummary: nil
+        )
+    }
+
+    func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials,
+        headerSummary: KeePassHeaderSummary?
+    ) throws -> KeePassReadOnlySnapshot {
         let parser = KeePassXMLSnapshotParser()
         do {
             let parsed = try parser.parse(database)
             return KeePassXMLSnapshotBuilder.build(
                 parsed,
                 sourceName: sourceName,
-                headerSummary: nil
+                headerSummary: headerSummary
             )
         } catch {
             throw KeePassOperationError(
