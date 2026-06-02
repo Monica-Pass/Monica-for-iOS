@@ -29,6 +29,46 @@ struct SettingsRootView: View {
         }
     }
 
+    private var cardDensitySelection: Binding<VaultDisplayCardDensity> {
+        Binding {
+            session.vaultDisplayPreferences.cardDensity
+        } set: { density in
+            var preferences = session.vaultDisplayPreferences
+            preferences.cardDensity = density
+            session.updateVaultDisplayPreferences(preferences)
+        }
+    }
+
+    private var showsLoginUsernameBinding: Binding<Bool> {
+        Binding {
+            session.vaultDisplayPreferences.showsLoginUsername
+        } set: { isVisible in
+            var preferences = session.vaultDisplayPreferences
+            preferences.showsLoginUsername = isVisible
+            session.updateVaultDisplayPreferences(preferences)
+        }
+    }
+
+    private var showsLoginURLBinding: Binding<Bool> {
+        Binding {
+            session.vaultDisplayPreferences.showsLoginURL
+        } set: { isVisible in
+            var preferences = session.vaultDisplayPreferences
+            preferences.showsLoginURL = isVisible
+            session.updateVaultDisplayPreferences(preferences)
+        }
+    }
+
+    private var showsTabLabelsBinding: Binding<Bool> {
+        Binding {
+            session.vaultDisplayPreferences.showsTabLabels
+        } set: { isVisible in
+            var preferences = session.vaultDisplayPreferences
+            preferences.showsTabLabels = isVisible
+            session.updateVaultDisplayPreferences(preferences)
+        }
+    }
+
     var body: some View {
         AndroidParityScreen {
             AndroidParitySection(title: "应用") {
@@ -47,6 +87,21 @@ struct SettingsRootView: View {
                             Text(policy.label).tag(policy)
                         }
                     }
+                    AndroidParityDivider()
+                    Picker("卡片密度", selection: cardDensitySelection) {
+                        ForEach(VaultDisplayCardDensity.allCases) { density in
+                            Text(density.label).tag(density)
+                        }
+                    }
+                    Toggle("账号字段", isOn: showsLoginUsernameBinding)
+                        .font(.headline.weight(.heavy))
+                        .tint(AndroidParityPalette.primary)
+                    Toggle("网址字段", isOn: showsLoginURLBinding)
+                        .font(.headline.weight(.heavy))
+                        .tint(AndroidParityPalette.primary)
+                    Toggle("底部导航文字", isOn: showsTabLabelsBinding)
+                        .font(.headline.weight(.heavy))
+                        .tint(AndroidParityPalette.primary)
                     Button {
                         if session.isBiometricUnlockEnabled {
                             session.setBiometricUnlockEnabled(false)

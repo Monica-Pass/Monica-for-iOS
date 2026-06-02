@@ -156,6 +156,62 @@ struct AppVaultQuickFilterRow: Sendable, Equatable, Identifiable {
     let isSelected: Bool
 }
 
+enum VaultDisplayCardDensity: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
+    case comfortable
+    case compact
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .comfortable:
+            "舒适"
+        case .compact:
+            "紧凑"
+        }
+    }
+
+    var verticalSpacing: CGFloat {
+        switch self {
+        case .comfortable:
+            8
+        case .compact:
+            4
+        }
+    }
+
+    var iconSize: CGFloat {
+        switch self {
+        case .comfortable:
+            18
+        case .compact:
+            14
+        }
+    }
+}
+
+struct VaultDisplayPreferences: Sendable, Codable, Equatable {
+    static let `default` = VaultDisplayPreferences(
+        cardDensity: .comfortable,
+        showsLoginUsername: true,
+        showsLoginURL: true,
+        showsTabLabels: true
+    )
+
+    var cardDensity: VaultDisplayCardDensity
+    var showsLoginUsername: Bool
+    var showsLoginURL: Bool
+    var showsTabLabels: Bool
+}
+
+struct AppVaultDisplayPreferenceRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+}
+
 struct AppLoginStackedGroup: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -544,6 +600,11 @@ protocol BiometricUnlockPreferenceStore: Sendable {
     func saveIsEnabled(_ isEnabled: Bool)
 }
 
+protocol VaultDisplayPreferenceStore: Sendable {
+    func loadPreferences() -> VaultDisplayPreferences
+    func savePreferences(_ preferences: VaultDisplayPreferences)
+}
+
 protocol BiometricUnlockAuthorizer: Sendable {
     func authenticate(reason: String) async throws
 }
@@ -714,6 +775,47 @@ final class MemoryBiometricUnlockPreferenceStore: BiometricUnlockPreferenceStore
 
     func saveIsEnabled(_ isEnabled: Bool) {
         self.isEnabled = isEnabled
+    }
+}
+
+final class UserDefaultsVaultDisplayPreferenceStore: VaultDisplayPreferenceStore, @unchecked Sendable {
+    private let userDefaults: UserDefaults
+    private let key = "monica.vaultDisplayPreferences"
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func loadPreferences() -> VaultDisplayPreferences {
+        guard let data = userDefaults.data(forKey: key),
+              let preferences = try? JSONDecoder().decode(VaultDisplayPreferences.self, from: data)
+        else {
+            return .default
+        }
+        return preferences
+    }
+
+    func savePreferences(_ preferences: VaultDisplayPreferences) {
+        guard let data = try? JSONEncoder().encode(preferences) else {
+            return
+        }
+        userDefaults.set(data, forKey: key)
+    }
+}
+
+final class MemoryVaultDisplayPreferenceStore: VaultDisplayPreferenceStore, @unchecked Sendable {
+    private(set) var preferences: VaultDisplayPreferences?
+
+    init(preferences: VaultDisplayPreferences? = nil) {
+        self.preferences = preferences
+    }
+
+    func loadPreferences() -> VaultDisplayPreferences {
+        preferences ?? .default
+    }
+
+    func savePreferences(_ preferences: VaultDisplayPreferences) {
+        self.preferences = preferences
     }
 }
 
@@ -979,6 +1081,7 @@ final class AppSessionModel {
     var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
     var attachmentSearchQuery = ""
     var selectedVaultQuickFilterID = "all"
+    var vaultDisplayPreferences: VaultDisplayPreferences
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -1024,6 +1127,7 @@ final class AppSessionModel {
     private let vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)?
     private let rememberedVaultStore: any RememberedVaultStore
     private let biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore
+    private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
     private let biometricUnlockAuthorizer: any BiometricUnlockAuthorizer
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
@@ -1050,6 +1154,7 @@ final class AppSessionModel {
         vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)? = nil,
         rememberedVaultStore: any RememberedVaultStore = MemoryRememberedVaultStore(),
         biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore = MemoryBiometricUnlockPreferenceStore(),
+        vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore = MemoryVaultDisplayPreferenceStore(),
         biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
         securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
@@ -1072,6 +1177,7 @@ final class AppSessionModel {
         self.vaultWrappedKeyProvider = vaultWrappedKeyProvider
         self.rememberedVaultStore = rememberedVaultStore
         self.biometricUnlockPreferenceStore = biometricUnlockPreferenceStore
+        self.vaultDisplayPreferenceStore = vaultDisplayPreferenceStore
         self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
@@ -1087,6 +1193,7 @@ final class AppSessionModel {
         self.autoLockPolicy = autoLockPolicy
         self.notificationPermissionState = notificationPermissionStatusProvider()
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
+        self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
         if let remembered = try? rememberedVaultStore.load() {
             self.rememberedVaultDescriptor = LocalVaultDescriptor(
                 fileURL: remembered.fileURL,
@@ -1407,6 +1514,45 @@ final class AppSessionModel {
         clearVaultSearchQueries()
         setAllFavoriteFilters(filterID == "favorites")
         selectedVaultQuickFilterID = filterID
+    }
+
+    var vaultDisplayPreferenceRows: [AppVaultDisplayPreferenceRow] {
+        [
+            AppVaultDisplayPreferenceRow(
+                id: "card-density",
+                title: "卡片密度",
+                value: vaultDisplayPreferences.cardDensity.label,
+                detail: "调整密码列表卡片的间距和扫描密度。",
+                systemImage: "rectangle.compress.vertical"
+            ),
+            AppVaultDisplayPreferenceRow(
+                id: "login-username",
+                title: "账号字段",
+                value: vaultDisplayPreferences.showsLoginUsername ? "显示" : "隐藏",
+                detail: "控制密码列表是否展示账号摘要。",
+                systemImage: "person.text.rectangle"
+            ),
+            AppVaultDisplayPreferenceRow(
+                id: "login-url",
+                title: "网址字段",
+                value: vaultDisplayPreferences.showsLoginURL ? "显示" : "隐藏",
+                detail: "控制密码列表是否展示网站或 URL 摘要。",
+                systemImage: "globe"
+            ),
+            AppVaultDisplayPreferenceRow(
+                id: "tab-labels",
+                title: "底部导航文字",
+                value: vaultDisplayPreferences.showsTabLabels ? "显示" : "隐藏",
+                detail: "控制底部导航是否显示文字标签。",
+                systemImage: "menubar.rectangle"
+            )
+        ]
+    }
+
+    func updateVaultDisplayPreferences(_ preferences: VaultDisplayPreferences) {
+        vaultDisplayPreferences = preferences
+        vaultDisplayPreferenceStore.savePreferences(preferences)
+        recordUserActivity()
     }
 
     var permissionStatusRows: [AppPermissionStatusRow] {
@@ -6124,7 +6270,11 @@ struct AppRootView: View {
                     ForEach(MonicaAppTab.phaseOneAndroidParityTabs, id: \.self) { tab in
                         tabContent(for: tab)
                             .tabItem {
-                                Label(tab.title, systemImage: tab.systemImage)
+                                if session.vaultDisplayPreferences.showsTabLabels {
+                                    Label(tab.title, systemImage: tab.systemImage)
+                                } else {
+                                    Image(systemName: tab.systemImage)
+                                }
                             }
                             .tag(tab)
                     }

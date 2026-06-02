@@ -199,7 +199,10 @@ struct AndroidParityVaultHomeView: View {
             } else {
                 ForEach(session.filteredLoginEntries) { entry in
                     Button { session.presentEditEditor(for: entry) } label: {
-                        AndroidPasswordListCard(entry: entry)
+                        AndroidPasswordListCard(
+                            entry: entry,
+                            preferences: session.vaultDisplayPreferences
+                        )
                     }
                     .buttonStyle(.plain)
                 }
@@ -855,25 +858,30 @@ struct AndroidParityModuleChrome<Content: View>: View {
 
 private struct AndroidPasswordListCard: View {
     let entry: LocalLoginEntry
+    let preferences: VaultDisplayPreferences
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
-            HStack(alignment: .top, spacing: 18) {
+            HStack(alignment: .top, spacing: preferences.cardDensity == .compact ? 12 : 18) {
                 AndroidParityIconTile(systemImage: "lock.fill", fill: AndroidParityPalette.primaryContainer)
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: preferences.cardDensity.verticalSpacing) {
                     Text(entry.title.isEmpty ? "未命名" : entry.title)
                         .font(.subheadline.weight(.semibold))
-                    Text(entry.username)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.textSecondary)
-                    Text(entry.url)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
-                        .lineLimit(1)
+                    if preferences.showsLoginUsername, !entry.username.isEmpty {
+                        Text(entry.username)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    }
+                    if preferences.showsLoginURL, !entry.url.isEmpty {
+                        Text(entry.url)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
+                            .lineLimit(1)
+                    }
                 }
                 Spacer()
                 Image(systemName: "ellipsis")
-                    .font(.subheadline.weight(.semibold))
+                    .font(.system(size: preferences.cardDensity.iconSize, weight: .semibold))
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
         }

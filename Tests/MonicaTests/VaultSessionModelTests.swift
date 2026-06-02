@@ -420,6 +420,60 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertNil(model.permissionStatusRows[4].settingsURL)
     }
 
+    func testVaultDisplayPreferencesPersistAndSummarizeIOSFieldCustomization() throws {
+        let store = MemoryVaultDisplayPreferenceStore()
+        let model = AppSessionModel(vaultDisplayPreferenceStore: store)
+
+        XCTAssertEqual(model.vaultDisplayPreferences.cardDensity, .comfortable)
+        XCTAssertTrue(model.vaultDisplayPreferences.showsLoginUsername)
+        XCTAssertTrue(model.vaultDisplayPreferences.showsLoginURL)
+        XCTAssertTrue(model.vaultDisplayPreferences.showsTabLabels)
+
+        model.updateVaultDisplayPreferences(
+            VaultDisplayPreferences(
+                cardDensity: .compact,
+                showsLoginUsername: false,
+                showsLoginURL: true,
+                showsTabLabels: false
+            )
+        )
+
+        XCTAssertEqual(store.preferences?.cardDensity, .compact)
+        XCTAssertEqual(model.vaultDisplayPreferenceRows.map(\.title), ["卡片密度", "账号字段", "网址字段", "底部导航文字"])
+        XCTAssertEqual(model.vaultDisplayPreferenceRows.map(\.value), ["紧凑", "隐藏", "显示", "隐藏"])
+
+        let restored = AppSessionModel(vaultDisplayPreferenceStore: store)
+        XCTAssertEqual(restored.vaultDisplayPreferences.cardDensity, .compact)
+        XCTAssertFalse(restored.vaultDisplayPreferences.showsLoginUsername)
+        XCTAssertTrue(restored.vaultDisplayPreferences.showsLoginURL)
+        XCTAssertFalse(restored.vaultDisplayPreferences.showsTabLabels)
+    }
+
+    func testVaultDisplayPreferencesSurviveVaultLock() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultDisplayPreferenceStore: MemoryVaultDisplayPreferenceStore()
+        )
+
+        try unlockNewVault(model)
+        model.updateVaultDisplayPreferences(
+            VaultDisplayPreferences(
+                cardDensity: .compact,
+                showsLoginUsername: false,
+                showsLoginURL: false,
+                showsTabLabels: false
+            )
+        )
+
+        model.lockLocalVault()
+
+        XCTAssertEqual(model.vaultDisplayPreferences.cardDensity, .compact)
+        XCTAssertFalse(model.vaultDisplayPreferences.showsLoginUsername)
+        XCTAssertFalse(model.vaultDisplayPreferences.showsLoginURL)
+        XCTAssertFalse(model.vaultDisplayPreferences.showsTabLabels)
+    }
+
     func testDeveloperDiagnosticsExposeRedactedOperationalState() {
         let model = AppSessionModel()
         let environment = MonicaAppEnvironment(
