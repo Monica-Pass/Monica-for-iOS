@@ -1540,6 +1540,131 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.filteredIdentityEntries.isEmpty)
     }
 
+    func testVaultQuickFiltersSummarizeCurrentCategoryFavoritesAndTrash() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        try unlockNewVault(model)
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "github-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.selectLoginEntryForEditing(try XCTUnwrap(model.loginEntries.first))
+        try model.setSelectedLoginFavorite(true)
+
+        model.noteEntries = [
+            LocalNoteEntry(
+                id: "note-1",
+                projectID: "project-1",
+                title: "Recovery Codes",
+                body: "secret",
+                favorite: true
+            )
+        ]
+        model.deletedTotpEntries = [
+            LocalTotpEntry(
+                id: "totp-deleted-1",
+                projectID: "project-1",
+                title: "Old TOTP",
+                secret: "JBSWY3DPEHPK3PXP",
+                issuer: "GitHub",
+                accountName: "alice",
+                period: 30,
+                digits: 6,
+                algorithm: "SHA1",
+                otpType: "TOTP",
+                counter: 0,
+                favorite: false
+            )
+        ]
+        model.deletedAttachmentEntries = [
+            LocalAttachmentMetadata(
+                id: "attachment-deleted-1",
+                projectID: "project-1",
+                entryID: "entry-1",
+                fileName: "old-contract.pdf",
+                mediaType: "application/pdf",
+                originalSize: 100,
+                storedSize: 80,
+                contentHash: "hash-secret",
+                storageMode: "local",
+                source: "android-backup-local",
+                downloadState: "downloaded",
+                wrappedContentEncryptionKey: "wrapped-key",
+                localPath: "old-contract.enc",
+                deleted: true
+            )
+        ]
+
+        let rows = model.vaultQuickFilterRows
+
+        XCTAssertEqual(rows.map(\.id), ["all", "category-project-1", "favorites", "trash"])
+        XCTAssertEqual(rows.map(\.title), ["全部", "Personal", "收藏", "回收站"])
+        XCTAssertEqual(rows.map(\.value), ["2 项", "2 项", "2 项", "2 项"])
+        XCTAssertEqual(rows.map(\.systemImage), ["tray.full", "folder", "star", "trash"])
+        XCTAssertEqual(rows.map(\.isSelected), [true, false, false, false])
+
+        model.loginSearchQuery = "github"
+        model.noteSearchQuery = "recovery"
+        model.applyVaultQuickFilter("favorites")
+
+        XCTAssertTrue(model.showFavoriteLoginEntriesOnly)
+        XCTAssertTrue(model.showFavoriteNoteEntriesOnly)
+        XCTAssertEqual(model.loginSearchQuery, "")
+        XCTAssertEqual(model.noteSearchQuery, "")
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, true, false])
+
+        model.applyVaultQuickFilter("category-project-1")
+
+        XCTAssertFalse(model.showFavoriteLoginEntriesOnly)
+        XCTAssertFalse(model.showFavoriteNoteEntriesOnly)
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, true, false, false])
+
+        model.applyVaultQuickFilter("trash")
+
+        XCTAssertTrue(model.isTrashQuickFilterSelected)
+        XCTAssertTrue(model.filteredLoginEntries.isEmpty)
+        XCTAssertTrue(model.filteredNoteEntries.isEmpty)
+        XCTAssertEqual(model.deletedTotpEntries.map(\.title), ["Old TOTP"])
+        XCTAssertEqual(model.deletedAttachmentEntries.map(\.fileName), ["old-contract.pdf"])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, false, true])
+    }
+
+    func testVaultQuickFiltersResetWhenVaultLocks() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        try unlockNewVault(model)
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "github-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        model.loginSearchQuery = "git"
+        model.noteSearchQuery = "note"
+        model.applyVaultQuickFilter("favorites")
+
+        XCTAssertEqual(model.selectedVaultQuickFilterID, "favorites")
+        XCTAssertTrue(model.showFavoriteLoginEntriesOnly)
+
+        model.lockLocalVault()
+
+        XCTAssertEqual(model.selectedVaultQuickFilterID, "all")
+        XCTAssertEqual(model.loginSearchQuery, "")
+        XCTAssertEqual(model.noteSearchQuery, "")
+        XCTAssertFalse(model.showFavoriteLoginEntriesOnly)
+        XCTAssertFalse(model.showFavoriteNoteEntriesOnly)
+        XCTAssertTrue(model.vaultQuickFilterRows.map(\.id).contains("all"))
+    }
+
     func testGenerateSelectedLoginPasswordFillsEditingDraftWithoutSavingEntry() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

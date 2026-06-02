@@ -78,6 +78,8 @@ struct AndroidParityVaultHomeView: View {
             selectedAction: $session.expandedToolbarAction,
             searchText: searchBinding,
             favoritesOnly: favoritesBinding,
+            quickFilterRows: session.vaultQuickFilterRows,
+            onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
             onAdd: { session.presentAddEditor(for: tab) }
         ) {
@@ -714,6 +716,8 @@ struct AndroidParityModuleChrome<Content: View>: View {
     @Binding var selectedAction: AndroidParityToolbarAction?
     @Binding var searchText: String
     @Binding var favoritesOnly: Bool
+    let quickFilterRows: [AppVaultQuickFilterRow]
+    let onQuickFilter: (String) -> Void
     let onOpenVault: () -> Void
     let onAdd: () -> Void
     @ViewBuilder var content: Content
@@ -723,6 +727,7 @@ struct AndroidParityModuleChrome<Content: View>: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     header
+                    quickFilterStrip
                     if selectedAction == .search { searchPanel }
                     content
                 }
@@ -774,6 +779,43 @@ struct AndroidParityModuleChrome<Content: View>: View {
             Toggle("仅显示收藏", isOn: $favoritesOnly)
                 .font(.headline.weight(.heavy))
                 .tint(AndroidParityPalette.primary)
+        }
+    }
+
+    private var quickFilterStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(quickFilterRows) { row in
+                    Button {
+                        onQuickFilter(row.id)
+                    } label: {
+                        HStack(spacing: 8) {
+                            Image(systemName: row.systemImage)
+                                .font(.subheadline.weight(.heavy))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(row.title)
+                                    .font(.subheadline.weight(.heavy))
+                                    .lineLimit(1)
+                                Text(row.value)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(row.isSelected ? AndroidParityPalette.textPrimary.opacity(0.72) : AndroidParityPalette.textSecondary)
+                                    .lineLimit(1)
+                            }
+                        }
+                        .padding(.horizontal, 14)
+                        .frame(height: 52)
+                        .background(
+                            row.isSelected ? AndroidParityPalette.primaryContainer : AndroidParityPalette.surfaceVariant,
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                        .foregroundStyle(row.isSelected ? AndroidParityPalette.textPrimary : AndroidParityPalette.textSecondary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(row.title)，\(row.value)")
+                    .accessibilityHint(row.detail)
+                }
+            }
+            .padding(.vertical, 2)
         }
     }
 

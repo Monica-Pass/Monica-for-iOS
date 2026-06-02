@@ -147,6 +147,15 @@ struct AppSecurityCenterRepairSuggestion: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+struct AppVaultQuickFilterRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+    let isSelected: Bool
+}
+
 enum AppOperationTimelineAction: String, Sendable, Equatable {
     case created
     case updated
@@ -952,6 +961,7 @@ final class AppSessionModel {
     var attachmentEntries: [LocalAttachmentMetadata] = []
     var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
     var attachmentSearchQuery = ""
+    var selectedVaultQuickFilterID = "all"
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -1070,6 +1080,9 @@ final class AppSessionModel {
     }
 
     var filteredLoginEntries: [LocalLoginEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = loginSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             loginEntries,
@@ -1084,6 +1097,9 @@ final class AppSessionModel {
     }
 
     var filteredNoteEntries: [LocalNoteEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = noteSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             noteEntries,
@@ -1097,6 +1113,9 @@ final class AppSessionModel {
     }
 
     var filteredTotpEntries: [LocalTotpEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = totpSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             totpEntries,
@@ -1111,6 +1130,9 @@ final class AppSessionModel {
     }
 
     var filteredCardEntries: [LocalCardEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = cardSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             cardEntries,
@@ -1127,6 +1149,9 @@ final class AppSessionModel {
     }
 
     var filteredIdentityEntries: [LocalIdentityEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = identitySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             identityEntries,
@@ -1145,6 +1170,9 @@ final class AppSessionModel {
     }
 
     var filteredPasskeyEntries: [LocalPasskeyEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = passkeySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             passkeyEntries,
@@ -1160,6 +1188,9 @@ final class AppSessionModel {
     }
 
     var filteredSshKeyEntries: [LocalSshKeyEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = sshKeySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             sshKeyEntries,
@@ -1176,6 +1207,9 @@ final class AppSessionModel {
     }
 
     var filteredApiTokenEntries: [LocalApiTokenEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = apiTokenSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             apiTokenEntries,
@@ -1192,6 +1226,9 @@ final class AppSessionModel {
     }
 
     var filteredWifiEntries: [LocalWifiEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = wifiSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             wifiEntries,
@@ -1224,6 +1261,9 @@ final class AppSessionModel {
     }
 
     var filteredSendEntries: [LocalSendEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = sendSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         return filteredFavoriteEntries(
             sendEntries,
@@ -1239,6 +1279,9 @@ final class AppSessionModel {
     }
 
     var filteredAttachmentEntries: [LocalAttachmentMetadata] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
         let query = attachmentSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty else {
             return attachmentEntries
@@ -1253,6 +1296,68 @@ final class AppSessionModel {
                 || (entry.entryID?.localizedCaseInsensitiveContains(query) ?? false)
                 || (entry.localPath?.localizedCaseInsensitiveContains(query) ?? false)
         }
+    }
+
+    var vaultQuickFilterRows: [AppVaultQuickFilterRow] {
+        let category = activeProject
+        let activeCount = activeVaultEntryCount
+        let deletedCount = deletedVaultEntryCount
+        var rows = [
+            AppVaultQuickFilterRow(
+                id: "all",
+                title: "全部",
+                value: itemCountLabel(activeCount),
+                detail: "显示当前分类里的全部活动条目。",
+                systemImage: "tray.full",
+                isSelected: selectedVaultQuickFilterID == "all"
+            )
+        ]
+        if let category {
+            rows.append(
+                AppVaultQuickFilterRow(
+                    id: "category-\(category.id)",
+                    title: category.title,
+                    value: itemCountLabel(activeCount),
+                    detail: "当前分类。",
+                    systemImage: "folder",
+                    isSelected: selectedVaultQuickFilterID == "category-\(category.id)"
+                )
+            )
+        }
+        rows.append(
+            AppVaultQuickFilterRow(
+                id: "favorites",
+                title: "收藏",
+                value: itemCountLabel(favoriteVaultEntryCount),
+                detail: "只显示已收藏条目。",
+                systemImage: "star",
+                isSelected: selectedVaultQuickFilterID == "favorites"
+            )
+        )
+        rows.append(
+            AppVaultQuickFilterRow(
+                id: "trash",
+                title: "回收站",
+                value: itemCountLabel(deletedCount),
+                detail: "显示当前分类的已删除条目。",
+                systemImage: "trash",
+                isSelected: selectedVaultQuickFilterID == "trash"
+            )
+        )
+        return rows
+    }
+
+    var isTrashQuickFilterSelected: Bool {
+        selectedVaultQuickFilterID == "trash"
+    }
+
+    func applyVaultQuickFilter(_ filterID: String) {
+        guard vaultQuickFilterRows.contains(where: { $0.id == filterID }) else {
+            return
+        }
+        clearVaultSearchQueries()
+        setAllFavoriteFilters(filterID == "favorites")
+        selectedVaultQuickFilterID = filterID
     }
 
     var permissionStatusRows: [AppPermissionStatusRow] {
@@ -1502,6 +1607,47 @@ final class AppSessionModel {
             }
     }
 
+    private var activeVaultEntryCount: Int {
+        loginEntries.count
+            + noteEntries.count
+            + totpEntries.count
+            + cardEntries.count
+            + identityEntries.count
+            + passkeyEntries.count
+            + sshKeyEntries.count
+            + apiTokenEntries.count
+            + wifiEntries.count
+            + sendEntries.count
+            + attachmentEntries.count
+    }
+
+    private var favoriteVaultEntryCount: Int {
+        loginEntries.filter(\.favorite).count
+            + noteEntries.filter(\.favorite).count
+            + totpEntries.filter(\.favorite).count
+            + cardEntries.filter(\.favorite).count
+            + identityEntries.filter(\.favorite).count
+            + passkeyEntries.filter(\.favorite).count
+            + sshKeyEntries.filter(\.favorite).count
+            + apiTokenEntries.filter(\.favorite).count
+            + wifiEntries.filter(\.favorite).count
+            + sendEntries.filter(\.favorite).count
+    }
+
+    private var deletedVaultEntryCount: Int {
+        deletedLoginEntries.count
+            + deletedNoteEntries.count
+            + deletedTotpEntries.count
+            + deletedCardEntries.count
+            + deletedIdentityEntries.count
+            + deletedPasskeyEntries.count
+            + deletedSshKeyEntries.count
+            + deletedApiTokenEntries.count
+            + deletedWifiEntries.count
+            + deletedSendEntries.count
+            + deletedAttachmentEntries.count
+    }
+
     private func itemCountLabel(_ count: Int) -> String {
         "\(count) 项"
     }
@@ -1615,6 +1761,39 @@ final class AppSessionModel {
                 return lhs.offset < rhs.offset
             }
             .map(\.element)
+    }
+
+    private func clearVaultSearchQueries() {
+        loginSearchQuery = ""
+        noteSearchQuery = ""
+        totpSearchQuery = ""
+        cardSearchQuery = ""
+        identitySearchQuery = ""
+        passkeySearchQuery = ""
+        sshKeySearchQuery = ""
+        apiTokenSearchQuery = ""
+        wifiSearchQuery = ""
+        sendSearchQuery = ""
+        attachmentSearchQuery = ""
+    }
+
+    private func setAllFavoriteFilters(_ favoritesOnly: Bool) {
+        showFavoriteLoginEntriesOnly = favoritesOnly
+        showFavoriteNoteEntriesOnly = favoritesOnly
+        showFavoriteTotpEntriesOnly = favoritesOnly
+        showFavoriteCardEntriesOnly = favoritesOnly
+        showFavoriteIdentityEntriesOnly = favoritesOnly
+        showFavoritePasskeyEntriesOnly = favoritesOnly
+        showFavoriteSshKeyEntriesOnly = favoritesOnly
+        showFavoriteApiTokenEntriesOnly = favoritesOnly
+        showFavoriteWifiEntriesOnly = favoritesOnly
+        showFavoriteSendEntriesOnly = favoritesOnly
+    }
+
+    private func resetVaultQuickFilters() {
+        selectedVaultQuickFilterID = "all"
+        clearVaultSearchQueries()
+        setAllFavoriteFilters(false)
     }
 
     private var pendingFirstTimePassword = ""
@@ -4748,42 +4927,31 @@ final class AppSessionModel {
         activeEntryRepository = nil
         activeProject = nil
         lastUserActivityAt = nil
+        resetVaultQuickFilters()
         loginEntries = []
         deletedLoginEntries = []
-        loginSearchQuery = ""
-        showFavoriteLoginEntriesOnly = false
         loginPassword = ""
         clearEditingLoginEntry()
         noteEntries = []
         deletedNoteEntries = []
-        noteSearchQuery = ""
-        showFavoriteNoteEntriesOnly = false
         noteBody = ""
         clearEditingNoteEntry()
         totpEntries = []
         deletedTotpEntries = []
-        totpSearchQuery = ""
-        showFavoriteTotpEntriesOnly = false
         totpSecret = ""
         totpImportURI = ""
         clearEditingTotpEntry()
         cardEntries = []
         deletedCardEntries = []
-        cardSearchQuery = ""
-        showFavoriteCardEntriesOnly = false
         cardNumber = ""
         cardCVV = ""
         clearEditingCardEntry()
         identityEntries = []
         deletedIdentityEntries = []
-        identitySearchQuery = ""
-        showFavoriteIdentityEntriesOnly = false
         identityDocumentNumber = ""
         clearEditingIdentityEntry()
         passkeyEntries = []
         deletedPasskeyEntries = []
-        passkeySearchQuery = ""
-        showFavoritePasskeyEntriesOnly = false
         passkeyPrivateKeyReference = ""
         clearEditingPasskeyEntry()
         clearExtendedParityEntries()
@@ -4805,42 +4973,31 @@ final class AppSessionModel {
         activeEntryRepository = nil
         activeProject = nil
         lastUserActivityAt = nil
+        resetVaultQuickFilters()
         loginEntries = []
         deletedLoginEntries = []
-        loginSearchQuery = ""
-        showFavoriteLoginEntriesOnly = false
         loginPassword = ""
         clearEditingLoginEntry()
         noteEntries = []
         deletedNoteEntries = []
-        noteSearchQuery = ""
-        showFavoriteNoteEntriesOnly = false
         noteBody = ""
         clearEditingNoteEntry()
         totpEntries = []
         deletedTotpEntries = []
-        totpSearchQuery = ""
-        showFavoriteTotpEntriesOnly = false
         totpSecret = ""
         totpImportURI = ""
         clearEditingTotpEntry()
         cardEntries = []
         deletedCardEntries = []
-        cardSearchQuery = ""
-        showFavoriteCardEntriesOnly = false
         cardNumber = ""
         cardCVV = ""
         clearEditingCardEntry()
         identityEntries = []
         deletedIdentityEntries = []
-        identitySearchQuery = ""
-        showFavoriteIdentityEntriesOnly = false
         identityDocumentNumber = ""
         clearEditingIdentityEntry()
         passkeyEntries = []
         deletedPasskeyEntries = []
-        passkeySearchQuery = ""
-        showFavoritePasskeyEntriesOnly = false
         passkeyPrivateKeyReference = ""
         clearEditingPasskeyEntry()
         clearExtendedParityEntries()
