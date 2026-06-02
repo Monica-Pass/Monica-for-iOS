@@ -779,6 +779,25 @@ struct AndroidParityVaultHomeView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.primary)
+                    Menu {
+                        ForEach(session.availableVaultBatchMoveTargets) { project in
+                            Button {
+                                do {
+                                    try session.moveSelectedVaultBatchItems(toProjectID: project.id)
+                                } catch {
+                                    // AppSessionModel owns user-visible failure state.
+                                }
+                            } label: {
+                                Label(project.title, systemImage: "folder")
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "folder.badge.gearshape")
+                            .frame(width: 34, height: 34)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.primary)
+                    .disabled(!session.canMoveSelectedVaultBatchItems)
                     Button {
                         do {
                             if session.isTrashQuickFilterSelected {

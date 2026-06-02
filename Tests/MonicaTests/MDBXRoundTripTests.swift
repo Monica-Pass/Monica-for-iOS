@@ -49,6 +49,140 @@ final class MDBXRoundTripTests: XCTestCase {
         XCTAssertEqual(listed.first?.username, "alice")
     }
 
+    func testStorageEntryRepositoryMovesEntriesThroughRealMDBXEngine() throws {
+        let repository = LocalVaultRepository()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-move-\(UUID().uuidString).mdbx")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+        }
+
+        let session = try repository.createVault(
+            named: vaultURL.deletingPathExtension().lastPathComponent,
+            in: vaultURL.deletingLastPathComponent(),
+            password: "中文 password 12345!",
+            deviceID: "ios-move-xctest-device"
+        )
+        let entries = repository.entryRepository(for: session)
+        let personal = try entries.createProject(title: "Personal")
+        let work = try entries.createProject(title: "Work")
+        let login = try entries.createLoginEntry(
+            projectID: personal.id,
+            draft: LocalLoginEntryDraft(
+                title: "GitHub",
+                username: "alice",
+                password: "correct horse battery staple",
+                url: "https://github.com"
+            )
+        )
+        let note = try entries.createNoteEntry(
+            projectID: personal.id,
+            draft: LocalNoteEntryDraft(title: "Recovery Codes", body: "github recovery")
+        )
+        let totp = try entries.createTotpEntry(
+            projectID: personal.id,
+            draft: LocalTotpEntryDraft(
+                title: "GitHub 2FA",
+                secret: "JBSWY3DPEHPK3PXP",
+                issuer: "GitHub",
+                accountName: "alice",
+                period: 30,
+                digits: 6,
+                algorithm: "SHA1",
+                otpType: "TOTP",
+                counter: 0
+            )
+        )
+        let card = try entries.createCardEntry(
+            projectID: personal.id,
+            draft: LocalCardEntryDraft(
+                title: "Everyday Visa",
+                cardholderName: "Alice Example",
+                number: "4111111111111111",
+                expiryMonth: "12",
+                expiryYear: "2031",
+                cvv: "123",
+                issuer: "Monica Bank",
+                network: "Visa",
+                notes: "main card"
+            )
+        )
+        let identity = try entries.createIdentityEntry(
+            projectID: personal.id,
+            draft: LocalIdentityEntryDraft(
+                title: "Passport",
+                documentType: "PASSPORT",
+                fullName: "Alice Example",
+                documentNumber: "P1234567",
+                issuer: "Monica Authority",
+                country: "US",
+                issueDate: "2024-01-01",
+                expiryDate: "2034-01-01",
+                notes: "travel"
+            )
+        )
+        let passkey = try entries.createPasskeyEntry(
+            projectID: personal.id,
+            draft: LocalPasskeyEntryDraft(
+                title: "GitHub Passkey",
+                relyingPartyID: "github.com",
+                username: "alice",
+                userHandle: "user-handle",
+                credentialID: "credential-id",
+                publicKeyCOSE: "public-key",
+                privateKeyReference: "keychain-ref",
+                notes: "AuthenticationServices metadata"
+            )
+        )
+        let attachment = try entries.createAttachmentMetadata(
+            projectID: personal.id,
+            entryID: login.id,
+            fileName: "passkey-note.txt",
+            mediaType: "text/plain",
+            originalSize: 128,
+            storedSize: 128,
+            contentHash: "sha256:attachment",
+            storageMode: "embedded-inline"
+        )
+
+        let movedLogin = try entries.moveEntry(kind: .login, entryID: login.id, fromProjectID: personal.id, toProjectID: work.id)
+        let movedNote = try entries.moveEntry(kind: .note, entryID: note.id, fromProjectID: personal.id, toProjectID: work.id)
+        let movedTotp = try entries.moveEntry(kind: .totp, entryID: totp.id, fromProjectID: personal.id, toProjectID: work.id)
+        let movedCard = try entries.moveEntry(kind: .card, entryID: card.id, fromProjectID: personal.id, toProjectID: work.id)
+        let movedIdentity = try entries.moveEntry(kind: .identity, entryID: identity.id, fromProjectID: personal.id, toProjectID: work.id)
+        let movedPasskey = try entries.moveEntry(kind: .passkey, entryID: passkey.id, fromProjectID: personal.id, toProjectID: work.id)
+        let movedAttachment = try entries.moveEntry(kind: .attachmentRef, entryID: attachment.id, fromProjectID: personal.id, toProjectID: work.id)
+
+        XCTAssertEqual(movedLogin, LocalVaultMovedEntry(id: login.id, title: "GitHub", kind: .login))
+        XCTAssertEqual(movedNote, LocalVaultMovedEntry(id: note.id, title: "Recovery Codes", kind: .note))
+        XCTAssertEqual(movedTotp, LocalVaultMovedEntry(id: totp.id, title: "GitHub 2FA", kind: .totp))
+        XCTAssertEqual(movedCard, LocalVaultMovedEntry(id: card.id, title: "Everyday Visa", kind: .card))
+        XCTAssertEqual(movedIdentity, LocalVaultMovedEntry(id: identity.id, title: "Passport", kind: .identity))
+        XCTAssertEqual(movedPasskey, LocalVaultMovedEntry(id: passkey.id, title: "GitHub Passkey", kind: .passkey))
+        XCTAssertEqual(movedAttachment, LocalVaultMovedEntry(id: attachment.id, title: "passkey-note.txt", kind: .attachmentRef))
+        XCTAssertTrue(try entries.listLoginEntries(projectID: personal.id).isEmpty)
+        XCTAssertTrue(try entries.listNoteEntries(projectID: personal.id).isEmpty)
+        XCTAssertTrue(try entries.listTotpEntries(projectID: personal.id).isEmpty)
+        XCTAssertTrue(try entries.listCardEntries(projectID: personal.id).isEmpty)
+        XCTAssertTrue(try entries.listIdentityEntries(projectID: personal.id).isEmpty)
+        XCTAssertTrue(try entries.listPasskeyEntries(projectID: personal.id).isEmpty)
+        XCTAssertTrue(try entries.listAttachmentMetadata(projectID: personal.id).isEmpty)
+        XCTAssertEqual(try entries.listLoginEntries(projectID: work.id).first?.id, login.id)
+        XCTAssertEqual(try entries.listLoginEntries(projectID: work.id).first?.projectID, work.id)
+        XCTAssertEqual(try entries.listNoteEntries(projectID: work.id).first?.id, note.id)
+        XCTAssertEqual(try entries.listNoteEntries(projectID: work.id).first?.projectID, work.id)
+        XCTAssertEqual(try entries.listTotpEntries(projectID: work.id).first?.id, totp.id)
+        XCTAssertEqual(try entries.listTotpEntries(projectID: work.id).first?.projectID, work.id)
+        XCTAssertEqual(try entries.listCardEntries(projectID: work.id).first?.id, card.id)
+        XCTAssertEqual(try entries.listCardEntries(projectID: work.id).first?.projectID, work.id)
+        XCTAssertEqual(try entries.listIdentityEntries(projectID: work.id).first?.id, identity.id)
+        XCTAssertEqual(try entries.listIdentityEntries(projectID: work.id).first?.projectID, work.id)
+        XCTAssertEqual(try entries.listPasskeyEntries(projectID: work.id).first?.id, passkey.id)
+        XCTAssertEqual(try entries.listPasskeyEntries(projectID: work.id).first?.projectID, work.id)
+        XCTAssertEqual(try entries.listAttachmentMetadata(projectID: work.id).first?.id, attachment.id)
+        XCTAssertEqual(try entries.listAttachmentMetadata(projectID: work.id).first?.projectID, work.id)
+    }
+
     func testAndroidParityEntriesRoundTripThroughRealMDBXEngine() throws {
         let repository = LocalVaultRepository()
         let vaultURL = FileManager.default.temporaryDirectory

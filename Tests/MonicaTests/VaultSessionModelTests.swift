@@ -2037,6 +2037,57 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 2 项"))
     }
 
+    func testBatchSelectionMovesCurrentFilteredLoginEntriesToTargetCategory() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        try unlockNewVault(model)
+        let personal = try model.createVaultCategory(title: "Personal")
+        let work = try model.createVaultCategory(title: "Work")
+        try model.switchVaultCategory(projectID: personal.id)
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "github-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.loginTitle = "GitLab"
+        model.loginUsername = "alice"
+        model.loginPassword = "gitlab-secret"
+        model.loginURL = "https://gitlab.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.loginTitle = "Bank"
+        model.loginUsername = "alice"
+        model.loginPassword = "bank-secret"
+        model.loginURL = "https://bank.example"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        model.loginSearchQuery = "git"
+        model.enterVaultBatchSelection(for: .login)
+        model.selectAllVisibleVaultBatchItems(for: .login)
+
+        XCTAssertTrue(model.canMoveSelectedVaultBatchItems)
+        XCTAssertEqual(model.availableVaultBatchMoveTargets.map(\.id), [work.id])
+
+        try model.moveSelectedVaultBatchItems(toProjectID: work.id)
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank"])
+        XCTAssertFalse(model.isVaultBatchSelectionActive)
+        XCTAssertEqual(model.loginSearchQuery, "")
+        XCTAssertEqual(model.entryOperationState, .succeeded("已移动 2 项"))
+        XCTAssertEqual(engine.movedVaultEntries.map(\.entryID), ["entry-1", "entry-2"])
+        XCTAssertEqual(engine.movedVaultEntries.map(\.toProjectID), [work.id, work.id])
+        XCTAssertEqual(model.operationTimelineEvents.prefix(2).map(\.action), [.moved, .moved])
+        XCTAssertFalse(model.operationTimelineEvents.map(\.detail).joined().contains("github-secret"))
+
+        try model.switchVaultCategory(projectID: work.id)
+
+        XCTAssertEqual(model.loginEntries.map(\.id), ["entry-1", "entry-2"])
+        XCTAssertEqual(model.loginEntries.map(\.projectID), [work.id, work.id])
+    }
+
     func testBatchSelectionResetsWhenVaultLocks() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
@@ -4552,6 +4603,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var createdProjects: [RecordedProjectCall] = []
     private(set) var renamedProjects: [RecordedRenamedProjectCall] = []
     private(set) var deletedProjects: [RecordedDeletedProjectCall] = []
+    private(set) var movedVaultEntries: [RecordedMoveEntryCall] = []
     private(set) var createdLoginEntries: [RecordedLoginEntryCall] = []
     private(set) var updatedLoginEntries: [RecordedUpdatedLoginEntryCall] = []
     private(set) var favoritedLoginEntries: [RecordedFavoriteEntryCall] = []
@@ -4824,6 +4876,212 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedProjects.append(.init(vaultID: handle.vaultID, projectID: projectID))
         projects[handle.vaultID, default: []].removeAll { $0.id == projectID }
+    }
+
+    func moveEntry(
+        in handle: LocalVaultHandle,
+        kind: UnifiedVaultItemKind,
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String
+    ) throws -> LocalVaultMovedEntry {
+        movedVaultEntries.append(
+            .init(
+                vaultID: handle.vaultID,
+                kind: kind,
+                entryID: entryID,
+                fromProjectID: fromProjectID,
+                toProjectID: toProjectID
+            )
+        )
+
+        switch kind {
+        case .login:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &loginEntries, title: \.title) { entry, projectID in
+                LocalLoginEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    username: entry.username,
+                    password: entry.password,
+                    url: entry.url,
+                    favorite: entry.favorite
+                )
+            }
+        case .note:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &noteEntries, title: \.title) { entry, projectID in
+                LocalNoteEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    body: entry.body,
+                    favorite: entry.favorite
+                )
+            }
+        case .totp:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &totpEntries, title: \.title) { entry, projectID in
+                LocalTotpEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    secret: entry.secret,
+                    issuer: entry.issuer,
+                    accountName: entry.accountName,
+                    period: entry.period,
+                    digits: entry.digits,
+                    algorithm: entry.algorithm,
+                    otpType: entry.otpType,
+                    counter: entry.counter,
+                    favorite: entry.favorite
+                )
+            }
+        case .card:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &cardEntries, title: \.title) { entry, projectID in
+                LocalCardEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    cardholderName: entry.cardholderName,
+                    number: entry.number,
+                    expiryMonth: entry.expiryMonth,
+                    expiryYear: entry.expiryYear,
+                    cvv: entry.cvv,
+                    issuer: entry.issuer,
+                    network: entry.network,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .identity:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &identityEntries, title: \.title) { entry, projectID in
+                LocalIdentityEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    documentType: entry.documentType,
+                    fullName: entry.fullName,
+                    documentNumber: entry.documentNumber,
+                    issuer: entry.issuer,
+                    country: entry.country,
+                    issueDate: entry.issueDate,
+                    expiryDate: entry.expiryDate,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .passkey:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &passkeyEntries, title: \.title) { entry, projectID in
+                LocalPasskeyEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    relyingPartyID: entry.relyingPartyID,
+                    username: entry.username,
+                    userHandle: entry.userHandle,
+                    credentialID: entry.credentialID,
+                    publicKeyCOSE: entry.publicKeyCOSE,
+                    privateKeyReference: entry.privateKeyReference,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .sshKey:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &sshKeyEntries, title: \.title) { entry, projectID in
+                LocalSshKeyEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    username: entry.username,
+                    host: entry.host,
+                    publicKey: entry.publicKey,
+                    privateKeyReference: entry.privateKeyReference,
+                    passphraseHint: entry.passphraseHint,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .apiToken:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &apiTokenEntries, title: \.title) { entry, projectID in
+                LocalApiTokenEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    issuer: entry.issuer,
+                    accountName: entry.accountName,
+                    token: entry.token,
+                    scopes: entry.scopes,
+                    expiresAt: entry.expiresAt,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .wifi:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &wifiEntries, title: \.title) { entry, projectID in
+                LocalWifiEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    ssid: entry.ssid,
+                    securityType: entry.securityType,
+                    password: entry.password,
+                    hidden: entry.hidden,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .send:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &sendEntries, title: \.title) { entry, projectID in
+                LocalSendEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    body: entry.body,
+                    expiresAt: entry.expiresAt,
+                    maxViews: entry.maxViews,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .attachmentRef:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
+                LocalAttachmentMetadata(
+                    id: entry.id,
+                    projectID: projectID,
+                    entryID: entry.entryID,
+                    fileName: entry.fileName,
+                    mediaType: entry.mediaType,
+                    originalSize: entry.originalSize,
+                    storedSize: entry.storedSize,
+                    contentHash: entry.contentHash,
+                    storageMode: entry.storageMode,
+                    source: entry.source,
+                    downloadState: entry.downloadState,
+                    wrappedContentEncryptionKey: entry.wrappedContentEncryptionKey,
+                    localPath: entry.localPath,
+                    deleted: entry.deleted
+                )
+            }
+        }
+    }
+
+    private func moveRecordedEntry<Entry: Identifiable>(
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String,
+        kind: UnifiedVaultItemKind,
+        entries: inout [String: [Entry]],
+        title: KeyPath<Entry, String>,
+        moving: (Entry, String) -> Entry
+    ) throws -> LocalVaultMovedEntry where Entry.ID == String {
+        guard var sourceEntries = entries[fromProjectID],
+              let index = sourceEntries.firstIndex(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = sourceEntries.remove(at: index)
+        entries[fromProjectID] = sourceEntries
+        let moved = moving(entry, toProjectID)
+        entries[toProjectID, default: []].append(moved)
+        return LocalVaultMovedEntry(id: moved.id, title: moved[keyPath: title], kind: kind)
     }
 
     func createLoginEntry(
@@ -6213,6 +6471,14 @@ private struct RecordedRenamedProjectCall {
 private struct RecordedDeletedProjectCall {
     let vaultID: String
     let projectID: String
+}
+
+private struct RecordedMoveEntryCall {
+    let vaultID: String
+    let kind: UnifiedVaultItemKind
+    let entryID: String
+    let fromProjectID: String
+    let toProjectID: String
 }
 
 private struct RecordedLoginEntryCall {

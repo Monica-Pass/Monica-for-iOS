@@ -2475,9 +2475,19 @@ public protocol LocalVaultEngine {
         projectID: String,
         attachmentID: String
     ) throws -> LocalAttachmentMetadata
+
+    func moveEntry(
+        in handle: LocalVaultHandle,
+        kind: UnifiedVaultItemKind,
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String
+    ) throws -> LocalVaultMovedEntry
 }
 
 public extension LocalVaultEngine {
+    func moveEntry(in handle: LocalVaultHandle, kind: UnifiedVaultItemKind, entryID: String, fromProjectID: String, toProjectID: String) throws -> LocalVaultMovedEntry { throw LocalVaultRepositoryError.unsupportedEntryType(kind) }
+
     func createPasskeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
     func listPasskeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPasskeyEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
     func updatePasskeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
@@ -2532,6 +2542,18 @@ public struct LocalVaultProject: Sendable, Equatable, Identifiable {
     public init(id: String, title: String) {
         self.id = id
         self.title = title
+    }
+}
+
+public struct LocalVaultMovedEntry: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let title: String
+    public let kind: UnifiedVaultItemKind
+
+    public init(id: String, title: String, kind: UnifiedVaultItemKind) {
+        self.id = id
+        self.title = title
+        self.kind = kind
     }
 }
 
@@ -4042,6 +4064,21 @@ public struct LocalVaultEntryRepository {
         )
     }
 
+    public func moveEntry(
+        kind: UnifiedVaultItemKind,
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String
+    ) throws -> LocalVaultMovedEntry {
+        try engine.moveEntry(
+            in: session.handle,
+            kind: kind,
+            entryID: entryID,
+            fromProjectID: fromProjectID,
+            toProjectID: toProjectID
+        )
+    }
+
     public func createLoginEntry(
         projectID: String,
         draft: LocalLoginEntryDraft
@@ -4843,6 +4880,63 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             throw LocalVaultRepositoryError.projectNotFound
         }
         projects[handle.vaultID, default: []].removeAll { $0.id == projectID }
+    }
+
+    public func moveEntry(
+        in handle: LocalVaultHandle,
+        kind: UnifiedVaultItemKind,
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String
+    ) throws -> LocalVaultMovedEntry {
+        switch kind {
+        case .login:
+            let entry = try vault(for: handle).moveLoginEntry(
+                projectID: fromProjectID,
+                entryID: entryID,
+                targetProjectID: toProjectID
+            )
+            return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
+        case .note:
+            let entry = try vault(for: handle).moveNoteEntry(
+                projectID: fromProjectID,
+                entryID: entryID,
+                targetProjectID: toProjectID
+            )
+            return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
+        case .totp:
+            let entry = try vault(for: handle).moveTotpEntry(
+                projectID: fromProjectID,
+                entryID: entryID,
+                targetProjectID: toProjectID
+            )
+            return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
+        case .card:
+            let entry = try vault(for: handle).moveCardEntry(
+                projectID: fromProjectID,
+                entryID: entryID,
+                targetProjectID: toProjectID
+            )
+            return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
+        case .identity:
+            let entry = try vault(for: handle).moveIdentityEntry(
+                projectID: fromProjectID,
+                entryID: entryID,
+                targetProjectID: toProjectID
+            )
+            return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
+        case .passkey, .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+            let mapping = parityMoveMapping(for: kind)
+            let entry = try moveParityEntry(
+                in: handle,
+                projectID: fromProjectID,
+                entryID: entryID,
+                entryType: mapping.entryType,
+                kind: mapping.kind,
+                targetProjectID: toProjectID
+            )
+            return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
+        }
     }
 
     public func createLoginEntry(
@@ -5802,6 +5896,42 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             entryType: entryType,
             kind: kind
         )
+    }
+
+    private func moveParityEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        entryType: String,
+        kind: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXParityEntry {
+        try vault(for: handle).moveParityEntry(
+            projectID: projectID,
+            entryID: entryID,
+            entryType: entryType,
+            kind: kind,
+            targetProjectID: targetProjectID
+        )
+    }
+
+    private func parityMoveMapping(for kind: UnifiedVaultItemKind) -> (entryType: String, kind: String) {
+        switch kind {
+        case .passkey:
+            return ("passkey", "passkey")
+        case .sshKey:
+            return ("ssh-key", "ssh-key")
+        case .apiToken:
+            return ("api-token", "api-token")
+        case .wifi:
+            return ("document-ref", "wifi")
+        case .send:
+            return ("document-ref", "send")
+        case .attachmentRef:
+            return ("document-ref", "attachment-ref")
+        case .login, .totp, .note, .card, .identity:
+            preconditionFailure("Core entry kinds do not use parity move mapping.")
+        }
     }
 
     private func parityPayloadJSON(_ payload: [String: Any]) throws -> String {

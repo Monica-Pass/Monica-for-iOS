@@ -371,6 +371,7 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
     case updated
     case deleted
     case restored
+    case moved
 
     var title: String {
         switch self {
@@ -382,6 +383,8 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
             "已删除"
         case .restored:
             "已恢复"
+        case .moved:
+            "已移动"
         }
     }
 
@@ -395,6 +398,8 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
             "trash.circle"
         case .restored:
             "arrow.uturn.backward.circle"
+        case .moved:
+            "arrow.right.circle"
         }
     }
 }
@@ -1742,6 +1747,20 @@ final class AppSessionModel {
         isVaultBatchSelectionActive && isTrashQuickFilterSelected && !selectedVaultBatchItemIDs.isEmpty
     }
 
+    var canMoveSelectedVaultBatchItems: Bool {
+        isVaultBatchSelectionActive
+            && !isTrashQuickFilterSelected
+            && !selectedVaultBatchItemIDs.isEmpty
+            && !availableVaultBatchMoveTargets.isEmpty
+    }
+
+    var availableVaultBatchMoveTargets: [LocalVaultProject] {
+        guard let activeProject else {
+            return []
+        }
+        return vaultProjects.filter { $0.id != activeProject.id }
+    }
+
     func enterVaultBatchSelection(for kind: UnifiedVaultItemKind) {
         vaultBatchSelectionKind = kind
         selectedVaultBatchItemIDs = selectedVaultBatchItemIDs.intersection(visibleVaultBatchItemIDs(for: kind))
@@ -1878,6 +1897,58 @@ final class AppSessionModel {
             return
         }
         try mutateSelectedVaultBatchItems(kind: kind, action: .restored)
+    }
+
+    func moveSelectedVaultBatchItems(toProjectID targetProjectID: String) throws {
+        guard let kind = vaultBatchSelectionKind, canMoveSelectedVaultBatchItems else {
+            return
+        }
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let sourceProjectID = activeProject?.id,
+                  vaultProjects.contains(where: { $0.id == targetProjectID })
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let orderedIDs = visibleVaultBatchItemOrder(for: kind)
+                .filter { selectedVaultBatchItemIDs.contains($0) }
+            guard !orderedIDs.isEmpty else {
+                clearVaultBatchSelection()
+                entryOperationState = .idle
+                return
+            }
+
+            let events = try moveVaultBatchItems(
+                kind: kind,
+                ids: orderedIDs,
+                fromProjectID: sourceProjectID,
+                toProjectID: targetProjectID,
+                entryRepository: entryRepository
+            )
+
+            try refreshAllEntryLists(projectID: sourceProjectID, entryRepository: entryRepository)
+            clearVaultSearchQueries()
+            if kind == .login {
+                try refreshAutoFillEncryptedIndexIfConfigured()
+            }
+            for event in events {
+                appendOperationTimelineEvent(
+                    action: .moved,
+                    itemKind: kind,
+                    itemID: event.id,
+                    itemTitle: event.title
+                )
+            }
+            clearVaultBatchSelection()
+            entryOperationState = .succeeded("已移动 \(events.count) 项")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
     }
 
     var vaultDisplayPreferenceRows: [AppVaultDisplayPreferenceRow] {
@@ -2480,7 +2551,7 @@ final class AppSessionModel {
                     projectID: projectID,
                     entryRepository: entryRepository
                 )
-            case .created, .updated:
+            case .created, .updated, .moved:
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
@@ -2606,6 +2677,26 @@ final class AppSessionModel {
                 let entry = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: id)
                 events.append((id, entry.fileName))
             }
+        }
+        return events
+    }
+
+    private func moveVaultBatchItems(
+        kind: UnifiedVaultItemKind,
+        ids: [String],
+        fromProjectID: String,
+        toProjectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> [(id: String, title: String)] {
+        var events: [(id: String, title: String)] = []
+        for id in ids {
+            let moved = try entryRepository.moveEntry(
+                kind: kind,
+                entryID: id,
+                fromProjectID: fromProjectID,
+                toProjectID: toProjectID
+            )
+            events.append((moved.id, moved.title))
         }
         return events
     }

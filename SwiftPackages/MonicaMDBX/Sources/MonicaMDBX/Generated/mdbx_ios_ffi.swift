@@ -353,7 +353,7 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles. 
+// Initial value and increment amount for handles.
 // These ensure that SWIFT handles always have the lowest bit set
 fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
 fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
@@ -536,99 +536,111 @@ fileprivate struct FfiConverterData: FfiConverterRustBuffer {
 
 
 public protocol MdbxVaultProtocol: AnyObject, Sendable {
-    
+
     func createCardEntry(projectId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws  -> CardEntryRecord
-    
+
     func createIdentityEntry(projectId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String) throws  -> IdentityEntryRecord
-    
+
     func createLoginEntry(projectId: String, title: String, username: String, password: String, url: String) throws  -> LoginEntryRecord
-    
+
     func createNoteEntry(projectId: String, title: String, body: String) throws  -> NoteEntryRecord
-    
+
     func createParityEntry(projectId: String, entryType: String, kind: String, title: String, payloadJson: String) throws  -> ParityEntryRecord
-    
+
     func createProject(title: String) throws  -> ProjectRecord
-    
+
     func createTotpEntry(projectId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64) throws  -> TotpEntryRecord
-    
-    func deleteCardEntry(projectId: String, entryId: String) throws 
-    
-    func deleteIdentityEntry(projectId: String, entryId: String) throws 
-    
-    func deleteLoginEntry(projectId: String, entryId: String) throws 
-    
-    func deleteNoteEntry(projectId: String, entryId: String) throws 
-    
-    func deleteParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws 
-    
-    func deleteTotpEntry(projectId: String, entryId: String) throws 
-    
+
+    func deleteCardEntry(projectId: String, entryId: String) throws
+
+    func deleteIdentityEntry(projectId: String, entryId: String) throws
+
+    func deleteLoginEntry(projectId: String, entryId: String) throws
+
+    func deleteNoteEntry(projectId: String, entryId: String) throws
+
+    func deleteParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws
+
+    func deleteTotpEntry(projectId: String, entryId: String) throws
+
     func info()  -> VaultInfo
-    
+
     func listCardEntries(projectId: String) throws  -> [CardEntryRecord]
-    
+
     func listDeletedCardEntries(projectId: String) throws  -> [CardEntryRecord]
-    
+
     func listDeletedEntries(projectId: String) throws  -> [LoginEntryRecord]
-    
+
     func listDeletedIdentityEntries(projectId: String) throws  -> [IdentityEntryRecord]
-    
+
     func listDeletedNoteEntries(projectId: String) throws  -> [NoteEntryRecord]
-    
+
     func listDeletedParityEntries(projectId: String, entryType: String, kind: String) throws  -> [ParityEntryRecord]
-    
+
     func listDeletedTotpEntries(projectId: String) throws  -> [TotpEntryRecord]
-    
+
     func listEntries(projectId: String) throws  -> [LoginEntryRecord]
-    
+
     func listIdentityEntries(projectId: String) throws  -> [IdentityEntryRecord]
-    
+
     func listNoteEntries(projectId: String) throws  -> [NoteEntryRecord]
-    
+
     func listParityEntries(projectId: String, entryType: String, kind: String) throws  -> [ParityEntryRecord]
-    
+
     func listTotpEntries(projectId: String) throws  -> [TotpEntryRecord]
-    
-    func resetMasterPassword(newPassword: String) throws 
-    
+
+    func moveCardEntry(projectId: String, entryId: String, targetProjectId: String) throws  -> CardEntryRecord
+
+    func moveIdentityEntry(projectId: String, entryId: String, targetProjectId: String) throws  -> IdentityEntryRecord
+
+    func moveLoginEntry(projectId: String, entryId: String, targetProjectId: String) throws  -> LoginEntryRecord
+
+    func moveNoteEntry(projectId: String, entryId: String, targetProjectId: String) throws  -> NoteEntryRecord
+
+    func moveParityEntry(projectId: String, entryId: String, entryType: String, kind: String, targetProjectId: String) throws  -> ParityEntryRecord
+
+    func moveTotpEntry(projectId: String, entryId: String, targetProjectId: String) throws  -> TotpEntryRecord
+
+    func resetMasterPassword(newPassword: String) throws
+
     func restoreCardEntry(projectId: String, entryId: String) throws  -> CardEntryRecord
-    
+
     func restoreIdentityEntry(projectId: String, entryId: String) throws  -> IdentityEntryRecord
-    
+
     func restoreLoginEntry(projectId: String, entryId: String) throws  -> LoginEntryRecord
-    
+
     func restoreNoteEntry(projectId: String, entryId: String) throws  -> NoteEntryRecord
-    
+
     func restoreParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws  -> ParityEntryRecord
-    
+
     func restoreTotpEntry(projectId: String, entryId: String) throws  -> TotpEntryRecord
-    
+
     func setCardFavorite(projectId: String, entryId: String, favorite: Bool) throws  -> CardEntryRecord
-    
+
     func setIdentityFavorite(projectId: String, entryId: String, favorite: Bool) throws  -> IdentityEntryRecord
-    
+
     func setLoginFavorite(projectId: String, entryId: String, favorite: Bool) throws  -> LoginEntryRecord
-    
+
     func setNoteFavorite(projectId: String, entryId: String, favorite: Bool) throws  -> NoteEntryRecord
-    
+
     func setParityEntryFavorite(projectId: String, entryId: String, entryType: String, kind: String, favorite: Bool) throws  -> ParityEntryRecord
-    
+
     func setTotpFavorite(projectId: String, entryId: String, favorite: Bool) throws  -> TotpEntryRecord
-    
-    func setupLocalSecurityKeyUnlock(keyMaterial: Data) throws 
-    
+
+    func setupLocalSecurityKeyUnlock(keyMaterial: Data) throws
+
     func updateCardEntry(projectId: String, entryId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws  -> CardEntryRecord
-    
+
     func updateIdentityEntry(projectId: String, entryId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String) throws  -> IdentityEntryRecord
-    
+
     func updateLoginEntry(projectId: String, entryId: String, title: String, username: String, password: String, url: String) throws  -> LoginEntryRecord
-    
+
     func updateNoteEntry(projectId: String, entryId: String, title: String, body: String) throws  -> NoteEntryRecord
-    
+
     func updateParityEntry(projectId: String, entryId: String, entryType: String, kind: String, title: String, payloadJson: String) throws  -> ParityEntryRecord
-    
+
     func updateTotpEntry(projectId: String, entryId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64) throws  -> TotpEntryRecord
-    
+
 }
 open class MdbxVault: MdbxVaultProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -680,9 +692,9 @@ open class MdbxVault: MdbxVaultProtocol, @unchecked Sendable {
         try! rustCall { uniffi_mdbx_ios_ffi_fn_free_mdbxvault(handle, $0) }
     }
 
-    
 
-    
+
+
 open func createCardEntry(projectId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String)throws  -> CardEntryRecord  {
     return try  FfiConverterTypeCardEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_card_entry(
@@ -700,7 +712,7 @@ open func createCardEntry(projectId: String, title: String, cardholderName: Stri
     )
 })
 }
-    
+
 open func createIdentityEntry(projectId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String)throws  -> IdentityEntryRecord  {
     return try  FfiConverterTypeIdentityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_identity_entry(
@@ -718,7 +730,7 @@ open func createIdentityEntry(projectId: String, title: String, documentType: St
     )
 })
 }
-    
+
 open func createLoginEntry(projectId: String, title: String, username: String, password: String, url: String)throws  -> LoginEntryRecord  {
     return try  FfiConverterTypeLoginEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_login_entry(
@@ -731,7 +743,7 @@ open func createLoginEntry(projectId: String, title: String, username: String, p
     )
 })
 }
-    
+
 open func createNoteEntry(projectId: String, title: String, body: String)throws  -> NoteEntryRecord  {
     return try  FfiConverterTypeNoteEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_note_entry(
@@ -742,7 +754,7 @@ open func createNoteEntry(projectId: String, title: String, body: String)throws 
     )
 })
 }
-    
+
 open func createParityEntry(projectId: String, entryType: String, kind: String, title: String, payloadJson: String)throws  -> ParityEntryRecord  {
     return try  FfiConverterTypeParityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_parity_entry(
@@ -755,7 +767,7 @@ open func createParityEntry(projectId: String, entryType: String, kind: String, 
     )
 })
 }
-    
+
 open func createProject(title: String)throws  -> ProjectRecord  {
     return try  FfiConverterTypeProjectRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_project(
@@ -764,7 +776,7 @@ open func createProject(title: String)throws  -> ProjectRecord  {
     )
 })
 }
-    
+
 open func createTotpEntry(projectId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64)throws  -> TotpEntryRecord  {
     return try  FfiConverterTypeTotpEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_create_totp_entry(
@@ -782,7 +794,7 @@ open func createTotpEntry(projectId: String, title: String, secret: String, issu
     )
 })
 }
-    
+
 open func deleteCardEntry(projectId: String, entryId: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_delete_card_entry(
             self.uniffiCloneHandle(),
@@ -791,7 +803,7 @@ open func deleteCardEntry(projectId: String, entryId: String)throws   {try rustC
     )
 }
 }
-    
+
 open func deleteIdentityEntry(projectId: String, entryId: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_delete_identity_entry(
             self.uniffiCloneHandle(),
@@ -800,7 +812,7 @@ open func deleteIdentityEntry(projectId: String, entryId: String)throws   {try r
     )
 }
 }
-    
+
 open func deleteLoginEntry(projectId: String, entryId: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_delete_login_entry(
             self.uniffiCloneHandle(),
@@ -809,7 +821,7 @@ open func deleteLoginEntry(projectId: String, entryId: String)throws   {try rust
     )
 }
 }
-    
+
 open func deleteNoteEntry(projectId: String, entryId: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_delete_note_entry(
             self.uniffiCloneHandle(),
@@ -818,7 +830,7 @@ open func deleteNoteEntry(projectId: String, entryId: String)throws   {try rustC
     )
 }
 }
-    
+
 open func deleteParityEntry(projectId: String, entryId: String, entryType: String, kind: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_delete_parity_entry(
             self.uniffiCloneHandle(),
@@ -829,7 +841,7 @@ open func deleteParityEntry(projectId: String, entryId: String, entryType: Strin
     )
 }
 }
-    
+
 open func deleteTotpEntry(projectId: String, entryId: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_delete_totp_entry(
             self.uniffiCloneHandle(),
@@ -838,7 +850,7 @@ open func deleteTotpEntry(projectId: String, entryId: String)throws   {try rustC
     )
 }
 }
-    
+
 open func info() -> VaultInfo  {
     return try!  FfiConverterTypeVaultInfo_lift(try! rustCall() {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_info(
@@ -846,7 +858,7 @@ open func info() -> VaultInfo  {
     )
 })
 }
-    
+
 open func listCardEntries(projectId: String)throws  -> [CardEntryRecord]  {
     return try  FfiConverterSequenceTypeCardEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_card_entries(
@@ -855,7 +867,7 @@ open func listCardEntries(projectId: String)throws  -> [CardEntryRecord]  {
     )
 })
 }
-    
+
 open func listDeletedCardEntries(projectId: String)throws  -> [CardEntryRecord]  {
     return try  FfiConverterSequenceTypeCardEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_deleted_card_entries(
@@ -864,7 +876,7 @@ open func listDeletedCardEntries(projectId: String)throws  -> [CardEntryRecord] 
     )
 })
 }
-    
+
 open func listDeletedEntries(projectId: String)throws  -> [LoginEntryRecord]  {
     return try  FfiConverterSequenceTypeLoginEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_deleted_entries(
@@ -873,7 +885,7 @@ open func listDeletedEntries(projectId: String)throws  -> [LoginEntryRecord]  {
     )
 })
 }
-    
+
 open func listDeletedIdentityEntries(projectId: String)throws  -> [IdentityEntryRecord]  {
     return try  FfiConverterSequenceTypeIdentityEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_deleted_identity_entries(
@@ -882,7 +894,7 @@ open func listDeletedIdentityEntries(projectId: String)throws  -> [IdentityEntry
     )
 })
 }
-    
+
 open func listDeletedNoteEntries(projectId: String)throws  -> [NoteEntryRecord]  {
     return try  FfiConverterSequenceTypeNoteEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_deleted_note_entries(
@@ -891,7 +903,7 @@ open func listDeletedNoteEntries(projectId: String)throws  -> [NoteEntryRecord] 
     )
 })
 }
-    
+
 open func listDeletedParityEntries(projectId: String, entryType: String, kind: String)throws  -> [ParityEntryRecord]  {
     return try  FfiConverterSequenceTypeParityEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_deleted_parity_entries(
@@ -902,7 +914,7 @@ open func listDeletedParityEntries(projectId: String, entryType: String, kind: S
     )
 })
 }
-    
+
 open func listDeletedTotpEntries(projectId: String)throws  -> [TotpEntryRecord]  {
     return try  FfiConverterSequenceTypeTotpEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_deleted_totp_entries(
@@ -911,7 +923,7 @@ open func listDeletedTotpEntries(projectId: String)throws  -> [TotpEntryRecord] 
     )
 })
 }
-    
+
 open func listEntries(projectId: String)throws  -> [LoginEntryRecord]  {
     return try  FfiConverterSequenceTypeLoginEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_entries(
@@ -920,7 +932,7 @@ open func listEntries(projectId: String)throws  -> [LoginEntryRecord]  {
     )
 })
 }
-    
+
 open func listIdentityEntries(projectId: String)throws  -> [IdentityEntryRecord]  {
     return try  FfiConverterSequenceTypeIdentityEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_identity_entries(
@@ -929,7 +941,7 @@ open func listIdentityEntries(projectId: String)throws  -> [IdentityEntryRecord]
     )
 })
 }
-    
+
 open func listNoteEntries(projectId: String)throws  -> [NoteEntryRecord]  {
     return try  FfiConverterSequenceTypeNoteEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_note_entries(
@@ -938,7 +950,7 @@ open func listNoteEntries(projectId: String)throws  -> [NoteEntryRecord]  {
     )
 })
 }
-    
+
 open func listParityEntries(projectId: String, entryType: String, kind: String)throws  -> [ParityEntryRecord]  {
     return try  FfiConverterSequenceTypeParityEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_parity_entries(
@@ -949,7 +961,7 @@ open func listParityEntries(projectId: String, entryType: String, kind: String)t
     )
 })
 }
-    
+
 open func listTotpEntries(projectId: String)throws  -> [TotpEntryRecord]  {
     return try  FfiConverterSequenceTypeTotpEntryRecord.lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_list_totp_entries(
@@ -958,7 +970,75 @@ open func listTotpEntries(projectId: String)throws  -> [TotpEntryRecord]  {
     )
 })
 }
-    
+
+open func moveCardEntry(projectId: String, entryId: String, targetProjectId: String)throws  -> CardEntryRecord  {
+    return try  FfiConverterTypeCardEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
+    uniffi_mdbx_ios_ffi_fn_method_mdbxvault_move_card_entry(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),
+        FfiConverterString.lower(entryId),
+        FfiConverterString.lower(targetProjectId),$0
+    )
+})
+}
+
+open func moveIdentityEntry(projectId: String, entryId: String, targetProjectId: String)throws  -> IdentityEntryRecord  {
+    return try  FfiConverterTypeIdentityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
+    uniffi_mdbx_ios_ffi_fn_method_mdbxvault_move_identity_entry(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),
+        FfiConverterString.lower(entryId),
+        FfiConverterString.lower(targetProjectId),$0
+    )
+})
+}
+
+open func moveLoginEntry(projectId: String, entryId: String, targetProjectId: String)throws  -> LoginEntryRecord  {
+    return try  FfiConverterTypeLoginEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
+    uniffi_mdbx_ios_ffi_fn_method_mdbxvault_move_login_entry(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),
+        FfiConverterString.lower(entryId),
+        FfiConverterString.lower(targetProjectId),$0
+    )
+})
+}
+
+open func moveNoteEntry(projectId: String, entryId: String, targetProjectId: String)throws  -> NoteEntryRecord  {
+    return try  FfiConverterTypeNoteEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
+    uniffi_mdbx_ios_ffi_fn_method_mdbxvault_move_note_entry(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),
+        FfiConverterString.lower(entryId),
+        FfiConverterString.lower(targetProjectId),$0
+    )
+})
+}
+
+open func moveParityEntry(projectId: String, entryId: String, entryType: String, kind: String, targetProjectId: String)throws  -> ParityEntryRecord  {
+    return try  FfiConverterTypeParityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
+    uniffi_mdbx_ios_ffi_fn_method_mdbxvault_move_parity_entry(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),
+        FfiConverterString.lower(entryId),
+        FfiConverterString.lower(entryType),
+        FfiConverterString.lower(kind),
+        FfiConverterString.lower(targetProjectId),$0
+    )
+})
+}
+
+open func moveTotpEntry(projectId: String, entryId: String, targetProjectId: String)throws  -> TotpEntryRecord  {
+    return try  FfiConverterTypeTotpEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
+    uniffi_mdbx_ios_ffi_fn_method_mdbxvault_move_totp_entry(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(projectId),
+        FfiConverterString.lower(entryId),
+        FfiConverterString.lower(targetProjectId),$0
+    )
+})
+}
+
 open func resetMasterPassword(newPassword: String)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_reset_master_password(
             self.uniffiCloneHandle(),
@@ -966,7 +1046,7 @@ open func resetMasterPassword(newPassword: String)throws   {try rustCallWithErro
     )
 }
 }
-    
+
 open func restoreCardEntry(projectId: String, entryId: String)throws  -> CardEntryRecord  {
     return try  FfiConverterTypeCardEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_restore_card_entry(
@@ -976,7 +1056,7 @@ open func restoreCardEntry(projectId: String, entryId: String)throws  -> CardEnt
     )
 })
 }
-    
+
 open func restoreIdentityEntry(projectId: String, entryId: String)throws  -> IdentityEntryRecord  {
     return try  FfiConverterTypeIdentityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_restore_identity_entry(
@@ -986,7 +1066,7 @@ open func restoreIdentityEntry(projectId: String, entryId: String)throws  -> Ide
     )
 })
 }
-    
+
 open func restoreLoginEntry(projectId: String, entryId: String)throws  -> LoginEntryRecord  {
     return try  FfiConverterTypeLoginEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_restore_login_entry(
@@ -996,7 +1076,7 @@ open func restoreLoginEntry(projectId: String, entryId: String)throws  -> LoginE
     )
 })
 }
-    
+
 open func restoreNoteEntry(projectId: String, entryId: String)throws  -> NoteEntryRecord  {
     return try  FfiConverterTypeNoteEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_restore_note_entry(
@@ -1006,7 +1086,7 @@ open func restoreNoteEntry(projectId: String, entryId: String)throws  -> NoteEnt
     )
 })
 }
-    
+
 open func restoreParityEntry(projectId: String, entryId: String, entryType: String, kind: String)throws  -> ParityEntryRecord  {
     return try  FfiConverterTypeParityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_restore_parity_entry(
@@ -1018,7 +1098,7 @@ open func restoreParityEntry(projectId: String, entryId: String, entryType: Stri
     )
 })
 }
-    
+
 open func restoreTotpEntry(projectId: String, entryId: String)throws  -> TotpEntryRecord  {
     return try  FfiConverterTypeTotpEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_restore_totp_entry(
@@ -1028,7 +1108,7 @@ open func restoreTotpEntry(projectId: String, entryId: String)throws  -> TotpEnt
     )
 })
 }
-    
+
 open func setCardFavorite(projectId: String, entryId: String, favorite: Bool)throws  -> CardEntryRecord  {
     return try  FfiConverterTypeCardEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_set_card_favorite(
@@ -1039,7 +1119,7 @@ open func setCardFavorite(projectId: String, entryId: String, favorite: Bool)thr
     )
 })
 }
-    
+
 open func setIdentityFavorite(projectId: String, entryId: String, favorite: Bool)throws  -> IdentityEntryRecord  {
     return try  FfiConverterTypeIdentityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_set_identity_favorite(
@@ -1050,7 +1130,7 @@ open func setIdentityFavorite(projectId: String, entryId: String, favorite: Bool
     )
 })
 }
-    
+
 open func setLoginFavorite(projectId: String, entryId: String, favorite: Bool)throws  -> LoginEntryRecord  {
     return try  FfiConverterTypeLoginEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_set_login_favorite(
@@ -1061,7 +1141,7 @@ open func setLoginFavorite(projectId: String, entryId: String, favorite: Bool)th
     )
 })
 }
-    
+
 open func setNoteFavorite(projectId: String, entryId: String, favorite: Bool)throws  -> NoteEntryRecord  {
     return try  FfiConverterTypeNoteEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_set_note_favorite(
@@ -1072,7 +1152,7 @@ open func setNoteFavorite(projectId: String, entryId: String, favorite: Bool)thr
     )
 })
 }
-    
+
 open func setParityEntryFavorite(projectId: String, entryId: String, entryType: String, kind: String, favorite: Bool)throws  -> ParityEntryRecord  {
     return try  FfiConverterTypeParityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_set_parity_entry_favorite(
@@ -1085,7 +1165,7 @@ open func setParityEntryFavorite(projectId: String, entryId: String, entryType: 
     )
 })
 }
-    
+
 open func setTotpFavorite(projectId: String, entryId: String, favorite: Bool)throws  -> TotpEntryRecord  {
     return try  FfiConverterTypeTotpEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_set_totp_favorite(
@@ -1096,7 +1176,7 @@ open func setTotpFavorite(projectId: String, entryId: String, favorite: Bool)thr
     )
 })
 }
-    
+
 open func setupLocalSecurityKeyUnlock(keyMaterial: Data)throws   {try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_setup_local_security_key_unlock(
             self.uniffiCloneHandle(),
@@ -1104,7 +1184,7 @@ open func setupLocalSecurityKeyUnlock(keyMaterial: Data)throws   {try rustCallWi
     )
 }
 }
-    
+
 open func updateCardEntry(projectId: String, entryId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String)throws  -> CardEntryRecord  {
     return try  FfiConverterTypeCardEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_update_card_entry(
@@ -1123,7 +1203,7 @@ open func updateCardEntry(projectId: String, entryId: String, title: String, car
     )
 })
 }
-    
+
 open func updateIdentityEntry(projectId: String, entryId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String)throws  -> IdentityEntryRecord  {
     return try  FfiConverterTypeIdentityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_update_identity_entry(
@@ -1142,7 +1222,7 @@ open func updateIdentityEntry(projectId: String, entryId: String, title: String,
     )
 })
 }
-    
+
 open func updateLoginEntry(projectId: String, entryId: String, title: String, username: String, password: String, url: String)throws  -> LoginEntryRecord  {
     return try  FfiConverterTypeLoginEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_update_login_entry(
@@ -1156,7 +1236,7 @@ open func updateLoginEntry(projectId: String, entryId: String, title: String, us
     )
 })
 }
-    
+
 open func updateNoteEntry(projectId: String, entryId: String, title: String, body: String)throws  -> NoteEntryRecord  {
     return try  FfiConverterTypeNoteEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_update_note_entry(
@@ -1168,7 +1248,7 @@ open func updateNoteEntry(projectId: String, entryId: String, title: String, bod
     )
 })
 }
-    
+
 open func updateParityEntry(projectId: String, entryId: String, entryType: String, kind: String, title: String, payloadJson: String)throws  -> ParityEntryRecord  {
     return try  FfiConverterTypeParityEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_update_parity_entry(
@@ -1182,7 +1262,7 @@ open func updateParityEntry(projectId: String, entryId: String, entryType: Strin
     )
 })
 }
-    
+
 open func updateTotpEntry(projectId: String, entryId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64)throws  -> TotpEntryRecord  {
     return try  FfiConverterTypeTotpEntryRecord_lift(try rustCallWithError(FfiConverterTypeMdbxFfiError_lift) {
     uniffi_mdbx_ios_ffi_fn_method_mdbxvault_update_totp_entry(
@@ -1201,9 +1281,9 @@ open func updateTotpEntry(projectId: String, entryId: String, title: String, sec
     )
 })
 }
-    
 
-    
+
+
 }
 
 
@@ -1281,9 +1361,9 @@ public struct CardEntryRecord: Equatable, Hashable {
         self.favorite = favorite
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1297,17 +1377,17 @@ public struct FfiConverterTypeCardEntryRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CardEntryRecord {
         return
             try CardEntryRecord(
-                entryId: FfiConverterString.read(from: &buf), 
-                projectId: FfiConverterString.read(from: &buf), 
-                title: FfiConverterString.read(from: &buf), 
-                cardholderName: FfiConverterString.read(from: &buf), 
-                number: FfiConverterString.read(from: &buf), 
-                expiryMonth: FfiConverterString.read(from: &buf), 
-                expiryYear: FfiConverterString.read(from: &buf), 
-                cvv: FfiConverterString.read(from: &buf), 
-                issuer: FfiConverterString.read(from: &buf), 
-                network: FfiConverterString.read(from: &buf), 
-                notes: FfiConverterString.read(from: &buf), 
+                entryId: FfiConverterString.read(from: &buf),
+                projectId: FfiConverterString.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                cardholderName: FfiConverterString.read(from: &buf),
+                number: FfiConverterString.read(from: &buf),
+                expiryMonth: FfiConverterString.read(from: &buf),
+                expiryYear: FfiConverterString.read(from: &buf),
+                cvv: FfiConverterString.read(from: &buf),
+                issuer: FfiConverterString.read(from: &buf),
+                network: FfiConverterString.read(from: &buf),
+                notes: FfiConverterString.read(from: &buf),
                 favorite: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1375,9 +1455,9 @@ public struct IdentityEntryRecord: Equatable, Hashable {
         self.favorite = favorite
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1391,17 +1471,17 @@ public struct FfiConverterTypeIdentityEntryRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> IdentityEntryRecord {
         return
             try IdentityEntryRecord(
-                entryId: FfiConverterString.read(from: &buf), 
-                projectId: FfiConverterString.read(from: &buf), 
-                title: FfiConverterString.read(from: &buf), 
-                documentType: FfiConverterString.read(from: &buf), 
-                fullName: FfiConverterString.read(from: &buf), 
-                documentNumber: FfiConverterString.read(from: &buf), 
-                issuer: FfiConverterString.read(from: &buf), 
-                country: FfiConverterString.read(from: &buf), 
-                issueDate: FfiConverterString.read(from: &buf), 
-                expiryDate: FfiConverterString.read(from: &buf), 
-                notes: FfiConverterString.read(from: &buf), 
+                entryId: FfiConverterString.read(from: &buf),
+                projectId: FfiConverterString.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                documentType: FfiConverterString.read(from: &buf),
+                fullName: FfiConverterString.read(from: &buf),
+                documentNumber: FfiConverterString.read(from: &buf),
+                issuer: FfiConverterString.read(from: &buf),
+                country: FfiConverterString.read(from: &buf),
+                issueDate: FfiConverterString.read(from: &buf),
+                expiryDate: FfiConverterString.read(from: &buf),
+                notes: FfiConverterString.read(from: &buf),
                 favorite: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1459,9 +1539,9 @@ public struct LoginEntryRecord: Equatable, Hashable {
         self.favorite = favorite
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1475,12 +1555,12 @@ public struct FfiConverterTypeLoginEntryRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LoginEntryRecord {
         return
             try LoginEntryRecord(
-                entryId: FfiConverterString.read(from: &buf), 
-                projectId: FfiConverterString.read(from: &buf), 
-                title: FfiConverterString.read(from: &buf), 
-                username: FfiConverterString.read(from: &buf), 
-                password: FfiConverterString.read(from: &buf), 
-                url: FfiConverterString.read(from: &buf), 
+                entryId: FfiConverterString.read(from: &buf),
+                projectId: FfiConverterString.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                username: FfiConverterString.read(from: &buf),
+                password: FfiConverterString.read(from: &buf),
+                url: FfiConverterString.read(from: &buf),
                 favorite: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1529,9 +1609,9 @@ public struct NoteEntryRecord: Equatable, Hashable {
         self.favorite = favorite
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1545,10 +1625,10 @@ public struct FfiConverterTypeNoteEntryRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> NoteEntryRecord {
         return
             try NoteEntryRecord(
-                entryId: FfiConverterString.read(from: &buf), 
-                projectId: FfiConverterString.read(from: &buf), 
-                title: FfiConverterString.read(from: &buf), 
-                body: FfiConverterString.read(from: &buf), 
+                entryId: FfiConverterString.read(from: &buf),
+                projectId: FfiConverterString.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                body: FfiConverterString.read(from: &buf),
                 favorite: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1597,9 +1677,9 @@ public struct ParityEntryRecord: Equatable, Hashable {
         self.favorite = favorite
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1613,11 +1693,11 @@ public struct FfiConverterTypeParityEntryRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ParityEntryRecord {
         return
             try ParityEntryRecord(
-                entryId: FfiConverterString.read(from: &buf), 
-                projectId: FfiConverterString.read(from: &buf), 
-                title: FfiConverterString.read(from: &buf), 
-                kind: FfiConverterString.read(from: &buf), 
-                payloadJson: FfiConverterString.read(from: &buf), 
+                entryId: FfiConverterString.read(from: &buf),
+                projectId: FfiConverterString.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                kind: FfiConverterString.read(from: &buf),
+                payloadJson: FfiConverterString.read(from: &buf),
                 favorite: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1659,9 +1739,9 @@ public struct ProjectRecord: Equatable, Hashable {
         self.title = title
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1675,7 +1755,7 @@ public struct FfiConverterTypeProjectRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProjectRecord {
         return
             try ProjectRecord(
-                projectId: FfiConverterString.read(from: &buf), 
+                projectId: FfiConverterString.read(from: &buf),
                 title: FfiConverterString.read(from: &buf)
         )
     }
@@ -1733,9 +1813,9 @@ public struct TotpEntryRecord: Equatable, Hashable {
         self.favorite = favorite
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1749,17 +1829,17 @@ public struct FfiConverterTypeTotpEntryRecord: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TotpEntryRecord {
         return
             try TotpEntryRecord(
-                entryId: FfiConverterString.read(from: &buf), 
-                projectId: FfiConverterString.read(from: &buf), 
-                title: FfiConverterString.read(from: &buf), 
-                secret: FfiConverterString.read(from: &buf), 
-                issuer: FfiConverterString.read(from: &buf), 
-                accountName: FfiConverterString.read(from: &buf), 
-                period: FfiConverterUInt32.read(from: &buf), 
-                digits: FfiConverterUInt32.read(from: &buf), 
-                algorithm: FfiConverterString.read(from: &buf), 
-                otpType: FfiConverterString.read(from: &buf), 
-                counter: FfiConverterUInt64.read(from: &buf), 
+                entryId: FfiConverterString.read(from: &buf),
+                projectId: FfiConverterString.read(from: &buf),
+                title: FfiConverterString.read(from: &buf),
+                secret: FfiConverterString.read(from: &buf),
+                issuer: FfiConverterString.read(from: &buf),
+                accountName: FfiConverterString.read(from: &buf),
+                period: FfiConverterUInt32.read(from: &buf),
+                digits: FfiConverterUInt32.read(from: &buf),
+                algorithm: FfiConverterString.read(from: &buf),
+                otpType: FfiConverterString.read(from: &buf),
+                counter: FfiConverterUInt64.read(from: &buf),
                 favorite: FfiConverterBool.read(from: &buf)
         )
     }
@@ -1807,9 +1887,9 @@ public struct VaultInfo: Equatable, Hashable {
         self.deviceId = deviceId
     }
 
-    
 
-    
+
+
 }
 
 #if compiler(>=6)
@@ -1823,7 +1903,7 @@ public struct FfiConverterTypeVaultInfo: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VaultInfo {
         return
             try VaultInfo(
-                vaultId: FfiConverterString.read(from: &buf), 
+                vaultId: FfiConverterString.read(from: &buf),
                 deviceId: FfiConverterString.read(from: &buf)
         )
     }
@@ -1852,23 +1932,23 @@ public func FfiConverterTypeVaultInfo_lower(_ value: VaultInfo) -> RustBuffer {
 
 public enum MdbxFfiError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
-    
-    
+
+
     case Storage(message: String
     )
     case Serialization(message: String
     )
     case LockPoisoned
 
-    
 
-    
 
-    
+
+
+
     public var errorDescription: String? {
         String(reflecting: self)
     }
-    
+
 }
 
 #if compiler(>=6)
@@ -1885,9 +1965,9 @@ public struct FfiConverterTypeMdbxFfiError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
-        
 
-        
+
+
         case 1: return .Storage(
             message: try FfiConverterString.read(from: &buf)
             )
@@ -1903,23 +1983,23 @@ public struct FfiConverterTypeMdbxFfiError: FfiConverterRustBuffer {
     public static func write(_ value: MdbxFfiError, into buf: inout [UInt8]) {
         switch value {
 
-        
 
-        
-        
+
+
+
         case let .Storage(message):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(message, into: &buf)
-            
-        
+
+
         case let .Serialization(message):
             writeInt(&buf, Int32(2))
             FfiConverterString.write(message, into: &buf)
-            
-        
+
+
         case .LockPoisoned:
             writeInt(&buf, Int32(3))
-        
+
         }
     }
 }
@@ -2216,6 +2296,24 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_list_totp_entries() != 52122) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_move_card_entry() != 50694) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_move_identity_entry() != 25248) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_move_login_entry() != 22137) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_move_note_entry() != 14094) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_move_parity_entry() != 4212) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_move_totp_entry() != 51274) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_mdbx_ios_ffi_checksum_method_mdbxvault_reset_master_password() != 46485) {

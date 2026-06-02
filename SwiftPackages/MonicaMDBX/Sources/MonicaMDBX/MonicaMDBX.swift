@@ -217,6 +217,19 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         return MonicaMDBXLoginEntry(raw: entry)
     }
 
+    public func moveLoginEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXLoginEntry {
+        let entry = try rawVault.moveLoginEntry(
+            projectId: projectID,
+            entryId: entryID,
+            targetProjectId: targetProjectID
+        )
+        return MonicaMDBXLoginEntry(raw: entry)
+    }
+
     public func createNoteEntry(
         projectID: String,
         title: String,
@@ -275,6 +288,19 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         entryID: String
     ) throws -> MonicaMDBXNoteEntry {
         let entry = try rawVault.restoreNoteEntry(projectId: projectID, entryId: entryID)
+        return MonicaMDBXNoteEntry(raw: entry)
+    }
+
+    public func moveNoteEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXNoteEntry {
+        let entry = try rawVault.moveNoteEntry(
+            projectId: projectID,
+            entryId: entryID,
+            targetProjectId: targetProjectID
+        )
         return MonicaMDBXNoteEntry(raw: entry)
     }
 
@@ -367,6 +393,19 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         return MonicaMDBXTotpEntry(raw: entry)
     }
 
+    public func moveTotpEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXTotpEntry {
+        let entry = try rawVault.moveTotpEntry(
+            projectId: projectID,
+            entryId: entryID,
+            targetProjectId: targetProjectID
+        )
+        return MonicaMDBXTotpEntry(raw: entry)
+    }
+
     public func createCardEntry(
         projectID: String,
         title: String,
@@ -456,6 +495,19 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         return MonicaMDBXCardEntry(raw: entry)
     }
 
+    public func moveCardEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXCardEntry {
+        let entry = try rawVault.moveCardEntry(
+            projectId: projectID,
+            entryId: entryID,
+            targetProjectId: targetProjectID
+        )
+        return MonicaMDBXCardEntry(raw: entry)
+    }
+
     public func createIdentityEntry(
         projectID: String,
         title: String,
@@ -542,6 +594,19 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         entryID: String
     ) throws -> MonicaMDBXIdentityEntry {
         let entry = try rawVault.restoreIdentityEntry(projectId: projectID, entryId: entryID)
+        return MonicaMDBXIdentityEntry(raw: entry)
+    }
+
+    public func moveIdentityEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXIdentityEntry {
+        let entry = try rawVault.moveIdentityEntry(
+            projectId: projectID,
+            entryId: entryID,
+            targetProjectId: targetProjectID
+        )
         return MonicaMDBXIdentityEntry(raw: entry)
     }
 
@@ -643,6 +708,23 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             entryId: entryID,
             entryType: entryType,
             kind: kind
+        )
+        return MonicaMDBXParityEntry(raw: entry, entryType: entryType)
+    }
+
+    public func moveParityEntry(
+        projectID: String,
+        entryID: String,
+        entryType: String,
+        kind: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXParityEntry {
+        let entry = try rawVault.moveParityEntry(
+            projectId: projectID,
+            entryId: entryID,
+            entryType: entryType,
+            kind: kind,
+            targetProjectId: targetProjectID
         )
         return MonicaMDBXParityEntry(raw: entry, entryType: entryType)
     }
@@ -812,6 +894,14 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
 
+    public func moveLoginEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXLoginEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
     public func createNoteEntry(
         projectID: String,
         title: String,
@@ -852,6 +942,14 @@ public final class MonicaMDBXVault: @unchecked Sendable {
     public func restoreNoteEntry(
         projectID: String,
         entryID: String
+    ) throws -> MonicaMDBXNoteEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
+    public func moveNoteEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
     ) throws -> MonicaMDBXNoteEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
@@ -914,6 +1012,14 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
 
+    public func moveTotpEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXTotpEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
     public func createCardEntry(
         projectID: String,
         title: String,
@@ -972,6 +1078,14 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
 
+    public func moveCardEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
+    ) throws -> MonicaMDBXCardEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
     public func createIdentityEntry(
         projectID: String,
         title: String,
@@ -1026,6 +1140,14 @@ public final class MonicaMDBXVault: @unchecked Sendable {
     public func restoreIdentityEntry(
         projectID: String,
         entryID: String
+    ) throws -> MonicaMDBXIdentityEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
+    public func moveIdentityEntry(
+        projectID: String,
+        entryID: String,
+        targetProjectID: String
     ) throws -> MonicaMDBXIdentityEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
@@ -1091,6 +1213,16 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         entryID: String,
         entryType: String,
         kind: String
+    ) throws -> MonicaMDBXParityEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
+    public func moveParityEntry(
+        projectID: String,
+        entryID: String,
+        entryType: String,
+        kind: String,
+        targetProjectID: String
     ) throws -> MonicaMDBXParityEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }

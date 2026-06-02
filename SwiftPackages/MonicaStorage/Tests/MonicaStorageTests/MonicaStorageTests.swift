@@ -756,6 +756,207 @@ import MonicaStorage
     #expect(engine.deletedProjects.isEmpty)
 }
 
+@Test func entryRepositoryMovesEntriesBetweenProjectsPreservingIdentity() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let personal = try entryRepository.createProject(title: "Personal")
+    let work = try entryRepository.createProject(title: "Work")
+    let login = try entryRepository.createLoginEntry(
+        projectID: personal.id,
+        draft: LocalLoginEntryDraft(
+            title: "GitHub",
+            username: "alice",
+            password: "correct horse battery staple",
+            url: "https://github.com"
+        )
+    )
+    let note = try entryRepository.createNoteEntry(
+        projectID: personal.id,
+        draft: LocalNoteEntryDraft(title: "Recovery Codes", body: "github recovery")
+    )
+    let totp = try entryRepository.createTotpEntry(
+        projectID: personal.id,
+        draft: LocalTotpEntryDraft(
+            title: "GitHub 2FA",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "GitHub",
+            accountName: "alice",
+            period: 30,
+            digits: 6,
+            algorithm: "SHA1",
+            otpType: "TOTP",
+            counter: 0
+        )
+    )
+    let card = try entryRepository.createCardEntry(
+        projectID: personal.id,
+        draft: LocalCardEntryDraft(
+            title: "Everyday Visa",
+            cardholderName: "Alice Example",
+            number: "4111111111111111",
+            expiryMonth: "12",
+            expiryYear: "2031",
+            cvv: "123",
+            issuer: "Monica Bank",
+            network: "Visa",
+            notes: "main card"
+        )
+    )
+    let identity = try entryRepository.createIdentityEntry(
+        projectID: personal.id,
+        draft: LocalIdentityEntryDraft(
+            title: "Passport",
+            documentType: "PASSPORT",
+            fullName: "Alice Example",
+            documentNumber: "P1234567",
+            issuer: "Monica Authority",
+            country: "US",
+            issueDate: "2024-01-01",
+            expiryDate: "2034-01-01",
+            notes: "travel"
+        )
+    )
+    let passkey = try entryRepository.createPasskeyEntry(
+        projectID: personal.id,
+        draft: LocalPasskeyEntryDraft(
+            title: "GitHub Passkey",
+            relyingPartyID: "github.com",
+            username: "alice",
+            userHandle: "user-handle",
+            credentialID: "credential-id",
+            publicKeyCOSE: "public-key",
+            privateKeyReference: "keychain-ref",
+            notes: "AuthenticationServices metadata"
+        )
+    )
+    let sshKey = try entryRepository.createSshKeyEntry(
+        projectID: personal.id,
+        draft: LocalSshKeyEntryDraft(
+            title: "Production SSH",
+            username: "deploy",
+            host: "prod.example.com",
+            publicKey: "ssh-ed25519 AAAA",
+            privateKeyReference: "keychain-ssh",
+            passphraseHint: "vault protected",
+            notes: "rotate quarterly"
+        )
+    )
+    let apiToken = try entryRepository.createApiTokenEntry(
+        projectID: personal.id,
+        draft: LocalApiTokenEntryDraft(
+            title: "OpenAI",
+            issuer: "OpenAI",
+            accountName: "alice@example.com",
+            token: "sk-secret",
+            scopes: "responses.read",
+            expiresAt: "2026-12-31",
+            notes: "local-only"
+        )
+    )
+    let wifi = try entryRepository.createWifiEntry(
+        projectID: personal.id,
+        draft: LocalWifiEntryDraft(
+            title: "Studio Wi-Fi",
+            ssid: "MonicaLab",
+            securityType: "WPA3",
+            password: "wifi-secret",
+            hidden: false,
+            notes: "office"
+        )
+    )
+    let send = try entryRepository.createSendEntry(
+        projectID: personal.id,
+        draft: LocalSendEntryDraft(
+            title: "One-time secret",
+            body: "share once",
+            expiresAt: "2026-06-02T00:00:00Z",
+            maxViews: 1,
+            notes: "local metadata"
+        )
+    )
+    let attachment = try entryRepository.createAttachmentMetadata(
+        projectID: personal.id,
+        entryID: login.id,
+        fileName: "passkey-note.txt",
+        mediaType: "text/plain",
+        originalSize: 128,
+        storedSize: 128,
+        contentHash: "sha256:attachment",
+        storageMode: "embedded-inline"
+    )
+
+    let movedEntries = try [
+        entryRepository.moveEntry(kind: .login, entryID: login.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .note, entryID: note.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .totp, entryID: totp.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .card, entryID: card.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .identity, entryID: identity.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .passkey, entryID: passkey.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .sshKey, entryID: sshKey.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .apiToken, entryID: apiToken.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .wifi, entryID: wifi.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .send, entryID: send.id, fromProjectID: personal.id, toProjectID: work.id),
+        entryRepository.moveEntry(kind: .attachmentRef, entryID: attachment.id, fromProjectID: personal.id, toProjectID: work.id)
+    ]
+
+    #expect(movedEntries == [
+        LocalVaultMovedEntry(id: login.id, title: "GitHub", kind: .login),
+        LocalVaultMovedEntry(id: note.id, title: "Recovery Codes", kind: .note),
+        LocalVaultMovedEntry(id: totp.id, title: "GitHub 2FA", kind: .totp),
+        LocalVaultMovedEntry(id: card.id, title: "Everyday Visa", kind: .card),
+        LocalVaultMovedEntry(id: identity.id, title: "Passport", kind: .identity),
+        LocalVaultMovedEntry(id: passkey.id, title: "GitHub Passkey", kind: .passkey),
+        LocalVaultMovedEntry(id: sshKey.id, title: "Production SSH", kind: .sshKey),
+        LocalVaultMovedEntry(id: apiToken.id, title: "OpenAI", kind: .apiToken),
+        LocalVaultMovedEntry(id: wifi.id, title: "Studio Wi-Fi", kind: .wifi),
+        LocalVaultMovedEntry(id: send.id, title: "One-time secret", kind: .send),
+        LocalVaultMovedEntry(id: attachment.id, title: "passkey-note.txt", kind: .attachmentRef)
+    ])
+    #expect(try entryRepository.listLoginEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listNoteEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listTotpEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listCardEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listIdentityEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listPasskeyEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listSshKeyEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listApiTokenEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listWifiEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listSendEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listAttachmentMetadata(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listLoginEntries(projectID: work.id).map(\.id) == [login.id])
+    #expect(try entryRepository.listNoteEntries(projectID: work.id).map(\.id) == [note.id])
+    #expect(try entryRepository.listTotpEntries(projectID: work.id).map(\.id) == [totp.id])
+    #expect(try entryRepository.listCardEntries(projectID: work.id).map(\.id) == [card.id])
+    #expect(try entryRepository.listIdentityEntries(projectID: work.id).map(\.id) == [identity.id])
+    #expect(try entryRepository.listPasskeyEntries(projectID: work.id).map(\.id) == [passkey.id])
+    #expect(try entryRepository.listSshKeyEntries(projectID: work.id).map(\.id) == [sshKey.id])
+    #expect(try entryRepository.listApiTokenEntries(projectID: work.id).map(\.id) == [apiToken.id])
+    #expect(try entryRepository.listWifiEntries(projectID: work.id).map(\.id) == [wifi.id])
+    #expect(try entryRepository.listSendEntries(projectID: work.id).map(\.id) == [send.id])
+    #expect(try entryRepository.listAttachmentMetadata(projectID: work.id).map(\.id) == [attachment.id])
+    #expect(try entryRepository.listLoginEntries(projectID: work.id).first?.projectID == work.id)
+    #expect(engine.movedVaultEntries.map(\.kind) == [
+        .login,
+        .note,
+        .totp,
+        .card,
+        .identity,
+        .passkey,
+        .sshKey,
+        .apiToken,
+        .wifi,
+        .send,
+        .attachmentRef
+    ])
+}
+
 @Test func loginEntryRepositoryUpdatesProjectScopedLoginAndListsUpdatedEntry() throws {
     let engine = RecordingVaultEngine()
     let vaultRepository = LocalVaultRepository(engine: engine)
@@ -1802,6 +2003,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var createdProjects: [RecordedProjectCall] = []
     private(set) var renamedProjects: [RecordedRenamedProjectCall] = []
     private(set) var deletedProjects: [RecordedDeletedProjectCall] = []
+    private(set) var movedVaultEntries: [RecordedMoveEntryCall] = []
     private(set) var createdLoginEntries: [RecordedLoginEntryCall] = []
     private(set) var updatedLoginEntries: [RecordedUpdatedLoginEntryCall] = []
     private(set) var favoritedLoginEntries: [RecordedFavoriteEntryCall] = []
@@ -1965,6 +2167,212 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedProjects.append(.init(vaultID: handle.vaultID, projectID: projectID))
         projects[handle.vaultID, default: []].removeAll { $0.id == projectID }
+    }
+
+    func moveEntry(
+        in handle: LocalVaultHandle,
+        kind: UnifiedVaultItemKind,
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String
+    ) throws -> LocalVaultMovedEntry {
+        movedVaultEntries.append(
+            .init(
+                vaultID: handle.vaultID,
+                kind: kind,
+                entryID: entryID,
+                fromProjectID: fromProjectID,
+                toProjectID: toProjectID
+            )
+        )
+
+        switch kind {
+        case .login:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &loginEntries, title: \.title) { entry, projectID in
+                LocalLoginEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    username: entry.username,
+                    password: entry.password,
+                    url: entry.url,
+                    favorite: entry.favorite
+                )
+            }
+        case .note:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &noteEntries, title: \.title) { entry, projectID in
+                LocalNoteEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    body: entry.body,
+                    favorite: entry.favorite
+                )
+            }
+        case .totp:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &totpEntries, title: \.title) { entry, projectID in
+                LocalTotpEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    secret: entry.secret,
+                    issuer: entry.issuer,
+                    accountName: entry.accountName,
+                    period: entry.period,
+                    digits: entry.digits,
+                    algorithm: entry.algorithm,
+                    otpType: entry.otpType,
+                    counter: entry.counter,
+                    favorite: entry.favorite
+                )
+            }
+        case .card:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &cardEntries, title: \.title) { entry, projectID in
+                LocalCardEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    cardholderName: entry.cardholderName,
+                    number: entry.number,
+                    expiryMonth: entry.expiryMonth,
+                    expiryYear: entry.expiryYear,
+                    cvv: entry.cvv,
+                    issuer: entry.issuer,
+                    network: entry.network,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .identity:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &identityEntries, title: \.title) { entry, projectID in
+                LocalIdentityEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    documentType: entry.documentType,
+                    fullName: entry.fullName,
+                    documentNumber: entry.documentNumber,
+                    issuer: entry.issuer,
+                    country: entry.country,
+                    issueDate: entry.issueDate,
+                    expiryDate: entry.expiryDate,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .passkey:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &passkeyEntries, title: \.title) { entry, projectID in
+                LocalPasskeyEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    relyingPartyID: entry.relyingPartyID,
+                    username: entry.username,
+                    userHandle: entry.userHandle,
+                    credentialID: entry.credentialID,
+                    publicKeyCOSE: entry.publicKeyCOSE,
+                    privateKeyReference: entry.privateKeyReference,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .sshKey:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &sshKeyEntries, title: \.title) { entry, projectID in
+                LocalSshKeyEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    username: entry.username,
+                    host: entry.host,
+                    publicKey: entry.publicKey,
+                    privateKeyReference: entry.privateKeyReference,
+                    passphraseHint: entry.passphraseHint,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .apiToken:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &apiTokenEntries, title: \.title) { entry, projectID in
+                LocalApiTokenEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    issuer: entry.issuer,
+                    accountName: entry.accountName,
+                    token: entry.token,
+                    scopes: entry.scopes,
+                    expiresAt: entry.expiresAt,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .wifi:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &wifiEntries, title: \.title) { entry, projectID in
+                LocalWifiEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    ssid: entry.ssid,
+                    securityType: entry.securityType,
+                    password: entry.password,
+                    hidden: entry.hidden,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .send:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &sendEntries, title: \.title) { entry, projectID in
+                LocalSendEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    body: entry.body,
+                    expiresAt: entry.expiresAt,
+                    maxViews: entry.maxViews,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .attachmentRef:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
+                LocalAttachmentMetadata(
+                    id: entry.id,
+                    projectID: projectID,
+                    entryID: entry.entryID,
+                    fileName: entry.fileName,
+                    mediaType: entry.mediaType,
+                    originalSize: entry.originalSize,
+                    storedSize: entry.storedSize,
+                    contentHash: entry.contentHash,
+                    storageMode: entry.storageMode,
+                    source: entry.source,
+                    downloadState: entry.downloadState,
+                    wrappedContentEncryptionKey: entry.wrappedContentEncryptionKey,
+                    localPath: entry.localPath,
+                    deleted: entry.deleted
+                )
+            }
+        }
+    }
+
+    private func moveRecordedEntry<Entry: Identifiable>(
+        entryID: String,
+        fromProjectID: String,
+        toProjectID: String,
+        kind: UnifiedVaultItemKind,
+        entries: inout [String: [Entry]],
+        title: KeyPath<Entry, String>,
+        moving: (Entry, String) -> Entry
+    ) throws -> LocalVaultMovedEntry where Entry.ID == String {
+        guard var sourceEntries = entries[fromProjectID],
+              let index = sourceEntries.firstIndex(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let entry = sourceEntries.remove(at: index)
+        entries[fromProjectID] = sourceEntries
+        let moved = moving(entry, toProjectID)
+        entries[toProjectID, default: []].append(moved)
+        return LocalVaultMovedEntry(id: moved.id, title: moved[keyPath: title], kind: kind)
     }
 
     func createLoginEntry(
@@ -2954,6 +3362,14 @@ private struct RecordedRenamedProjectCall: Equatable {
 private struct RecordedDeletedProjectCall: Equatable {
     let vaultID: String
     let projectID: String
+}
+
+private struct RecordedMoveEntryCall: Equatable {
+    let vaultID: String
+    let kind: UnifiedVaultItemKind
+    let entryID: String
+    let fromProjectID: String
+    let toProjectID: String
 }
 
 private struct RecordedLoginEntryCall: Equatable {
