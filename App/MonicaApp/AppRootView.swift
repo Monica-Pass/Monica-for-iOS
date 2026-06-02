@@ -1264,6 +1264,7 @@ final class AppSessionModel {
     var attachmentEntries: [LocalAttachmentMetadata] = []
     var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
     var attachmentSearchQuery = ""
+    var vaultProjects: [LocalVaultProject] = []
     var selectedVaultQuickFilterID = "all"
     var selectedVaultBatchItemIDs: Set<String> = []
     private var vaultBatchSelectionKind: UnifiedVaultItemKind?
@@ -1694,6 +1695,14 @@ final class AppSessionModel {
         return rows
     }
 
+    var activeVaultCategoryTitle: String {
+        activeProject?.title ?? "未选择分类"
+    }
+
+    var activeVaultProjectID: String? {
+        activeProject?.id
+    }
+
     var isTrashQuickFilterSelected: Bool {
         selectedVaultQuickFilterID == "trash"
     }
@@ -1737,6 +1746,93 @@ final class AppSessionModel {
         vaultBatchSelectionKind = kind
         selectedVaultBatchItemIDs = selectedVaultBatchItemIDs.intersection(visibleVaultBatchItemIDs(for: kind))
         recordUserActivity()
+    }
+
+    @discardableResult
+    func createVaultCategory(title: String) throws -> LocalVaultProject {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try entryRepository.createProject(title: title)
+            vaultProjects.append(project)
+            try activateVaultCategory(project, entryRepository: entryRepository)
+            entryOperationState = .succeeded(project.title)
+            return project
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func switchVaultCategory(projectID: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let project = vaultProjects.first(where: { $0.id == projectID })
+            else {
+                throw LocalVaultRepositoryError.projectNotFound
+            }
+            try activateVaultCategory(project, entryRepository: entryRepository)
+            entryOperationState = .succeeded(project.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    @discardableResult
+    func renameVaultCategory(projectID: String, title: String) throws -> LocalVaultProject {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let renamed = try entryRepository.renameProject(projectID: projectID, title: title)
+            vaultProjects = vaultProjects.map { $0.id == projectID ? renamed : $0 }
+            if activeProject?.id == projectID {
+                activeProject = renamed
+                selectedVaultQuickFilterID = "category-\(renamed.id)"
+            }
+            entryOperationState = .succeeded(renamed.title)
+            return renamed
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteVaultCategory(projectID: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            try entryRepository.deleteProject(projectID: projectID)
+            vaultProjects.removeAll { $0.id == projectID }
+            if activeProject?.id == projectID {
+                if let next = vaultProjects.first {
+                    try activateVaultCategory(next, entryRepository: entryRepository)
+                } else {
+                    activeProject = nil
+                    clearAllEntryLists()
+                    resetVaultQuickFilters()
+                }
+            }
+            entryOperationState = .succeeded("已删除分类")
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
     }
 
     func clearVaultBatchSelection() {
@@ -2599,8 +2695,10 @@ final class AppSessionModel {
             vaultState = .unlocked
             activeVaultName = session.descriptor.displayName
             activeVaultSession = session
-            activeEntryRepository = vaultRepository.entryRepository(for: session)
+            let entryRepository = vaultRepository.entryRepository(for: session)
+            activeEntryRepository = entryRepository
             activeProject = nil
+            vaultProjects = try entryRepository.listProjects()
             rememberVault(session)
             loginEntries = []
             deletedLoginEntries = []
@@ -2644,8 +2742,10 @@ final class AppSessionModel {
             vaultState = .unlocked
             activeVaultName = session.descriptor.displayName
             activeVaultSession = session
-            activeEntryRepository = vaultRepository.entryRepository(for: session)
+            let entryRepository = vaultRepository.entryRepository(for: session)
+            activeEntryRepository = entryRepository
             activeProject = nil
+            vaultProjects = try entryRepository.listProjects()
             rememberVault(session)
             loginEntries = []
             deletedLoginEntries = []
@@ -5377,8 +5477,10 @@ final class AppSessionModel {
             vaultState = .unlocked
             activeVaultName = session.descriptor.displayName
             activeVaultSession = session
-            activeEntryRepository = vaultRepository.entryRepository(for: session)
+            let entryRepository = vaultRepository.entryRepository(for: session)
+            activeEntryRepository = entryRepository
             activeProject = nil
+            vaultProjects = try entryRepository.listProjects()
             rememberVault(session)
             loginEntries = []
             deletedLoginEntries = []
@@ -5679,6 +5781,7 @@ final class AppSessionModel {
         activeVaultSession = nil
         activeEntryRepository = nil
         activeProject = nil
+        vaultProjects = []
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -5725,6 +5828,7 @@ final class AppSessionModel {
         activeVaultName = nil
         activeEntryRepository = nil
         activeProject = nil
+        vaultProjects = []
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -5807,6 +5911,16 @@ final class AppSessionModel {
         return activeVaultSession
     }
 
+    private func activateVaultCategory(
+        _ project: LocalVaultProject,
+        entryRepository: LocalVaultEntryRepository
+    ) throws {
+        activeProject = project
+        try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+        resetVaultQuickFilters()
+        selectedVaultQuickFilterID = "category-\(project.id)"
+    }
+
     private func ensureActiveProject(
         projectTitle: String,
         entryRepository: LocalVaultEntryRepository
@@ -5816,6 +5930,9 @@ final class AppSessionModel {
         }
         let project = try entryRepository.createProject(title: projectTitle)
         activeProject = project
+        if !vaultProjects.contains(where: { $0.id == project.id }) {
+            vaultProjects.append(project)
+        }
         return project
     }
 
@@ -5874,6 +5991,22 @@ final class AppSessionModel {
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+    }
+
+    private func clearAllEntryLists() {
+        loginEntries = []
+        deletedLoginEntries = []
+        noteEntries = []
+        deletedNoteEntries = []
+        totpEntries = []
+        deletedTotpEntries = []
+        cardEntries = []
+        deletedCardEntries = []
+        identityEntries = []
+        deletedIdentityEntries = []
+        passkeyEntries = []
+        deletedPasskeyEntries = []
+        clearExtendedParityEntries()
     }
 
     private func csvExportDrafts() -> [VaultCSVItemDraft] {

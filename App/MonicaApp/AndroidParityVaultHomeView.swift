@@ -66,6 +66,9 @@ struct AndroidParityVaultHomeView: View {
 
     @State private var isVaultImporterPresented = false
     @State private var isTotpScannerPresented = false
+    @State private var isCreateCategoryAlertPresented = false
+    @State private var isRenameCategoryAlertPresented = false
+    @State private var pendingCategoryTitle = ""
     @State private var now = Date()
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
@@ -81,6 +84,7 @@ struct AndroidParityVaultHomeView: View {
             stackedGroupMode: $session.isLoginStackedGroupModeEnabled,
             showsStackedGroupModeToggle: itemKind == .login,
             quickFilterRows: session.vaultQuickFilterRows,
+            categoryBar: { categoryBar },
             onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
             onAdd: { session.presentAddEditor(for: tab) },
@@ -139,6 +143,24 @@ struct AndroidParityVaultHomeView: View {
         }
         .onReceive(timer) { value in
             now = value
+        }
+        .alert("新建分类", isPresented: $isCreateCategoryAlertPresented) {
+            TextField("分类名称", text: $pendingCategoryTitle)
+            Button("取消", role: .cancel) { pendingCategoryTitle = "" }
+            Button("创建") {
+                do { try session.createVaultCategory(title: pendingCategoryTitle) } catch {}
+                pendingCategoryTitle = ""
+            }
+        }
+        .alert("重命名分类", isPresented: $isRenameCategoryAlertPresented) {
+            TextField("分类名称", text: $pendingCategoryTitle)
+            Button("取消", role: .cancel) { pendingCategoryTitle = "" }
+            Button("保存") {
+                if let projectID = session.activeVaultProjectID {
+                    do { try session.renameVaultCategory(projectID: projectID, title: pendingCategoryTitle) } catch {}
+                }
+                pendingCategoryTitle = ""
+            }
         }
     }
 
@@ -684,6 +706,62 @@ struct AndroidParityVaultHomeView: View {
         session.activeVaultBatchSelectionKind ?? itemKind
     }
 
+    private var categoryBar: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6), cornerRadius: 22) {
+            HStack(spacing: 10) {
+                Menu {
+                    ForEach(session.vaultProjects) { project in
+                        Button {
+                            do { try session.switchVaultCategory(projectID: project.id) } catch {}
+                        } label: {
+                            Label(project.title, systemImage: project.id == session.activeVaultProjectID ? "checkmark.circle.fill" : "folder")
+                        }
+                    }
+                } label: {
+                    Label(session.activeVaultCategoryTitle, systemImage: "folder.fill")
+                        .font(.subheadline.weight(.heavy))
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .disabled(session.vaultProjects.isEmpty)
+                .foregroundStyle(AndroidParityPalette.textPrimary)
+
+                Button {
+                    pendingCategoryTitle = ""
+                    isCreateCategoryAlertPresented = true
+                } label: {
+                    Image(systemName: "folder.badge.plus")
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AndroidParityPalette.primary)
+
+                Button {
+                    pendingCategoryTitle = session.activeVaultCategoryTitle
+                    isRenameCategoryAlertPresented = true
+                } label: {
+                    Image(systemName: "square.and.pencil")
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AndroidParityPalette.primary)
+                .disabled(session.activeVaultProjectID == nil)
+
+                Button {
+                    if let projectID = session.activeVaultProjectID {
+                        do { try session.deleteVaultCategory(projectID: projectID) } catch {}
+                    }
+                } label: {
+                    Image(systemName: "folder.badge.minus")
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.red)
+                .disabled(session.activeVaultProjectID == nil)
+            }
+        }
+    }
+
     private var batchActionBar: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6), cornerRadius: 22) {
             HStack(spacing: 10) {
@@ -894,7 +972,7 @@ struct AndroidParityVaultHomeView: View {
     }
 }
 
-struct AndroidParityModuleChrome<BatchBar: View, Content: View>: View {
+struct AndroidParityModuleChrome<CategoryBar: View, BatchBar: View, Content: View>: View {
     let title: String
     let tab: MonicaAppTab
     @Binding var selectedAction: AndroidParityToolbarAction?
@@ -903,6 +981,7 @@ struct AndroidParityModuleChrome<BatchBar: View, Content: View>: View {
     @Binding var stackedGroupMode: Bool
     let showsStackedGroupModeToggle: Bool
     let quickFilterRows: [AppVaultQuickFilterRow]
+    @ViewBuilder var categoryBar: CategoryBar
     let onQuickFilter: (String) -> Void
     let onOpenVault: () -> Void
     let onAdd: () -> Void
@@ -914,6 +993,7 @@ struct AndroidParityModuleChrome<BatchBar: View, Content: View>: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     header
+                    categoryBar
                     quickFilterStrip
                     batchBar
                     if selectedAction == .search { searchPanel }

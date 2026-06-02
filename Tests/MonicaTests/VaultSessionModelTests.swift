@@ -1772,6 +1772,63 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.vaultQuickFilterRows.map(\.id).contains("all"))
     }
 
+    func testVaultCategoriesCanBeCreatedRenamedSwitchedAndDeletedWhenEmpty() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        try unlockNewVault(model)
+
+        let personal = try model.createVaultCategory(title: " Personal ")
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "github-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.loginSearchQuery = "github"
+        model.enterVaultBatchSelection(for: .login)
+        model.toggleVaultBatchItemSelection("entry-1", for: .login)
+
+        let clients = try model.createVaultCategory(title: "Clients")
+
+        XCTAssertEqual(model.vaultProjects.map(\.title), ["Personal", "Clients"])
+        XCTAssertEqual(model.activeVaultCategoryTitle, "Clients")
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertEqual(model.loginSearchQuery, "")
+        XCTAssertFalse(model.isVaultBatchSelectionActive)
+
+        model.loginTitle = "Client Portal"
+        model.loginUsername = "team"
+        model.loginPassword = "client-secret"
+        model.loginURL = "https://client.example"
+        try model.createLoginEntry(projectTitle: "Clients")
+
+        try model.switchVaultCategory(projectID: personal.id)
+
+        XCTAssertEqual(model.activeVaultCategoryTitle, "Personal")
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.title), ["全部", "Personal", "收藏", "回收站"])
+
+        let renamed = try model.renameVaultCategory(projectID: clients.id, title: " Customers ")
+        try model.switchVaultCategory(projectID: renamed.id)
+
+        XCTAssertEqual(model.activeVaultCategoryTitle, "Customers")
+        XCTAssertEqual(model.loginEntries.map(\.title), ["Client Portal"])
+        XCTAssertEqual(engine.renamedProjects.map(\.title), ["Customers"])
+
+        let empty = try model.createVaultCategory(title: "Archive")
+        try model.deleteVaultCategory(projectID: empty.id)
+
+        XCTAssertEqual(model.vaultProjects.map(\.title), ["Personal", "Customers"])
+        XCTAssertEqual(engine.deletedProjects.map(\.projectID), [empty.id])
+
+        XCTAssertThrowsError(try model.deleteVaultCategory(projectID: renamed.id)) { error in
+            XCTAssertEqual(error as? LocalVaultRepositoryError, .projectNotEmpty)
+        }
+        XCTAssertEqual(model.vaultProjects.map(\.title), ["Personal", "Customers"])
+    }
+
     func testLoginStackedGroupsSummarizeFilteredEntriesWithoutLeakingPasswords() throws {
         let model = AppSessionModel()
         model.loginEntries = [
@@ -4493,6 +4550,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     var openVaultID = "opened-vault"
     var securityKeyOpenVaultID = "security-key-opened-vault"
     private(set) var createdProjects: [RecordedProjectCall] = []
+    private(set) var renamedProjects: [RecordedRenamedProjectCall] = []
+    private(set) var deletedProjects: [RecordedDeletedProjectCall] = []
     private(set) var createdLoginEntries: [RecordedLoginEntryCall] = []
     private(set) var updatedLoginEntries: [RecordedUpdatedLoginEntryCall] = []
     private(set) var favoritedLoginEntries: [RecordedFavoriteEntryCall] = []
@@ -4544,6 +4603,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var deletedSendEntries: [RecordedEntryMutationCall] = []
     private(set) var restoredSendEntries: [RecordedEntryMutationCall] = []
     private(set) var createdAttachmentMetadata: [RecordedAttachmentMetadataCall] = []
+    private var projects: [String: [LocalVaultProject]] = [:]
     private var loginEntries: [String: [LocalLoginEntry]] = [:]
     private var deletedEntries: [String: [LocalLoginEntry]] = [:]
     private var noteEntries: [String: [LocalNoteEntry]] = [:]
@@ -4732,7 +4792,38 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         title: String
     ) throws -> LocalVaultProject {
         createdProjects.append(.init(vaultID: handle.vaultID, title: title))
-        return LocalVaultProject(id: "project-\(createdProjects.count)", title: title)
+        let project = LocalVaultProject(id: "project-\(createdProjects.count)", title: title)
+        projects[handle.vaultID, default: []].append(project)
+        return project
+    }
+
+    func listProjects(in handle: LocalVaultHandle) throws -> [LocalVaultProject] {
+        projects[handle.vaultID, default: []]
+    }
+
+    func renameProject(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        title: String
+    ) throws -> LocalVaultProject {
+        guard let index = projects[handle.vaultID, default: []].firstIndex(where: { $0.id == projectID }) else {
+            throw LocalVaultRepositoryError.projectNotFound
+        }
+        let renamed = LocalVaultProject(id: projectID, title: title)
+        renamedProjects.append(.init(vaultID: handle.vaultID, projectID: projectID, title: title))
+        projects[handle.vaultID, default: []][index] = renamed
+        return renamed
+    }
+
+    func deleteProject(in handle: LocalVaultHandle, projectID: String) throws {
+        guard projects[handle.vaultID, default: []].contains(where: { $0.id == projectID }) else {
+            throw LocalVaultRepositoryError.projectNotFound
+        }
+        guard !projectContainsEntries(projectID: projectID) else {
+            throw LocalVaultRepositoryError.projectNotEmpty
+        }
+        deletedProjects.append(.init(vaultID: handle.vaultID, projectID: projectID))
+        projects[handle.vaultID, default: []].removeAll { $0.id == projectID }
     }
 
     func createLoginEntry(
@@ -6059,6 +6150,31 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         attachmentMetadata[projectID, default: []].append(restored)
         return restored
     }
+
+    private func projectContainsEntries(projectID: String) -> Bool {
+        !loginEntries[projectID, default: []].isEmpty
+            || !deletedEntries[projectID, default: []].isEmpty
+            || !noteEntries[projectID, default: []].isEmpty
+            || !deletedNotes[projectID, default: []].isEmpty
+            || !totpEntries[projectID, default: []].isEmpty
+            || !deletedTotp[projectID, default: []].isEmpty
+            || !cardEntries[projectID, default: []].isEmpty
+            || !deletedCards[projectID, default: []].isEmpty
+            || !identityEntries[projectID, default: []].isEmpty
+            || !deletedIdentities[projectID, default: []].isEmpty
+            || !passkeyEntries[projectID, default: []].isEmpty
+            || !deletedPasskeys[projectID, default: []].isEmpty
+            || !sshKeyEntries[projectID, default: []].isEmpty
+            || !deletedSshKeys[projectID, default: []].isEmpty
+            || !apiTokenEntries[projectID, default: []].isEmpty
+            || !deletedApiTokens[projectID, default: []].isEmpty
+            || !wifiEntries[projectID, default: []].isEmpty
+            || !deletedWifi[projectID, default: []].isEmpty
+            || !sendEntries[projectID, default: []].isEmpty
+            || !deletedSends[projectID, default: []].isEmpty
+            || !attachmentMetadata[projectID, default: []].isEmpty
+            || !deletedAttachmentMetadata[projectID, default: []].isEmpty
+    }
 }
 
 private struct RecordedVaultCall {
@@ -6086,6 +6202,17 @@ private struct RecordedResetMasterPasswordCall: Equatable {
 private struct RecordedProjectCall {
     let vaultID: String
     let title: String
+}
+
+private struct RecordedRenamedProjectCall {
+    let vaultID: String
+    let projectID: String
+    let title: String
+}
+
+private struct RecordedDeletedProjectCall {
+    let vaultID: String
+    let projectID: String
 }
 
 private struct RecordedLoginEntryCall {

@@ -1900,6 +1900,8 @@ public enum LocalVaultRepositoryError: Error, Sendable, Equatable, LocalizedErro
     case emptyProjectTitle
     case emptyEntryTitle
     case vaultUnavailable
+    case projectNotFound
+    case projectNotEmpty
     case unsupportedEntryType(UnifiedVaultItemKind)
     case invalidEntryPayload
 
@@ -1917,6 +1919,10 @@ public enum LocalVaultRepositoryError: Error, Sendable, Equatable, LocalizedErro
             return "条目标题不能为空。"
         case .vaultUnavailable:
             return "保险库会话已不可用。"
+        case .projectNotFound:
+            return "分类不存在。"
+        case .projectNotEmpty:
+            return "分类内仍有条目，无法直接删除。"
         case .unsupportedEntryType(let kind):
             return "\(kind.displayName) 还没有接入当前 MDBX 引擎。"
         case .invalidEntryPayload:
@@ -1996,6 +2002,21 @@ public protocol LocalVaultEngine {
         in handle: LocalVaultHandle,
         title: String
     ) throws -> LocalVaultProject
+
+    func listProjects(
+        in handle: LocalVaultHandle
+    ) throws -> [LocalVaultProject]
+
+    func renameProject(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        title: String
+    ) throws -> LocalVaultProject
+
+    func deleteProject(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws
 
     func createLoginEntry(
         in handle: LocalVaultHandle,
@@ -3998,6 +4019,29 @@ public struct LocalVaultEntryRepository {
         )
     }
 
+    public func listProjects() throws -> [LocalVaultProject] {
+        try engine.listProjects(in: session.handle)
+    }
+
+    public func renameProject(
+        projectID: String,
+        title: String
+    ) throws -> LocalVaultProject {
+        let normalizedTitle = try normalizedProjectTitle(title)
+        return try engine.renameProject(
+            in: session.handle,
+            projectID: projectID,
+            title: normalizedTitle
+        )
+    }
+
+    public func deleteProject(projectID: String) throws {
+        try engine.deleteProject(
+            in: session.handle,
+            projectID: projectID
+        )
+    }
+
     public func createLoginEntry(
         projectID: String,
         draft: LocalLoginEntryDraft
@@ -4683,6 +4727,7 @@ public struct LocalVaultEntryRepository {
 public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
     private let lock = NSLock()
     private var vaults: [String: MonicaMDBXVault] = [:]
+    private var projects: [String: [LocalVaultProject]] = [:]
 
     public init() {}
 
@@ -4749,6 +4794,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         vaults.removeValue(forKey: handle.vaultID)
+        projects.removeValue(forKey: handle.vaultID)
     }
 
     public func createProject(
@@ -4756,7 +4802,47 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         title: String
     ) throws -> LocalVaultProject {
         let project = try vault(for: handle).createProject(title: title)
-        return LocalVaultProject(id: project.id, title: project.title)
+        let localProject = LocalVaultProject(id: project.id, title: project.title)
+        lock.lock()
+        projects[handle.vaultID, default: []].append(localProject)
+        lock.unlock()
+        return localProject
+    }
+
+    public func listProjects(in handle: LocalVaultHandle) throws -> [LocalVaultProject] {
+        _ = try vault(for: handle)
+        lock.lock()
+        defer { lock.unlock() }
+        return projects[handle.vaultID, default: []]
+    }
+
+    public func renameProject(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        title: String
+    ) throws -> LocalVaultProject {
+        _ = try vault(for: handle)
+        lock.lock()
+        defer { lock.unlock() }
+        guard let index = projects[handle.vaultID, default: []].firstIndex(where: { $0.id == projectID }) else {
+            throw LocalVaultRepositoryError.projectNotFound
+        }
+        let renamed = LocalVaultProject(id: projectID, title: title)
+        projects[handle.vaultID, default: []][index] = renamed
+        return renamed
+    }
+
+    public func deleteProject(in handle: LocalVaultHandle, projectID: String) throws {
+        _ = try vault(for: handle)
+        guard try !projectContainsEntries(handle: handle, projectID: projectID) else {
+            throw LocalVaultRepositoryError.projectNotEmpty
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        guard projects[handle.vaultID, default: []].contains(where: { $0.id == projectID }) else {
+            throw LocalVaultRepositoryError.projectNotFound
+        }
+        projects[handle.vaultID, default: []].removeAll { $0.id == projectID }
     }
 
     public func createLoginEntry(
@@ -5580,6 +5666,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         vaults[vaultID] = vault
+        projects[vaultID, default: []] = projects[vaultID, default: []]
     }
 
     private func vault(for handle: LocalVaultHandle) throws -> MonicaMDBXVault {
@@ -5589,6 +5676,31 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             throw LocalVaultRepositoryError.vaultUnavailable
         }
         return vault
+    }
+
+    private func projectContainsEntries(handle: LocalVaultHandle, projectID: String) throws -> Bool {
+        try !listLoginEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedLoginEntries(in: handle, projectID: projectID).isEmpty
+            || !listNoteEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedNoteEntries(in: handle, projectID: projectID).isEmpty
+            || !listTotpEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedTotpEntries(in: handle, projectID: projectID).isEmpty
+            || !listCardEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedCardEntries(in: handle, projectID: projectID).isEmpty
+            || !listIdentityEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedIdentityEntries(in: handle, projectID: projectID).isEmpty
+            || !listPasskeyEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedPasskeyEntries(in: handle, projectID: projectID).isEmpty
+            || !listSshKeyEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedSshKeyEntries(in: handle, projectID: projectID).isEmpty
+            || !listApiTokenEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedApiTokenEntries(in: handle, projectID: projectID).isEmpty
+            || !listWifiEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedWifiEntries(in: handle, projectID: projectID).isEmpty
+            || !listSendEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedSendEntries(in: handle, projectID: projectID).isEmpty
+            || !listAttachmentMetadata(in: handle, projectID: projectID).isEmpty
+            || !listDeletedAttachmentMetadata(in: handle, projectID: projectID).isEmpty
     }
 
     private func createParityEntry(
