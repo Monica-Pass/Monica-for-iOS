@@ -1280,6 +1280,7 @@ final class AppSessionModel {
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
     var keePassReadOnlySnapshot: KeePassReadOnlySnapshot?
+    var keePassReadOnlyImportPlan: KeePassReadOnlyImportPlan?
     var keePassPendingDatabaseData: Data?
     var keePassPendingDatabaseName: String?
     var keePassUnlockPassword = ""
@@ -5400,6 +5401,7 @@ final class AppSessionModel {
         keePassPendingDatabaseData = data
         keePassPendingDatabaseName = fileName
         keePassReadOnlySnapshot = nil
+        keePassReadOnlyImportPlan = nil
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
@@ -5443,6 +5445,7 @@ final class AppSessionModel {
             keePassKeyFileName = sanitizedKeePassFileName(keyFileName) ?? ""
         }
         keePassReadOnlySnapshot = nil
+        keePassReadOnlyImportPlan = nil
 
         let preflight = KeePassFormatInspector.prepareUnlock(
             databaseData,
@@ -5488,10 +5491,33 @@ final class AppSessionModel {
                 )
             )
             keePassReadOnlySnapshot = snapshot
+            keePassReadOnlyImportPlan = nil
             entryOperationState = .succeeded("KeePass 只读预览：\(snapshot.displaySummary)")
             return snapshot
         } catch {
             keePassReadOnlySnapshot = nil
+            keePassReadOnlyImportPlan = nil
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func previewKeePassReadOnlyImportPlan() throws -> KeePassReadOnlyImportPlan {
+        recordUserActivity()
+
+        do {
+            let snapshot: KeePassReadOnlySnapshot
+            if let existingSnapshot = keePassReadOnlySnapshot {
+                snapshot = existingSnapshot
+            } else {
+                snapshot = try previewKeePassReadOnlyTree()
+            }
+            let plan = KeePassReadOnlyImportPlanner.plan(snapshot)
+            keePassReadOnlyImportPlan = plan
+            entryOperationState = .succeeded("KeePass 导入计划：\(plan.displaySummary)")
+            return plan
+        } catch {
+            keePassReadOnlyImportPlan = nil
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
@@ -5507,6 +5533,7 @@ final class AppSessionModel {
         keePassKeyFileData = try Data(contentsOf: fileURL)
         keePassKeyFileName = sanitizedKeePassFileName(fileURL.lastPathComponent) ?? "keyfile"
         keePassReadOnlySnapshot = nil
+        keePassReadOnlyImportPlan = nil
         entryOperationState = .succeeded("KeePass 密钥文件已选择：\(keePassKeyFileName)")
     }
 
@@ -6244,6 +6271,7 @@ final class AppSessionModel {
     private func clearKeePassImportState() {
         keePassImportPreview = nil
         keePassReadOnlySnapshot = nil
+        keePassReadOnlyImportPlan = nil
         keePassPendingDatabaseData = nil
         keePassPendingDatabaseName = nil
         keePassUnlockPassword = ""

@@ -137,6 +137,54 @@ import MonicaStorage
     #expect(!result.displaySummary.contains("key-file-secret"))
 }
 
+@Test func keepPassReadOnlyImportPlannerBuildsPreviewOnlyPlanWithoutLeakingSecrets() throws {
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "personal.kdbx",
+        headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+        groups: [
+            KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+            KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-1",
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com",
+                groupPath: "/Work",
+                hasPassword: true,
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: false
+            ),
+            KeePassReadOnlyEntry(
+                id: "entry-2",
+                title: "Deleted",
+                username: "bob",
+                url: "https://deleted.example",
+                groupPath: "/Trash",
+                hasPassword: true,
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: true
+            )
+        ]
+    )
+
+    let plan = KeePassReadOnlyImportPlanner.plan(snapshot)
+
+    #expect(plan.candidateCount == 1)
+    #expect(plan.skippedCount == 1)
+    #expect(plan.candidates.first?.title == "GitHub")
+    #expect(plan.candidates.first?.kind == .login)
+    #expect(plan.candidates.first?.groupPath == "/Work")
+    #expect(plan.candidates.first?.hasPassword == true)
+    #expect(plan.skipped.first?.reason == .deletedEntry)
+    #expect(plan.displaySummary == "KDBX 4，1 个可预览条目，1 个跳过")
+    #expect(!plan.displaySummary.contains("database-password"))
+    #expect(!plan.displaySummary.contains("key-file-secret"))
+}
+
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
     let login = UnifiedVaultItem(
         id: "login-1",

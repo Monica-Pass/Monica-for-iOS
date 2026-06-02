@@ -262,6 +262,150 @@ public struct KeePassReadOnlySnapshot: Sendable, Equatable {
     }
 }
 
+public enum KeePassReadOnlyImportCandidateKind: Sendable, Equatable {
+    case login
+
+    public var displayName: String {
+        switch self {
+        case .login:
+            return "密码条目"
+        }
+    }
+}
+
+public enum KeePassReadOnlyImportSkipReason: Sendable, Equatable {
+    case deletedEntry
+
+    public var displayName: String {
+        switch self {
+        case .deletedEntry:
+            return "回收站条目"
+        }
+    }
+}
+
+public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let kind: KeePassReadOnlyImportCandidateKind
+    public let title: String
+    public let username: String
+    public let url: String
+    public let groupPath: String
+    public let hasPassword: Bool
+    public let hasTotp: Bool
+    public let attachmentCount: Int
+
+    public init(
+        id: String,
+        kind: KeePassReadOnlyImportCandidateKind,
+        title: String,
+        username: String,
+        url: String,
+        groupPath: String,
+        hasPassword: Bool,
+        hasTotp: Bool,
+        attachmentCount: Int
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.username = username
+        self.url = url
+        self.groupPath = groupPath
+        self.hasPassword = hasPassword
+        self.hasTotp = hasTotp
+        self.attachmentCount = attachmentCount
+    }
+}
+
+public struct KeePassReadOnlyImportSkippedEntry: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let title: String
+    public let groupPath: String
+    public let reason: KeePassReadOnlyImportSkipReason
+
+    public init(id: String, title: String, groupPath: String, reason: KeePassReadOnlyImportSkipReason) {
+        self.id = id
+        self.title = title
+        self.groupPath = groupPath
+        self.reason = reason
+    }
+}
+
+public struct KeePassReadOnlyImportPlan: Sendable, Equatable {
+    public let sourceName: String?
+    public let headerSummary: KeePassHeaderSummary?
+    public let candidates: [KeePassReadOnlyImportCandidate]
+    public let skipped: [KeePassReadOnlyImportSkippedEntry]
+
+    public init(
+        sourceName: String?,
+        headerSummary: KeePassHeaderSummary?,
+        candidates: [KeePassReadOnlyImportCandidate],
+        skipped: [KeePassReadOnlyImportSkippedEntry]
+    ) {
+        self.sourceName = sourceName
+        self.headerSummary = headerSummary
+        self.candidates = candidates
+        self.skipped = skipped
+    }
+
+    public var candidateCount: Int {
+        candidates.count
+    }
+
+    public var skippedCount: Int {
+        skipped.count
+    }
+
+    public var displaySummary: String {
+        let version = headerSummary?.displayName ?? "KDBX"
+        return "\(version)，\(candidateCount) 个可预览条目，\(skippedCount) 个跳过"
+    }
+}
+
+public enum KeePassReadOnlyImportPlanner {
+    public static func plan(_ snapshot: KeePassReadOnlySnapshot) -> KeePassReadOnlyImportPlan {
+        var candidates: [KeePassReadOnlyImportCandidate] = []
+        var skipped: [KeePassReadOnlyImportSkippedEntry] = []
+
+        for entry in snapshot.entries {
+            if entry.isDeleted {
+                skipped.append(
+                    KeePassReadOnlyImportSkippedEntry(
+                        id: entry.id,
+                        title: entry.title,
+                        groupPath: entry.groupPath,
+                        reason: .deletedEntry
+                    )
+                )
+                continue
+            }
+
+            candidates.append(
+                KeePassReadOnlyImportCandidate(
+                    id: entry.id,
+                    kind: .login,
+                    title: entry.title,
+                    username: entry.username,
+                    url: entry.url,
+                    groupPath: entry.groupPath,
+                    hasPassword: entry.hasPassword,
+                    hasTotp: entry.hasTotp,
+                    attachmentCount: entry.attachmentCount
+                )
+            )
+        }
+
+        return KeePassReadOnlyImportPlan(
+            sourceName: snapshot.sourceName,
+            headerSummary: snapshot.headerSummary,
+            candidates: candidates,
+            skipped: skipped
+        )
+    }
+}
+
 public protocol KeePassDatabaseReader: Sendable {
     func readSnapshot(
         database: Data,

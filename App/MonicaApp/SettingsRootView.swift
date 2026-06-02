@@ -463,6 +463,35 @@ struct SettingsRootView: View {
                                 )
                             }
                         }
+                        Button {
+                            do {
+                                _ = try session.previewKeePassReadOnlyImportPlan()
+                            } catch {
+                                // AppSessionModel owns user-visible failure state.
+                            }
+                        } label: {
+                            Label("预览导入项", systemImage: "tray.and.arrow.down")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+
+                        if let plan = session.keePassReadOnlyImportPlan {
+                            AndroidParityInfoRow(title: "导入计划", value: plan.displaySummary)
+                            AndroidParityInfoRow(title: "可预览", value: "\(plan.candidateCount)")
+                            AndroidParityInfoRow(title: "跳过", value: "\(plan.skippedCount)")
+                            ForEach(plan.candidates.prefix(3)) { candidate in
+                                AndroidParityInfoRow(
+                                    title: candidate.title.isEmpty ? "未命名条目" : candidate.title,
+                                    value: candidate.username.isEmpty ? candidate.groupPath : candidate.username
+                                )
+                            }
+                            ForEach(plan.skipped.prefix(3)) { skipped in
+                                AndroidParityInfoRow(
+                                    title: skipped.title.isEmpty ? "跳过条目" : skipped.title,
+                                    value: skipped.reason.displayName
+                                )
+                            }
+                        }
                     }
 
                     AndroidParityDivider()

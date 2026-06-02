@@ -3326,6 +3326,73 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 只读预览：KDBX 4，2 个分组，1 个条目"))
     }
 
+    func testKeePassReadOnlyImportPlanUsesSnapshotWithoutWritingVaultOrLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-1",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: false
+                    ),
+                    KeePassReadOnlyEntry(
+                        id: "entry-2",
+                        title: "Old",
+                        username: "bob",
+                        url: "https://old.example",
+                        groupPath: "/Trash",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: true
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+
+        let plan = try model.previewKeePassReadOnlyImportPlan()
+
+        XCTAssertEqual(plan.candidateCount, 1)
+        XCTAssertEqual(plan.skippedCount, 1)
+        XCTAssertEqual(plan.candidates.first?.title, "GitHub")
+        XCTAssertEqual(model.keePassReadOnlyImportPlan?.displaySummary, "KDBX 4，1 个可预览条目，1 个跳过")
+        XCTAssertEqual(reader.requests.count, 1)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 导入计划：KDBX 4，1 个可预览条目，1 个跳过"))
+    }
+
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
