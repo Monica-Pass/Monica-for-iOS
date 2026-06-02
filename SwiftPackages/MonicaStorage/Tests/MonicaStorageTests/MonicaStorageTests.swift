@@ -811,7 +811,7 @@ import MonicaStorage
     #expect(ready.credentials.hasKeyFile)
     #expect(ready.credentials.keyFileName == "personal.key")
     #expect(ready.credentials.keyFileCandidateCount > 0)
-    #expect(ready.credentials.displayName == "密码 + 密钥文件（2 种 key 解析）")
+    #expect(ready.credentials.displayName == "密码 + 密钥文件（3 种 key 解析）")
     #expect(ready.issue == nil)
 }
 
@@ -850,6 +850,7 @@ import MonicaStorage
         keyFileName: "personal.key"
     )
     let passwordAndKeyLabels = passwordAndKeyCredentials.credentialCandidates.map(\.label)
+    #expect(passwordAndKeyLabels.first == "password-only")
     #expect(passwordAndKeyLabels.contains("xml-data/password+key"))
     #expect(!passwordAndKeyLabels.contains("xml-data/key-only"))
 
@@ -928,10 +929,10 @@ import MonicaStorage
     )
 
     #expect(snapshot.entryCount == 1)
-    #expect(baseReader.requests.map(\.label) == ["raw/password+key", "sha256(raw)/password+key"])
+    #expect(baseReader.requests.map(\.label) == ["password-only", "raw/password+key"])
     #expect(baseReader.requests.map(\.password) == ["database-password", "database-password"])
-    #expect(baseReader.requests.first?.keyMaterial == keyFile)
-    #expect(baseReader.requests.last?.keyMaterial == Data(SHA256.hash(data: keyFile)))
+    #expect(baseReader.requests.first?.keyMaterial == nil)
+    #expect(baseReader.requests.last?.keyMaterial == keyFile)
 }
 
 @Test func keePassCandidateTryingDatabaseReaderSummarizesInvalidCandidatesWithoutLeakingSecrets() throws {
@@ -967,7 +968,7 @@ import MonicaStorage
             )
         )
     }
-    #expect(baseReader.labels == ["raw/password+key", "sha256(raw)/password+key"])
+    #expect(baseReader.labels == ["password-only", "raw/password+key", "sha256(raw)/password+key"])
 
     do {
         _ = try reader.readSnapshot(
@@ -1362,6 +1363,74 @@ import MonicaStorage
     #expect(snapshot.entries.first?.decodedPassword == "kdbx4-decoded-secret")
     #expect(!snapshot.displaySummary.contains(password))
     #expect(!snapshot.displaySummary.contains("kdbx4-decoded-secret"))
+    #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
+}
+
+@Test func defaultKeePassDatabaseReaderDecryptsKdbx4AesKdfFixtureWithKeyFileCandidateWithoutLeakingCredentials() throws {
+    let password = "keyfile-password"
+    let rawKey = Data((1...32).map(UInt8.init))
+    let xmlKeyFile = Data("""
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeyFile><Key><Data>\(rawKey.base64EncodedString())</Data></Key></KeyFile>
+    """.utf8)
+    let transformSeed = Data(repeating: 0xAA, count: 32)
+    let database = try decodeHexData("""
+    03d9a29a67fb4bb500000400021000000031c1f2e6bf714350be5805216afc5a
+    ff0304000000000000000420000000bababababababababababababababababa
+    bababababababababababababababa0710000000cacacacacacacacacacacaca
+    cacacaca0b5d00000000014205000000245555494410000000c9d9f39a628a44
+    60bf740d08c18a4fea42010000005320000000aaaaaaaaaaaaaaaaaaaaaaaaaa
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa05010000005208000000010000
+    00000000000000040000000d0a0d0a8cc106b7dd71fe5e4c87846f27e38f6cc4
+    485ec2a75aa5e87e2ea1c808fa1674d5b001e33c945f8193aa2571a6c41d08d5
+    bc0450d347f655b0aa5ef4083528cd3eeeb5dd228eff2e262d4eda9ac539a9e7
+    5637c08390403712104f0fb446e4ee1002000050f4e96046647e1d1394672ea5
+    211764338a0ed1ef301781917d4534fc4cf87c328aaa83bc37f105e398f9275d
+    d5cc8b4554ff5d696729cd9c969bf95cac9b3e654a679b9d742229c90b008b28
+    69ca6dea02de5a4e475b50a07e54d6bff3178bd2c068ce4e4e51d60bde15f892
+    4346173f44f325b98f4e21c8c6ac28e64e421c6c53993fda9102bed6bc7ca76d
+    5919046f1eb25e5565f5755c5c5123a142bd3914d14cbd71282d4a1ebfb552db
+    5a0f4e3634a31e0870941830ea986d119c1e4df3e9268adba4b3d6f0934df65b
+    9277c61297585ad230e0b5f8d73adaf3ea7da6d2de1b8d0cc22cbc50efd4fa1d
+    7f719dbc26cca725efd3eba229a2a14c7507d239e65c51c09f57acf711135602
+    72ed4a7acb064d7544c9cebeb67f39f062f3cae0ed161b257f95e9c02083c9a6
+    7596265b2aa7b0d4c0b9072b61999bd4b56def5ff0d1a44991491576187a1aee
+    bc171e2b225b9d53cb133b216342ef9f5596f48f3d7f90979175f89b3b2e5396
+    1ab943b899ae0d433eb79c8058e86ba21d090824b79572f71c1608c81238dc97
+    6c672ee922e578724b0b1816077fb8bb87d9c4da50fb3a3f36bc1763a9ded2ba
+    3c40d33d0ef0a073ef50c0bc391c200797c0bcecd58599986a4a9cf9cacf485e
+    4233c1737c147fbbc655f7d5b976e057e2a25f9227556e9fa08c7aa43b78d7b8
+    0bc94d5a27787d00f612f389c1eacbcb6c9a6003aa93e1dc788ec3208ebb9e5d
+    a82cea81729a384ffe5663b25c1a3aa0dcecada713f0d9e19380f54378b663ab
+    6ccc9400000000
+    """)
+    let credentials = KeePassUnlockCredentials(
+        password: password,
+        keyFile: xmlKeyFile,
+        keyFileName: "../personal.key"
+    )
+    #expect(credentials.credentialCandidates.map(\.label) == [
+        "password-only",
+        "raw/password+key",
+        "xml-data/password+key",
+        "sha256(raw)/password+key"
+    ])
+    let reader = KeePassCandidateTryingDatabaseReader(baseReader: DefaultKeePassDatabaseReader())
+
+    let snapshot = try reader.readSnapshot(
+        database: database,
+        sourceName: "kdbx4-key-file-fixture.kdbx",
+        credentials: credentials
+    )
+
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(snapshot.headerSummary?.kdfParameters?.aesKdf?.rounds == 1)
+    #expect(snapshot.entries.first?.title == "KDBX4 Key File")
+    #expect(snapshot.entries.first?.username == "helen")
+    #expect(snapshot.entries.first?.decodedPassword == "keyfile-decoded-secret")
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains(rawKey.base64EncodedString()))
+    #expect(!snapshot.displaySummary.contains("keyfile-decoded-secret"))
     #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
 }
 

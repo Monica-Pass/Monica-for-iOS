@@ -1571,8 +1571,9 @@ public enum KeePassCredentialSupport {
         var seen = Set<String>()
         let materials = KeePassKeyFileMaterial.buildVariants(from: keyFile)
 
-        func append(label: String, password: String, key: Data) {
-            let signature = "\(label):\(sha256Hex(key)):\(password.count)"
+        func append(label: String, password: String, key: Data?) {
+            let keySignature = key.map(sha256Hex) ?? "no-key"
+            let signature = "\(label):\(keySignature):\(password.count)"
             guard seen.insert(signature).inserted else { return }
             candidates.append(
                 KeePassCredentialCandidate(
@@ -1583,6 +1584,9 @@ public enum KeePassCredentialSupport {
             )
         }
 
+        if !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            append(label: "password-only", password: password, key: nil)
+        }
         for material in materials {
             if password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 append(label: "\(material.label)/key-only", password: "", key: material.key)

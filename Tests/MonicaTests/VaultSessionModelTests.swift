@@ -3284,7 +3284,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
         XCTAssertEqual(
             model.entryOperationState,
-            .succeeded("KeePass 解锁输入已准备：KDBX 4，密码 + 密钥文件（2 种 key 解析）")
+            .succeeded("KeePass 解锁输入已准备：KDBX 4，密码 + 密钥文件（3 种 key 解析）")
         )
     }
 
@@ -3339,10 +3339,11 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(reader.requests.count, 1)
         XCTAssertEqual(reader.requests.first?.sourceName, "personal.kdbx")
         XCTAssertTrue(reader.requests.first?.credentials.hasPassword == true)
-        XCTAssertTrue(reader.requests.first?.credentials.hasKeyFile == true)
+        XCTAssertEqual(reader.requests.first?.credentials.candidateLabel, "password-only")
+        XCTAssertTrue(reader.requests.first?.credentials.hasKeyFile == false)
         XCTAssertTrue(engine.createdLoginEntries.isEmpty)
         XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
-        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("a2V5LWZpbGUtc2VjcmV0"))
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 只读预览：KDBX 4，2 个分组，1 个条目"))
     }
 
@@ -3398,10 +3399,10 @@ final class VaultSessionModelTests: XCTestCase {
         let snapshot = try model.previewKeePassReadOnlyTree()
 
         XCTAssertEqual(snapshot.entryCount, 1)
-        XCTAssertEqual(reader.requests.map { $0.credentials.candidateLabel }, ["raw/password+key", "sha256(raw)/password+key"])
+        XCTAssertEqual(reader.requests.map { $0.credentials.candidateLabel }, ["password-only", "raw/password+key"])
         XCTAssertTrue(engine.createdLoginEntries.isEmpty)
         XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
-        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("a2V5LWZpbGUtc2VjcmV0"))
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 只读预览：KDBX 4，0 个分组，1 个条目"))
     }
 
