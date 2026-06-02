@@ -16,6 +16,7 @@ struct SettingsRootView: View {
     @State private var isCSVImporterPresented = false
     @State private var isCSVExporterPresented = false
     @State private var csvExportDocument = CSVExportDocument()
+    @State private var isKeePassImporterPresented = false
     @State private var isAndroidBackupImporterPresented = false
     @State private var isAndroidBackupExporterPresented = false
     @State private var isAndroidBackupPasswordPromptPresented = false
@@ -382,6 +383,23 @@ struct SettingsRootView: View {
                     }
 
                     AndroidParityDivider()
+                    AndroidParityInfoRow(title: "KeePass / KDBX", value: session.entryOperationState.label)
+                    Button {
+                        isKeePassImporterPresented = true
+                    } label: {
+                        Label("检查 KDBX", systemImage: "key.radiowaves.forward")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(session.vaultState != .unlocked)
+
+                    if let preview = session.keePassImportPreview {
+                        AndroidParityDivider()
+                        AndroidParityInfoRow(title: "KeePass 格式", value: preview.format.displayName)
+                        AndroidParityInfoRow(title: "状态", value: keePassPreviewStatusText(preview.status))
+                    }
+
+                    AndroidParityDivider()
                     AndroidParityInfoRow(title: "Android 备份", value: session.entryOperationState.label)
                     if let encryptedFileName = session.pendingAndroidEncryptedBackupFileName {
                         AndroidParityInfoRow(title: "加密备份", value: encryptedFileName)
@@ -582,6 +600,25 @@ struct SettingsRootView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
+        .fileImporter(
+            isPresented: $isKeePassImporterPresented,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                do {
+                    _ = try session.previewKeePassImport(from: fileURL)
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                }
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
         .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
             SecureField("备份密码", text: $session.androidBackupDecryptPassword)
             Button("取消", role: .cancel) {
@@ -614,6 +651,17 @@ struct SettingsRootView: View {
 
     private var biometricStatusText: String {
         session.canUseBiometricUnlockHardware ? "未启用" : "不可用"
+    }
+
+    private func keePassPreviewStatusText(_ status: KeePassImportStatus) -> String {
+        switch status {
+        case .requiresCredentials:
+            return "等待密码或密钥文件"
+        case .unsupported:
+            return "暂不支持"
+        case .unknown:
+            return "无法识别"
+        }
     }
 
     private var recentOperationTimelineEvents: [AppOperationTimelineEvent] {

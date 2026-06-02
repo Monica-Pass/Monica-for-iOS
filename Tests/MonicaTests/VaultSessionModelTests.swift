@@ -3191,6 +3191,45 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("CSV 已导出 1 项"))
     }
 
+    func testKeePassImportPreviewDetectsKdbxWithoutWritingVault() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        let preview = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+
+        XCTAssertEqual(preview.format, .kdbx)
+        XCTAssertEqual(preview.status, .requiresCredentials)
+        XCTAssertNil(preview.issue)
+        XCTAssertNil(model.csvImportPreview)
+        XCTAssertNil(model.androidBackupImportPreview)
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 预览：KDBX 数据库，等待密码或密钥文件解锁"))
+    }
+
+    func testKeePassImportPreviewRejectsLegacyKdbWithReadableMessage() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        let legacyKdb = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x65, 0xFB, 0x4B, 0xB5
+        ])
+
+        try unlockNewVault(model)
+
+        XCTAssertThrowsError(try model.previewKeePassImport(legacyKdb, fileName: "old.kdb"))
+        XCTAssertNil(model.keePassImportPreview)
+        XCTAssertEqual(
+            model.entryOperationState,
+            .failed("检测到旧版 .kdb（KeePass 1.x）数据库，当前仅支持 .kdbx。请先在 KeePassDX/KeePassXC 中另存为 .kdbx 后再导入。")
+        )
+    }
+
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))

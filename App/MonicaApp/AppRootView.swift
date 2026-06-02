@@ -618,6 +618,14 @@ struct AndroidBackupImportPreview: Sendable, Equatable {
     var issues: [AndroidBackupImportIssue] { report.issues }
 }
 
+struct KeePassImportPreview: Sendable, Equatable {
+    let report: KeePassImportPreviewReport
+
+    var format: KeePassContainerFormat { report.format }
+    var status: KeePassImportStatus { report.status }
+    var issue: KeePassImportIssue? { report.issue }
+}
+
 struct CSVExportDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
@@ -1268,6 +1276,7 @@ final class AppSessionModel {
     var webDAVRestorePreview: WebDAVRestorePreview?
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
+    var keePassImportPreview: KeePassImportPreview?
     var androidBackupDecryptPassword = ""
     var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
@@ -5319,6 +5328,7 @@ final class AppSessionModel {
         let preview = CSVImportPreview(report: report)
         csvImportPreview = preview
         androidBackupImportPreview = nil
+        keePassImportPreview = nil
         entryOperationState = .succeeded("CSV 预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
         return preview
     }
@@ -5360,6 +5370,40 @@ final class AppSessionModel {
         }
     }
 
+    func previewKeePassImport(
+        _ data: Data,
+        fileName: String? = nil
+    ) throws -> KeePassImportPreview {
+        recordUserActivity()
+        let report = KeePassFormatInspector.inspect(data, sourceName: fileName)
+        if let issue = report.issue {
+            keePassImportPreview = nil
+            csvImportPreview = nil
+            androidBackupImportPreview = nil
+            entryOperationState = .failed(issue.message)
+            throw KeePassOperationError(code: issue.code, message: issue.message)
+        }
+
+        let preview = KeePassImportPreview(report: report)
+        keePassImportPreview = preview
+        csvImportPreview = nil
+        androidBackupImportPreview = nil
+        clearPendingAndroidEncryptedBackup()
+        entryOperationState = .succeeded("KeePass 预览：\(report.format.displayName) 数据库，等待密码或密钥文件解锁")
+        return preview
+    }
+
+    func previewKeePassImport(from fileURL: URL) throws -> KeePassImportPreview {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let data = try Data(contentsOf: fileURL)
+        return try previewKeePassImport(data, fileName: fileURL.lastPathComponent)
+    }
+
     func previewAndroidBackupImport(
         _ data: Data,
         fileName: String? = nil,
@@ -5374,18 +5418,21 @@ final class AppSessionModel {
         if let encryptedIssue = report.issues.first(where: { $0.code == .encryptedBackupUnsupported }) {
             androidBackupImportPreview = nil
             csvImportPreview = nil
+            keePassImportPreview = nil
             entryOperationState = .failed(encryptedIssue.message)
             throw AppAndroidBackupImportError.unsupportedEncryptedBackup(encryptedIssue.message)
         }
         if let decryptIssue = report.issues.first(where: { $0.code == .encryptedBackupDecryptionFailed }) {
             androidBackupImportPreview = nil
             csvImportPreview = nil
+            keePassImportPreview = nil
             entryOperationState = .failed(decryptIssue.message)
             throw AppAndroidBackupImportError.encryptedBackupDecryptionFailed(decryptIssue.message)
         }
         let preview = AndroidBackupImportPreview(report: report)
         androidBackupImportPreview = preview
         csvImportPreview = nil
+        keePassImportPreview = nil
         clearPendingAndroidEncryptedBackup()
         let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
         entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(attachmentText)，\(report.issues.count) 个问题")
@@ -6026,6 +6073,7 @@ final class AppSessionModel {
         clearExtendedParityEntries()
         csvImportPreview = nil
         androidBackupImportPreview = nil
+        keePassImportPreview = nil
         entryOperationState = .idle
         clearOperationTimelineEvents()
     }

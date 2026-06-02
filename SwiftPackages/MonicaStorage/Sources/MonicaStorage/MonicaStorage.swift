@@ -7,6 +7,155 @@ public enum MonicaStorageBaseline {
     public static let primaryStore = "MDBX"
 }
 
+public enum KeePassContainerFormat: Sendable, Equatable {
+    case kdbx
+    case legacyKdb
+    case unknown
+
+    public var displayName: String {
+        switch self {
+        case .kdbx:
+            return "KDBX"
+        case .legacyKdb:
+            return "KDB"
+        case .unknown:
+            return "未知格式"
+        }
+    }
+}
+
+public enum KeePassImportStatus: Sendable, Equatable {
+    case requiresCredentials
+    case unsupported
+    case unknown
+}
+
+public enum KeePassErrorCode: Sendable, Equatable {
+    case legacyKdbUnsupported
+    case formatUnsupported
+    case invalidCredential
+    case uriPermissionDenied
+    case kdfMemoryInsufficient
+    case ioReadWriteFailed
+}
+
+public struct KeePassImportIssue: Sendable, Equatable {
+    public let code: KeePassErrorCode
+    public let message: String
+
+    public init(code: KeePassErrorCode, message: String) {
+        self.code = code
+        self.message = message
+    }
+}
+
+public struct KeePassImportPreviewReport: Sendable, Equatable {
+    public let format: KeePassContainerFormat
+    public let status: KeePassImportStatus
+    public let sourceName: String?
+    public let issue: KeePassImportIssue?
+
+    public init(
+        format: KeePassContainerFormat,
+        status: KeePassImportStatus,
+        sourceName: String?,
+        issue: KeePassImportIssue?
+    ) {
+        self.format = format
+        self.status = status
+        self.sourceName = sourceName
+        self.issue = issue
+    }
+}
+
+public struct KeePassOperationError: Error, Sendable, Equatable, LocalizedError {
+    public let code: KeePassErrorCode
+    public let message: String
+
+    public init(code: KeePassErrorCode, message: String) {
+        self.code = code
+        self.message = message
+    }
+
+    public var errorDescription: String? {
+        message
+    }
+}
+
+public enum KeePassFormatInspector {
+    private static let kdbxSignature = Data([0x03, 0xD9, 0xA2, 0x9A, 0x67, 0xFB, 0x4B, 0xB5])
+    private static let legacyKdbSignatures = [
+        Data([0x03, 0xD9, 0xA2, 0x9A, 0x65, 0xFB, 0x4B, 0xB5]),
+        Data([0x03, 0xD9, 0xA2, 0x9A, 0x66, 0xFB, 0x4B, 0xB5])
+    ]
+    public static let legacyKdbUnsupportedMessage =
+        "检测到旧版 .kdb（KeePass 1.x）数据库，当前仅支持 .kdbx。请先在 KeePassDX/KeePassXC 中另存为 .kdbx 后再导入。"
+
+    public static func detect(_ data: Data, sourceName: String? = nil) -> KeePassContainerFormat {
+        if data.starts(with: kdbxSignature) {
+            return .kdbx
+        }
+        if legacyKdbSignatures.contains(where: { data.starts(with: $0) }) {
+            return .legacyKdb
+        }
+        if sourceName?.isLikelyLegacyKdbExtension == true {
+            return .legacyKdb
+        }
+        return .unknown
+    }
+
+    public static func inspect(_ data: Data, sourceName: String? = nil) -> KeePassImportPreviewReport {
+        let format = detect(data, sourceName: sourceName)
+        switch format {
+        case .kdbx:
+            return KeePassImportPreviewReport(
+                format: format,
+                status: .requiresCredentials,
+                sourceName: sourceName,
+                issue: nil
+            )
+        case .legacyKdb:
+            return KeePassImportPreviewReport(
+                format: format,
+                status: .unsupported,
+                sourceName: sourceName,
+                issue: KeePassImportIssue(
+                    code: .legacyKdbUnsupported,
+                    message: legacyKdbUnsupportedMessage
+                )
+            )
+        case .unknown:
+            return KeePassImportPreviewReport(
+                format: format,
+                status: .unknown,
+                sourceName: sourceName,
+                issue: KeePassImportIssue(
+                    code: .formatUnsupported,
+                    message: "数据库格式不支持或文件已损坏。"
+                )
+            )
+        }
+    }
+
+    public static func ensureKdbxSupported(_ data: Data, sourceName: String? = nil) throws {
+        let report = inspect(data, sourceName: sourceName)
+        guard report.format == .kdbx else {
+            let issue = report.issue ?? KeePassImportIssue(
+                code: .formatUnsupported,
+                message: "数据库格式不支持或文件已损坏。"
+            )
+            throw KeePassOperationError(code: issue.code, message: issue.message)
+        }
+    }
+}
+
+private extension String {
+    var isLikelyLegacyKdbExtension: Bool {
+        let lower = lowercased()
+        return lower.hasSuffix(".kdb") && !lower.hasSuffix(".kdbx")
+    }
+}
+
 public enum LocalAttachmentContentStoreError: Error, Sendable, Equatable, LocalizedError {
     case missingLocalPath
     case missingBlob(String)

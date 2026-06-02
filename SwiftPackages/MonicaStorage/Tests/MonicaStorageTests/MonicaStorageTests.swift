@@ -17,6 +17,32 @@ import MonicaStorage
     #expect(VaultSource.longTermSources == [.mdbx, .keepass, .bitwarden, .androidBackup, .csvImport])
 }
 
+@Test func keepPassFormatInspectorDetectsKdbxAndLegacyKdbContainers() throws {
+    let kdbx = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x67, 0xFB, 0x4B, 0xB5,
+        0x00, 0x00, 0x04, 0x00
+    ])
+    let legacyKdb = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x65, 0xFB, 0x4B, 0xB5
+    ])
+
+    #expect(KeePassFormatInspector.detect(kdbx, sourceName: "vault.kdbx") == .kdbx)
+    #expect(KeePassFormatInspector.detect(legacyKdb, sourceName: "old.kdb") == .legacyKdb)
+    #expect(KeePassFormatInspector.detect(Data("not a database".utf8), sourceName: "old.kdb") == .legacyKdb)
+    #expect(KeePassFormatInspector.detect(Data("not a database".utf8), sourceName: "notes.txt") == .unknown)
+
+    let report = KeePassFormatInspector.inspect(kdbx, sourceName: "vault.kdbx")
+    #expect(report.format == .kdbx)
+    #expect(report.status == .requiresCredentials)
+    #expect(report.issue == nil)
+
+    #expect(throws: KeePassOperationError.self) {
+        try KeePassFormatInspector.ensureKdbxSupported(legacyKdb, sourceName: "old.kdb")
+    }
+}
+
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
     let login = UnifiedVaultItem(
         id: "login-1",
