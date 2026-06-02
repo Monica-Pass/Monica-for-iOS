@@ -258,6 +258,19 @@ public struct KeePassKdbxPayloadCryptoInputs: Sendable, Equatable {
         KeePassKdbxInnerRandomStreamAlgorithm(rawValue: innerRandomStreamID)
     }
 
+    fileprivate func mergedWithKdbx4InnerHeader(
+        innerRandomStreamKey: Data?,
+        innerRandomStreamID: UInt32?
+    ) -> KeePassKdbxPayloadCryptoInputs {
+        KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: encryptionIV,
+            innerRandomStreamKey: innerRandomStreamKey ?? self.innerRandomStreamKey,
+            streamStartBytes: streamStartBytes,
+            innerRandomStreamID: innerRandomStreamID ?? self.innerRandomStreamID
+        )
+    }
+
     public var displaySummary: String {
         var parts: [String] = []
         if let masterSeed {
@@ -2071,30 +2084,130 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 credentialCandidate: candidate
             )
             let decryptedPayload = try payloadDecryptor.decryptPayload(context)
-            if KeePassXMLReadOnlySnapshotReader.canRead(decryptedPayload) {
-                return try xmlReader.readSnapshot(
-                    database: decryptedPayload,
-                    sourceName: sourceName,
-                    credentials: credentials,
-                    headerSummary: context.envelope.headerSummary,
-                    cryptoInputs: context.cryptoInputs
-                )
+            if let snapshot = try readDecryptedPayloadSnapshot(
+                decryptedPayload,
+                sourceName: sourceName,
+                credentials: credentials,
+                headerSummary: context.envelope.headerSummary,
+                cryptoInputs: context.cryptoInputs
+            ) {
+                return snapshot
             }
-            if let inflated = KeePassGzipPayloadInflator.inflate(decryptedPayload),
-               KeePassXMLReadOnlySnapshotReader.canRead(inflated) {
-                return try xmlReader.readSnapshot(
-                    database: inflated,
-                    sourceName: sourceName,
-                    credentials: credentials,
-                    headerSummary: context.envelope.headerSummary,
-                    cryptoInputs: context.cryptoInputs
-                )
+            if context.envelope.headerSummary.formatVersion == .kdbx4,
+               let innerPayload = KeePassKdbx4InnerHeaderParser.parse(decryptedPayload),
+               let snapshot = try readDecryptedPayloadSnapshot(
+                innerPayload.payload,
+                sourceName: sourceName,
+                credentials: credentials,
+                headerSummary: context.envelope.headerSummary,
+                cryptoInputs: innerPayload.cryptoInputs(base: context.cryptoInputs)
+               ) {
+                return snapshot
             }
         }
         throw KeePassOperationError(
             code: .formatUnsupported,
             message: "KDBX 解码器尚未接入"
         )
+    }
+
+    private func readDecryptedPayloadSnapshot(
+        _ payload: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials,
+        headerSummary: KeePassHeaderSummary,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> KeePassReadOnlySnapshot? {
+        if KeePassXMLReadOnlySnapshotReader.canRead(payload) {
+            return try xmlReader.readSnapshot(
+                database: payload,
+                sourceName: sourceName,
+                credentials: credentials,
+                headerSummary: headerSummary,
+                cryptoInputs: cryptoInputs
+            )
+        }
+        if let inflated = KeePassGzipPayloadInflator.inflate(payload),
+           KeePassXMLReadOnlySnapshotReader.canRead(inflated) {
+            return try xmlReader.readSnapshot(
+                database: inflated,
+                sourceName: sourceName,
+                credentials: credentials,
+                headerSummary: headerSummary,
+                cryptoInputs: cryptoInputs
+            )
+        }
+        return nil
+    }
+}
+
+private struct KeePassKdbx4InnerHeaderPayload {
+    let innerRandomStreamID: UInt32?
+    let innerRandomStreamKey: Data?
+    let payload: Data
+
+    func cryptoInputs(base: KeePassKdbxPayloadCryptoInputs) -> KeePassKdbxPayloadCryptoInputs {
+        base.mergedWithKdbx4InnerHeader(
+            innerRandomStreamKey: innerRandomStreamKey,
+            innerRandomStreamID: innerRandomStreamID
+        )
+    }
+}
+
+private enum KeePassKdbx4InnerHeaderParser {
+    private static let endField: UInt8 = 0
+    private static let innerRandomStreamIDField: UInt8 = 1
+    private static let innerRandomStreamKeyField: UInt8 = 2
+
+    static func parse(_ decryptedPayload: Data) -> KeePassKdbx4InnerHeaderPayload? {
+        var offset = 0
+        var innerRandomStreamID: UInt32?
+        var innerRandomStreamKey: Data?
+        while offset < decryptedPayload.count {
+            let fieldID = decryptedPayload[offset]
+            offset += 1
+            guard let length = readLittleEndianUInt32(from: decryptedPayload, at: offset) else {
+                return nil
+            }
+            offset += 4
+            guard Int(length) <= decryptedPayload.count - offset else {
+                return nil
+            }
+            let value = Data(decryptedPayload[offset..<offset + Int(length)])
+            offset += Int(length)
+
+            switch fieldID {
+            case endField:
+                guard length == 0, offset < decryptedPayload.count else {
+                    return nil
+                }
+                return KeePassKdbx4InnerHeaderPayload(
+                    innerRandomStreamID: innerRandomStreamID,
+                    innerRandomStreamKey: innerRandomStreamKey,
+                    payload: Data(decryptedPayload[offset..<decryptedPayload.count])
+                )
+            case innerRandomStreamIDField:
+                guard value.count == MemoryLayout<UInt32>.size else {
+                    return nil
+                }
+                innerRandomStreamID = readLittleEndianUInt32(from: value, at: 0)
+            case innerRandomStreamKeyField:
+                innerRandomStreamKey = value
+            default:
+                continue
+            }
+        }
+        return nil
+    }
+
+    private static func readLittleEndianUInt32(from data: Data, at offset: Int) -> UInt32? {
+        guard offset >= 0, offset + 4 <= data.count else {
+            return nil
+        }
+        return UInt32(data[offset])
+            | (UInt32(data[offset + 1]) << 8)
+            | (UInt32(data[offset + 2]) << 16)
+            | (UInt32(data[offset + 3]) << 24)
     }
 }
 

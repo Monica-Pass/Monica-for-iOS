@@ -1412,6 +1412,77 @@ import MonicaStorage
     #expect(!snapshot.displaySummary.contains(innerRandomStreamKey.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func defaultKeePassDatabaseReaderParsesKdbx4InnerHeaderBeforeProtectedValuesWithoutLeakingSecrets() throws {
+    final class DecryptedPayloadWithInnerHeaderDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
+        let decryptedPayload: Data
+
+        init(decryptedPayload: Data) {
+            self.decryptedPayload = decryptedPayload
+        }
+
+        func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
+            decryptedPayload
+        }
+    }
+
+    let password = "kdbx4-inner-header-password"
+    let innerRandomStreamKey = Data(repeating: 0xF4, count: 64)
+    let protectedPasswordCiphertext = "Gtk2BHw0dbkr+efdBXh9A5YmgTn1nXVbzHy0vPDtbw=="
+    let decodedPassword = "kdbx4 chacha protected password"
+    let xml = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>root-group-uuid</UUID>
+          <Name>Root</Name>
+          <Entry>
+            <UUID>entry-inner-header-uuid</UUID>
+            <String><Key>Title</Key><Value>Inner Header Login</Value></String>
+            <String><Key>UserName</Key><Value>finn</Value></String>
+            <String><Key>Password</Key><Value Protected="True">\(protectedPasswordCiphertext)</Value></String>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: Data(repeating: 0xB6, count: 32),
+        encryptionIV: Data(repeating: 0xC6, count: 16),
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "S", value: Data(repeating: 0xA6, count: 32)),
+            kdbxVariantUInt64(key: "R", value: 1)
+        ])
+    )
+    let innerHeader = makeKdbx4InnerHeader(fields: [
+        (1, littleEndianUInt32(3)),
+        (2, innerRandomStreamKey)
+    ])
+    let decryptor = DecryptedPayloadWithInnerHeaderDecryptor(
+        decryptedPayload: innerHeader + Data(xml.utf8)
+    )
+    let reader = DefaultKeePassDatabaseReader(payloadDecryptor: decryptor)
+
+    let snapshot = try reader.readSnapshot(
+        database: header + Data("encrypted-payload-secret".utf8),
+        sourceName: "kdbx4-inner-header-protected-values.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    let entry = try #require(snapshot.entries.first)
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(entry.title == "Inner Header Login")
+    #expect(entry.username == "finn")
+    #expect(entry.decodedPassword == decodedPassword)
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains(decodedPassword))
+    #expect(!snapshot.displaySummary.contains(protectedPasswordCiphertext))
+    #expect(!snapshot.displaySummary.contains(innerRandomStreamKey.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func defaultKeePassDatabaseReaderBuildsKdbxDecryptInputBeforeCryptoDecode() throws {
     final class RecordingDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
         var contexts: [KeePassKdbxDecryptInputContext] = []
@@ -5528,6 +5599,18 @@ private func makeKdbx4HmacBlockStream(hmacBaseKey: Data, blocks: [Data]) -> Data
     }
     let terminator = Data()
     data.append(kdbx4BlockHmac(blockIndex: UInt64(blocks.count), block: terminator, hmacBaseKey: hmacBaseKey))
+    data.append(littleEndianUInt32(0))
+    return data
+}
+
+private func makeKdbx4InnerHeader(fields: [(UInt8, Data)]) -> Data {
+    var data = Data()
+    for (id, value) in fields {
+        data.append(id)
+        data.append(littleEndianUInt32(UInt32(value.count)))
+        data.append(value)
+    }
+    data.append(0)
     data.append(littleEndianUInt32(0))
     return data
 }
