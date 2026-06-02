@@ -358,6 +358,35 @@ public struct KeePassReadOnlyImportPlan: Sendable, Equatable {
         skipped.count
     }
 
+    public var pendingPasswordCount: Int {
+        candidates.filter(\.hasPassword).count
+    }
+
+    public var pendingTotpCount: Int {
+        candidates.filter(\.hasTotp).count
+    }
+
+    public var pendingAttachmentCount: Int {
+        candidates.reduce(0) { $0 + $1.attachmentCount }
+    }
+
+    public var pendingCapabilitySummary: String {
+        var parts: [String] = []
+        if pendingPasswordCount > 0 {
+            parts.append("\(pendingPasswordCount) 个密码字段")
+        }
+        if pendingTotpCount > 0 {
+            parts.append("\(pendingTotpCount) 个 TOTP")
+        }
+        if pendingAttachmentCount > 0 {
+            parts.append("\(pendingAttachmentCount) 个附件")
+        }
+        guard !parts.isEmpty else {
+            return ""
+        }
+        return "待解码：\(parts.joined(separator: "，"))"
+    }
+
     public var displaySummary: String {
         let version = headerSummary?.displayName ?? "KDBX"
         return "\(version)，\(candidateCount) 个可预览条目，\(skippedCount) 个跳过"

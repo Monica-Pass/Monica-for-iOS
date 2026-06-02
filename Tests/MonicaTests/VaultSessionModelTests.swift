@@ -3411,8 +3411,8 @@ final class VaultSessionModelTests: XCTestCase {
                         url: "https://github.com",
                         groupPath: "/Work",
                         hasPassword: true,
-                        hasTotp: false,
-                        attachmentCount: 0,
+                        hasTotp: true,
+                        attachmentCount: 2,
                         isDeleted: false
                     )
                 ]
@@ -3454,7 +3454,10 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.keePassKeyFileName, "")
         XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
         XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
-        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 已导入 1 项元数据，秘密字段待 KDBX 解码器接入"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 已导入 1 项元数据；待解码：1 个密码字段，1 个 TOTP，2 个附件")
+        )
     }
 
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {

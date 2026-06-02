@@ -5553,7 +5553,9 @@ final class AppSessionModel {
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
             clearKeePassImportState()
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据，秘密字段待 KDBX 解码器接入")
+            let pendingSummary = plan.pendingCapabilitySummary
+            let pendingText = pendingSummary.isEmpty ? "，秘密字段待 KDBX 解码器接入" : "；\(pendingSummary)"
+            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(pendingText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
