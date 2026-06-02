@@ -80,6 +80,63 @@ import MonicaStorage
     #expect(ready.issue == nil)
 }
 
+@Test func keepPassDatabaseReaderBuildsReadOnlySnapshotAndKeepsCredentialsOutOfSummary() throws {
+    struct RecordingReader: KeePassDatabaseReader {
+        var snapshot: KeePassReadOnlySnapshot
+        func readSnapshot(
+            database: Data,
+            sourceName: String?,
+            credentials: KeePassUnlockCredentials
+        ) throws -> KeePassReadOnlySnapshot {
+            #expect(database.count == 12)
+            #expect(sourceName == "personal.kdbx")
+            #expect(credentials.hasPassword)
+            #expect(credentials.hasKeyFile)
+            return snapshot
+        }
+    }
+
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "personal.kdbx",
+        headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+        groups: [
+            KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+            KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-1",
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com",
+                groupPath: "/Work",
+                hasPassword: true,
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: false
+            )
+        ]
+    )
+    let reader = RecordingReader(snapshot: snapshot)
+    let credentials = KeePassUnlockCredentials(
+        password: "database-password",
+        keyFile: Data("key-file-secret".utf8),
+        keyFileName: "personal.key"
+    )
+
+    let result = try reader.readSnapshot(
+        database: Data([0x03, 0xD9, 0xA2, 0x9A, 0x67, 0xFB, 0x4B, 0xB5, 0x00, 0x00, 0x04, 0x00]),
+        sourceName: "personal.kdbx",
+        credentials: credentials
+    )
+
+    #expect(result.groupCount == 2)
+    #expect(result.entryCount == 1)
+    #expect(result.displaySummary == "KDBX 4，2 个分组，1 个条目")
+    #expect(!result.displaySummary.contains("database-password"))
+    #expect(!result.displaySummary.contains("key-file-secret"))
+}
+
 @Test func unifiedVaultItemNormalizesCoreAndroidParityTypes() {
     let login = UnifiedVaultItem(
         id: "login-1",

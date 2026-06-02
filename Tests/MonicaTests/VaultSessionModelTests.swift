@@ -3268,6 +3268,64 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassReadOnlyTreePreviewUsesInjectedReaderWithoutWritingVaultOrLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let reader = RecordingKeePassDatabaseReader(
+            snapshot: KeePassReadOnlySnapshot(
+                sourceName: "personal.kdbx",
+                headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+                groups: [
+                    KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                    KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+                ],
+                entries: [
+                    KeePassReadOnlyEntry(
+                        id: "entry-1",
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        groupPath: "/Work",
+                        hasPassword: true,
+                        hasTotp: false,
+                        attachmentCount: 0,
+                        isDeleted: false
+                    )
+                ]
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            keePassDatabaseReader: reader
+        )
+        let kdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+
+        try unlockNewVault(model)
+        _ = try model.previewKeePassImport(kdbx, fileName: "personal.kdbx")
+        _ = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+
+        let snapshot = try model.previewKeePassReadOnlyTree()
+
+        XCTAssertEqual(snapshot.groupCount, 2)
+        XCTAssertEqual(snapshot.entryCount, 1)
+        XCTAssertEqual(model.keePassReadOnlySnapshot?.displaySummary, "KDBX 4，2 个分组，1 个条目")
+        XCTAssertEqual(reader.requests.count, 1)
+        XCTAssertEqual(reader.requests.first?.sourceName, "personal.kdbx")
+        XCTAssertTrue(reader.requests.first?.credentials.hasPassword == true)
+        XCTAssertTrue(reader.requests.first?.credentials.hasKeyFile == true)
+        XCTAssertTrue(engine.createdLoginEntries.isEmpty)
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 只读预览：KDBX 4，2 个分组，1 个条目"))
+    }
+
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
@@ -4951,6 +5009,40 @@ private struct RecordedAndroidBackupAttachmentBlob: Equatable {
     let vaultID: String
     let localPath: String
     let data: Data
+}
+
+private final class RecordingKeePassDatabaseReader: KeePassDatabaseReader, @unchecked Sendable {
+    struct Request: Equatable {
+        let database: Data
+        let sourceName: String?
+        let credentials: KeePassUnlockCredentials
+    }
+
+    private(set) var requests: [Request] = []
+    var snapshot: KeePassReadOnlySnapshot
+    var error: Error?
+
+    init(snapshot: KeePassReadOnlySnapshot) {
+        self.snapshot = snapshot
+    }
+
+    func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> KeePassReadOnlySnapshot {
+        requests.append(
+            Request(
+                database: database,
+                sourceName: sourceName,
+                credentials: credentials
+            )
+        )
+        if let error {
+            throw error
+        }
+        return snapshot
+    }
 }
 
 private final class RecordingVaultEngine: LocalVaultEngine {

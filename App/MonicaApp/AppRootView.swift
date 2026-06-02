@@ -1279,6 +1279,7 @@ final class AppSessionModel {
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
+    var keePassReadOnlySnapshot: KeePassReadOnlySnapshot?
     var keePassPendingDatabaseData: Data?
     var keePassPendingDatabaseName: String?
     var keePassUnlockPassword = ""
@@ -1327,6 +1328,7 @@ final class AppSessionModel {
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
+    private let keePassDatabaseReader: any KeePassDatabaseReader
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let passwordGenerator: () throws -> String
     private var activeVaultSession: LocalVaultSession?
@@ -1356,6 +1358,7 @@ final class AppSessionModel {
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
+        keePassDatabaseReader: any KeePassDatabaseReader = UnsupportedKeePassDatabaseReader(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
         passwordGenerator: @escaping () throws -> String = {
@@ -1381,6 +1384,7 @@ final class AppSessionModel {
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
+        self.keePassDatabaseReader = keePassDatabaseReader
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.passwordGenerator = passwordGenerator
         self.autoLockPolicy = autoLockPolicy
@@ -5395,6 +5399,7 @@ final class AppSessionModel {
         keePassImportPreview = preview
         keePassPendingDatabaseData = data
         keePassPendingDatabaseName = fileName
+        keePassReadOnlySnapshot = nil
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
@@ -5437,6 +5442,7 @@ final class AppSessionModel {
         if let keyFileName {
             keePassKeyFileName = sanitizedKeePassFileName(keyFileName) ?? ""
         }
+        keePassReadOnlySnapshot = nil
 
         let preflight = KeePassFormatInspector.prepareUnlock(
             databaseData,
@@ -5462,6 +5468,35 @@ final class AppSessionModel {
         return preflight
     }
 
+    func previewKeePassReadOnlyTree() throws -> KeePassReadOnlySnapshot {
+        recordUserActivity()
+        guard let databaseData = keePassPendingDatabaseData else {
+            let message = "请先选择 KDBX 数据库文件"
+            entryOperationState = .failed(message)
+            throw KeePassOperationError(code: .formatUnsupported, message: message)
+        }
+
+        do {
+            _ = try prepareKeePassUnlockPreflight()
+            let snapshot = try keePassDatabaseReader.readSnapshot(
+                database: databaseData,
+                sourceName: keePassPendingDatabaseName,
+                credentials: KeePassUnlockCredentials(
+                    password: keePassUnlockPassword,
+                    keyFile: keePassKeyFileData,
+                    keyFileName: keePassKeyFileName
+                )
+            )
+            keePassReadOnlySnapshot = snapshot
+            entryOperationState = .succeeded("KeePass 只读预览：\(snapshot.displaySummary)")
+            return snapshot
+        } catch {
+            keePassReadOnlySnapshot = nil
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func importKeePassKeyFile(from fileURL: URL) throws {
         let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
         defer {
@@ -5471,6 +5506,7 @@ final class AppSessionModel {
         }
         keePassKeyFileData = try Data(contentsOf: fileURL)
         keePassKeyFileName = sanitizedKeePassFileName(fileURL.lastPathComponent) ?? "keyfile"
+        keePassReadOnlySnapshot = nil
         entryOperationState = .succeeded("KeePass 密钥文件已选择：\(keePassKeyFileName)")
     }
 
@@ -6207,6 +6243,7 @@ final class AppSessionModel {
 
     private func clearKeePassImportState() {
         keePassImportPreview = nil
+        keePassReadOnlySnapshot = nil
         keePassPendingDatabaseData = nil
         keePassPendingDatabaseName = nil
         keePassUnlockPassword = ""

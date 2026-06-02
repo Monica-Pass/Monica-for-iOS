@@ -434,6 +434,35 @@ struct SettingsRootView: View {
                         if let preflight = preview.unlockPreflight {
                             AndroidParityInfoRow(title: "凭据", value: preflight.credentials.displayName)
                         }
+                        Button {
+                            do {
+                                _ = try session.previewKeePassReadOnlyTree()
+                            } catch {
+                                // AppSessionModel owns user-visible failure state.
+                            }
+                        } label: {
+                            Label("预览结构", systemImage: "list.bullet.rectangle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+
+                        if let snapshot = session.keePassReadOnlySnapshot {
+                            AndroidParityInfoRow(title: "只读预览", value: snapshot.displaySummary)
+                            AndroidParityInfoRow(title: "分组", value: "\(snapshot.groupCount)")
+                            AndroidParityInfoRow(title: "条目", value: "\(snapshot.entryCount)")
+                            ForEach(snapshot.groups.prefix(3)) { group in
+                                AndroidParityInfoRow(
+                                    title: group.title.isEmpty ? "未命名分组" : group.title,
+                                    value: group.path
+                                )
+                            }
+                            ForEach(snapshot.entries.prefix(3)) { entry in
+                                AndroidParityInfoRow(
+                                    title: entry.title.isEmpty ? "未命名条目" : entry.title,
+                                    value: entry.username.isEmpty ? entry.groupPath : entry.username
+                                )
+                            }
+                        }
                     }
 
                     AndroidParityDivider()

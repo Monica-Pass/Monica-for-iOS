@@ -154,6 +154,137 @@ public struct KeePassUnlockPreflightReport: Sendable, Equatable {
     }
 }
 
+public struct KeePassUnlockCredentials: Sendable, Equatable {
+    public let password: String
+    public let keyFile: Data?
+    public let keyFileName: String?
+
+    public init(password: String, keyFile: Data?, keyFileName: String?) {
+        self.password = password
+        self.keyFile = keyFile
+        self.keyFileName = keyFileName?.sanitizedKeePassFileName
+    }
+
+    public var hasPassword: Bool {
+        !password.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    public var hasKeyFile: Bool {
+        keyFile?.isEmpty == false
+    }
+
+    public var summary: KeePassCredentialSummary {
+        KeePassCredentialSummary(
+            hasPassword: hasPassword,
+            hasKeyFile: hasKeyFile,
+            keyFileName: keyFileName
+        )
+    }
+}
+
+public struct KeePassReadOnlyGroup: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let title: String
+    public let path: String
+    public let depth: Int
+
+    public init(id: String, title: String, path: String, depth: Int) {
+        self.id = id
+        self.title = title
+        self.path = path
+        self.depth = depth
+    }
+}
+
+public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let title: String
+    public let username: String
+    public let url: String
+    public let groupPath: String
+    public let hasPassword: Bool
+    public let hasTotp: Bool
+    public let attachmentCount: Int
+    public let isDeleted: Bool
+
+    public init(
+        id: String,
+        title: String,
+        username: String,
+        url: String,
+        groupPath: String,
+        hasPassword: Bool,
+        hasTotp: Bool,
+        attachmentCount: Int,
+        isDeleted: Bool
+    ) {
+        self.id = id
+        self.title = title
+        self.username = username
+        self.url = url
+        self.groupPath = groupPath
+        self.hasPassword = hasPassword
+        self.hasTotp = hasTotp
+        self.attachmentCount = attachmentCount
+        self.isDeleted = isDeleted
+    }
+}
+
+public struct KeePassReadOnlySnapshot: Sendable, Equatable {
+    public let sourceName: String?
+    public let headerSummary: KeePassHeaderSummary?
+    public let groups: [KeePassReadOnlyGroup]
+    public let entries: [KeePassReadOnlyEntry]
+
+    public init(
+        sourceName: String?,
+        headerSummary: KeePassHeaderSummary?,
+        groups: [KeePassReadOnlyGroup],
+        entries: [KeePassReadOnlyEntry]
+    ) {
+        self.sourceName = sourceName
+        self.headerSummary = headerSummary
+        self.groups = groups
+        self.entries = entries
+    }
+
+    public var groupCount: Int {
+        groups.count
+    }
+
+    public var entryCount: Int {
+        entries.count
+    }
+
+    public var displaySummary: String {
+        let version = headerSummary?.displayName ?? "KDBX"
+        return "\(version)，\(groupCount) 个分组，\(entryCount) 个条目"
+    }
+}
+
+public protocol KeePassDatabaseReader: Sendable {
+    func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> KeePassReadOnlySnapshot
+}
+
+public struct UnsupportedKeePassDatabaseReader: KeePassDatabaseReader {
+    public init() {}
+
+    public func readSnapshot(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> KeePassReadOnlySnapshot {
+        throw KeePassOperationError(
+            code: .formatUnsupported,
+            message: "KDBX 解码器尚未接入"
+        )
+    }
+}
+
 public struct KeePassOperationError: Error, Sendable, Equatable, LocalizedError {
     public let code: KeePassErrorCode
     public let message: String
