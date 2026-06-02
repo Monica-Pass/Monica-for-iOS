@@ -137,6 +137,40 @@ import MonicaStorage
     #expect(!parameters!.displaySummary.contains(seed.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func keepPassFormatInspectorParsesKdbx3LegacyAesKdfParametersWithoutLeakingSeed() throws {
+    let transformSeed = Data((64..<96).map(UInt8.init))
+    let header = makeKdbx3Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        masterSeed: Data(repeating: 0xB1, count: 32),
+        transformSeed: transformSeed,
+        transformRounds: 1_234_567,
+        encryptionIV: Data(repeating: 0xC1, count: 16),
+        protectedStreamKey: Data(repeating: 0xD1, count: 32),
+        streamStartBytes: Data(repeating: 0xE1, count: 32),
+        innerRandomStreamID: 2
+    )
+    let encryptedPayload = Data("encrypted-payload-secret".utf8)
+
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(header + encryptedPayload)
+    let parameters = envelope.headerSummary.kdfParameters
+
+    #expect(envelope.headerSummary.displayName == "KDBX 3")
+    #expect(envelope.headerSummary.cryptoSummary?.displaySummary == "AES-256，GZip，AES-KDF")
+    #expect(parameters?.algorithm == .aesKdf)
+    #expect(parameters?.aesKdf?.seed == transformSeed)
+    #expect(parameters?.aesKdf?.rounds == 1_234_567)
+    #expect(parameters?.displaySummary == "AES-KDF，rounds 1234567")
+    #expect(envelope.encryptedPayload == encryptedPayload)
+    if let parameters {
+        #expect(!parameters.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
+    } else {
+        Issue.record("Expected KDBX3 AES-KDF parameters")
+    }
+    #expect(!envelope.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
+    #expect(!envelope.displaySummary.contains("encrypted-payload-secret"))
+}
+
 @Test func keepPassKdbxDecryptInputContextBuildsCompositeKeyWithoutLeakingSecrets() throws {
     let salt = Data((0..<32).map(UInt8.init))
     let header = makeKdbx4Header(
@@ -4983,6 +5017,43 @@ private struct RecordedAttachmentMutationCall: Equatable {
     let vaultID: String
     let projectID: String
     let attachmentID: String
+}
+
+private func makeKdbx3Header(
+    cipherID: Data,
+    compressionFlags: Data,
+    masterSeed: Data,
+    transformSeed: Data,
+    transformRounds: UInt64,
+    encryptionIV: Data,
+    protectedStreamKey: Data,
+    streamStartBytes: Data,
+    innerRandomStreamID: UInt32
+) -> Data {
+    var data = Data([
+        0x03, 0xD9, 0xA2, 0x9A,
+        0x67, 0xFB, 0x4B, 0xB5,
+        0x01, 0x00, 0x03, 0x00
+    ])
+    data.append(kdbx3HeaderField(id: 2, value: cipherID))
+    data.append(kdbx3HeaderField(id: 3, value: compressionFlags))
+    data.append(kdbx3HeaderField(id: 4, value: masterSeed))
+    data.append(kdbx3HeaderField(id: 5, value: transformSeed))
+    data.append(kdbx3HeaderField(id: 6, value: littleEndianUInt64(transformRounds)))
+    data.append(kdbx3HeaderField(id: 7, value: encryptionIV))
+    data.append(kdbx3HeaderField(id: 8, value: protectedStreamKey))
+    data.append(kdbx3HeaderField(id: 9, value: streamStartBytes))
+    data.append(kdbx3HeaderField(id: 10, value: littleEndianUInt32(innerRandomStreamID)))
+    data.append(kdbx3HeaderField(id: 0, value: Data([0x0D, 0x0A, 0x0D, 0x0A])))
+    return data
+}
+
+private func kdbx3HeaderField(id: UInt8, value: Data) -> Data {
+    var field = Data([id])
+    var length = UInt16(value.count).littleEndian
+    field.append(Data(bytes: &length, count: MemoryLayout<UInt16>.size))
+    field.append(value)
+    return field
 }
 
 private func makeKdbx4Header(

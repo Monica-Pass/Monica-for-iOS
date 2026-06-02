@@ -2524,6 +2524,8 @@ public enum KeePassFormatInspector {
     private static let kdbxCipherIDHeaderField: UInt8 = 2
     private static let kdbxCompressionFlagsHeaderField: UInt8 = 3
     private static let kdbxMasterSeedHeaderField: UInt8 = 4
+    private static let kdbxTransformSeedHeaderField: UInt8 = 5
+    private static let kdbxTransformRoundsHeaderField: UInt8 = 6
     private static let kdbxEncryptionIVHeaderField: UInt8 = 7
     private static let kdbxInnerRandomStreamKeyHeaderField: UInt8 = 8
     private static let kdbxStreamStartBytesHeaderField: UInt8 = 9
@@ -2714,8 +2716,8 @@ public enum KeePassFormatInspector {
             majorVersion: major == 0 ? nil : major,
             minorVersion: minor,
             formatVersion: formatVersion,
-            cryptoSummary: cryptoSummary(from: headerFields),
-            kdfParameters: kdfParameters(from: headerFields)
+            cryptoSummary: cryptoSummary(from: headerFields, formatVersion: formatVersion),
+            kdfParameters: kdfParameters(from: headerFields, formatVersion: formatVersion)
         )
     }
 
@@ -2745,8 +2747,8 @@ public enum KeePassFormatInspector {
             majorVersion: major == 0 ? nil : major,
             minorVersion: minor,
             formatVersion: formatVersion,
-            cryptoSummary: cryptoSummary(from: parsedFields.fields),
-            kdfParameters: kdfParameters(from: parsedFields.fields)
+            cryptoSummary: cryptoSummary(from: parsedFields.fields, formatVersion: formatVersion),
+            kdfParameters: kdfParameters(from: parsedFields.fields, formatVersion: formatVersion)
         )
         return ParsedKdbxHeader(
             summary: summary,
@@ -2805,11 +2807,15 @@ public enum KeePassFormatInspector {
         return nil
     }
 
-    private static func cryptoSummary(from headerFields: [UInt8: Data]) -> KeePassKdbxCryptoSummary? {
+    private static func cryptoSummary(
+        from headerFields: [UInt8: Data],
+        formatVersion: KeePassKdbxFormatVersion
+    ) -> KeePassKdbxCryptoSummary? {
         let summary = KeePassKdbxCryptoSummary(
             cipher: headerFields[kdbxCipherIDHeaderField].flatMap(cipherAlgorithm),
             compression: headerFields[kdbxCompressionFlagsHeaderField].flatMap(compressionAlgorithm),
             kdf: headerFields[kdbxKdfParametersHeaderField].flatMap(kdfAlgorithm)
+                ?? legacyKdbx3KdfAlgorithm(from: headerFields, formatVersion: formatVersion)
         )
         return summary.displaySummary.isEmpty ? nil : summary
     }
@@ -2852,7 +2858,13 @@ public enum KeePassFormatInspector {
         return kdfAlgorithm(uuid: uuid)
     }
 
-    private static func kdfParameters(from headerFields: [UInt8: Data]) -> KeePassKdbxKdfParameters? {
+    private static func kdfParameters(
+        from headerFields: [UInt8: Data],
+        formatVersion: KeePassKdbxFormatVersion
+    ) -> KeePassKdbxKdfParameters? {
+        if let legacy = legacyKdbx3KdfParameters(from: headerFields, formatVersion: formatVersion) {
+            return legacy
+        }
         guard let data = headerFields[kdbxKdfParametersHeaderField] else {
             return nil
         }
@@ -2884,6 +2896,35 @@ public enum KeePassFormatInspector {
         case .unknown:
             return KeePassKdbxKdfParameters(algorithm: algorithm)
         }
+    }
+
+    private static func legacyKdbx3KdfAlgorithm(
+        from headerFields: [UInt8: Data],
+        formatVersion: KeePassKdbxFormatVersion
+    ) -> KeePassKdbxKdfAlgorithm? {
+        guard formatVersion == .kdbx3,
+              headerFields[kdbxTransformSeedHeaderField] != nil || headerFields[kdbxTransformRoundsHeaderField] != nil else {
+            return nil
+        }
+        return .aesKdf
+    }
+
+    private static func legacyKdbx3KdfParameters(
+        from headerFields: [UInt8: Data],
+        formatVersion: KeePassKdbxFormatVersion
+    ) -> KeePassKdbxKdfParameters? {
+        guard legacyKdbx3KdfAlgorithm(from: headerFields, formatVersion: formatVersion) == .aesKdf else {
+            return nil
+        }
+        return KeePassKdbxKdfParameters(
+            algorithm: .aesKdf,
+            aesKdf: KeePassKdbxAesKdfParameters(
+                seed: headerFields[kdbxTransformSeedHeaderField],
+                rounds: headerFields[kdbxTransformRoundsHeaderField].flatMap {
+                    littleEndianUInt64(from: $0, at: 0)
+                }
+            )
+        )
     }
 
     private static func kdfAlgorithm(uuid: Data) -> KeePassKdbxKdfAlgorithm {
