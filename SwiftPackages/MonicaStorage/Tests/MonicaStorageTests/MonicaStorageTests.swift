@@ -86,6 +86,57 @@ import MonicaStorage
     #expect(!envelope.displaySummary.contains("encrypted-payload-bytes"))
 }
 
+@Test func keepPassFormatInspectorParsesKdbx4Argon2KdfParametersWithoutLeakingSalt() throws {
+    let salt = Data((0..<32).map(UInt8.init))
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])),
+            kdbxVariantByteArray(key: "S", value: salt),
+            kdbxVariantUInt64(key: "I", value: 4),
+            kdbxVariantUInt64(key: "M", value: 64 * 1024 * 1024),
+            kdbxVariantUInt32(key: "P", value: 2),
+            kdbxVariantUInt32(key: "V", value: 0x13)
+        ])
+    )
+
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(header + Data("encrypted".utf8))
+    let parameters = envelope.headerSummary.kdfParameters
+
+    #expect(parameters?.algorithm == .argon2id)
+    #expect(parameters?.argon2?.salt == salt)
+    #expect(parameters?.argon2?.iterations == 4)
+    #expect(parameters?.argon2?.memoryBytes == 64 * 1024 * 1024)
+    #expect(parameters?.argon2?.parallelism == 2)
+    #expect(parameters?.argon2?.version == 0x13)
+    #expect(parameters?.displaySummary == "Argon2id，memory 67108864 bytes，iterations 4，parallelism 2，version 19")
+    #expect(!parameters!.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+    #expect(!envelope.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+}
+
+@Test func keepPassFormatInspectorParsesKdbx4AesKdfParametersWithoutLeakingSeed() throws {
+    let seed = Data((32..<64).map(UInt8.init))
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD5, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "S", value: seed),
+            kdbxVariantUInt64(key: "R", value: 600_000)
+        ])
+    )
+
+    let report = KeePassFormatInspector.inspect(header, sourceName: "aes-kdf.kdbx")
+    let parameters = report.headerSummary?.kdfParameters
+
+    #expect(parameters?.algorithm == .aesKdf)
+    #expect(parameters?.aesKdf?.seed == seed)
+    #expect(parameters?.aesKdf?.rounds == 600_000)
+    #expect(parameters?.displaySummary == "AES-KDF，rounds 600000")
+    #expect(!parameters!.displaySummary.contains(seed.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
     let kdbx4 = Data([
         0x03, 0xD9, 0xA2, 0x9A,
@@ -4393,8 +4444,16 @@ private func kdbx4HeaderField(id: UInt8, value: Data) -> Data {
 }
 
 private func makeKdbxVariantDictionary(uuid: Data) -> Data {
+    makeKdbxVariantDictionary(entries: [
+        kdbxVariantByteArray(key: "$UUID", value: uuid)
+    ])
+}
+
+private func makeKdbxVariantDictionary(entries: [Data]) -> Data {
     var data = Data([0x00, 0x01])
-    data.append(kdbxVariantByteArray(key: "$UUID", value: uuid))
+    for entry in entries {
+        data.append(entry)
+    }
     data.append(Data([0x00]))
     return data
 }
@@ -4409,7 +4468,32 @@ private func kdbxVariantByteArray(key: String, value: Data) -> Data {
     return data
 }
 
+private func kdbxVariantUInt32(key: String, value: UInt32) -> Data {
+    var data = Data([0x04])
+    let keyData = Data(key.utf8)
+    data.append(littleEndianUInt32(UInt32(keyData.count)))
+    data.append(keyData)
+    data.append(littleEndianUInt32(UInt32(MemoryLayout<UInt32>.size)))
+    data.append(littleEndianUInt32(value))
+    return data
+}
+
+private func kdbxVariantUInt64(key: String, value: UInt64) -> Data {
+    var data = Data([0x05])
+    let keyData = Data(key.utf8)
+    data.append(littleEndianUInt32(UInt32(keyData.count)))
+    data.append(keyData)
+    data.append(littleEndianUInt32(UInt32(MemoryLayout<UInt64>.size)))
+    data.append(littleEndianUInt64(value))
+    return data
+}
+
 private func littleEndianUInt32(_ value: UInt32) -> Data {
     var little = value.littleEndian
     return Data(bytes: &little, count: MemoryLayout<UInt32>.size)
+}
+
+private func littleEndianUInt64(_ value: UInt64) -> Data {
+    var little = value.littleEndian
+    return Data(bytes: &little, count: MemoryLayout<UInt64>.size)
 }

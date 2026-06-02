@@ -121,22 +121,95 @@ public struct KeePassKdbxCryptoSummary: Sendable, Equatable {
     }
 }
 
+public struct KeePassKdbxArgon2Parameters: Sendable, Equatable {
+    public let salt: Data?
+    public let iterations: UInt64?
+    public let memoryBytes: UInt64?
+    public let parallelism: UInt32?
+    public let version: UInt32?
+
+    public init(
+        salt: Data?,
+        iterations: UInt64?,
+        memoryBytes: UInt64?,
+        parallelism: UInt32?,
+        version: UInt32?
+    ) {
+        self.salt = salt
+        self.iterations = iterations
+        self.memoryBytes = memoryBytes
+        self.parallelism = parallelism
+        self.version = version
+    }
+}
+
+public struct KeePassKdbxAesKdfParameters: Sendable, Equatable {
+    public let seed: Data?
+    public let rounds: UInt64?
+
+    public init(seed: Data?, rounds: UInt64?) {
+        self.seed = seed
+        self.rounds = rounds
+    }
+}
+
+public struct KeePassKdbxKdfParameters: Sendable, Equatable {
+    public let algorithm: KeePassKdbxKdfAlgorithm
+    public let argon2: KeePassKdbxArgon2Parameters?
+    public let aesKdf: KeePassKdbxAesKdfParameters?
+
+    public init(
+        algorithm: KeePassKdbxKdfAlgorithm,
+        argon2: KeePassKdbxArgon2Parameters? = nil,
+        aesKdf: KeePassKdbxAesKdfParameters? = nil
+    ) {
+        self.algorithm = algorithm
+        self.argon2 = argon2
+        self.aesKdf = aesKdf
+    }
+
+    public var displaySummary: String {
+        var parts = [algorithm.displayName]
+        if let argon2 {
+            if let memoryBytes = argon2.memoryBytes {
+                parts.append("memory \(memoryBytes) bytes")
+            }
+            if let iterations = argon2.iterations {
+                parts.append("iterations \(iterations)")
+            }
+            if let parallelism = argon2.parallelism {
+                parts.append("parallelism \(parallelism)")
+            }
+            if let version = argon2.version {
+                parts.append("version \(version)")
+            }
+        }
+        if let aesKdf, let rounds = aesKdf.rounds {
+            parts.append("rounds \(rounds)")
+        }
+        return parts.joined(separator: "，")
+    }
+}
+
 public struct KeePassHeaderSummary: Sendable, Equatable {
     public let majorVersion: Int?
     public let minorVersion: Int?
     public let formatVersion: KeePassKdbxFormatVersion
     public let cryptoSummary: KeePassKdbxCryptoSummary?
+    public let kdfParameters: KeePassKdbxKdfParameters?
 
     public init(
         majorVersion: Int?,
         minorVersion: Int?,
         formatVersion: KeePassKdbxFormatVersion,
-        cryptoSummary: KeePassKdbxCryptoSummary? = nil
+        cryptoSummary: KeePassKdbxCryptoSummary? = nil,
+        kdfParameters: KeePassKdbxKdfParameters? = nil
     ) {
         self.majorVersion = majorVersion
         self.minorVersion = minorVersion
         self.formatVersion = formatVersion
         self.cryptoSummary = cryptoSummary?.displaySummary.isEmpty == true ? nil : cryptoSummary
+        self.kdfParameters = kdfParameters
     }
 
     public var displayName: String {
@@ -1518,6 +1591,12 @@ public struct KeePassOperationError: Error, Sendable, Equatable, LocalizedError 
 }
 
 public enum KeePassFormatInspector {
+    fileprivate enum KdbxVariantValue {
+        case byteArray(Data)
+        case uint32(UInt32)
+        case uint64(UInt64)
+    }
+
     private struct ParsedKdbxHeader {
         let summary: KeePassHeaderSummary
         let fields: [UInt8: Data]
@@ -1706,7 +1785,8 @@ public enum KeePassFormatInspector {
             majorVersion: major == 0 ? nil : major,
             minorVersion: minor,
             formatVersion: formatVersion,
-            cryptoSummary: cryptoSummary(from: headerFields)
+            cryptoSummary: cryptoSummary(from: headerFields),
+            kdfParameters: kdfParameters(from: headerFields)
         )
     }
 
@@ -1736,7 +1816,8 @@ public enum KeePassFormatInspector {
             majorVersion: major == 0 ? nil : major,
             minorVersion: minor,
             formatVersion: formatVersion,
-            cryptoSummary: cryptoSummary(from: parsedFields.fields)
+            cryptoSummary: cryptoSummary(from: parsedFields.fields),
+            kdfParameters: kdfParameters(from: parsedFields.fields)
         )
         return ParsedKdbxHeader(
             summary: summary,
@@ -1835,10 +1916,48 @@ public enum KeePassFormatInspector {
     }
 
     private static func kdfAlgorithm(from data: Data) -> KeePassKdbxKdfAlgorithm? {
-        guard let uuid = variantDictionaryByteArrayValue(named: "$UUID", from: data),
+        guard let uuid = parseKdbxVariantDictionary(data).byteArray(named: "$UUID"),
               !uuid.isEmpty else {
             return nil
         }
+        return kdfAlgorithm(uuid: uuid)
+    }
+
+    private static func kdfParameters(from headerFields: [UInt8: Data]) -> KeePassKdbxKdfParameters? {
+        guard let data = headerFields[kdbxKdfParametersHeaderField] else {
+            return nil
+        }
+        let dictionary = parseKdbxVariantDictionary(data)
+        guard let uuid = dictionary.byteArray(named: "$UUID") else {
+            return nil
+        }
+        let algorithm = kdfAlgorithm(uuid: uuid)
+        switch algorithm {
+        case .argon2d, .argon2id:
+            return KeePassKdbxKdfParameters(
+                algorithm: algorithm,
+                argon2: KeePassKdbxArgon2Parameters(
+                    salt: dictionary.byteArray(named: "S"),
+                    iterations: dictionary.uint64(named: "I"),
+                    memoryBytes: dictionary.uint64(named: "M"),
+                    parallelism: dictionary.uint32(named: "P"),
+                    version: dictionary.uint32(named: "V")
+                )
+            )
+        case .aesKdf:
+            return KeePassKdbxKdfParameters(
+                algorithm: algorithm,
+                aesKdf: KeePassKdbxAesKdfParameters(
+                    seed: dictionary.byteArray(named: "S"),
+                    rounds: dictionary.uint64(named: "R")
+                )
+            )
+        case .unknown:
+            return KeePassKdbxKdfParameters(algorithm: algorithm)
+        }
+    }
+
+    private static func kdfAlgorithm(uuid: Data) -> KeePassKdbxKdfAlgorithm {
         switch uuid {
         case kdbxAesKdfUUID:
             return .aesKdf
@@ -1851,49 +1970,63 @@ public enum KeePassFormatInspector {
         }
     }
 
-    private static func variantDictionaryByteArrayValue(named name: String, from data: Data) -> Data? {
+    private static func parseKdbxVariantDictionary(_ data: Data) -> [String: KdbxVariantValue] {
         guard data.count >= 2 else {
-            return nil
+            return [:]
         }
+        var values: [String: KdbxVariantValue] = [:]
         var index = 2
         while index < data.count {
             let valueType = data[index]
             index += 1
 
             if valueType == 0 {
-                return nil
+                return values
             }
 
             guard let keyLengthRaw = littleEndianUInt32(from: data, at: index) else {
-                return nil
+                return values
             }
             index += 4
 
             let keyLength = Int(keyLengthRaw)
             guard index + keyLength <= data.count else {
-                return nil
+                return values
             }
             let keyData = Data(data[index..<index + keyLength])
             index += keyLength
 
             guard let valueLengthRaw = littleEndianUInt32(from: data, at: index) else {
-                return nil
+                return values
             }
             index += 4
 
             let valueLength = Int(valueLengthRaw)
             guard index + valueLength <= data.count else {
-                return nil
+                return values
             }
             let value = Data(data[index..<index + valueLength])
             index += valueLength
 
-            if valueType == 0x42,
-               String(data: keyData, encoding: .utf8) == name {
-                return value
+            guard let key = String(data: keyData, encoding: .utf8) else {
+                continue
+            }
+            switch valueType {
+            case 0x04:
+                if let number = littleEndianUInt32(from: value, at: 0), value.count == 4 {
+                    values[key] = .uint32(number)
+                }
+            case 0x05:
+                if let number = littleEndianUInt64(from: value, at: 0), value.count == 8 {
+                    values[key] = .uint64(number)
+                }
+            case 0x42:
+                values[key] = .byteArray(value)
+            default:
+                continue
             }
         }
-        return nil
+        return values
     }
 
     private static func littleEndianUInt16(from data: Data, at offset: Int) -> UInt16? {
@@ -1918,8 +2051,42 @@ public enum KeePassFormatInspector {
         return value
     }
 
+    private static func littleEndianUInt64(from data: Data, at offset: Int) -> UInt64? {
+        guard offset >= 0, offset + 8 <= data.count else {
+            return nil
+        }
+        var value: UInt64 = 0
+        for byteOffset in 0..<8 {
+            value |= UInt64(data[offset + byteOffset]) << UInt64(byteOffset * 8)
+        }
+        return value
+    }
+
     private static func hexString(_ data: Data) -> String {
         data.map { String(format: "%02X", $0) }.joined()
+    }
+}
+
+private extension Dictionary where Key == String, Value == KeePassFormatInspector.KdbxVariantValue {
+    func byteArray(named name: String) -> Data? {
+        guard case let .byteArray(value) = self[name] else {
+            return nil
+        }
+        return value
+    }
+
+    func uint32(named name: String) -> UInt32? {
+        guard case let .uint32(value) = self[name] else {
+            return nil
+        }
+        return value
+    }
+
+    func uint64(named name: String) -> UInt64? {
+        guard case let .uint64(value) = self[name] else {
+            return nil
+        }
+        return value
     }
 }
 
