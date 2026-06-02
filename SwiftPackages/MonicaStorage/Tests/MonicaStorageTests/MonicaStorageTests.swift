@@ -462,6 +462,36 @@ import MonicaStorage
     }
 }
 
+@Test func defaultKeePassDatabaseReaderInflatesGzipKeePassXMLWithoutLeakingCredentials() throws {
+    let reader = DefaultKeePassDatabaseReader()
+    let gzipXML = Data([
+        31, 139, 8, 0, 234, 8, 31, 106, 0, 3, 77, 142, 77, 10, 194, 48,
+        16, 133, 175, 226, 13, 230, 2, 143, 217, 248, 83, 165, 32, 82, 173, 251,
+        136, 131, 4, 210, 166, 76, 38, 139, 222, 94, 155, 166, 224, 238, 227, 205,
+        123, 195, 135, 86, 228, 230, 82, 58, 249, 32, 140, 46, 70, 99, 52, 26,
+        243, 196, 232, 251, 203, 129, 245, 151, 128, 10, 226, 234, 6, 225, 174, 4,
+        5, 113, 28, 77, 231, 90, 148, 133, 183, 230, 221, 212, 143, 31, 70, 43,
+        51, 63, 188, 5, 1, 45, 136, 167, 11, 89, 120, 31, 135, 73, 37, 37,
+        121, 239, 26, 111, 231, 252, 2, 173, 7, 208, 54, 164, 250, 154, 170, 11,
+        173, 102, 244, 111, 251, 5, 154, 180, 44, 88, 187, 0, 0, 0
+    ])
+
+    let snapshot = try reader.readSnapshot(
+        database: gzipXML,
+        sourceName: "decrypted-kdbx-payload.xml.gz",
+        credentials: KeePassUnlockCredentials(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+    )
+
+    #expect(snapshot.entryCount == 1)
+    #expect(snapshot.entries.first?.title == "Compressed GitHub")
+    #expect(!snapshot.displaySummary.contains("database-password"))
+    #expect(!snapshot.displaySummary.contains("key-file-secret"))
+}
+
 @Test func keepPassReadOnlyImportPlannerBuildsPreviewOnlyPlanWithoutLeakingSecrets() throws {
     let snapshot = KeePassReadOnlySnapshot(
         sourceName: "personal.kdbx",

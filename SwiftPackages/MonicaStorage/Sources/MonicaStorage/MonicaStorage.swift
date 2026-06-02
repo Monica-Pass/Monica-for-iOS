@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import MonicaMDBX
 import ZIPFoundation
+import zlib
 
 public enum MonicaStorageBaseline {
     public static let primaryStore = "MDBX"
@@ -908,10 +909,74 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 credentials: credentials
             )
         }
+        if let inflated = KeePassGzipPayloadInflator.inflate(database),
+           KeePassXMLReadOnlySnapshotReader.canRead(inflated) {
+            return try xmlReader.readSnapshot(
+                database: inflated,
+                sourceName: sourceName,
+                credentials: credentials
+            )
+        }
         throw KeePassOperationError(
             code: .formatUnsupported,
             message: "KDBX 解码器尚未接入"
         )
+    }
+}
+
+private enum KeePassGzipPayloadInflator {
+    private static let gzipMagic = Data([0x1F, 0x8B])
+    private static let chunkSize = 64 * 1024
+
+    static func inflate(_ data: Data) -> Data? {
+        guard data.starts(with: gzipMagic) else {
+            return nil
+        }
+
+        var stream = z_stream()
+        let initStatus = inflateInit2_(
+            &stream,
+            16 + MAX_WBITS,
+            ZLIB_VERSION,
+            Int32(MemoryLayout<z_stream>.size)
+        )
+        guard initStatus == Z_OK else {
+            return nil
+        }
+        defer {
+            inflateEnd(&stream)
+        }
+
+        var output = Data()
+        let status = data.withUnsafeBytes { inputBuffer -> Int32 in
+            guard let inputBase = inputBuffer.baseAddress else {
+                return Z_DATA_ERROR
+            }
+            stream.next_in = UnsafeMutablePointer<Bytef>(mutating: inputBase.assumingMemoryBound(to: Bytef.self))
+            stream.avail_in = uInt(data.count)
+
+            var status: Int32 = Z_OK
+            var buffer = [UInt8](repeating: 0, count: chunkSize)
+            while status == Z_OK {
+                let produced = buffer.withUnsafeMutableBytes { outputBuffer -> Int32 in
+                    guard let outputBase = outputBuffer.baseAddress else {
+                        return Z_BUF_ERROR
+                    }
+                    stream.next_out = outputBase.assumingMemoryBound(to: Bytef.self)
+                    stream.avail_out = uInt(chunkSize)
+                    let stepStatus = zlib.inflate(&stream, Z_NO_FLUSH)
+                    let written = chunkSize - Int(stream.avail_out)
+                    if written > 0 {
+                        output.append(outputBase.assumingMemoryBound(to: UInt8.self), count: written)
+                    }
+                    return stepStatus
+                }
+                status = produced
+            }
+            return status
+        }
+
+        return status == Z_STREAM_END ? output : nil
     }
 }
 
