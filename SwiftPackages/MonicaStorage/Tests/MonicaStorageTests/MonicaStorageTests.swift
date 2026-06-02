@@ -122,7 +122,7 @@ import MonicaStorage
         cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
         compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
         kdfParameters: makeKdbxVariantDictionary(entries: [
-            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD5, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
             kdbxVariantByteArray(key: "S", value: seed),
             kdbxVariantUInt64(key: "R", value: 600_000)
         ])
@@ -236,7 +236,7 @@ import MonicaStorage
         streamStartBytes: streamStartBytes,
         innerRandomStreamID: 3,
         kdfParameters: makeKdbxVariantDictionary(entries: [
-            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD5, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
             kdbxVariantByteArray(key: "S", value: kdfSeed),
             kdbxVariantUInt64(key: "R", value: 1)
         ])
@@ -1223,6 +1223,57 @@ import MonicaStorage
     #expect(snapshot.entries.first?.decodedPassword == "decoded-password-secret")
     #expect(!snapshot.displaySummary.contains(password))
     #expect(!snapshot.displaySummary.contains("decoded-password-secret"))
+    #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
+}
+
+@Test func defaultKeePassDatabaseReaderDecryptsKdbx4AesKdfFixtureToSnapshotWithoutLeakingCredentials() throws {
+    let password = "kdbx4-password"
+    let transformSeed = Data(repeating: 0xA8, count: 32)
+    let database = try decodeHexData("""
+    03d9a29a67fb4bb500000400021000000031c1f2e6bf714350be5805216afc5a
+    ff0304000000000000000420000000b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8b8
+    b8b8b8b8b8b8b8b8b8b8b8b8b8b8b80710000000c8c8c8c8c8c8c8c8c8c8c8c8
+    c8c8c8c80820000000e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8e8
+    e8e8e8e8e8e8e8e8e80a04000000020000000b5d000000000142050000002455
+    55494410000000c9d9f39a628a4460bf740d08c18a4fea420100000053200000
+    00a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8a8
+    a80501000000520800000001000000000000000000040000000d0a0d0a383132
+    aec311270c99adeb45e12b7d5296ee28b8fcc48cbff580e0f613b08ef1106afc
+    ce868dae0046e8702102c46c9c0bd4905c90de572aed245987cce77b3559acb5
+    f22fa19f5d22b9dbcbf2db0041461263e13524707813c46d5261971c36e00100
+    001626009f52b603b527ef921d4a6ba775d1e5a6d30f9763c6834e48312e3881
+    463f545749ac9ddb1745e667d8c310bb5f1a7a76d91a8ddf8cac80b89f4571ef
+    f906e38ac464cdce600d6ade36addb95f4feeb4c623ef255a80553cdd205e595
+    b5a0b79c8b0ea8f27462645b6c5ba29603f34d4d95b8c582f5e95a0ed3bdb662
+    44859ff25015cc1fe034cff67c9bbcc35b898f5a57a166c96b726f210713af26
+    c7e225e7b424c63f61922675a7d321f9bb62d741bb2028b7e3758e1bf07d6868
+    dc1d9f1a1b263cfd172da036aa3e368b9685e05974e9ef926bed7fefdd78813e
+    da15b8f0704b2aa0a286aeaab2fedd933cbc1be846bad768b6d4bfc16f0b4b86
+    2cfc7b91848286138bbb768409c93c0ac4d5bfdd46890d57bde57e95784813ac
+    b5a95e601aa2d5725776b002d83c602988733cbf808a39e2c7486673eb9b4684
+    d00db60ec7872ea482f40dfcc95f11a5bd29f98391b2279f86ee3bd87eb6f4f7
+    eba2c0807c6d38525256d66ad468573b6d5ef767be395e06061f8d23d7fab085
+    191f678ab771050739d096fbd39f69bfd9192f57b4d81a97804a0dc4f7737d19
+    8172739585dee2c1b0d0a20a334eb3d4cf69226894945fce3dfc9311a64267b8
+    201dd4b43f86f10a528a790857d3a92dd7cc8742aa4ea56129a1856f66f28a41
+    346df892a3db913e58fa8c6dbd4934189d8377f4b8786fdc6e01561a9c443988
+    7200000000
+    """)
+    let reader = DefaultKeePassDatabaseReader()
+
+    let snapshot = try reader.readSnapshot(
+        database: database,
+        sourceName: "kdbx4-aes-kdf-fixture.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(snapshot.headerSummary?.kdfParameters?.aesKdf?.rounds == 1)
+    #expect(snapshot.entries.first?.title == "KDBX4 GitLab")
+    #expect(snapshot.entries.first?.username == "carol")
+    #expect(snapshot.entries.first?.decodedPassword == "kdbx4-decoded-secret")
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains("kdbx4-decoded-secret"))
     #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
 }
 
