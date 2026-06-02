@@ -495,10 +495,22 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
                 iv: cryptoInputs.encryptionIV
             )
         case .chacha20:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "KDBX ChaCha20 payload 解密尚未接入"
-            )
+            guard masterKey.material.count == 32 else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KDBX ChaCha20 key 长度无效；请确认文件未损坏。"
+                )
+            }
+            guard let iv = cryptoInputs.encryptionIV, iv.count == 12 else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KDBX ChaCha20 IV 长度无效；请确认文件未损坏。"
+                )
+            }
+            return KeePassChaCha20KeyStream(
+                key: masterKey.material,
+                nonce: iv
+            ).xor(encryptedPayload)
         case .twofish:
             throw KeePassOperationError(
                 code: .formatUnsupported,

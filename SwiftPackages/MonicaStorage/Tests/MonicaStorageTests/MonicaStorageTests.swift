@@ -379,6 +379,31 @@ import MonicaStorage
     #expect(decrypted == expectedPlaintext)
 }
 
+@Test func keepPassKdbxChaCha20PayloadCipherDecryptsPayloadWithoutLeakingSecrets() throws {
+    let masterKey = KeePassKdbxMasterKeyMaterial(
+        algorithm: .aesKdf,
+        material: try decodeHexData("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xA1, count: 32),
+        encryptionIV: try decodeHexData("000000090000004a00000000"),
+        innerRandomStreamKey: Data(repeating: 0xB2, count: 64),
+        streamStartBytes: nil,
+        innerRandomStreamID: 3
+    )
+    let encryptedPayload = try decodeHexData("8adc91fd9ff4f0f51b0fad50ff15d637")
+
+    let decrypted = try DefaultKeePassKdbxPayloadCipher().decryptPayload(
+        encryptedPayload,
+        cipher: .chacha20,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    let expectedPlaintext = try decodeHexData("00000000000000000000000000000000")
+    #expect(decrypted == expectedPlaintext)
+}
+
 @Test func keepPassKdbx3BlockStreamDecoderValidatesStreamStartAndHashesBlocksWithoutLeakingSecrets() throws {
     let streamStartBytes = Data("stream-start-secret".utf8)
     let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
