@@ -259,6 +259,114 @@ public struct KeePassKdbxPayloadEnvelope: Sendable, Equatable {
     }
 }
 
+public struct KeePassKdbxCredentialMaterial: Sendable, Equatable {
+    public let passwordKey: Data?
+    public let keyFileKey: Data?
+    public let compositeKey: Data
+
+    public init(passwordKey: Data?, keyFileKey: Data?, compositeKey: Data) {
+        self.passwordKey = passwordKey
+        self.keyFileKey = keyFileKey
+        self.compositeKey = compositeKey
+    }
+
+    public static func build(from candidate: KeePassCredentialCandidate) throws -> KeePassKdbxCredentialMaterial {
+        let trimmedPassword = candidate.password.trimmingCharacters(in: .whitespacesAndNewlines)
+        let passwordKey = trimmedPassword.isEmpty ? nil : Data(SHA256.hash(data: Data(candidate.password.utf8)))
+        let keyFileKey = candidate.keyMaterial?.isEmpty == false ? candidate.keyMaterial : nil
+
+        var combined = Data()
+        if let passwordKey {
+            combined.append(passwordKey)
+        }
+        if let keyFileKey {
+            combined.append(keyFileKey)
+        }
+        guard !combined.isEmpty else {
+            throw KeePassOperationError(
+                code: .invalidCredential,
+                message: "请输入数据库密码或选择密钥文件"
+            )
+        }
+
+        return KeePassKdbxCredentialMaterial(
+            passwordKey: passwordKey,
+            keyFileKey: keyFileKey,
+            compositeKey: Data(SHA256.hash(data: combined))
+        )
+    }
+
+    public var componentSummary: String {
+        switch (passwordKey != nil, keyFileKey != nil) {
+        case (true, true):
+            return "password + key file"
+        case (true, false):
+            return "password"
+        case (false, true):
+            return "key file"
+        case (false, false):
+            return "no credential material"
+        }
+    }
+}
+
+public struct KeePassKdbxDecryptInputContext: Sendable, Equatable {
+    public let sourceName: String?
+    public let candidateLabel: String
+    public let envelope: KeePassKdbxPayloadEnvelope
+    public let kdfParameters: KeePassKdbxKdfParameters?
+    public let credentialMaterial: KeePassKdbxCredentialMaterial
+
+    public init(
+        sourceName: String?,
+        candidateLabel: String,
+        envelope: KeePassKdbxPayloadEnvelope,
+        kdfParameters: KeePassKdbxKdfParameters?,
+        credentialMaterial: KeePassKdbxCredentialMaterial
+    ) {
+        self.sourceName = sourceName
+        self.candidateLabel = candidateLabel
+        self.envelope = envelope
+        self.kdfParameters = kdfParameters
+        self.credentialMaterial = credentialMaterial
+    }
+
+    public static func build(
+        database: Data,
+        sourceName: String?,
+        credentialCandidate: KeePassCredentialCandidate
+    ) throws -> KeePassKdbxDecryptInputContext {
+        let envelope = try KeePassKdbxPayloadEnvelope.parse(database)
+        return KeePassKdbxDecryptInputContext(
+            sourceName: sourceName,
+            candidateLabel: credentialCandidate.label,
+            envelope: envelope,
+            kdfParameters: envelope.headerSummary.kdfParameters,
+            credentialMaterial: try KeePassKdbxCredentialMaterial.build(from: credentialCandidate)
+        )
+    }
+
+    public var displaySummary: String {
+        let kdf = kdfParameters?.algorithm.displayName ?? "未知 KDF"
+        return "\(envelope.headerSummary.displayName)，payload \(envelope.encryptedPayload.count) bytes，\(kdf)，candidate \(candidateLabel)，\(credentialMaterial.componentSummary)"
+    }
+}
+
+public protocol KeePassKdbxPayloadDecryptor: Sendable {
+    func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data
+}
+
+public struct UnsupportedKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
+    public init() {}
+
+    public func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
+        throw KeePassOperationError(
+            code: .formatUnsupported,
+            message: "KDBX 解码器尚未接入"
+        )
+    }
+}
+
 public struct KeePassCredentialSummary: Sendable, Equatable {
     public let hasPassword: Bool
     public let hasKeyFile: Bool
@@ -999,8 +1107,11 @@ public struct KeePassCandidateTryingDatabaseReader: KeePassDatabaseReader {
 
 public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
     private let xmlReader = KeePassXMLReadOnlySnapshotReader()
+    private let payloadDecryptor: any KeePassKdbxPayloadDecryptor
 
-    public init() {}
+    public init(payloadDecryptor: any KeePassKdbxPayloadDecryptor = UnsupportedKeePassKdbxPayloadDecryptor()) {
+        self.payloadDecryptor = payloadDecryptor
+    }
 
     public func readSnapshot(
         database: Data,
@@ -1021,6 +1132,34 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 sourceName: sourceName,
                 credentials: credentials
             )
+        }
+        if KeePassFormatInspector.detect(database, sourceName: sourceName) == .kdbx {
+            let candidate = KeePassCredentialCandidate(
+                label: credentials.candidateLabel ?? credentials.summary.displayName,
+                password: credentials.password,
+                keyMaterial: credentials.keyFile
+            )
+            let context = try KeePassKdbxDecryptInputContext.build(
+                database: database,
+                sourceName: sourceName,
+                credentialCandidate: candidate
+            )
+            let decryptedPayload = try payloadDecryptor.decryptPayload(context)
+            if KeePassXMLReadOnlySnapshotReader.canRead(decryptedPayload) {
+                return try xmlReader.readSnapshot(
+                    database: decryptedPayload,
+                    sourceName: sourceName,
+                    credentials: credentials
+                )
+            }
+            if let inflated = KeePassGzipPayloadInflator.inflate(decryptedPayload),
+               KeePassXMLReadOnlySnapshotReader.canRead(inflated) {
+                return try xmlReader.readSnapshot(
+                    database: inflated,
+                    sourceName: sourceName,
+                    credentials: credentials
+                )
+            }
         }
         throw KeePassOperationError(
             code: .formatUnsupported,

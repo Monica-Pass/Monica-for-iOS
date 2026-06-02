@@ -137,6 +137,55 @@ import MonicaStorage
     #expect(!parameters!.displaySummary.contains(seed.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func keepPassKdbxDecryptInputContextBuildsCompositeKeyWithoutLeakingSecrets() throws {
+    let salt = Data((0..<32).map(UInt8.init))
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])),
+            kdbxVariantByteArray(key: "S", value: salt),
+            kdbxVariantUInt64(key: "I", value: 4),
+            kdbxVariantUInt64(key: "M", value: 64 * 1024 * 1024),
+            kdbxVariantUInt32(key: "P", value: 2),
+            kdbxVariantUInt32(key: "V", value: 0x13)
+        ])
+    )
+    let encryptedPayload = Data("encrypted-payload-bytes".utf8)
+    let password = "database-password"
+    let keyMaterial = Data("key-file-secret".utf8)
+    let candidate = KeePassCredentialCandidate(
+        label: "raw/password+key",
+        password: password,
+        keyMaterial: keyMaterial
+    )
+
+    let context = try KeePassKdbxDecryptInputContext.build(
+        database: header + encryptedPayload,
+        sourceName: "personal.kdbx",
+        credentialCandidate: candidate
+    )
+
+    let passwordHash = Data(SHA256.hash(data: Data(password.utf8)))
+    var combined = Data()
+    combined.append(passwordHash)
+    combined.append(keyMaterial)
+
+    #expect(context.sourceName == "personal.kdbx")
+    #expect(context.candidateLabel == "raw/password+key")
+    #expect(context.envelope.encryptedPayload == encryptedPayload)
+    #expect(context.kdfParameters?.algorithm == .argon2id)
+    #expect(context.credentialMaterial.passwordKey == passwordHash)
+    #expect(context.credentialMaterial.keyFileKey == keyMaterial)
+    #expect(context.credentialMaterial.compositeKey == Data(SHA256.hash(data: combined)))
+    #expect(context.credentialMaterial.componentSummary == "password + key file")
+    #expect(context.displaySummary == "KDBX 4，payload 23 bytes，Argon2id，candidate raw/password+key，password + key file")
+    #expect(!context.displaySummary.contains(password))
+    #expect(!context.displaySummary.contains("key-file-secret"))
+    #expect(!context.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+    #expect(!context.displaySummary.contains("encrypted-payload-bytes"))
+}
+
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
     let kdbx4 = Data([
         0x03, 0xD9, 0xA2, 0x9A,
@@ -534,6 +583,62 @@ import MonicaStorage
             )
         )
     }
+}
+
+@Test func defaultKeePassDatabaseReaderBuildsKdbxDecryptInputBeforeCryptoDecode() throws {
+    final class RecordingDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
+        var contexts: [KeePassKdbxDecryptInputContext] = []
+
+        func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
+            contexts.append(context)
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX crypto not implemented"
+            )
+        }
+    }
+
+    let salt = Data((0..<32).map(UInt8.init))
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])),
+            kdbxVariantByteArray(key: "S", value: salt),
+            kdbxVariantUInt64(key: "I", value: 4),
+            kdbxVariantUInt64(key: "M", value: 64 * 1024 * 1024),
+            kdbxVariantUInt32(key: "P", value: 2),
+            kdbxVariantUInt32(key: "V", value: 0x13)
+        ])
+    )
+    let encryptedPayload = Data("encrypted-payload-bytes".utf8)
+    let decryptor = RecordingDecryptor()
+    let reader = DefaultKeePassDatabaseReader(payloadDecryptor: decryptor)
+
+    #expect(throws: KeePassOperationError.self) {
+        _ = try reader.readSnapshot(
+            database: header + encryptedPayload,
+            sourceName: "personal.kdbx",
+            credentials: KeePassUnlockCredentials(
+                password: "database-password",
+                keyFile: Data("key-file-secret".utf8),
+                keyFileName: "personal.key",
+                candidateLabel: "raw/password+key"
+            )
+        )
+    }
+
+    let context = try #require(decryptor.contexts.first)
+    #expect(context.sourceName == "personal.kdbx")
+    #expect(context.candidateLabel == "raw/password+key")
+    #expect(context.kdfParameters?.algorithm == .argon2id)
+    #expect(context.envelope.encryptedPayload == encryptedPayload)
+    #expect(context.credentialMaterial.componentSummary == "password + key file")
+    #expect(context.displaySummary == "KDBX 4，payload 23 bytes，Argon2id，candidate raw/password+key，password + key file")
+    #expect(!context.displaySummary.contains("database-password"))
+    #expect(!context.displaySummary.contains("key-file-secret"))
+    #expect(!context.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+    #expect(!context.displaySummary.contains("encrypted-payload-bytes"))
 }
 
 @Test func defaultKeePassDatabaseReaderInflatesGzipKeePassXMLWithoutLeakingCredentials() throws {
