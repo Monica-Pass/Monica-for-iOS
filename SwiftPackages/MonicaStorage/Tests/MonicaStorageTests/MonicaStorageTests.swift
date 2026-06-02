@@ -186,6 +186,56 @@ import MonicaStorage
     #expect(!context.displaySummary.contains("encrypted-payload-bytes"))
 }
 
+@Test func keepPassKdbxDecryptInputContextParsesPayloadCryptoInputsWithoutLeakingSecrets() throws {
+    let masterSeed = Data((64..<96).map(UInt8.init))
+    let encryptionIV = Data((96..<108).map(UInt8.init))
+    let innerRandomStreamKey = Data((108..<140).map(UInt8.init))
+    let streamStartBytes = Data((140..<172).map(UInt8.init))
+    let kdfSeed = Data((172..<204).map(UInt8.init))
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        masterSeed: masterSeed,
+        encryptionIV: encryptionIV,
+        innerRandomStreamKey: innerRandomStreamKey,
+        streamStartBytes: streamStartBytes,
+        innerRandomStreamID: 3,
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD5, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "S", value: kdfSeed),
+            kdbxVariantUInt64(key: "R", value: 1)
+        ])
+    )
+    let encryptedPayload = Data("encrypted-payload-bytes".utf8)
+
+    let context = try KeePassKdbxDecryptInputContext.build(
+        database: header + encryptedPayload,
+        sourceName: "aes-kdf.kdbx",
+        credentialCandidate: KeePassCredentialCandidate(
+            label: "password-only",
+            password: "database-password",
+            keyMaterial: nil
+        )
+    )
+
+    #expect(context.cryptoInputs.masterSeed == masterSeed)
+    #expect(context.cryptoInputs.encryptionIV == encryptionIV)
+    #expect(context.cryptoInputs.innerRandomStreamKey == innerRandomStreamKey)
+    #expect(context.cryptoInputs.streamStartBytes == streamStartBytes)
+    #expect(context.cryptoInputs.innerRandomStreamID == 3)
+    #expect(context.cryptoInputs.innerRandomStreamAlgorithm == .chacha20)
+    #expect(context.cryptoInputs.displaySummary == "master seed 32 bytes，IV 12 bytes，stream start 32 bytes，inner stream ChaCha20，inner key 32 bytes")
+    #expect(context.displaySummary == "KDBX 4，payload 23 bytes，AES-KDF，candidate password-only，password，master seed 32 bytes，IV 12 bytes，stream start 32 bytes，inner stream ChaCha20，inner key 32 bytes")
+
+    for secret in [masterSeed, encryptionIV, innerRandomStreamKey, streamStartBytes, kdfSeed] {
+        let hex = secret.map { String(format: "%02x", $0) }.joined()
+        #expect(!context.cryptoInputs.displaySummary.contains(hex))
+        #expect(!context.displaySummary.contains(hex))
+    }
+    #expect(!context.displaySummary.contains("database-password"))
+    #expect(!context.displaySummary.contains("encrypted-payload-bytes"))
+}
+
 @Test func keepPassKdbxAesKdfDeriverTransformsCompositeKeyWithoutLeakingSecrets() throws {
     let seed = try decodeHexData("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
     let plaintextBlock = try decodeHexData("00112233445566778899aabbccddeeff")
@@ -216,6 +266,7 @@ import MonicaStorage
             encryptedPayload: Data("encrypted-payload-bytes".utf8)
         ),
         kdfParameters: kdfParameters,
+        cryptoInputs: .empty,
         credentialMaterial: KeePassKdbxCredentialMaterial(
             passwordKey: nil,
             keyFileKey: nil,
@@ -232,6 +283,40 @@ import MonicaStorage
     #expect(!derived.displaySummary.contains(compositeKey.map { String(format: "%02x", $0) }.joined()))
     #expect(!derived.displaySummary.contains(derived.material.map { String(format: "%02x", $0) }.joined()))
     #expect(!derived.displaySummary.contains("encrypted-payload-bytes"))
+}
+
+@Test func keepPassKdbxMasterKeyComposerCombinesMasterSeedAndDerivedKeyWithoutLeakingSecrets() throws {
+    let masterSeed = Data((32..<64).map(UInt8.init))
+    let derivedMaterial = Data((64..<96).map(UInt8.init))
+    let derivedKey = KeePassKdbxDerivedKey(
+        algorithm: .aesKdf,
+        material: derivedMaterial,
+        rounds: 1
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: masterSeed,
+        encryptionIV: Data(repeating: 0xA1, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xC3, count: 32),
+        streamStartBytes: Data(repeating: 0xB2, count: 32),
+        innerRandomStreamID: 2
+    )
+
+    let masterKey = try DefaultKeePassKdbxMasterKeyComposer().composeMasterKey(
+        from: derivedKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    var combined = Data()
+    combined.append(masterSeed)
+    combined.append(derivedMaterial)
+    #expect(masterKey.algorithm == KeePassKdbxKdfAlgorithm.aesKdf)
+    #expect(masterKey.material == Data(SHA256.hash(data: combined)))
+    #expect(masterKey.displaySummary == "AES-KDF，master key 32 bytes")
+
+    for secret in [masterSeed, derivedMaterial, masterKey.material] {
+        let hex = secret.map { String(format: "%02x", $0) }.joined()
+        #expect(!masterKey.displaySummary.contains(hex))
+    }
 }
 
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
@@ -722,6 +807,7 @@ import MonicaStorage
             encryptedPayload: Data("encrypted-payload-bytes".utf8)
         ),
         kdfParameters: kdfParameters,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(masterSeed: Data(repeating: 0xB5, count: 32)),
         credentialMaterial: KeePassKdbxCredentialMaterial(
             passwordKey: Data("password-key-secret".utf8),
             keyFileKey: Data("key-file-secret".utf8),
@@ -4633,6 +4719,11 @@ private struct RecordedAttachmentMutationCall: Equatable {
 private func makeKdbx4Header(
     cipherID: Data,
     compressionFlags: Data,
+    masterSeed: Data? = nil,
+    encryptionIV: Data? = nil,
+    innerRandomStreamKey: Data? = nil,
+    streamStartBytes: Data? = nil,
+    innerRandomStreamID: UInt32? = nil,
     kdfParameters: Data
 ) -> Data {
     var data = Data([
@@ -4642,6 +4733,21 @@ private func makeKdbx4Header(
     ])
     data.append(kdbx4HeaderField(id: 2, value: cipherID))
     data.append(kdbx4HeaderField(id: 3, value: compressionFlags))
+    if let masterSeed {
+        data.append(kdbx4HeaderField(id: 4, value: masterSeed))
+    }
+    if let encryptionIV {
+        data.append(kdbx4HeaderField(id: 7, value: encryptionIV))
+    }
+    if let innerRandomStreamKey {
+        data.append(kdbx4HeaderField(id: 8, value: innerRandomStreamKey))
+    }
+    if let streamStartBytes {
+        data.append(kdbx4HeaderField(id: 9, value: streamStartBytes))
+    }
+    if let innerRandomStreamID {
+        data.append(kdbx4HeaderField(id: 10, value: littleEndianUInt32(innerRandomStreamID)))
+    }
     data.append(kdbx4HeaderField(id: 11, value: kdfParameters))
     data.append(kdbx4HeaderField(id: 0, value: Data([0x0D, 0x0A, 0x0D, 0x0A])))
     return data

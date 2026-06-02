@@ -191,6 +191,94 @@ public struct KeePassKdbxKdfParameters: Sendable, Equatable {
     }
 }
 
+public enum KeePassKdbxInnerRandomStreamAlgorithm: Sendable, Equatable {
+    case none
+    case arc4Variant
+    case salsa20
+    case chacha20
+    case unknown(UInt32)
+
+    public init(rawValue: UInt32?) {
+        switch rawValue {
+        case 0:
+            self = .none
+        case 1:
+            self = .arc4Variant
+        case 2:
+            self = .salsa20
+        case 3:
+            self = .chacha20
+        case let .some(value):
+            self = .unknown(value)
+        case .none:
+            self = .unknown(0)
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .none:
+            return "None"
+        case .arc4Variant:
+            return "ArcFourVariant"
+        case .salsa20:
+            return "Salsa20"
+        case .chacha20:
+            return "ChaCha20"
+        case let .unknown(value):
+            return "未知 inner stream(\(value))"
+        }
+    }
+}
+
+public struct KeePassKdbxPayloadCryptoInputs: Sendable, Equatable {
+    public let masterSeed: Data?
+    public let encryptionIV: Data?
+    public let innerRandomStreamKey: Data?
+    public let streamStartBytes: Data?
+    public let innerRandomStreamID: UInt32?
+
+    public init(
+        masterSeed: Data? = nil,
+        encryptionIV: Data? = nil,
+        innerRandomStreamKey: Data? = nil,
+        streamStartBytes: Data? = nil,
+        innerRandomStreamID: UInt32? = nil
+    ) {
+        self.masterSeed = masterSeed?.isEmpty == false ? masterSeed : nil
+        self.encryptionIV = encryptionIV?.isEmpty == false ? encryptionIV : nil
+        self.innerRandomStreamKey = innerRandomStreamKey?.isEmpty == false ? innerRandomStreamKey : nil
+        self.streamStartBytes = streamStartBytes?.isEmpty == false ? streamStartBytes : nil
+        self.innerRandomStreamID = innerRandomStreamID
+    }
+
+    public static let empty = KeePassKdbxPayloadCryptoInputs()
+
+    public var innerRandomStreamAlgorithm: KeePassKdbxInnerRandomStreamAlgorithm {
+        KeePassKdbxInnerRandomStreamAlgorithm(rawValue: innerRandomStreamID)
+    }
+
+    public var displaySummary: String {
+        var parts: [String] = []
+        if let masterSeed {
+            parts.append("master seed \(masterSeed.count) bytes")
+        }
+        if let encryptionIV {
+            parts.append("IV \(encryptionIV.count) bytes")
+        }
+        if let streamStartBytes {
+            parts.append("stream start \(streamStartBytes.count) bytes")
+        }
+        if innerRandomStreamID != nil || innerRandomStreamKey != nil {
+            parts.append("inner stream \(innerRandomStreamAlgorithm.displayName)")
+        }
+        if let innerRandomStreamKey {
+            parts.append("inner key \(innerRandomStreamKey.count) bytes")
+        }
+        return parts.isEmpty ? "crypto inputs unavailable" : parts.joined(separator: "，")
+    }
+}
+
 public struct KeePassHeaderSummary: Sendable, Equatable {
     public let majorVersion: Int?
     public let minorVersion: Int?
@@ -315,6 +403,7 @@ public struct KeePassKdbxDecryptInputContext: Sendable, Equatable {
     public let candidateLabel: String
     public let envelope: KeePassKdbxPayloadEnvelope
     public let kdfParameters: KeePassKdbxKdfParameters?
+    public let cryptoInputs: KeePassKdbxPayloadCryptoInputs
     public let credentialMaterial: KeePassKdbxCredentialMaterial
 
     public init(
@@ -322,12 +411,14 @@ public struct KeePassKdbxDecryptInputContext: Sendable, Equatable {
         candidateLabel: String,
         envelope: KeePassKdbxPayloadEnvelope,
         kdfParameters: KeePassKdbxKdfParameters?,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs = .empty,
         credentialMaterial: KeePassKdbxCredentialMaterial
     ) {
         self.sourceName = sourceName
         self.candidateLabel = candidateLabel
         self.envelope = envelope
         self.kdfParameters = kdfParameters
+        self.cryptoInputs = cryptoInputs
         self.credentialMaterial = credentialMaterial
     }
 
@@ -342,13 +433,19 @@ public struct KeePassKdbxDecryptInputContext: Sendable, Equatable {
             candidateLabel: credentialCandidate.label,
             envelope: envelope,
             kdfParameters: envelope.headerSummary.kdfParameters,
+            cryptoInputs: KeePassFormatInspector.parseKdbxPayloadCryptoInputs(from: envelope),
             credentialMaterial: try KeePassKdbxCredentialMaterial.build(from: credentialCandidate)
         )
     }
 
     public var displaySummary: String {
         let kdf = kdfParameters?.algorithm.displayName ?? "未知 KDF"
-        return "\(envelope.headerSummary.displayName)，payload \(envelope.encryptedPayload.count) bytes，\(kdf)，candidate \(candidateLabel)，\(credentialMaterial.componentSummary)"
+        let base = "\(envelope.headerSummary.displayName)，payload \(envelope.encryptedPayload.count) bytes，\(kdf)，candidate \(candidateLabel)，\(credentialMaterial.componentSummary)"
+        let cryptoSummary = cryptoInputs.displaySummary
+        guard cryptoSummary != "crypto inputs unavailable" else {
+            return base
+        }
+        return "\(base)，\(cryptoSummary)"
     }
 }
 
@@ -358,13 +455,22 @@ public protocol KeePassKdbxPayloadDecryptor: Sendable {
 
 public struct UnsupportedKeePassKdbxPayloadDecryptor: KeePassKdbxPayloadDecryptor {
     private let keyDeriver: any KeePassKdbxKeyDeriver
+    private let masterKeyComposer: any KeePassKdbxMasterKeyComposer
 
-    public init(keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver()) {
+    public init(
+        keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
+        masterKeyComposer: any KeePassKdbxMasterKeyComposer = DefaultKeePassKdbxMasterKeyComposer()
+    ) {
         self.keyDeriver = keyDeriver
+        self.masterKeyComposer = masterKeyComposer
     }
 
     public func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
-        _ = try keyDeriver.deriveKey(from: context)
+        let derivedKey = try keyDeriver.deriveKey(from: context)
+        _ = try masterKeyComposer.composeMasterKey(
+            from: derivedKey,
+            cryptoInputs: context.cryptoInputs
+        )
         throw KeePassOperationError(
             code: .formatUnsupported,
             message: "KDBX payload 解密尚未接入"
@@ -390,6 +496,63 @@ public struct KeePassKdbxDerivedKey: Sendable, Equatable {
         }
         parts.append("derived key \(material.count) bytes")
         return parts.joined(separator: "，")
+    }
+}
+
+public struct KeePassKdbxMasterKeyMaterial: Sendable, Equatable {
+    public let algorithm: KeePassKdbxKdfAlgorithm
+    public let material: Data
+
+    public init(algorithm: KeePassKdbxKdfAlgorithm, material: Data) {
+        self.algorithm = algorithm
+        self.material = material
+    }
+
+    public var displaySummary: String {
+        "\(algorithm.displayName)，master key \(material.count) bytes"
+    }
+}
+
+public protocol KeePassKdbxMasterKeyComposer: Sendable {
+    func composeMasterKey(
+        from derivedKey: KeePassKdbxDerivedKey,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> KeePassKdbxMasterKeyMaterial
+}
+
+public struct DefaultKeePassKdbxMasterKeyComposer: KeePassKdbxMasterKeyComposer {
+    public init() {}
+
+    public func composeMasterKey(
+        from derivedKey: KeePassKdbxDerivedKey,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> KeePassKdbxMasterKeyMaterial {
+        guard let masterSeed = cryptoInputs.masterSeed else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX master seed 缺失；请确认文件未损坏。"
+            )
+        }
+        guard masterSeed.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX master seed 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard derivedKey.material.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX derived key 长度无效；请确认文件未损坏。"
+            )
+        }
+
+        var combined = Data()
+        combined.append(masterSeed)
+        combined.append(derivedKey.material)
+        return KeePassKdbxMasterKeyMaterial(
+            algorithm: derivedKey.algorithm,
+            material: Data(SHA256.hash(data: combined))
+        )
     }
 }
 
@@ -2001,6 +2164,11 @@ public enum KeePassFormatInspector {
     private static let kdbxHeaderStartOffset = kdbxVersionOffset + kdbxVersionByteCount
     private static let kdbxCipherIDHeaderField: UInt8 = 2
     private static let kdbxCompressionFlagsHeaderField: UInt8 = 3
+    private static let kdbxMasterSeedHeaderField: UInt8 = 4
+    private static let kdbxEncryptionIVHeaderField: UInt8 = 7
+    private static let kdbxInnerRandomStreamKeyHeaderField: UInt8 = 8
+    private static let kdbxStreamStartBytesHeaderField: UInt8 = 9
+    private static let kdbxInnerRandomStreamIDHeaderField: UInt8 = 10
     private static let kdbxKdfParametersHeaderField: UInt8 = 11
     private static let kdbxEndHeaderField: UInt8 = 0
     private static let kdbxAes256CipherUUID = Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF])
@@ -2145,6 +2313,21 @@ public enum KeePassFormatInspector {
             headerFields: parsed.fields,
             headerByteRange: 0..<payloadStart,
             encryptedPayload: Data(data[payloadStart..<data.count])
+        )
+    }
+
+    public static func parseKdbxPayloadCryptoInputs(
+        from envelope: KeePassKdbxPayloadEnvelope
+    ) -> KeePassKdbxPayloadCryptoInputs {
+        let headerFields = envelope.headerFields
+        return KeePassKdbxPayloadCryptoInputs(
+            masterSeed: headerFields[kdbxMasterSeedHeaderField],
+            encryptionIV: headerFields[kdbxEncryptionIVHeaderField],
+            innerRandomStreamKey: headerFields[kdbxInnerRandomStreamKeyHeaderField],
+            streamStartBytes: headerFields[kdbxStreamStartBytesHeaderField],
+            innerRandomStreamID: headerFields[kdbxInnerRandomStreamIDHeaderField].flatMap {
+                littleEndianUInt32(from: $0, at: 0)
+            }
         )
     }
 
