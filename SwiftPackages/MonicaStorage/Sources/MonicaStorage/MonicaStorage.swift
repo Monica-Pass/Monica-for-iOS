@@ -2100,7 +2100,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 sourceName: sourceName,
                 credentials: credentials,
                 headerSummary: context.envelope.headerSummary,
-                cryptoInputs: innerPayload.cryptoInputs(base: context.cryptoInputs)
+                cryptoInputs: innerPayload.cryptoInputs(base: context.cryptoInputs),
+                externalBinaries: innerPayload.binaries
                ) {
                 return snapshot
             }
@@ -2116,7 +2117,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
         sourceName: String?,
         credentials: KeePassUnlockCredentials,
         headerSummary: KeePassHeaderSummary,
-        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        externalBinaries: [String: Data] = [:]
     ) throws -> KeePassReadOnlySnapshot? {
         if KeePassXMLReadOnlySnapshotReader.canRead(payload) {
             return try xmlReader.readSnapshot(
@@ -2124,7 +2126,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 sourceName: sourceName,
                 credentials: credentials,
                 headerSummary: headerSummary,
-                cryptoInputs: cryptoInputs
+                cryptoInputs: cryptoInputs,
+                externalBinaries: externalBinaries
             )
         }
         if let inflated = KeePassGzipPayloadInflator.inflate(payload),
@@ -2134,7 +2137,8 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
                 sourceName: sourceName,
                 credentials: credentials,
                 headerSummary: headerSummary,
-                cryptoInputs: cryptoInputs
+                cryptoInputs: cryptoInputs,
+                externalBinaries: externalBinaries
             )
         }
         return nil
@@ -2144,6 +2148,7 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
 private struct KeePassKdbx4InnerHeaderPayload {
     let innerRandomStreamID: UInt32?
     let innerRandomStreamKey: Data?
+    let binaries: [String: Data]
     let payload: Data
 
     func cryptoInputs(base: KeePassKdbxPayloadCryptoInputs) -> KeePassKdbxPayloadCryptoInputs {
@@ -2158,11 +2163,14 @@ private enum KeePassKdbx4InnerHeaderParser {
     private static let endField: UInt8 = 0
     private static let innerRandomStreamIDField: UInt8 = 1
     private static let innerRandomStreamKeyField: UInt8 = 2
+    private static let binaryField: UInt8 = 3
 
     static func parse(_ decryptedPayload: Data) -> KeePassKdbx4InnerHeaderPayload? {
         var offset = 0
         var innerRandomStreamID: UInt32?
         var innerRandomStreamKey: Data?
+        var binaries: [String: Data] = [:]
+        var nextBinaryID = 0
         while offset < decryptedPayload.count {
             let fieldID = decryptedPayload[offset]
             offset += 1
@@ -2184,6 +2192,7 @@ private enum KeePassKdbx4InnerHeaderParser {
                 return KeePassKdbx4InnerHeaderPayload(
                     innerRandomStreamID: innerRandomStreamID,
                     innerRandomStreamKey: innerRandomStreamKey,
+                    binaries: binaries,
                     payload: Data(decryptedPayload[offset..<decryptedPayload.count])
                 )
             case innerRandomStreamIDField:
@@ -2193,6 +2202,10 @@ private enum KeePassKdbx4InnerHeaderParser {
                 innerRandomStreamID = readLittleEndianUInt32(from: value, at: 0)
             case innerRandomStreamKeyField:
                 innerRandomStreamKey = value
+            case binaryField:
+                let content = value.isEmpty ? Data() : Data(value.dropFirst())
+                binaries[String(nextBinaryID)] = content
+                nextBinaryID += 1
             default:
                 continue
             }
@@ -2311,10 +2324,12 @@ public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
         sourceName: String?,
         credentials: KeePassUnlockCredentials,
         headerSummary: KeePassHeaderSummary?,
-        cryptoInputs: KeePassKdbxPayloadCryptoInputs = .empty
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs = .empty,
+        externalBinaries: [String: Data] = [:]
     ) throws -> KeePassReadOnlySnapshot {
         let parser = KeePassXMLSnapshotParser(
-            protectedValueDecoder: try KeePassProtectedValueStreamDecoder.make(from: cryptoInputs)
+            protectedValueDecoder: try KeePassProtectedValueStreamDecoder.make(from: cryptoInputs),
+            externalBinaries: externalBinaries
         )
         do {
             let parsed = try parser.parse(database)
@@ -2638,8 +2653,12 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
     private var elementStack: [String] = []
     private var parseFailure: Error?
 
-    init(protectedValueDecoder: KeePassProtectedValueStreamDecoder? = nil) {
+    init(
+        protectedValueDecoder: KeePassProtectedValueStreamDecoder? = nil,
+        externalBinaries: [String: Data] = [:]
+    ) {
         self.protectedValueDecoder = protectedValueDecoder
+        parsed.binaries = externalBinaries
     }
 
     func parse(_ data: Data) throws -> ParsedKeePassXML {

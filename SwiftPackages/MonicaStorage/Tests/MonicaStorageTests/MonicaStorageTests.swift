@@ -1483,6 +1483,80 @@ import MonicaStorage
     #expect(!snapshot.displaySummary.contains(innerRandomStreamKey.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func defaultKeePassDatabaseReaderMergesKdbx4InnerHeaderBinariesIntoSnapshotWithoutLeakingSecrets() throws {
+    final class DecryptedPayloadWithInnerHeaderDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
+        let decryptedPayload: Data
+
+        init(decryptedPayload: Data) {
+            self.decryptedPayload = decryptedPayload
+        }
+
+        func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
+            decryptedPayload
+        }
+    }
+
+    let password = "kdbx4-inner-binary-password"
+    let attachmentContent = Data("inner header attachment secret".utf8)
+    let xml = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>root-group-uuid</UUID>
+          <Name>Root</Name>
+          <Entry>
+            <UUID>entry-inner-binary-uuid</UUID>
+            <String><Key>Title</Key><Value>Inner Binary Login</Value></String>
+            <String><Key>UserName</Key><Value>gwen</Value></String>
+            <Binary><Key>inner.txt</Key><Value Ref="0" /></Binary>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: Data(repeating: 0xB7, count: 32),
+        encryptionIV: Data(repeating: 0xC7, count: 16),
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "S", value: Data(repeating: 0xA7, count: 32)),
+            kdbxVariantUInt64(key: "R", value: 1)
+        ])
+    )
+    let innerHeader = makeKdbx4InnerHeader(fields: [
+        (3, Data([0x00]) + attachmentContent)
+    ])
+    let decryptor = DecryptedPayloadWithInnerHeaderDecryptor(
+        decryptedPayload: innerHeader + Data(xml.utf8)
+    )
+    let reader = DefaultKeePassDatabaseReader(payloadDecryptor: decryptor)
+
+    let snapshot = try reader.readSnapshot(
+        database: header + Data("encrypted-payload-secret".utf8),
+        sourceName: "kdbx4-inner-header-binary-attachments.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    let entry = try #require(snapshot.entries.first)
+    let attachment = try #require(entry.attachments.first)
+    let expectedAttachmentHash = Data(SHA256.hash(data: attachmentContent))
+        .map { String(format: "%02x", $0) }
+        .joined()
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(entry.title == "Inner Binary Login")
+    #expect(entry.username == "gwen")
+    #expect(attachment.fileName == "inner.txt")
+    #expect(attachment.originalSize == Int64(attachmentContent.count))
+    #expect(attachment.contentHash == "sha256:" + expectedAttachmentHash)
+    #expect(attachment.decodedContent == attachmentContent)
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains("inner header attachment secret"))
+    #expect(!snapshot.displaySummary.contains(attachmentContent.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func defaultKeePassDatabaseReaderBuildsKdbxDecryptInputBeforeCryptoDecode() throws {
     final class RecordingDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
         var contexts: [KeePassKdbxDecryptInputContext] = []
