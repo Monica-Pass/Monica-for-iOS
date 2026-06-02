@@ -7,7 +7,7 @@ import MonicaMDBX
 
     #expect(info.bridge == "UniFFI")
     #expect(info.state == .ready)
-    #expect(MonicaMDBXBindingAvailability.binaryModule == "mdbx_ios_ffiFFI")
+    #expect(MonicaMDBXBindingAvailability.binaryModule == "mdbx_ffiFFI")
 }
 
 @Test func runtimeReportsUnavailableOutsideIOS() {

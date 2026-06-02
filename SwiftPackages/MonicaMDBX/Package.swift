@@ -11,10 +11,10 @@ let package = Package(
     targets: [
         .target(
             name: "MonicaMDBX",
-            dependencies: ["mdbx_ios_ffiFFI"]
+            dependencies: ["mdbx_ffiFFI"]
         ),
         .binaryTarget(
-            name: "mdbx_ios_ffiFFI",
+            name: "mdbx_ffiFFI",
             path: "../../Artifacts/MDBX/MonicaMDBXGenerated.xcframework"
         ),
         .testTarget(name: "MonicaMDBXTests", dependencies: ["MonicaMDBX"])

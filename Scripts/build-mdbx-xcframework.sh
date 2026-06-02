@@ -85,10 +85,10 @@ SIMULATOR_AR="$(xcrun --sdk iphonesimulator -f ar)"
 rm -rf "$BUILD_DIR" "$XCFRAMEWORK_PATH"
 mkdir -p "$HEADERS_DIR" "$ARTIFACTS_DIR"
 
-cp "$GENERATED_DIR/mdbx_ios_ffiFFI.h" "$HEADERS_DIR/"
+cp "$GENERATED_DIR/mdbx_ffiFFI.h" "$HEADERS_DIR/"
 cat > "$HEADERS_DIR/module.modulemap" <<'EOF'
-module mdbx_ios_ffiFFI {
-    header "mdbx_ios_ffiFFI.h"
+module mdbx_ffiFFI {
+    header "mdbx_ffiFFI.h"
     export *
 }
 EOF
@@ -103,7 +103,7 @@ env \
   CFLAGS_aarch64_apple_ios="-isysroot $IPHONEOS_SDK -miphoneos-version-min=$MIN_IOS_VERSION" \
   CARGO_TARGET_AARCH64_APPLE_IOS_LINKER="$IPHONEOS_CLANG" \
   RUSTFLAGS="-C link-arg=-isysroot -C link-arg=$IPHONEOS_SDK -C link-arg=-miphoneos-version-min=$MIN_IOS_VERSION" \
-  "$CARGO" build -p mdbx-ios-ffi --target "$DEVICE_TARGET" --release
+  "$CARGO" build -p mdbx-ffi --target "$DEVICE_TARGET" --release
 
 env \
   SDKROOT="$SIMULATOR_SDK" \
@@ -113,7 +113,7 @@ env \
   CFLAGS_aarch64_apple_ios_sim="-isysroot $SIMULATOR_SDK -mios-simulator-version-min=$MIN_IOS_VERSION" \
   CARGO_TARGET_AARCH64_APPLE_IOS_SIM_LINKER="$SIMULATOR_CLANG" \
   RUSTFLAGS="-C link-arg=-isysroot -C link-arg=$SIMULATOR_SDK -C link-arg=-mios-simulator-version-min=$MIN_IOS_VERSION" \
-  "$CARGO" build -p mdbx-ios-ffi --target "$SIM_ARM64_TARGET" --release
+  "$CARGO" build -p mdbx-ffi --target "$SIM_ARM64_TARGET" --release
 
 env \
   SDKROOT="$SIMULATOR_SDK" \
@@ -123,28 +123,29 @@ env \
   CFLAGS_x86_64_apple_ios="-isysroot $SIMULATOR_SDK -mios-simulator-version-min=$MIN_IOS_VERSION" \
   CARGO_TARGET_X86_64_APPLE_IOS_LINKER="$SIMULATOR_CLANG" \
   RUSTFLAGS="-C link-arg=-isysroot -C link-arg=$SIMULATOR_SDK -C link-arg=-mios-simulator-version-min=$MIN_IOS_VERSION" \
-  "$CARGO" build -p mdbx-ios-ffi --target "$SIM_X86_64_TARGET" --release
+  "$CARGO" build -p mdbx-ffi --target "$SIM_X86_64_TARGET" --release
 
 mkdir -p "$BUILD_DIR/Simulator"
 lipo -create \
-  "$MDBX_DIR/target/$SIM_ARM64_TARGET/release/libmdbx_ios_ffi.a" \
-  "$MDBX_DIR/target/$SIM_X86_64_TARGET/release/libmdbx_ios_ffi.a" \
-  -output "$BUILD_DIR/Simulator/libmdbx_ios_ffi.a"
+  "$MDBX_DIR/target/$SIM_ARM64_TARGET/release/libmdbx_ffi.a" \
+  "$MDBX_DIR/target/$SIM_X86_64_TARGET/release/libmdbx_ffi.a" \
+  -output "$BUILD_DIR/Simulator/libmdbx_ffi.a"
 
 xcodebuild -create-xcframework \
-  -library "$MDBX_DIR/target/$DEVICE_TARGET/release/libmdbx_ios_ffi.a" \
+  -library "$MDBX_DIR/target/$DEVICE_TARGET/release/libmdbx_ffi.a" \
   -headers "$HEADERS_DIR" \
-  -library "$BUILD_DIR/Simulator/libmdbx_ios_ffi.a" \
+  -library "$BUILD_DIR/Simulator/libmdbx_ffi.a" \
   -headers "$HEADERS_DIR" \
   -output "$XCFRAMEWORK_PATH"
 
 echo "Created XCFramework: $XCFRAMEWORK_PATH"
-echo "Swift binding source: $GENERATED_DIR/mdbx_ios_ffi.swift"
+echo "Swift binding source: $GENERATED_DIR/mdbx_ffi.swift"
 
 mkdir -p "$SWIFTPM_BINDINGS_DIR"
 {
   echo "#if os(iOS)"
-  cat "$GENERATED_DIR/mdbx_ios_ffi.swift"
+  cat "$GENERATED_DIR/mdbx_ffi.swift"
   printf "\n#endif\n"
-} > "$SWIFTPM_BINDINGS_DIR/mdbx_ios_ffi.swift"
-echo "Synced SwiftPM binding source: $SWIFTPM_BINDINGS_DIR/mdbx_ios_ffi.swift"
+} > "$SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"
+rm -f "$SWIFTPM_BINDINGS_DIR/mdbx_ios_ffi.swift"
+echo "Synced SwiftPM binding source: $SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"

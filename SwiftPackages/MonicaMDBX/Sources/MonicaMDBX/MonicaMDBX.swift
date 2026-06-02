@@ -19,8 +19,8 @@ public struct MonicaMDBXBridgeInfo: Sendable, Equatable {
 }
 
 public enum MonicaMDBXBindingAvailability {
-    public static let swiftBinding = "mdbx_ios_ffi"
-    public static let binaryModule = "mdbx_ios_ffiFFI"
+    public static let swiftBinding = "mdbx_ffi"
+    public static let binaryModule = "mdbx_ffiFFI"
 }
 
 public enum MonicaMDBXError: Error, Sendable, Equatable, LocalizedError {
@@ -735,6 +735,596 @@ public final class MonicaMDBXVault: @unchecked Sendable {
 
     public func resetMasterPassword(_ newPassword: String) throws {
         try rawVault.resetMasterPassword(newPassword: newPassword)
+    }
+}
+
+fileprivate struct LoginEntryRecord {
+    let entryId: String
+    let projectId: String
+    let title: String
+    let username: String
+    let password: String
+    let url: String
+    let favorite: Bool
+}
+
+fileprivate struct NoteEntryRecord {
+    let entryId: String
+    let projectId: String
+    let title: String
+    let body: String
+    let favorite: Bool
+}
+
+fileprivate struct TotpEntryRecord {
+    let entryId: String
+    let projectId: String
+    let title: String
+    let secret: String
+    let issuer: String
+    let accountName: String
+    let period: UInt32
+    let digits: UInt32
+    let algorithm: String
+    let otpType: String
+    let counter: UInt64
+    let favorite: Bool
+}
+
+fileprivate struct CardEntryRecord {
+    let entryId: String
+    let projectId: String
+    let title: String
+    let cardholderName: String
+    let number: String
+    let expiryMonth: String
+    let expiryYear: String
+    let cvv: String
+    let issuer: String
+    let network: String
+    let notes: String
+    let favorite: Bool
+}
+
+fileprivate struct IdentityEntryRecord {
+    let entryId: String
+    let projectId: String
+    let title: String
+    let documentType: String
+    let fullName: String
+    let documentNumber: String
+    let issuer: String
+    let country: String
+    let issueDate: String
+    let expiryDate: String
+    let notes: String
+    let favorite: Bool
+}
+
+fileprivate struct ParityEntryRecord {
+    let entryId: String
+    let projectId: String
+    let title: String
+    let kind: String
+    let payloadJson: String
+    let favorite: Bool
+}
+
+fileprivate enum MDBXBusinessPayload {
+    static func jsonString(_ object: [String: Any]) throws -> String {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        guard let string = String(data: data, encoding: .utf8) else {
+            throw MonicaMDBXError.verificationFailed("无法序列化 MDBX payload。")
+        }
+        return string
+    }
+
+    static func object(from json: String) throws -> [String: Any] {
+        guard let data = json.data(using: .utf8),
+              let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw MonicaMDBXError.verificationFailed("MDBX payload 必须是 JSON object。")
+        }
+        return object
+    }
+
+    static func string(_ object: [String: Any], _ key: String) -> String {
+        object[key] as? String ?? ""
+    }
+
+    static func bool(_ object: [String: Any], _ key: String) -> Bool {
+        object[key] as? Bool ?? false
+    }
+
+    static func uint32(_ object: [String: Any], _ key: String, default defaultValue: UInt32) -> UInt32 {
+        if let number = object[key] as? NSNumber {
+            return number.uint32Value
+        }
+        return defaultValue
+    }
+
+    static func uint64(_ object: [String: Any], _ key: String) -> UInt64 {
+        if let number = object[key] as? NSNumber {
+            return number.uint64Value
+        }
+        return 0
+    }
+
+    static func withFavorite(_ payloadJSON: String, favorite: Bool) throws -> String {
+        var object = try object(from: payloadJSON)
+        object["favorite"] = favorite
+        return try jsonString(object)
+    }
+
+    static func favorite(from payloadJSON: String) throws -> Bool {
+        try bool(object(from: payloadJSON), "favorite")
+    }
+
+    static func kind(from payloadJSON: String) throws -> String {
+        try string(object(from: payloadJSON), "kind")
+    }
+}
+
+fileprivate extension EntryRecord {
+    var payloadObject: [String: Any] {
+        get throws { try MDBXBusinessPayload.object(from: payloadJson) }
+    }
+}
+
+fileprivate extension LoginEntryRecord {
+    init(raw: EntryRecord) throws {
+        let payload = try raw.payloadObject
+        self.init(
+            entryId: raw.entryId,
+            projectId: raw.projectId,
+            title: raw.title,
+            username: MDBXBusinessPayload.string(payload, "username"),
+            password: MDBXBusinessPayload.string(payload, "password"),
+            url: MDBXBusinessPayload.string(payload, "website"),
+            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+        )
+    }
+}
+
+fileprivate extension NoteEntryRecord {
+    init(raw: EntryRecord) throws {
+        let payload = try raw.payloadObject
+        self.init(
+            entryId: raw.entryId,
+            projectId: raw.projectId,
+            title: raw.title,
+            body: MDBXBusinessPayload.string(payload, "body"),
+            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+        )
+    }
+}
+
+fileprivate extension TotpEntryRecord {
+    init(raw: EntryRecord) throws {
+        let payload = try raw.payloadObject
+        self.init(
+            entryId: raw.entryId,
+            projectId: raw.projectId,
+            title: raw.title,
+            secret: MDBXBusinessPayload.string(payload, "secret"),
+            issuer: MDBXBusinessPayload.string(payload, "issuer"),
+            accountName: MDBXBusinessPayload.string(payload, "accountName"),
+            period: MDBXBusinessPayload.uint32(payload, "period", default: 30),
+            digits: MDBXBusinessPayload.uint32(payload, "digits", default: 6),
+            algorithm: MDBXBusinessPayload.string(payload, "algorithm").isEmpty ? "SHA1" : MDBXBusinessPayload.string(payload, "algorithm"),
+            otpType: MDBXBusinessPayload.string(payload, "otpType").isEmpty ? "TOTP" : MDBXBusinessPayload.string(payload, "otpType"),
+            counter: MDBXBusinessPayload.uint64(payload, "counter"),
+            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+        )
+    }
+}
+
+fileprivate extension CardEntryRecord {
+    init(raw: EntryRecord) throws {
+        let payload = try raw.payloadObject
+        self.init(
+            entryId: raw.entryId,
+            projectId: raw.projectId,
+            title: raw.title,
+            cardholderName: MDBXBusinessPayload.string(payload, "cardholderName"),
+            number: MDBXBusinessPayload.string(payload, "number"),
+            expiryMonth: MDBXBusinessPayload.string(payload, "expiryMonth"),
+            expiryYear: MDBXBusinessPayload.string(payload, "expiryYear"),
+            cvv: MDBXBusinessPayload.string(payload, "cvv"),
+            issuer: MDBXBusinessPayload.string(payload, "issuer"),
+            network: MDBXBusinessPayload.string(payload, "network"),
+            notes: MDBXBusinessPayload.string(payload, "notes"),
+            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+        )
+    }
+}
+
+fileprivate extension IdentityEntryRecord {
+    init(raw: EntryRecord) throws {
+        let payload = try raw.payloadObject
+        self.init(
+            entryId: raw.entryId,
+            projectId: raw.projectId,
+            title: raw.title,
+            documentType: MDBXBusinessPayload.string(payload, "documentType"),
+            fullName: MDBXBusinessPayload.string(payload, "fullName"),
+            documentNumber: MDBXBusinessPayload.string(payload, "documentNumber"),
+            issuer: MDBXBusinessPayload.string(payload, "issuer"),
+            country: MDBXBusinessPayload.string(payload, "country"),
+            issueDate: MDBXBusinessPayload.string(payload, "issueDate"),
+            expiryDate: MDBXBusinessPayload.string(payload, "expiryDate"),
+            notes: MDBXBusinessPayload.string(payload, "notes"),
+            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+        )
+    }
+}
+
+fileprivate extension ParityEntryRecord {
+    init(raw: EntryRecord) throws {
+        let payload = try raw.payloadObject
+        self.init(
+            entryId: raw.entryId,
+            projectId: raw.projectId,
+            title: raw.title,
+            kind: MDBXBusinessPayload.string(payload, "kind"),
+            payloadJson: raw.payloadJson,
+            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+        )
+    }
+}
+
+fileprivate extension MdbxVault {
+    func createLoginEntry(
+        projectId: String,
+        title: String,
+        username: String,
+        password: String,
+        url: String
+    ) throws -> LoginEntryRecord {
+        let payload = try MDBXBusinessPayload.jsonString([
+            "kind": "password",
+            "username": username,
+            "password": password,
+            "website": url,
+            "favorite": false
+        ])
+        return try LoginEntryRecord(raw: createEntry(
+            projectId: projectId,
+            entryType: "login",
+            title: title,
+            payloadJson: payload
+        ))
+    }
+
+    func listEntries(projectId: String) throws -> [LoginEntryRecord] {
+        try listEntries(projectId: projectId, entryType: "login").map(LoginEntryRecord.init(raw:))
+    }
+
+    func listDeletedEntries(projectId: String) throws -> [LoginEntryRecord] {
+        try listDeletedEntries(projectId: projectId, entryType: "login").map(LoginEntryRecord.init(raw:))
+    }
+
+    func updateLoginEntry(
+        projectId: String,
+        entryId: String,
+        title: String,
+        username: String,
+        password: String,
+        url: String
+    ) throws -> LoginEntryRecord {
+        let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "login")
+        let payload = try MDBXBusinessPayload.jsonString([
+            "kind": "password",
+            "username": username,
+            "password": password,
+            "website": url,
+            "favorite": favorite
+        ])
+        return try LoginEntryRecord(raw: updateEntry(
+            projectId: projectId,
+            entryId: entryId,
+            entryType: "login",
+            title: title,
+            payloadJson: payload
+        ))
+    }
+
+    func setLoginFavorite(projectId: String, entryId: String, favorite: Bool) throws -> LoginEntryRecord {
+        try LoginEntryRecord(raw: setFavorite(projectId: projectId, entryId: entryId, entryType: "login", favorite: favorite))
+    }
+
+    func deleteLoginEntry(projectId: String, entryId: String) throws {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "login")
+        try deleteEntry(projectId: projectId, entryId: entryId)
+    }
+
+    func restoreLoginEntry(projectId: String, entryId: String) throws -> LoginEntryRecord {
+        try LoginEntryRecord(raw: restoreEntry(projectId: projectId, entryId: entryId))
+    }
+
+    func moveLoginEntry(projectId: String, entryId: String, targetProjectId: String) throws -> LoginEntryRecord {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "login")
+        return try LoginEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
+    }
+
+    func createNoteEntry(projectId: String, title: String, body: String) throws -> NoteEntryRecord {
+        let payload = try MDBXBusinessPayload.jsonString(["kind": "note", "body": body, "favorite": false])
+        return try NoteEntryRecord(raw: createEntry(projectId: projectId, entryType: "note", title: title, payloadJson: payload))
+    }
+
+    func listNoteEntries(projectId: String) throws -> [NoteEntryRecord] {
+        try listEntries(projectId: projectId, entryType: "note").map(NoteEntryRecord.init(raw:))
+    }
+
+    func listDeletedNoteEntries(projectId: String) throws -> [NoteEntryRecord] {
+        try listDeletedEntries(projectId: projectId, entryType: "note").map(NoteEntryRecord.init(raw:))
+    }
+
+    func updateNoteEntry(projectId: String, entryId: String, title: String, body: String) throws -> NoteEntryRecord {
+        let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "note")
+        let payload = try MDBXBusinessPayload.jsonString(["kind": "note", "body": body, "favorite": favorite])
+        return try NoteEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "note", title: title, payloadJson: payload))
+    }
+
+    func setNoteFavorite(projectId: String, entryId: String, favorite: Bool) throws -> NoteEntryRecord {
+        try NoteEntryRecord(raw: setFavorite(projectId: projectId, entryId: entryId, entryType: "note", favorite: favorite))
+    }
+
+    func deleteNoteEntry(projectId: String, entryId: String) throws {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "note")
+        try deleteEntry(projectId: projectId, entryId: entryId)
+    }
+
+    func restoreNoteEntry(projectId: String, entryId: String) throws -> NoteEntryRecord {
+        try NoteEntryRecord(raw: restoreEntry(projectId: projectId, entryId: entryId))
+    }
+
+    func moveNoteEntry(projectId: String, entryId: String, targetProjectId: String) throws -> NoteEntryRecord {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "note")
+        return try NoteEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
+    }
+
+    func createTotpEntry(projectId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64) throws -> TotpEntryRecord {
+        let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, favorite: false)
+        return try TotpEntryRecord(raw: createEntry(projectId: projectId, entryType: "totp", title: title, payloadJson: payload))
+    }
+
+    func listTotpEntries(projectId: String) throws -> [TotpEntryRecord] {
+        try listEntries(projectId: projectId, entryType: "totp").map(TotpEntryRecord.init(raw:))
+    }
+
+    func listDeletedTotpEntries(projectId: String) throws -> [TotpEntryRecord] {
+        try listDeletedEntries(projectId: projectId, entryType: "totp").map(TotpEntryRecord.init(raw:))
+    }
+
+    func updateTotpEntry(projectId: String, entryId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64) throws -> TotpEntryRecord {
+        let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "totp")
+        let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, favorite: favorite)
+        return try TotpEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "totp", title: title, payloadJson: payload))
+    }
+
+    func setTotpFavorite(projectId: String, entryId: String, favorite: Bool) throws -> TotpEntryRecord {
+        try TotpEntryRecord(raw: setFavorite(projectId: projectId, entryId: entryId, entryType: "totp", favorite: favorite))
+    }
+
+    func deleteTotpEntry(projectId: String, entryId: String) throws {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "totp")
+        try deleteEntry(projectId: projectId, entryId: entryId)
+    }
+
+    func restoreTotpEntry(projectId: String, entryId: String) throws -> TotpEntryRecord {
+        try TotpEntryRecord(raw: restoreEntry(projectId: projectId, entryId: entryId))
+    }
+
+    func moveTotpEntry(projectId: String, entryId: String, targetProjectId: String) throws -> TotpEntryRecord {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "totp")
+        return try TotpEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
+    }
+
+    func createCardEntry(projectId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws -> CardEntryRecord {
+        let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, notes: notes, favorite: false)
+        return try CardEntryRecord(raw: createEntry(projectId: projectId, entryType: "card", title: title, payloadJson: payload))
+    }
+
+    func listCardEntries(projectId: String) throws -> [CardEntryRecord] {
+        try listEntries(projectId: projectId, entryType: "card").map(CardEntryRecord.init(raw:))
+    }
+
+    func listDeletedCardEntries(projectId: String) throws -> [CardEntryRecord] {
+        try listDeletedEntries(projectId: projectId, entryType: "card").map(CardEntryRecord.init(raw:))
+    }
+
+    func updateCardEntry(projectId: String, entryId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws -> CardEntryRecord {
+        let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "card")
+        let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, notes: notes, favorite: favorite)
+        return try CardEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "card", title: title, payloadJson: payload))
+    }
+
+    func setCardFavorite(projectId: String, entryId: String, favorite: Bool) throws -> CardEntryRecord {
+        try CardEntryRecord(raw: setFavorite(projectId: projectId, entryId: entryId, entryType: "card", favorite: favorite))
+    }
+
+    func deleteCardEntry(projectId: String, entryId: String) throws {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "card")
+        try deleteEntry(projectId: projectId, entryId: entryId)
+    }
+
+    func restoreCardEntry(projectId: String, entryId: String) throws -> CardEntryRecord {
+        try CardEntryRecord(raw: restoreEntry(projectId: projectId, entryId: entryId))
+    }
+
+    func moveCardEntry(projectId: String, entryId: String, targetProjectId: String) throws -> CardEntryRecord {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "card")
+        return try CardEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
+    }
+
+    func createIdentityEntry(projectId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String) throws -> IdentityEntryRecord {
+        let payload = try identityPayload(documentType: documentType, fullName: fullName, documentNumber: documentNumber, issuer: issuer, country: country, issueDate: issueDate, expiryDate: expiryDate, notes: notes, favorite: false)
+        return try IdentityEntryRecord(raw: createEntry(projectId: projectId, entryType: "identity", title: title, payloadJson: payload))
+    }
+
+    func listIdentityEntries(projectId: String) throws -> [IdentityEntryRecord] {
+        try listEntries(projectId: projectId, entryType: "identity").map(IdentityEntryRecord.init(raw:))
+    }
+
+    func listDeletedIdentityEntries(projectId: String) throws -> [IdentityEntryRecord] {
+        try listDeletedEntries(projectId: projectId, entryType: "identity").map(IdentityEntryRecord.init(raw:))
+    }
+
+    func updateIdentityEntry(projectId: String, entryId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String) throws -> IdentityEntryRecord {
+        let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "identity")
+        let payload = try identityPayload(documentType: documentType, fullName: fullName, documentNumber: documentNumber, issuer: issuer, country: country, issueDate: issueDate, expiryDate: expiryDate, notes: notes, favorite: favorite)
+        return try IdentityEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "identity", title: title, payloadJson: payload))
+    }
+
+    func setIdentityFavorite(projectId: String, entryId: String, favorite: Bool) throws -> IdentityEntryRecord {
+        try IdentityEntryRecord(raw: setFavorite(projectId: projectId, entryId: entryId, entryType: "identity", favorite: favorite))
+    }
+
+    func deleteIdentityEntry(projectId: String, entryId: String) throws {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "identity")
+        try deleteEntry(projectId: projectId, entryId: entryId)
+    }
+
+    func restoreIdentityEntry(projectId: String, entryId: String) throws -> IdentityEntryRecord {
+        try IdentityEntryRecord(raw: restoreEntry(projectId: projectId, entryId: entryId))
+    }
+
+    func moveIdentityEntry(projectId: String, entryId: String, targetProjectId: String) throws -> IdentityEntryRecord {
+        _ = try activeEntry(projectId: projectId, entryId: entryId, entryType: "identity")
+        return try IdentityEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
+    }
+
+    func createParityEntry(projectId: String, entryType: String, kind: String, title: String, payloadJson: String) throws -> ParityEntryRecord {
+        let payload = try parityPayload(kind: kind, payloadJSON: payloadJson, favorite: false)
+        return try ParityEntryRecord(raw: createEntry(projectId: projectId, entryType: entryType, title: title, payloadJson: payload))
+    }
+
+    func listParityEntries(projectId: String, entryType: String, kind: String) throws -> [ParityEntryRecord] {
+        try listEntries(projectId: projectId, entryType: entryType)
+            .filter { try MDBXBusinessPayload.kind(from: $0.payloadJson) == kind }
+            .map(ParityEntryRecord.init(raw:))
+    }
+
+    func listDeletedParityEntries(projectId: String, entryType: String, kind: String) throws -> [ParityEntryRecord] {
+        try listDeletedEntries(projectId: projectId, entryType: entryType)
+            .filter { try MDBXBusinessPayload.kind(from: $0.payloadJson) == kind }
+            .map(ParityEntryRecord.init(raw:))
+    }
+
+    func updateParityEntry(projectId: String, entryId: String, entryType: String, kind: String, title: String, payloadJson: String) throws -> ParityEntryRecord {
+        let current = try activeParityEntry(projectId: projectId, entryId: entryId, entryType: entryType, kind: kind)
+        let favorite = try MDBXBusinessPayload.favorite(from: current.payloadJson)
+        let payload = try parityPayload(kind: kind, payloadJSON: payloadJson, favorite: favorite)
+        return try ParityEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: title, payloadJson: payload))
+    }
+
+    func setParityEntryFavorite(projectId: String, entryId: String, entryType: String, kind: String, favorite: Bool) throws -> ParityEntryRecord {
+        let current = try activeParityEntry(projectId: projectId, entryId: entryId, entryType: entryType, kind: kind)
+        let payload = try MDBXBusinessPayload.withFavorite(current.payloadJson, favorite: favorite)
+        return try ParityEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload))
+    }
+
+    func deleteParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws {
+        _ = try activeParityEntry(projectId: projectId, entryId: entryId, entryType: entryType, kind: kind)
+        try deleteEntry(projectId: projectId, entryId: entryId)
+    }
+
+    func restoreParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws -> ParityEntryRecord {
+        let restored = try restoreEntry(projectId: projectId, entryId: entryId)
+        guard restored.entryType == entryType, try MDBXBusinessPayload.kind(from: restored.payloadJson) == kind else {
+            throw MonicaMDBXError.verificationFailed("恢复的 MDBX 条目类型不匹配。")
+        }
+        return try ParityEntryRecord(raw: restored)
+    }
+
+    func moveParityEntry(projectId: String, entryId: String, entryType: String, kind: String, targetProjectId: String) throws -> ParityEntryRecord {
+        _ = try activeParityEntry(projectId: projectId, entryId: entryId, entryType: entryType, kind: kind)
+        return try ParityEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
+    }
+
+    private func activeEntry(projectId: String, entryId: String, entryType: String) throws -> EntryRecord {
+        guard let entry = try listEntries(projectId: projectId, entryType: entryType).first(where: { $0.entryId == entryId }) else {
+            throw MonicaMDBXError.verificationFailed("找不到 MDBX 条目。")
+        }
+        return entry
+    }
+
+    private func activeParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws -> EntryRecord {
+        let entry = try activeEntry(projectId: projectId, entryId: entryId, entryType: entryType)
+        guard try MDBXBusinessPayload.kind(from: entry.payloadJson) == kind else {
+            throw MonicaMDBXError.verificationFailed("MDBX parity 条目 kind 不匹配。")
+        }
+        return entry
+    }
+
+    private func currentPayloadFavorite(projectId: String, entryId: String, entryType: String) throws -> Bool {
+        try MDBXBusinessPayload.favorite(from: activeEntry(projectId: projectId, entryId: entryId, entryType: entryType).payloadJson)
+    }
+
+    private func setFavorite(projectId: String, entryId: String, entryType: String, favorite: Bool) throws -> EntryRecord {
+        let current = try activeEntry(projectId: projectId, entryId: entryId, entryType: entryType)
+        let payload = try MDBXBusinessPayload.withFavorite(current.payloadJson, favorite: favorite)
+        return try updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload)
+    }
+
+    private func totpPayload(secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, favorite: Bool) throws -> String {
+        try MDBXBusinessPayload.jsonString([
+            "kind": "totp",
+            "secret": secret,
+            "issuer": issuer,
+            "accountName": accountName,
+            "period": period,
+            "digits": digits,
+            "algorithm": algorithm,
+            "otpType": otpType,
+            "counter": counter,
+            "favorite": favorite,
+            "steamFingerprint": "",
+            "steamDeviceId": "",
+            "steamSerialNumber": "",
+            "steamSharedSecretBase64": "",
+            "steamRevocationCode": "",
+            "steamIdentitySecret": "",
+            "steamTokenGid": "",
+            "steamRawJson": ""
+        ])
+    }
+
+    private func cardPayload(cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String, favorite: Bool) throws -> String {
+        try MDBXBusinessPayload.jsonString([
+            "kind": "card",
+            "cardholderName": cardholderName,
+            "number": number,
+            "expiryMonth": expiryMonth,
+            "expiryYear": expiryYear,
+            "cvv": cvv,
+            "issuer": issuer,
+            "network": network,
+            "notes": notes,
+            "favorite": favorite
+        ])
+    }
+
+    private func identityPayload(documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String, favorite: Bool) throws -> String {
+        try MDBXBusinessPayload.jsonString([
+            "kind": "identity",
+            "documentType": documentType,
+            "fullName": fullName,
+            "documentNumber": documentNumber,
+            "issuer": issuer,
+            "country": country,
+            "issueDate": issueDate,
+            "expiryDate": expiryDate,
+            "notes": notes,
+            "favorite": favorite
+        ])
+    }
+
+    private func parityPayload(kind: String, payloadJSON: String, favorite: Bool) throws -> String {
+        var object = try MDBXBusinessPayload.object(from: payloadJSON)
+        object["kind"] = kind
+        object["favorite"] = favorite
+        return try MDBXBusinessPayload.jsonString(object)
     }
 }
 

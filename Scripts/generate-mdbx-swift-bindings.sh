@@ -6,10 +6,10 @@ IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$IOS_DIR/.." && pwd)"
 MDBX_DIR="$REPO_ROOT/mdbx"
 OUT_DIR="$IOS_DIR/Generated/MDBXUniFFI"
-LIB_PATH="$MDBX_DIR/target/debug/libmdbx_ios_ffi.dylib"
+LIB_PATH="$MDBX_DIR/target/debug/libmdbx_ffi.dylib"
 
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "cargo is required to build mdbx-ios-ffi" >&2
+  echo "cargo is required to build mdbx-ffi" >&2
   exit 1
 fi
 
@@ -24,7 +24,7 @@ if ! command -v uniffi-bindgen-swift >/dev/null 2>&1; then
 fi
 
 cd "$MDBX_DIR"
-cargo build -p mdbx-ios-ffi
+cargo build -p mdbx-ffi
 
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
