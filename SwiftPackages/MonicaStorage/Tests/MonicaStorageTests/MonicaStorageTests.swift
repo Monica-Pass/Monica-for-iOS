@@ -63,6 +63,29 @@ import MonicaStorage
     #expect(!report.headerSummary!.cryptoSummary!.displaySummary.contains("key-file-secret"))
 }
 
+@Test func keepPassKdbxPayloadEnvelopeSplitsHeaderFieldsAndEncryptedPayloadWithoutSecrets() throws {
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x01, 0x00, 0x00, 0x00]),
+        kdfParameters: makeKdbxVariantDictionary(
+            uuid: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])
+        )
+    )
+    let encryptedPayload = Data("encrypted-payload-bytes".utf8)
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(header + encryptedPayload)
+
+    #expect(envelope.headerSummary.displayName == "KDBX 4")
+    #expect(envelope.headerSummary.cryptoSummary?.displaySummary == "AES-256，GZip，Argon2id")
+    #expect(envelope.headerByteRange == 0..<header.count)
+    #expect(envelope.encryptedPayload == encryptedPayload)
+    #expect(envelope.headerFields[2] == Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]))
+    #expect(envelope.headerFields[3] == Data([0x01, 0x00, 0x00, 0x00]))
+    #expect(envelope.displaySummary == "KDBX 4，header 89 bytes，payload 23 bytes，AES-256，GZip，Argon2id")
+    #expect(!envelope.displaySummary.contains("database-password"))
+    #expect(!envelope.displaySummary.contains("key-file-secret"))
+    #expect(!envelope.displaySummary.contains("encrypted-payload-bytes"))
+}
+
 @Test func keepPassUnlockPreflightRequiresCredentialsAndSummarizesInputs() throws {
     let kdbx4 = Data([
         0x03, 0xD9, 0xA2, 0x9A,

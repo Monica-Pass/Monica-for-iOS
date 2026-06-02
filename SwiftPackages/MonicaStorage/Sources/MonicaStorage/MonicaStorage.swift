@@ -154,6 +154,38 @@ public struct KeePassHeaderSummary: Sendable, Equatable {
     }
 }
 
+public struct KeePassKdbxPayloadEnvelope: Sendable, Equatable {
+    public let headerSummary: KeePassHeaderSummary
+    public let headerFields: [UInt8: Data]
+    public let headerByteRange: Range<Int>
+    public let encryptedPayload: Data
+
+    public init(
+        headerSummary: KeePassHeaderSummary,
+        headerFields: [UInt8: Data],
+        headerByteRange: Range<Int>,
+        encryptedPayload: Data
+    ) {
+        self.headerSummary = headerSummary
+        self.headerFields = headerFields
+        self.headerByteRange = headerByteRange
+        self.encryptedPayload = encryptedPayload
+    }
+
+    public static func parse(_ data: Data) throws -> KeePassKdbxPayloadEnvelope {
+        try KeePassFormatInspector.parseKdbxPayloadEnvelope(data)
+    }
+
+    public var displaySummary: String {
+        let crypto = headerSummary.cryptoSummary?.displaySummary
+        let base = "\(headerSummary.displayName)，header \(headerByteRange.count) bytes，payload \(encryptedPayload.count) bytes"
+        guard let crypto, !crypto.isEmpty else {
+            return base
+        }
+        return "\(base)，\(crypto)"
+    }
+}
+
 public struct KeePassCredentialSummary: Sendable, Equatable {
     public let hasPassword: Bool
     public let hasKeyFile: Bool
@@ -1486,6 +1518,17 @@ public struct KeePassOperationError: Error, Sendable, Equatable, LocalizedError 
 }
 
 public enum KeePassFormatInspector {
+    private struct ParsedKdbxHeader {
+        let summary: KeePassHeaderSummary
+        let fields: [UInt8: Data]
+        let headerEndOffset: Int
+    }
+
+    private struct ParsedKdbxHeaderFields {
+        let fields: [UInt8: Data]
+        let headerEndOffset: Int
+    }
+
     private static let kdbxSignature = Data([0x03, 0xD9, 0xA2, 0x9A, 0x67, 0xFB, 0x4B, 0xB5])
     private static let kdbxVersionOffset = 8
     private static let kdbxVersionByteCount = 4
@@ -1617,6 +1660,28 @@ public enum KeePassFormatInspector {
         )
     }
 
+    public static func parseKdbxPayloadEnvelope(_ data: Data) throws -> KeePassKdbxPayloadEnvelope {
+        guard let parsed = parseKdbxHeader(data) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX header 无法解析；请确认文件未损坏。"
+            )
+        }
+        let payloadStart = parsed.headerEndOffset
+        guard payloadStart <= data.count else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX payload 无法解析；请确认文件未损坏。"
+            )
+        }
+        return KeePassKdbxPayloadEnvelope(
+            headerSummary: parsed.summary,
+            headerFields: parsed.fields,
+            headerByteRange: 0..<payloadStart,
+            encryptedPayload: Data(data[payloadStart..<data.count])
+        )
+    }
+
     private static func parseKdbxHeaderSummary(_ data: Data) -> KeePassHeaderSummary? {
         guard data.starts(with: kdbxSignature),
               data.count >= kdbxVersionOffset + kdbxVersionByteCount else {
@@ -1636,7 +1701,7 @@ public enum KeePassFormatInspector {
         default:
             formatVersion = .unknown
         }
-        let headerFields = parseKdbxHeaderFields(data, formatVersion: formatVersion)
+        let headerFields = parseKdbxHeaderFields(data, formatVersion: formatVersion)?.fields ?? [:]
         return KeePassHeaderSummary(
             majorVersion: major == 0 ? nil : major,
             minorVersion: minor,
@@ -1645,10 +1710,45 @@ public enum KeePassFormatInspector {
         )
     }
 
+    private static func parseKdbxHeader(_ data: Data) -> ParsedKdbxHeader? {
+        guard data.starts(with: kdbxSignature),
+              data.count >= kdbxVersionOffset + kdbxVersionByteCount else {
+            return nil
+        }
+        guard let rawVersion = littleEndianUInt32(from: data, at: kdbxVersionOffset) else {
+            return nil
+        }
+        let minor = Int(rawVersion & 0xFFFF)
+        let major = Int((rawVersion >> 16) & 0xFFFF)
+        let formatVersion: KeePassKdbxFormatVersion
+        switch major {
+        case 3:
+            formatVersion = .kdbx3
+        case 4:
+            formatVersion = .kdbx4
+        default:
+            formatVersion = .unknown
+        }
+        guard let parsedFields = parseKdbxHeaderFields(data, formatVersion: formatVersion) else {
+            return nil
+        }
+        let summary = KeePassHeaderSummary(
+            majorVersion: major == 0 ? nil : major,
+            minorVersion: minor,
+            formatVersion: formatVersion,
+            cryptoSummary: cryptoSummary(from: parsedFields.fields)
+        )
+        return ParsedKdbxHeader(
+            summary: summary,
+            fields: parsedFields.fields,
+            headerEndOffset: parsedFields.headerEndOffset
+        )
+    }
+
     private static func parseKdbxHeaderFields(
         _ data: Data,
         formatVersion: KeePassKdbxFormatVersion
-    ) -> [UInt8: Data] {
+    ) -> ParsedKdbxHeaderFields? {
         let lengthByteCount: Int
         switch formatVersion {
         case .kdbx3:
@@ -1656,7 +1756,7 @@ public enum KeePassFormatInspector {
         case .kdbx4:
             lengthByteCount = 4
         case .unknown:
-            return [:]
+            return nil
         }
 
         var fields: [UInt8: Data] = [:]
@@ -1666,7 +1766,7 @@ public enum KeePassFormatInspector {
             index += 1
 
             guard index + lengthByteCount <= data.count else {
-                return fields
+                return nil
             }
 
             let fieldLength: UInt32?
@@ -1676,23 +1776,23 @@ public enum KeePassFormatInspector {
                 fieldLength = littleEndianUInt32(from: data, at: index)
             }
             guard let fieldLength else {
-                return fields
+                return nil
             }
             index += lengthByteCount
 
             let valueLength = Int(fieldLength)
             guard index + valueLength <= data.count else {
-                return fields
+                return nil
             }
             let value = Data(data[index..<index + valueLength])
             index += valueLength
 
             if fieldID == kdbxEndHeaderField {
-                return fields
+                return ParsedKdbxHeaderFields(fields: fields, headerEndOffset: index)
             }
             fields[fieldID] = value
         }
-        return fields
+        return nil
     }
 
     private static func cryptoSummary(from headerFields: [UInt8: Data]) -> KeePassKdbxCryptoSummary? {
