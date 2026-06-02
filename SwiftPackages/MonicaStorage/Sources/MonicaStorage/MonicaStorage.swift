@@ -2247,9 +2247,17 @@ private final class KeePassProtectedValueStreamDecoder {
                 keyStream: KeePassSalsa20KeyStream(key: key, iv: salsa20IV)
             )
         case .chacha20:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "KeePass ChaCha20 protected value stream 尚未接入"
+            guard innerRandomStreamKey.count == SHA512.byteCount else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KeePass inner stream key 长度无效；请确认文件未损坏。"
+                )
+            }
+            let hash = Data(SHA512.hash(data: innerRandomStreamKey))
+            let key = Data(hash.prefix(32))
+            let nonce = Data(hash.dropFirst(32).prefix(12))
+            return KeePassProtectedValueStreamDecoder(
+                keyStream: KeePassChaCha20KeyStream(key: key, nonce: nonce)
             )
         case .unknown:
             throw KeePassOperationError(
@@ -2280,6 +2288,104 @@ private final class KeePassProtectedValueStreamDecoder {
 
 private protocol KeePassInnerRandomKeyStream: AnyObject {
     func xor(_ data: Data) -> Data
+}
+
+private final class KeePassChaCha20KeyStream: KeePassInnerRandomKeyStream {
+    private let key: [UInt8]
+    private let nonce: [UInt8]
+    private var counter: UInt32 = 0
+    private var block = [UInt8]()
+    private var blockOffset = 0
+
+    init(key: Data, nonce: Data) {
+        self.key = [UInt8](key)
+        self.nonce = [UInt8](nonce)
+    }
+
+    func xor(_ data: Data) -> Data {
+        var output = [UInt8]()
+        output.reserveCapacity(data.count)
+        for byte in data {
+            output.append(byte ^ nextByte())
+        }
+        return Data(output)
+    }
+
+    private func nextByte() -> UInt8 {
+        if blockOffset >= block.count {
+            block = Self.block(key: key, nonce: nonce, counter: counter)
+            counter &+= 1
+            blockOffset = 0
+        }
+        defer { blockOffset += 1 }
+        return block[blockOffset]
+    }
+
+    private static func block(key: [UInt8], nonce: [UInt8], counter: UInt32) -> [UInt8] {
+        let constants = [UInt8]("expand 32-byte k".utf8)
+        let initial: [UInt32] = [
+            word(constants, 0), word(constants, 4), word(constants, 8), word(constants, 12),
+            word(key, 0), word(key, 4), word(key, 8), word(key, 12),
+            word(key, 16), word(key, 20), word(key, 24), word(key, 28),
+            counter,
+            word(nonce, 0), word(nonce, 4), word(nonce, 8)
+        ]
+        var state = initial
+        for _ in 0..<10 {
+            quarterRound(&state, 0, 4, 8, 12)
+            quarterRound(&state, 1, 5, 9, 13)
+            quarterRound(&state, 2, 6, 10, 14)
+            quarterRound(&state, 3, 7, 11, 15)
+            quarterRound(&state, 0, 5, 10, 15)
+            quarterRound(&state, 1, 6, 11, 12)
+            quarterRound(&state, 2, 7, 8, 13)
+            quarterRound(&state, 3, 4, 9, 14)
+        }
+        var output = [UInt8]()
+        output.reserveCapacity(64)
+        for index in 0..<16 {
+            output.append(contentsOf: littleEndianUInt32Bytes(state[index] &+ initial[index]))
+        }
+        return output
+    }
+
+    private static func quarterRound(_ state: inout [UInt32], _ a: Int, _ b: Int, _ c: Int, _ d: Int) {
+        state[a] = state[a] &+ state[b]
+        state[d] ^= state[a]
+        state[d] = rotateLeft(state[d], by: 16)
+
+        state[c] = state[c] &+ state[d]
+        state[b] ^= state[c]
+        state[b] = rotateLeft(state[b], by: 12)
+
+        state[a] = state[a] &+ state[b]
+        state[d] ^= state[a]
+        state[d] = rotateLeft(state[d], by: 8)
+
+        state[c] = state[c] &+ state[d]
+        state[b] ^= state[c]
+        state[b] = rotateLeft(state[b], by: 7)
+    }
+
+    private static func rotateLeft(_ value: UInt32, by shift: UInt32) -> UInt32 {
+        (value << shift) | (value >> (32 - shift))
+    }
+
+    private static func word(_ bytes: [UInt8], _ offset: Int) -> UInt32 {
+        UInt32(bytes[offset])
+            | (UInt32(bytes[offset + 1]) << 8)
+            | (UInt32(bytes[offset + 2]) << 16)
+            | (UInt32(bytes[offset + 3]) << 24)
+    }
+
+    private static func littleEndianUInt32Bytes(_ value: UInt32) -> [UInt8] {
+        [
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ]
+    }
 }
 
 private final class KeePassSalsa20KeyStream: KeePassInnerRandomKeyStream {

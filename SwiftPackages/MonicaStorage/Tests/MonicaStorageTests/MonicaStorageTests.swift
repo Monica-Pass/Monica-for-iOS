@@ -1340,6 +1340,78 @@ import MonicaStorage
     #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func defaultKeePassDatabaseReaderDecodesKdbx4ChaCha20ProtectedValuesWithoutLeakingSecrets() throws {
+    final class DecryptedXMLPayloadDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
+        let decryptedPayload: Data
+        var contexts: [KeePassKdbxDecryptInputContext] = []
+
+        init(decryptedPayload: Data) {
+            self.decryptedPayload = decryptedPayload
+        }
+
+        func decryptPayload(_ context: KeePassKdbxDecryptInputContext) throws -> Data {
+            contexts.append(context)
+            return decryptedPayload
+        }
+    }
+
+    let password = "kdbx4-chacha-password"
+    let innerRandomStreamKey = Data(repeating: 0xF4, count: 64)
+    let protectedPasswordCiphertext = "Gtk2BHw0dbkr+efdBXh9A5YmgTn1nXVbzHy0vPDtbw=="
+    let decodedPassword = "kdbx4 chacha protected password"
+    let xml = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>root-group-uuid</UUID>
+          <Name>Root</Name>
+          <Entry>
+            <UUID>entry-chacha-uuid</UUID>
+            <String><Key>Title</Key><Value>ChaCha Login</Value></String>
+            <String><Key>UserName</Key><Value>erin</Value></String>
+            <String><Key>Password</Key><Value Protected="True">\(protectedPasswordCiphertext)</Value></String>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: Data(repeating: 0xB4, count: 32),
+        encryptionIV: Data(repeating: 0xC4, count: 16),
+        innerRandomStreamKey: innerRandomStreamKey,
+        innerRandomStreamID: 3,
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "S", value: Data(repeating: 0xA4, count: 32)),
+            kdbxVariantUInt64(key: "R", value: 1)
+        ])
+    )
+    let decryptor = DecryptedXMLPayloadDecryptor(decryptedPayload: Data(xml.utf8))
+    let reader = DefaultKeePassDatabaseReader(payloadDecryptor: decryptor)
+
+    let snapshot = try reader.readSnapshot(
+        database: header + Data("encrypted-payload-secret".utf8),
+        sourceName: "kdbx4-chacha20-protected-values.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    let entry = try #require(snapshot.entries.first)
+    let context = try #require(decryptor.contexts.first)
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(context.cryptoInputs.innerRandomStreamID == 3)
+    #expect(context.cryptoInputs.innerRandomStreamKey == innerRandomStreamKey)
+    #expect(entry.title == "ChaCha Login")
+    #expect(entry.username == "erin")
+    #expect(entry.decodedPassword == decodedPassword)
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains(decodedPassword))
+    #expect(!snapshot.displaySummary.contains(protectedPasswordCiphertext))
+    #expect(!snapshot.displaySummary.contains(innerRandomStreamKey.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func defaultKeePassDatabaseReaderBuildsKdbxDecryptInputBeforeCryptoDecode() throws {
     final class RecordingDecryptor: KeePassKdbxPayloadDecryptor, @unchecked Sendable {
         var contexts: [KeePassKdbxDecryptInputContext] = []
