@@ -3473,22 +3473,24 @@ final class VaultSessionModelTests: XCTestCase {
                 ],
                 entries: [
                     KeePassReadOnlyEntry(
-                        id: "entry-1",
+                        id: "entry-uuid-github",
                         title: "GitHub",
                         username: "alice",
                         url: "https://github.com",
                         groupPath: "/Work",
+                        groupID: "group-uuid-work",
                         hasPassword: true,
                         hasTotp: false,
                         attachmentCount: 0,
                         isDeleted: false
                     ),
                     KeePassReadOnlyEntry(
-                        id: "entry-2",
+                        id: "entry-uuid-bank",
                         title: "Bank",
                         username: "alice",
                         url: "https://bank.example",
                         groupPath: "/Personal",
+                        groupID: "group-uuid-personal",
                         hasPassword: true,
                         hasTotp: false,
                         attachmentCount: 0,
@@ -3520,7 +3522,32 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(engine.createdLoginEntries.map(\.projectID), ["project-1", "project-2"])
         XCTAssertEqual(model.activeVaultCategoryTitle, "KeePass / Work")
         XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(
+            model.keePassLastMetadataImportReferences,
+            [
+                AppKeePassImportedEntryReference(
+                    sourceEntryID: "entry-uuid-github",
+                    sourceGroupID: "group-uuid-work",
+                    sourceGroupPath: "/Work",
+                    importedLoginEntryID: "entry-1",
+                    importedProjectID: "project-1"
+                ),
+                AppKeePassImportedEntryReference(
+                    sourceEntryID: "entry-uuid-bank",
+                    sourceGroupID: "group-uuid-personal",
+                    sourceGroupPath: "/Personal",
+                    importedLoginEntryID: "entry-2",
+                    importedProjectID: "project-2"
+                )
+            ]
+        )
+        XCTAssertFalse(model.entryOperationState.label.contains("entry-uuid-github"))
+        XCTAssertFalse(model.entryOperationState.label.contains("group-uuid-work"))
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 已导入 2 项元数据；待解码：2 个密码字段"))
+
+        _ = try model.previewKeePassImport(kdbx, fileName: "other.kdbx")
+
+        XCTAssertTrue(model.keePassLastMetadataImportReferences.isEmpty)
     }
 
     func testAndroidBackupImportFileBuildsPreviewWithoutWritingVault() throws {

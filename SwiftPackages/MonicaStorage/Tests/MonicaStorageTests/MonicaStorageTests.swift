@@ -152,6 +152,7 @@ import MonicaStorage
                 username: "alice",
                 url: "https://github.com",
                 groupPath: "/Work",
+                groupID: "group-uuid-work",
                 hasPassword: true,
                 hasTotp: true,
                 attachmentCount: 2,
@@ -163,6 +164,7 @@ import MonicaStorage
                 username: "bob",
                 url: "https://deleted.example",
                 groupPath: "/Trash",
+                groupID: "group-uuid-trash",
                 hasPassword: true,
                 hasTotp: false,
                 attachmentCount: 0,
@@ -178,13 +180,16 @@ import MonicaStorage
     #expect(plan.candidates.first?.title == "GitHub")
     #expect(plan.candidates.first?.kind == .login)
     #expect(plan.candidates.first?.groupPath == "/Work")
+    #expect(plan.candidates.first?.groupID == "group-uuid-work")
     #expect(plan.candidates.first?.hasPassword == true)
     #expect(plan.pendingPasswordCount == 1)
     #expect(plan.pendingTotpCount == 1)
     #expect(plan.pendingAttachmentCount == 2)
     #expect(plan.pendingCapabilitySummary == "待解码：1 个密码字段，1 个 TOTP，2 个附件")
     #expect(plan.skipped.first?.reason == .deletedEntry)
+    #expect(plan.skipped.first?.groupID == "group-uuid-trash")
     #expect(plan.displaySummary == "KDBX 4，1 个可预览条目，1 个跳过")
+    #expect(!plan.displaySummary.contains("group-uuid-work"))
     #expect(!plan.pendingCapabilitySummary.contains("database-password"))
     #expect(!plan.pendingCapabilitySummary.contains("key-file-secret"))
     #expect(!plan.displaySummary.contains("database-password"))

@@ -628,6 +628,14 @@ struct KeePassImportPreview: Sendable, Equatable {
     var issue: KeePassImportIssue? { report.issue }
 }
 
+struct AppKeePassImportedEntryReference: Sendable, Equatable {
+    let sourceEntryID: String
+    let sourceGroupID: String?
+    let sourceGroupPath: String
+    let importedLoginEntryID: String
+    let importedProjectID: String
+}
+
 struct CSVExportDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
@@ -1286,6 +1294,7 @@ final class AppSessionModel {
     var keePassUnlockPassword = ""
     var keePassKeyFileData: Data?
     var keePassKeyFileName = ""
+    var keePassLastMetadataImportReferences: [AppKeePassImportedEntryReference] = []
     var androidBackupDecryptPassword = ""
     var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
@@ -5402,6 +5411,7 @@ final class AppSessionModel {
         keePassPendingDatabaseName = fileName
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
+        keePassLastMetadataImportReferences = []
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
@@ -5539,6 +5549,7 @@ final class AppSessionModel {
             }
 
             var firstImportedProject: LocalVaultProject?
+            var importedReferences: [AppKeePassImportedEntryReference] = []
             for candidate in plan.candidates {
                 let project = try ensureKeePassImportProject(
                     baseTitle: projectTitle,
@@ -5548,13 +5559,22 @@ final class AppSessionModel {
                 if firstImportedProject == nil {
                     firstImportedProject = project
                 }
-                _ = try entryRepository.createLoginEntry(
+                let importedEntry = try entryRepository.createLoginEntry(
                     projectID: project.id,
                     draft: LocalLoginEntryDraft(
                         title: candidate.title,
                         username: candidate.username,
                         password: "",
                         url: candidate.url
+                    )
+                )
+                importedReferences.append(
+                    AppKeePassImportedEntryReference(
+                        sourceEntryID: candidate.id,
+                        sourceGroupID: candidate.groupID,
+                        sourceGroupPath: candidate.groupPath,
+                        importedLoginEntryID: importedEntry.id,
+                        importedProjectID: project.id
                     )
                 )
             }
@@ -5566,7 +5586,8 @@ final class AppSessionModel {
                 selectedVaultQuickFilterID = "category-\(activeProject.id)"
             }
             try refreshAutoFillEncryptedIndexIfConfigured()
-            clearKeePassImportState()
+            keePassLastMetadataImportReferences = importedReferences
+            clearKeePassImportState(preservingLastMetadataImportReferences: true)
             let pendingSummary = plan.pendingCapabilitySummary
             let pendingText = pendingSummary.isEmpty ? "，秘密字段待 KDBX 解码器接入" : "；\(pendingSummary)"
             entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(pendingText)")
@@ -6321,7 +6342,9 @@ final class AppSessionModel {
         androidBackupDecryptPassword = ""
     }
 
-    private func clearKeePassImportState() {
+    private func clearKeePassImportState(
+        preservingLastMetadataImportReferences: Bool = false
+    ) {
         keePassImportPreview = nil
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
@@ -6330,6 +6353,9 @@ final class AppSessionModel {
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
+        if !preservingLastMetadataImportReferences {
+            keePassLastMetadataImportReferences = []
+        }
     }
 
     private func clearExtendedParityEntries() {

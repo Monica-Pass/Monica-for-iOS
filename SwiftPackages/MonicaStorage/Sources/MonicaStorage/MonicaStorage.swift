@@ -202,6 +202,7 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let username: String
     public let url: String
     public let groupPath: String
+    public let groupID: String?
     public let hasPassword: Bool
     public let hasTotp: Bool
     public let attachmentCount: Int
@@ -213,6 +214,7 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         username: String,
         url: String,
         groupPath: String,
+        groupID: String? = nil,
         hasPassword: Bool,
         hasTotp: Bool,
         attachmentCount: Int,
@@ -223,6 +225,7 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         self.username = username
         self.url = url
         self.groupPath = groupPath
+        self.groupID = groupID
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
         self.attachmentCount = attachmentCount
@@ -291,6 +294,7 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
     public let username: String
     public let url: String
     public let groupPath: String
+    public let groupID: String?
     public let hasPassword: Bool
     public let hasTotp: Bool
     public let attachmentCount: Int
@@ -302,6 +306,7 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         username: String,
         url: String,
         groupPath: String,
+        groupID: String? = nil,
         hasPassword: Bool,
         hasTotp: Bool,
         attachmentCount: Int
@@ -312,6 +317,7 @@ public struct KeePassReadOnlyImportCandidate: Sendable, Equatable, Identifiable 
         self.username = username
         self.url = url
         self.groupPath = groupPath
+        self.groupID = groupID
         self.hasPassword = hasPassword
         self.hasTotp = hasTotp
         self.attachmentCount = attachmentCount
@@ -322,12 +328,20 @@ public struct KeePassReadOnlyImportSkippedEntry: Sendable, Equatable, Identifiab
     public let id: String
     public let title: String
     public let groupPath: String
+    public let groupID: String?
     public let reason: KeePassReadOnlyImportSkipReason
 
-    public init(id: String, title: String, groupPath: String, reason: KeePassReadOnlyImportSkipReason) {
+    public init(
+        id: String,
+        title: String,
+        groupPath: String,
+        groupID: String? = nil,
+        reason: KeePassReadOnlyImportSkipReason
+    ) {
         self.id = id
         self.title = title
         self.groupPath = groupPath
+        self.groupID = groupID
         self.reason = reason
     }
 }
@@ -405,6 +419,7 @@ public enum KeePassReadOnlyImportPlanner {
                         id: entry.id,
                         title: entry.title,
                         groupPath: entry.groupPath,
+                        groupID: entry.groupID,
                         reason: .deletedEntry
                     )
                 )
@@ -419,6 +434,7 @@ public enum KeePassReadOnlyImportPlanner {
                     username: entry.username,
                     url: entry.url,
                     groupPath: entry.groupPath,
+                    groupID: entry.groupID,
                     hasPassword: entry.hasPassword,
                     hasTotp: entry.hasTotp,
                     attachmentCount: entry.attachmentCount
