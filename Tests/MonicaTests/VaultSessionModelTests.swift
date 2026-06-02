@@ -3624,6 +3624,67 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: previewURL.path))
     }
 
+    func testAttachmentQuickLookPreviewAppendsRedactedContentTimelineEvent() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let cek = Data((0..<32).map(UInt8.init))
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore,
+            attachmentContentEncryptionKeyProvider: { _ in cek }
+        )
+        let nonceData = Data((80..<92).map(UInt8.init))
+        let plaintext = Data("timeline plaintext".utf8)
+        let sealedBox = try AES.GCM.seal(
+            plaintext,
+            using: SymmetricKey(data: cek),
+            nonce: try AES.GCM.Nonce(data: nonceData)
+        )
+        let encryptedBlob = try XCTUnwrap(sealedBox.combined)
+
+        try unlockNewVault(model)
+        let attachment = LocalAttachmentMetadata(
+            id: "attachment-1",
+            projectID: "project-1",
+            entryID: "entry-1",
+            fileName: "../contract.pdf",
+            mediaType: "application/pdf",
+            originalSize: Int64(plaintext.count),
+            storedSize: Int64(encryptedBlob.count),
+            contentHash: "sha256:timeline-secret-hash",
+            storageMode: "android-backup-encrypted-blob",
+            source: "android-backup-local",
+            downloadState: "downloaded",
+            wrappedContentEncryptionKey: "wrapped-timeline-secret-key",
+            localPath: "attachment-1.enc",
+            deleted: false
+        )
+        model.attachmentEntries = [attachment]
+        _ = try blobStore.saveEncryptedBlob(
+            encryptedBlob,
+            vaultID: "created-vault",
+            localPath: "attachment-1.enc"
+        )
+
+        try model.presentAttachmentQuickLookPreview(attachment)
+
+        let event = try XCTUnwrap(model.operationTimelineEvents.first)
+        XCTAssertEqual(event.action, .viewed)
+        XCTAssertEqual(event.itemKind, .attachmentRef)
+        XCTAssertEqual(event.itemID, attachment.id)
+        XCTAssertEqual(event.itemTitle, "contract.pdf")
+
+        let timelineText = "\(event.title) \(event.detail)"
+        [
+            "sha256:timeline-secret-hash",
+            "wrapped-timeline-secret-key",
+            "attachment-1.enc",
+            "timeline plaintext"
+        ].forEach { secret in
+            XCTAssertFalse(timelineText.contains(secret))
+        }
+    }
+
     func testAttachmentQuickLookPreviewWithoutContentKeyProviderUsesRedactedFailure() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()

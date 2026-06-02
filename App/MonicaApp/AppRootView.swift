@@ -404,6 +404,7 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
     case deleted
     case restored
     case moved
+    case viewed
 
     var title: String {
         switch self {
@@ -417,6 +418,8 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
             "已恢复"
         case .moved:
             "已移动"
+        case .viewed:
+            "已查看"
         }
     }
 
@@ -432,6 +435,8 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
             "arrow.uturn.backward.circle"
         case .moved:
             "arrow.right.circle"
+        case .viewed:
+            "eye.circle"
         }
     }
 }
@@ -1736,6 +1741,12 @@ final class AppSessionModel {
                 contentEncryptionKey: contentEncryptionKey
             )
             attachmentQuickLookPreviewURL = preview.fileURL
+            appendOperationTimelineEvent(
+                action: .viewed,
+                itemKind: .attachmentRef,
+                itemID: entry.id,
+                itemTitle: preview.displayFileName
+            )
             entryOperationState = .succeeded("附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节")
         } catch let error as LocalAttachmentContentStoreError {
             entryOperationState = .failed(error.localizedDescription)
@@ -2661,7 +2672,7 @@ final class AppSessionModel {
                     projectID: projectID,
                     entryRepository: entryRepository
                 )
-            case .created, .updated, .moved:
+            case .created, .updated, .moved, .viewed:
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
