@@ -2959,6 +2959,10 @@ final class AppSessionModel {
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
+    private func sha256Hex(_ data: Data) -> String {
+        Data(SHA256.hash(data: data)).map { String(format: "%02x", $0) }.joined()
+    }
+
     private func duplicateLoginEntryCount(in entries: [LocalLoginEntry]) -> Int {
         duplicateLoginGroups(in: entries)
             .reduce(0) { count, group in count + group.entries.count }
@@ -6431,6 +6435,78 @@ final class AppSessionModel {
         }
     }
 
+    func replaceKeePassReadOnlyAttachmentContent(
+        entryID: String,
+        attachmentID: String,
+        decodedContent content: Data,
+        fileName: String? = nil,
+        mediaType: String? = nil
+    ) throws -> KeePassReadOnlySnapshot {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let snapshot: KeePassReadOnlySnapshot
+            if let existingSnapshot = keePassReadOnlySnapshot {
+                snapshot = existingSnapshot
+            } else {
+                snapshot = try previewKeePassReadOnlyTree()
+            }
+            guard let entryIndex = snapshot.entries.firstIndex(where: { $0.id == entryID }) else {
+                throw AppKeePassSnapshotEditError.entryUnavailable
+            }
+            let entry = snapshot.entries[entryIndex]
+            guard let attachmentIndex = entry.attachments.firstIndex(where: { $0.id == attachmentID }) else {
+                throw AppKeePassSnapshotEditError.attachmentUnavailable
+            }
+            let attachment = entry.attachments[attachmentIndex]
+            let updatedAttachment = KeePassReadOnlyAttachment(
+                id: attachment.id,
+                fileName: sanitizedAttachmentPreviewFileName(fileName ?? attachment.fileName),
+                mediaType: mediaType ?? attachment.mediaType,
+                originalSize: Int64(content.count),
+                contentHash: "sha256:\(sha256Hex(content))",
+                decodedContent: content
+            )
+            var updatedAttachments = entry.attachments
+            updatedAttachments[attachmentIndex] = updatedAttachment
+            let updatedEntry = KeePassReadOnlyEntry(
+                id: entry.id,
+                title: entry.title,
+                username: entry.username,
+                url: entry.url,
+                groupPath: entry.groupPath,
+                groupID: entry.groupID,
+                notes: entry.notes,
+                customFields: entry.customFields,
+                hasPassword: entry.hasPassword,
+                decodedPassword: entry.decodedPassword,
+                hasTotp: entry.hasTotp,
+                decodedTotp: entry.decodedTotp,
+                attachmentCount: updatedAttachments.count,
+                isDeleted: entry.isDeleted,
+                attachments: updatedAttachments
+            )
+            var updatedEntries = snapshot.entries
+            updatedEntries[entryIndex] = updatedEntry
+            let updatedSnapshot = KeePassReadOnlySnapshot(
+                sourceName: snapshot.sourceName,
+                headerSummary: snapshot.headerSummary,
+                groups: snapshot.groups,
+                entries: updatedEntries
+            )
+            keePassReadOnlySnapshot = updatedSnapshot
+            keePassReadOnlyImportPlan = nil
+            entryOperationState = .succeeded(
+                "KeePass 附件内容已替换：\(updatedAttachment.fileName) \(content.count) 字节"
+            )
+            return updatedSnapshot
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func previewAndroidBackupImport(
         _ data: Data,
         fileName: String? = nil,
@@ -8442,6 +8518,20 @@ enum AppKeePassKdbxWritebackError: Error, Sendable, Equatable, LocalizedError {
         switch self {
         case .sourceFileUnavailable:
             return "请先从本地文件选择 KeePass KDBX 数据库，再执行写回。"
+        }
+    }
+}
+
+enum AppKeePassSnapshotEditError: Error, Sendable, Equatable, LocalizedError {
+    case entryUnavailable
+    case attachmentUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .entryUnavailable:
+            return "未找到可编辑的 KeePass 条目。"
+        case .attachmentUnavailable:
+            return "未找到可编辑的 KeePass 附件。"
         }
     }
 }

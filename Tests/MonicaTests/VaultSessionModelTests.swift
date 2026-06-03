@@ -3741,6 +3741,182 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassSnapshotAttachmentContentEditWritesUpdatedAttachmentWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let oldAttachmentSecret = Data("old keepass attachment secret".utf8)
+        let newAttachmentSecret = Data("new keepass attachment secret".utf8)
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-attachment",
+                    title: "Contract",
+                    username: "owner@example.com",
+                    url: "https://example.com/contract",
+                    groupPath: "/",
+                    groupID: "root",
+                    notes: "entry note",
+                    hasPassword: true,
+                    decodedPassword: "entry-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-1",
+                            fileName: "contract.pdf",
+                            mediaType: "application/pdf",
+                            originalSize: Int64(oldAttachmentSecret.count),
+                            contentHash: "sha256:old-attachment-secret-hash",
+                            decodedContent: oldAttachmentSecret
+                        )
+                    ]
+                )
+            ]
+        )
+        let reader = RecordingKeePassDatabaseReader(snapshot: snapshot)
+        let model = AppSessionModel(
+            keePassDatabaseReader: reader,
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx4WritebackCoordinator: coordinator
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx-attachment-edit-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("personal.kdbx")
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xB1, count: 32),
+            encryptionIV: Data(repeating: 0xB2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xB3, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xB4, count: 32),
+                iterations: 2,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-placeholder".utf8)
+        try sourceDatabase.write(to: databaseURL)
+        let expectedResult = KeePassKdbx4WritebackResult(
+            database: Data("coordinated-kdbx-with-edited-attachment".utf8),
+            headerBytes: Data([0x03]),
+            payloadSection: Data([0x04]),
+            xmlPayloadByteCount: 128,
+            groupCount: 1,
+            entryCount: 1,
+            attachmentCount: 1
+        )
+        coordinator.result = expectedResult
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyTree()
+
+        let editedSnapshot = try model.replaceKeePassReadOnlyAttachmentContent(
+            entryID: "entry-attachment",
+            attachmentID: "attachment-1",
+            decodedContent: newAttachmentSecret
+        )
+        let editedEntry = try XCTUnwrap(editedSnapshot.entries.first)
+        let editedAttachment = try XCTUnwrap(editedEntry.attachments.first)
+
+        _ = try model.writeKeePassReadOnlySnapshotBackToSource()
+
+        let request = try XCTUnwrap(coordinator.requests.first)
+        let writtenAttachment = try XCTUnwrap(request.snapshot.entries.first?.attachments.first)
+        let expectedHash = Data(SHA256.hash(data: newAttachmentSecret))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        XCTAssertEqual(editedAttachment.decodedContent, newAttachmentSecret)
+        XCTAssertEqual(editedAttachment.originalSize, Int64(newAttachmentSecret.count))
+        XCTAssertEqual(editedAttachment.contentHash, "sha256:\(expectedHash)")
+        XCTAssertEqual(writtenAttachment, editedAttachment)
+        XCTAssertEqual(writer.replacements.first?.data, expectedResult.database)
+        [
+            "old keepass attachment secret",
+            "new keepass attachment secret",
+            "entry-password-secret",
+            "old-attachment-secret-hash",
+            expectedHash,
+            "coordinated-kdbx-with-edited-attachment"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+    }
+
+    func testKeePassSnapshotAttachmentContentEditFailureIsRedactedAndKeepsSnapshot() throws {
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-1",
+                    title: "Login",
+                    username: "user@example.com",
+                    url: "https://example.com",
+                    groupPath: "/",
+                    hasPassword: true,
+                    decodedPassword: "existing-entry-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-1",
+                            fileName: "secret.txt",
+                            originalSize: 9,
+                            contentHash: "sha256:existing-secret-hash",
+                            decodedContent: Data("old bytes".utf8)
+                        )
+                    ]
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            keePassDatabaseReader: RecordingKeePassDatabaseReader(snapshot: snapshot)
+        )
+        model.keePassReadOnlySnapshot = snapshot
+
+        XCTAssertThrowsError(
+            try model.replaceKeePassReadOnlyAttachmentContent(
+                entryID: "entry-1",
+                attachmentID: "missing-attachment-secret-id",
+                decodedContent: Data("replacement secret bytes".utf8)
+            )
+        ) { error in
+            XCTAssertEqual(error as? AppKeePassSnapshotEditError, .attachmentUnavailable)
+        }
+
+        XCTAssertEqual(model.keePassReadOnlySnapshot, snapshot)
+        XCTAssertEqual(model.entryOperationState, .failed("未找到可编辑的 KeePass 附件。"))
+        [
+            "existing-entry-password-secret",
+            "existing-secret-hash",
+            "missing-attachment-secret-id",
+            "replacement secret bytes"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+    }
+
     func testKeePassConfirmImportCreatesLoginMetadataWithoutSecretsAndClearsPreviewState() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(
