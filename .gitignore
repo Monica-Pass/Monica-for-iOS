@@ -7,8 +7,8 @@ xcuserdata/
 **/xcuserdata/
 SwiftPackages/**/.swiftpm/xcode/xcuserdata/
 
+*.md
+
 Generated/MDBXUniFFI/*
-!Generated/MDBXUniFFI/README.md
 
 Artifacts/MDBX/*
-!Artifacts/MDBX/README.md
