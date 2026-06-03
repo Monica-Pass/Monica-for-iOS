@@ -265,7 +265,8 @@ extension AppSessionModel {
         guard let appGroupContainerURL else {
             return AppSessionModel(
                 vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
-                appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore()
+                appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
+                plusResourceUnlockService: DefaultAppPlusResourceUnlockService()
             )
         }
         let indexStore = FileAutoFillEncryptedIndexStore(appGroupContainerURL: appGroupContainerURL)
@@ -294,7 +295,8 @@ extension AppSessionModel {
             autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(),
             autoFillIndexKeyMaterialProvider: { vaultID in
                 try keyMaterialProvider.keyMaterial(for: vaultID)
-            }
+            },
+            plusResourceUnlockService: DefaultAppPlusResourceUnlockService()
         )
         session.refreshNotificationPermissionStatus()
         return session

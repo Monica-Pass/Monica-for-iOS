@@ -147,55 +147,6 @@ struct AppSecurityCenterRepairSuggestion: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
-enum AppPlusStoreKitProduct: String, Sendable, Equatable, CaseIterable {
-    case monthly
-    case yearly
-    case lifetime
-
-    var productID: String {
-        switch self {
-        case .monthly:
-            return "ru.takagi.monica.plus.monthly"
-        case .yearly:
-            return "ru.takagi.monica.plus.yearly"
-        case .lifetime:
-            return "ru.takagi.monica.plus.lifetime"
-        }
-    }
-
-    var displayName: String {
-        switch self {
-        case .monthly:
-            return "Monthly"
-        case .yearly:
-            return "Yearly"
-        case .lifetime:
-            return "Lifetime"
-        }
-    }
-
-    static func product(for productID: String) -> AppPlusStoreKitProduct? {
-        let normalized = productID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return allCases.first { $0.productID == normalized }
-    }
-}
-
-struct AppStoreKitPlusEntitlement: Sendable, Equatable {
-    let productID: String
-    let transactionID: String
-    let originalTransactionID: String
-    let purchasedAt: Date
-    let expiresAt: Date?
-    let revokedAt: Date?
-    let environment: String
-}
-
-struct AppLegacyPlusEntitlement: Sendable, Equatable {
-    let licenseID: String
-    let verifiedAt: Date
-    let expiresAt: Date?
-}
-
 struct AppPlusEntitlementStatusRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -218,8 +169,7 @@ struct AppPlusFeatureRow: Sendable, Equatable, Identifiable {
 
 private enum AppPlusEntitlementSource: Sendable, Equatable {
     case none
-    case storeKit(product: AppPlusStoreKitProduct)
-    case legacyCDK
+    case resourceUnlock
 }
 
 private struct AppPlusEntitlementSnapshot: Sendable, Equatable {
@@ -228,6 +178,16 @@ private struct AppPlusEntitlementSnapshot: Sendable, Equatable {
 
     var isActive: Bool {
         source != .none
+    }
+}
+
+protocol AppPlusResourceUnlockService: Sendable {
+    func unlockPlus() async throws -> Bool
+}
+
+struct DefaultAppPlusResourceUnlockService: AppPlusResourceUnlockService {
+    func unlockPlus() async throws -> Bool {
+        true
     }
 }
 
@@ -1426,6 +1386,7 @@ final class AppSessionModel {
     var notificationPermissionState: AppPermissionStatusRow.State = .checkable
     var vaultKeychainState: VaultKeychainState = .idle
     private var plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
+    var plusActivationState: PlusActivationState = .idle
     var webDAVBaseURL = ""
     var webDAVUsername = ""
     var webDAVPassword = ""
@@ -1486,6 +1447,7 @@ final class AppSessionModel {
     private let autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)?
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
+    private let plusResourceUnlockService: (any AppPlusResourceUnlockService)?
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
@@ -1517,6 +1479,7 @@ final class AppSessionModel {
         autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)? = nil,
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
+        plusResourceUnlockService: (any AppPlusResourceUnlockService)? = nil,
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
@@ -1544,6 +1507,7 @@ final class AppSessionModel {
         self.autoFillIndexKeyMaterialProvider = autoFillIndexKeyMaterialProvider
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
+        self.plusResourceUnlockService = plusResourceUnlockService
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
@@ -2684,91 +2648,87 @@ final class AppSessionModel {
     }
 
     var plusEntitlementStatusRow: AppPlusEntitlementStatusRow {
-        let isActive = plusEntitlementSnapshot.isActive
         return AppPlusEntitlementStatusRow(
             id: "plus-entitlement",
             title: "Monica Plus",
-            value: isActive ? "已激活" : "未激活",
+            value: isPlusActive ? "已激活" : "未激活",
             detail: plusEntitlementDetail(for: plusEntitlementSnapshot),
-            systemImage: isActive ? "checkmark.seal.fill" : "seal"
+            systemImage: isPlusActive ? "checkmark.seal.fill" : "seal"
         )
     }
 
+    var isPlusActive: Bool {
+        plusEntitlementSnapshot.isActive
+    }
+
     var plusFeatureRows: [AppPlusFeatureRow] {
-        let isUnlocked = plusEntitlementSnapshot.isActive
         return [
             AppPlusFeatureRow(
                 id: "premium_themes",
                 title: "会员专属主题",
                 detail: "解锁 Monica Plus 专属主题配色。",
                 systemImage: "paintpalette",
-                isUnlocked: isUnlocked
+                isUnlocked: isPlusActive
             ),
             AppPlusFeatureRow(
                 id: "validator_vibration",
                 title: "验证器震动提醒",
                 detail: "验证码即将刷新时的本机提醒能力。",
                 systemImage: "waveform",
-                isUnlocked: isUnlocked
+                isUnlocked: isPlusActive
             ),
             AppPlusFeatureRow(
                 id: "copy_next_code",
                 title: "智能复制下一个验证码",
                 detail: "倒计时过短时可切换到下一枚 TOTP。",
                 systemImage: "arrow.triangle.2.circlepath",
-                isUnlocked: isUnlocked
+                isUnlocked: isPlusActive
             ),
             AppPlusFeatureRow(
                 id: "bitwarden_sync",
                 title: "Bitwarden 同步",
                 detail: "对齐 Android Plus 中的 Bitwarden 同步能力开关。",
                 systemImage: "cloud",
-                isUnlocked: isUnlocked
+                isUnlocked: isPlusActive
             )
         ]
     }
 
-    func applyStoreKitPlusEntitlements(
-        _ entitlements: [AppStoreKitPlusEntitlement],
-        now: Date = Date()
-    ) {
-        let activeProducts = entitlements.compactMap { entitlement -> AppPlusStoreKitProduct? in
-            guard entitlement.revokedAt == nil,
-                  entitlement.expiresAt.map({ $0 > now }) ?? true
-            else {
-                return nil
-            }
-            return AppPlusStoreKitProduct.product(for: entitlement.productID)
-        }
-        guard let product = activeProducts.sorted(by: plusProductPriorityDescending).first else {
-            plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
-            recordUserActivity()
-            return
-        }
-        plusEntitlementSnapshot = AppPlusEntitlementSnapshot(
-            source: .storeKit(product: product),
-            expiresAt: entitlements
-                .filter { AppPlusStoreKitProduct.product(for: $0.productID) == product }
-                .compactMap(\.expiresAt)
-                .max()
-        )
-        recordUserActivity()
+    var canActivatePlusFromResource: Bool {
+        plusResourceUnlockService != nil
     }
 
-    func applyLegacyPlusEntitlement(
-        _ entitlement: AppLegacyPlusEntitlement,
-        now: Date = Date()
-    ) {
-        guard entitlement.expiresAt.map({ $0 > now }) ?? true else {
-            plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
-            recordUserActivity()
-            return
-        }
-        plusEntitlementSnapshot = AppPlusEntitlementSnapshot(
-            source: .legacyCDK,
-            expiresAt: entitlement.expiresAt
-        )
+    func activatePlusFromResource(now: Date = Date()) async throws {
         recordUserActivity()
+        plusActivationState = .running
+        do {
+            guard let plusResourceUnlockService else {
+                throw AppPlusResourceUnlockError.serviceUnavailable
+            }
+            guard try await plusResourceUnlockService.unlockPlus() else {
+                throw AppPlusResourceUnlockError.activationRejected
+            }
+            plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
+            plusActivationState = .activated
+            recordUserActivity(at: now)
+        } catch {
+            plusActivationState = .failed(readablePlusResourceUnlockErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    func deactivatePlus(now: Date = Date()) {
+        recordUserActivity()
+        plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
+        plusActivationState = .deactivated
+        recordUserActivity(at: now)
+    }
+
+    private func readablePlusResourceUnlockErrorMessage(for error: Error) -> String {
+        if let appError = error as? AppPlusResourceUnlockError {
+            return appError.localizedDescription
+        }
+        return "Plus 解锁失败，请稍后重试。"
     }
 
     var permissionStatusRows: [AppPermissionStatusRow] {
@@ -3063,32 +3023,12 @@ final class AppSessionModel {
         "\(count) 项"
     }
 
-    private func plusProductPriorityDescending(
-        _ lhs: AppPlusStoreKitProduct,
-        _ rhs: AppPlusStoreKitProduct
-    ) -> Bool {
-        plusProductPriority(lhs) > plusProductPriority(rhs)
-    }
-
-    private func plusProductPriority(_ product: AppPlusStoreKitProduct) -> Int {
-        switch product {
-        case .lifetime:
-            return 3
-        case .yearly:
-            return 2
-        case .monthly:
-            return 1
-        }
-    }
-
     private func plusEntitlementDetail(for snapshot: AppPlusEntitlementSnapshot) -> String {
         switch snapshot.source {
         case .none:
-            return "StoreKit 2 购买/恢复和 Plus/CDK 校验尚未激活。"
-        case .storeKit(let product):
-            return "StoreKit 2 已映射到 Monica Plus \(product.displayName)。"
-        case .legacyCDK:
-            return "Plus/CDK 已映射到 Monica Plus。"
+            return "点击资源激活按钮即可解锁 Monica Plus。"
+        case .resourceUnlock:
+            return "已通过 Android 同口径资源按钮解锁 Monica Plus。"
         }
     }
 
@@ -8194,6 +8134,50 @@ enum WebDAVBackupState: Sendable, Equatable {
             return true
         }
         return false
+    }
+}
+
+enum PlusActivationState: Sendable, Equatable {
+    case idle
+    case running
+    case activated
+    case deactivated
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .idle:
+            return "就绪"
+        case .running:
+            return "处理中"
+        case .activated:
+            return "Plus 已激活"
+        case .deactivated:
+            return "Plus 已关闭"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var isRunning: Bool {
+        if case .running = self {
+            return true
+        }
+        return false
+    }
+}
+
+enum AppPlusResourceUnlockError: Error, Sendable, Equatable, LocalizedError {
+    case serviceUnavailable
+    case activationRejected
+
+    var errorDescription: String? {
+        switch self {
+        case .serviceUnavailable:
+            return "Plus 解锁服务不可用。"
+        case .activationRejected:
+            return "Plus 解锁未通过。"
+        }
     }
 }
 

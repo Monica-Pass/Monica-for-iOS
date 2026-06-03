@@ -203,6 +203,28 @@ struct SettingsRootView: View {
                     Text(session.plusEntitlementStatusRow.detail)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
+                    AndroidParityInfoRow(title: "激活", value: session.plusActivationState.label)
+                    if session.isPlusActive {
+                        Button(role: .destructive) {
+                            session.deactivatePlus()
+                        } label: {
+                            Label("关闭 Plus", systemImage: "seal")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+                        .disabled(session.plusActivationState.isRunning)
+                    } else {
+                        Button {
+                            Task {
+                                try? await session.activatePlusFromResource()
+                            }
+                        } label: {
+                            Label("激活 Plus", systemImage: "checkmark.seal")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(!session.canActivatePlusFromResource || session.plusActivationState.isRunning)
+                    }
                     AndroidParityDivider()
                     ForEach(session.plusFeatureRows) { row in
                         HStack(alignment: .top, spacing: 12) {

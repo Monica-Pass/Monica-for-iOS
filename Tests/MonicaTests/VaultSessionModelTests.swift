@@ -243,70 +243,63 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingLoginTitle, "GitHub")
     }
 
-    func testPlusEntitlementMappingUnifiesStoreKitAndLegacyCDKWithoutLeakingIdentifiers() {
-        let model = AppSessionModel()
-        let now = Date(timeIntervalSince1970: 1_803_000_000)
+    func testPlusResourceButtonActivatesAndroidCompatiblePlusWithoutPurchase() async throws {
+        let service = RecordingAppPlusResourceUnlockService()
+        let model = AppSessionModel(plusResourceUnlockService: service)
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
 
         XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
+        XCTAssertFalse(model.isPlusActive)
         XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
 
-        model.applyStoreKitPlusEntitlements(
-            [
-                AppStoreKitPlusEntitlement(
-                    productID: AppPlusStoreKitProduct.monthly.productID,
-                    transactionID: "storekit-secret-expired-transaction",
-                    originalTransactionID: "storekit-secret-original",
-                    purchasedAt: now.addingTimeInterval(-90 * 24 * 60 * 60),
-                    expiresAt: now.addingTimeInterval(-24 * 60 * 60),
-                    revokedAt: nil,
-                    environment: "Sandbox"
-                )
-            ],
-            now: now
-        )
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
+        try await model.activatePlusFromResource(now: now)
 
-        model.applyStoreKitPlusEntitlements(
-            [
-                AppStoreKitPlusEntitlement(
-                    productID: AppPlusStoreKitProduct.lifetime.productID,
-                    transactionID: "storekit-secret-active-transaction",
-                    originalTransactionID: "storekit-secret-active-original",
-                    purchasedAt: now,
-                    expiresAt: nil,
-                    revokedAt: nil,
-                    environment: "Sandbox"
-                )
-            ],
-            now: now
-        )
-
+        XCTAssertEqual(service.unlockCallCount, 1)
+        XCTAssertEqual(model.plusActivationState, .activated)
+        XCTAssertTrue(model.isPlusActive)
         XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
-        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "StoreKit 2 已映射到 Monica Plus Lifetime。")
+        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "已通过 Android 同口径资源按钮解锁 Monica Plus。")
         XCTAssertEqual(
             model.plusFeatureRows.map(\.id),
             ["premium_themes", "validator_vibration", "copy_next_code", "bitwarden_sync"]
         )
         XCTAssertTrue(model.plusFeatureRows.allSatisfy(\.isUnlocked))
-
-        let storeKitVisibleText = ([model.plusEntitlementStatusRow.detail] + model.plusFeatureRows.map { $0.detail })
+        let visibleText = ([model.plusActivationState.label, model.plusEntitlementStatusRow.detail] + model.plusFeatureRows.map { $0.detail })
             .joined(separator: " ")
-        XCTAssertFalse(storeKitVisibleText.contains("storekit-secret-active-transaction"))
-        XCTAssertFalse(storeKitVisibleText.contains("storekit-secret-active-original"))
+        XCTAssertFalse(visibleText.localizedCaseInsensitiveContains("storekit"))
+        XCTAssertFalse(visibleText.localizedCaseInsensitiveContains("transaction"))
+        XCTAssertFalse(visibleText.contains("resource-secret-token"))
+    }
 
-        model.applyLegacyPlusEntitlement(
-            AppLegacyPlusEntitlement(
-                licenseID: "legacy-secret-license-id",
-                verifiedAt: now,
-                expiresAt: nil
-            ),
-            now: now
-        )
+    func testPlusResourceButtonFailureDoesNotUnlockOrLeakSecret() async throws {
+        let service = RecordingAppPlusResourceUnlockService()
+        service.unlockResult = false
+        let model = AppSessionModel(plusResourceUnlockService: service)
 
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
-        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "Plus/CDK 已映射到 Monica Plus。")
-        XCTAssertTrue(model.plusFeatureRows.allSatisfy(\.isUnlocked))
-        XCTAssertFalse(model.plusEntitlementStatusRow.detail.contains("legacy-secret-license-id"))
+        do {
+            try await model.activatePlusFromResource()
+            XCTFail("Plus resource unlock should fail when the resource grant is rejected.")
+        } catch {
+            XCTAssertEqual(model.plusActivationState, .failed("Plus 解锁未通过。"))
+        }
+
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
+        XCTAssertFalse(model.isPlusActive)
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
+        XCTAssertFalse(model.plusActivationState.label.contains("resource-secret-token"))
+    }
+
+    func testPlusResourceButtonCanDeactivatePlusLocally() async throws {
+        let service = RecordingAppPlusResourceUnlockService()
+        let model = AppSessionModel(plusResourceUnlockService: service)
+
+        try await model.activatePlusFromResource()
+        model.deactivatePlus()
+
+        XCTAssertEqual(model.plusActivationState, .deactivated)
+        XCTAssertFalse(model.isPlusActive)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
     }
 
     func testSavingPresentedAddPasswordEditorUsesExistingCreateFlow() throws {
@@ -6245,6 +6238,16 @@ private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @un
             throw downloadError
         }
         return downloadedBackup
+    }
+}
+
+private final class RecordingAppPlusResourceUnlockService: AppPlusResourceUnlockService, @unchecked Sendable {
+    var unlockResult = true
+    private(set) var unlockCallCount = 0
+
+    func unlockPlus() async throws -> Bool {
+        unlockCallCount += 1
+        return unlockResult
     }
 }
 
