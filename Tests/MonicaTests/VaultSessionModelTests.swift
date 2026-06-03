@@ -1154,6 +1154,24 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.oneDriveAuthenticationState.label.contains("onedrive-access-token-secret"))
     }
 
+    func testOneDriveMSALDiagnosticErrorDoesNotLeakCallbackSecrets() {
+        let error = AppOneDriveAuthenticationError.authenticationFailed(
+            domain: "MSALErrorDomain",
+            code: -50000,
+            message: "AADSTS50011 callback failed code=auth-code-secret&state=state-secret access_token=token-secret"
+        )
+
+        let message = error.localizedDescription
+
+        XCTAssertTrue(message.contains("MSALErrorDomain -50000"))
+        XCTAssertFalse(message.contains("auth-code-secret"))
+        XCTAssertFalse(message.contains("state-secret"))
+        XCTAssertFalse(message.contains("token-secret"))
+        XCTAssertTrue(message.contains("code=<redacted>"))
+        XCTAssertTrue(message.contains("state=<redacted>"))
+        XCTAssertTrue(message.contains("access_token=<redacted>"))
+    }
+
     func testAppInfoPlistRegistersOneDriveMSALRedirectScheme() throws {
         let plistURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

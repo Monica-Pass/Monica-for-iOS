@@ -115,7 +115,11 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
                nsError.code == MSALError.userCanceled.rawValue {
                 continuation.resume(throwing: AppOneDriveAuthenticationError.authenticationCancelled)
             } else {
-                continuation.resume(throwing: error)
+                continuation.resume(throwing: AppOneDriveAuthenticationError.authenticationFailed(
+                    domain: nsError.domain,
+                    code: nsError.code,
+                    message: nsError.localizedDescription
+                ))
             }
             return
         }

@@ -10145,6 +10145,7 @@ enum AppOneDriveAuthenticationError: Error, Sendable, Equatable, LocalizedError 
     case presentationUnavailable
     case invalidRedirect
     case tokenUnavailable
+    case authenticationFailed(domain: String, code: Int, message: String)
 
     var errorDescription: String? {
         switch self {
@@ -10158,7 +10159,29 @@ enum AppOneDriveAuthenticationError: Error, Sendable, Equatable, LocalizedError 
             return "OneDrive 登录回调无效，请重试。"
         case .tokenUnavailable:
             return "OneDrive 需要先登录。"
+        case .authenticationFailed(let domain, let code, let message):
+            let cleanMessage = AppOneDriveAuthenticationError.redactedDiagnosticMessage(message)
+            return cleanMessage.isEmpty
+                ? "OneDrive 登录失败：\(domain) \(code)"
+                : "OneDrive 登录失败：\(domain) \(code) \(cleanMessage)"
         }
+    }
+
+    private static func redactedDiagnosticMessage(_ message: String) -> String {
+        let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return ""
+        }
+        let sensitiveKeys = ["code=", "state=", "client_info=", "id_token=", "access_token=", "refresh_token="]
+        var redacted = trimmed
+        for key in sensitiveKeys {
+            redacted = redacted.replacingOccurrences(
+                of: "\(key)[^\\s&]+",
+                with: "\(key)<redacted>",
+                options: .regularExpression
+            )
+        }
+        return redacted
     }
 }
 
