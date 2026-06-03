@@ -2584,6 +2584,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
     public let url: String
     public let groupPath: String
     public let groupID: String?
+    public let originalGroupPath: String?
+    public let originalGroupID: String?
     public let notes: String
     public let customFields: [KeePassReadOnlyCustomField]
     public let hasPassword: Bool
@@ -2601,6 +2603,8 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         url: String,
         groupPath: String,
         groupID: String? = nil,
+        originalGroupPath: String? = nil,
+        originalGroupID: String? = nil,
         notes: String = "",
         customFields: [KeePassReadOnlyCustomField] = [],
         hasPassword: Bool,
@@ -2617,6 +2621,10 @@ public struct KeePassReadOnlyEntry: Sendable, Equatable, Identifiable {
         self.url = url
         self.groupPath = groupPath
         self.groupID = groupID
+        let trimmedOriginalGroupPath = originalGroupPath?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let trimmedOriginalGroupID = originalGroupID?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        self.originalGroupPath = trimmedOriginalGroupPath.isEmpty ? nil : trimmedOriginalGroupPath
+        self.originalGroupID = trimmedOriginalGroupID.isEmpty ? nil : trimmedOriginalGroupID
         self.notes = notes
         self.customFields = customFields
             .filter { !$0.title.isEmpty }
@@ -2813,6 +2821,9 @@ public struct KeePassXMLPayloadWriter: Sendable {
     ) {
         xml.append("\(indent)<Entry>")
         xml.append("\(indent)  <UUID>\(Self.escapeText(entry.id))</UUID>")
+        if entry.isDeleted, let originalGroupID = entry.originalGroupID {
+            xml.append("\(indent)  <PreviousParentGroup>\(Self.escapeText(originalGroupID))</PreviousParentGroup>")
+        }
         appendString(key: "Title", value: entry.title, into: &xml, indent: indent + "  ")
         appendString(key: "UserName", value: entry.username, into: &xml, indent: indent + "  ")
         appendString(
@@ -4430,6 +4441,7 @@ private struct ParsedKeePassGroup {
 
 private struct ParsedKeePassEntry {
     var uuid = ""
+    var previousParentGroupUUID = ""
     var strings: [ParsedKeePassStringField] = []
     var binaries: [ParsedKeePassEntryBinary] = []
 }
@@ -4545,6 +4557,10 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
             }
         case "RecycleBinUUID":
             parsed.recycleBinUUID = text.isEmpty ? nil : text
+        case "PreviousParentGroup":
+            if currentEntry != nil {
+                currentEntry?.previousParentGroupUUID = text
+            }
         case "Key":
             if currentString != nil {
                 currentString?.key = text
@@ -4616,6 +4632,7 @@ private enum KeePassXMLSnapshotBuilder {
     ) -> KeePassReadOnlySnapshot {
         var groups: [KeePassReadOnlyGroup] = []
         var entries: [KeePassReadOnlyEntry] = []
+        let groupPathsByID = groupPathsByID(for: parsed.rootGroups)
         for root in parsed.rootGroups {
             append(
                 group: root,
@@ -4623,6 +4640,7 @@ private enum KeePassXMLSnapshotBuilder {
                 isRootGroup: true,
                 parentDeleted: false,
                 parsed: parsed,
+                groupPathsByID: groupPathsByID,
                 groups: &groups,
                 entries: &entries
             )
@@ -4641,6 +4659,7 @@ private enum KeePassXMLSnapshotBuilder {
         isRootGroup: Bool,
         parentDeleted: Bool,
         parsed: ParsedKeePassXML,
+        groupPathsByID: [String: String],
         groups: inout [KeePassReadOnlyGroup],
         entries: inout [KeePassReadOnlyEntry]
     ) {
@@ -4663,6 +4682,7 @@ private enum KeePassXMLSnapshotBuilder {
                 groupPath: path,
                 groupID: group.uuid.isEmpty ? nil : group.uuid,
                 isDeleted: isDeleted,
+                groupPathsByID: groupPathsByID,
                 binaries: parsed.binaries
             ))
         }
@@ -4673,6 +4693,7 @@ private enum KeePassXMLSnapshotBuilder {
                 isRootGroup: false,
                 parentDeleted: isDeleted,
                 parsed: parsed,
+                groupPathsByID: groupPathsByID,
                 groups: &groups,
                 entries: &entries
             )
@@ -4684,6 +4705,7 @@ private enum KeePassXMLSnapshotBuilder {
         groupPath: String,
         groupID: String?,
         isDeleted: Bool,
+        groupPathsByID: [String: String],
         binaries: [String: Data]
     ) -> KeePassReadOnlyEntry {
         let title = firstFieldValue(entry, keys: ["Title", "Name"])
@@ -4723,6 +4745,8 @@ private enum KeePassXMLSnapshotBuilder {
             url: url,
             groupPath: groupPath,
             groupID: groupID,
+            originalGroupPath: isDeleted ? groupPathsByID[entry.previousParentGroupUUID] : nil,
+            originalGroupID: isDeleted && !entry.previousParentGroupUUID.isEmpty ? entry.previousParentGroupUUID : nil,
             notes: notes,
             customFields: customFields,
             hasPassword: !password.isEmpty,
@@ -4733,6 +4757,41 @@ private enum KeePassXMLSnapshotBuilder {
             isDeleted: isDeleted,
             attachments: attachments
         )
+    }
+
+    private static func groupPathsByID(for rootGroups: [ParsedKeePassGroup]) -> [String: String] {
+        var paths: [String: String] = [:]
+        for root in rootGroups {
+            collectGroupPaths(
+                group: root,
+                parentComponents: [],
+                isRootGroup: true,
+                paths: &paths
+            )
+        }
+        return paths
+    }
+
+    private static func collectGroupPaths(
+        group: ParsedKeePassGroup,
+        parentComponents: [String],
+        isRootGroup: Bool,
+        paths: inout [String: String]
+    ) {
+        let title = group.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let components = isRootGroup ? [] : parentComponents + [title.isEmpty ? "Untitled" : title]
+        let path = components.isEmpty ? "/" : "/" + components.joined(separator: "/")
+        if !group.uuid.isEmpty {
+            paths[group.uuid] = path
+        }
+        for child in group.groups {
+            collectGroupPaths(
+                group: child,
+                parentComponents: components,
+                isRootGroup: false,
+                paths: &paths
+            )
+        }
     }
 
     private static func firstFieldValue(_ entry: ParsedKeePassEntry, keys: [String]) -> String {

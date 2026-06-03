@@ -7290,6 +7290,8 @@ final class AppSessionModel {
                 url: entry.url,
                 groupPath: entry.groupPath,
                 groupID: entry.groupID,
+                originalGroupPath: entry.originalGroupPath,
+                originalGroupID: entry.originalGroupID,
                 notes: entry.notes,
                 customFields: entry.customFields,
                 hasPassword: entry.hasPassword,
@@ -7357,6 +7359,8 @@ final class AppSessionModel {
                 url: entry.url,
                 groupPath: entry.groupPath,
                 groupID: entry.groupID,
+                originalGroupPath: entry.originalGroupPath,
+                originalGroupID: entry.originalGroupID,
                 notes: entry.notes,
                 customFields: entry.customFields,
                 hasPassword: entry.hasPassword,
@@ -7453,6 +7457,8 @@ final class AppSessionModel {
                 url: entry.url,
                 groupPath: entry.groupPath,
                 groupID: entry.groupID,
+                originalGroupPath: entry.originalGroupPath,
+                originalGroupID: entry.originalGroupID,
                 notes: entry.notes,
                 customFields: entry.customFields,
                 hasPassword: entry.hasPassword,
@@ -7546,7 +7552,17 @@ final class AppSessionModel {
                 candidate.isDeleted ? candidate.groupID : nil
             })
             let targetGroup: KeePassReadOnlyGroup
-            if let targetGroupID {
+            if let originalGroupID = entry.originalGroupID,
+               let originalGroup = snapshot.groups.first(where: { group in
+                   group.id == originalGroupID && !recycleBinGroupIDs.contains(group.id)
+               }) {
+                targetGroup = originalGroup
+            } else if let originalGroupPath = entry.originalGroupPath,
+                      let originalGroup = snapshot.groups.first(where: { group in
+                          group.path == originalGroupPath && !recycleBinGroupIDs.contains(group.id)
+                      }) {
+                targetGroup = originalGroup
+            } else if let targetGroupID {
                 guard let explicitGroup = snapshot.groups.first(where: { $0.id == targetGroupID }),
                       !recycleBinGroupIDs.contains(explicitGroup.id) else {
                     throw AppKeePassSnapshotEditError.targetGroupUnavailable

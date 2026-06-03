@@ -5159,6 +5159,118 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassSnapshotRecycleBinEntryRestoreMovesEntryToOriginalGroupAndWritesBackWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1),
+                KeePassReadOnlyGroup(id: "clients", title: "Clients", path: "/Work/Clients", depth: 2),
+                KeePassReadOnlyGroup(id: "fallback", title: "Fallback", path: "/Fallback", depth: 1),
+                KeePassReadOnlyGroup(id: "recycle-bin", title: "Recycle Bin", path: "/Recycle Bin", depth: 1)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "deleted-entry",
+                    title: "Deleted Login",
+                    username: "deleted@example.com",
+                    url: "https://deleted.example.com",
+                    groupPath: "/Recycle Bin",
+                    groupID: "recycle-bin",
+                    originalGroupPath: "/Work/Clients",
+                    originalGroupID: "clients",
+                    notes: "deleted entry note secret",
+                    hasPassword: true,
+                    decodedPassword: "deleted-entry-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 0,
+                    isDeleted: true
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            keePassDatabaseReader: RecordingKeePassDatabaseReader(snapshot: snapshot),
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx4WritebackCoordinator: coordinator
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx-recycle-original-restore-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("personal.kdbx")
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xF1, count: 32),
+            encryptionIV: Data(repeating: 0xF2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xF3, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xF4, count: 32),
+                iterations: 2,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-placeholder".utf8)
+        let restoreResultDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-after-original-restore".utf8)
+        try sourceDatabase.write(to: databaseURL)
+        coordinator.result = KeePassKdbx4WritebackResult(
+            database: restoreResultDatabase,
+            headerBytes: Data([0x0D]),
+            payloadSection: Data([0x0E]),
+            xmlPayloadByteCount: 192,
+            groupCount: 5,
+            entryCount: 1,
+            attachmentCount: 0
+        )
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyTree()
+
+        let result = try model.restoreKeePassReadOnlyRecycleBinEntryAndWriteBack(
+            entryID: "deleted-entry",
+            targetGroupID: "fallback"
+        )
+
+        let request = try XCTUnwrap(coordinator.requests.first)
+        let restoredEntry = try XCTUnwrap(request.snapshot.entries.first)
+        XCTAssertEqual(result.database, restoreResultDatabase)
+        XCTAssertEqual(restoredEntry.groupID, "clients")
+        XCTAssertEqual(restoredEntry.groupPath, "/Work/Clients")
+        XCTAssertNil(restoredEntry.originalGroupID)
+        XCTAssertNil(restoredEntry.originalGroupPath)
+        XCTAssertFalse(restoredEntry.isDeleted)
+        XCTAssertTrue(writer.replacements.first?.data == restoreResultDatabase)
+        [
+            "deleted-entry-password-secret",
+            "deleted entry note secret",
+            "encrypted-payload-after-original-restore",
+            "database-password"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 回收站条目已还原并写回：Deleted Login -> /Work/Clients")
+        )
+    }
+
     func testKeePassSnapshotAttachmentContentEditFailureIsRedactedAndKeepsSnapshot() throws {
         let snapshot = KeePassReadOnlySnapshot(
             sourceName: "personal.kdbx",

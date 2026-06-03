@@ -2155,6 +2155,7 @@ import MonicaStorage
             <Name>Recycle Bin</Name>
             <Entry>
               <UUID>entry-trash-uuid</UUID>
+              <PreviousParentGroup>work-group-uuid</PreviousParentGroup>
               <String><Key>Title</Key><Value>Deleted Login</Value></String>
               <String><Key>UserName</Key><Value>bob</Value></String>
               <String><Key>Password</Key><Value>deleted password</Value></String>
@@ -2200,6 +2201,8 @@ import MonicaStorage
 
     let deleted = try #require(snapshot.entries.first { $0.id == "entry-trash-uuid" })
     #expect(deleted.groupPath == "/Recycle Bin")
+    #expect(deleted.originalGroupID == "work-group-uuid")
+    #expect(deleted.originalGroupPath == "/Work")
     #expect(deleted.isDeleted)
 
     #expect(!snapshot.displaySummary.contains("database-password"))
@@ -2258,6 +2261,8 @@ import MonicaStorage
                 url: "",
                 groupPath: "/Recycle Bin",
                 groupID: "trash-group-uuid",
+                originalGroupPath: "/Work",
+                originalGroupID: "work-group-uuid",
                 hasPassword: true,
                 decodedPassword: "deleted password",
                 hasTotp: false,
@@ -2288,6 +2293,7 @@ import MonicaStorage
     let xml = try #require(String(data: result.xmlPayload, encoding: .utf8))
     #expect(xml.contains("<KeePassFile>"))
     #expect(xml.contains("<RecycleBinUUID>trash-group-uuid</RecycleBinUUID>"))
+    #expect(xml.contains("<PreviousParentGroup>work-group-uuid</PreviousParentGroup>"))
     #expect(xml.contains("GitHub &amp; CI"))
     #expect(xml.contains("contract &amp; terms.txt"))
 
@@ -2307,6 +2313,8 @@ import MonicaStorage
     #expect(github.attachments.first?.decodedContent == Data("edited attachment secret".utf8))
     let deleted = try #require(reparsed.entries.first { $0.id == "entry-trash-uuid" })
     #expect(deleted.isDeleted)
+    #expect(deleted.originalGroupID == "work-group-uuid")
+    #expect(deleted.originalGroupPath == "/Work")
     #expect(deleted.attachments.first?.fileName == "deleted.txt")
     #expect(deleted.attachments.first?.decodedContent == Data("deleted attachment secret".utf8))
 }
