@@ -21,9 +21,14 @@ let package = Package(
             name: "MonicaStorage",
             dependencies: [
                 "MonicaMDBX",
+                "MonicaStorageTwofish",
                 "ZIPFoundation",
                 .product(name: "argon2", package: "phc-winner-argon2")
             ]
+        ),
+        .target(
+            name: "MonicaStorageTwofish",
+            publicHeadersPath: "include"
         ),
         .testTarget(name: "MonicaStorageTests", dependencies: ["MonicaStorage"])
     ]

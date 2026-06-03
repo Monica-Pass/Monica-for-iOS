@@ -500,6 +500,35 @@ import MonicaStorage
     #expect(decrypted == expectedPlaintext)
 }
 
+@Test func keepPassKdbxTwofishPayloadCipherDecryptsCbcPayloadWithoutLeakingSecrets() throws {
+    let masterKey = KeePassKdbxMasterKeyMaterial(
+        algorithm: .aesKdf,
+        material: Data(repeating: 0x00, count: 32)
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xA1, count: 32),
+        encryptionIV: Data(repeating: 0x00, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xB2, count: 32),
+        streamStartBytes: nil,
+        innerRandomStreamID: 2
+    )
+    let encryptedPayload = try decodeHexData("""
+    57ff739d4dc92c1bd7fc01700cc8216f
+    b07fb634f1e56d6d4c97aa3a791b3498
+    """)
+
+    let decrypted = try DefaultKeePassKdbxPayloadCipher().decryptPayload(
+        encryptedPayload,
+        cipher: .twofish,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    let expectedPlaintext = Data(repeating: 0x00, count: 16)
+    #expect(decrypted == expectedPlaintext)
+    #expect(!decrypted.description.contains(masterKey.material.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func keepPassKdbx3BlockStreamDecoderValidatesStreamStartAndHashesBlocksWithoutLeakingSecrets() throws {
     let streamStartBytes = Data("stream-start-secret".utf8)
     let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
@@ -1533,6 +1562,68 @@ import MonicaStorage
     #expect(!snapshot.displaySummary.contains(password))
     #expect(!snapshot.displaySummary.contains("argon2id-decoded-secret"))
     #expect(!snapshot.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+}
+
+@Test func defaultKeePassDatabaseReaderDecryptsKdbx4TwofishFixtureToSnapshotWithoutLeakingCredentials() throws {
+    let password = "twofish-password"
+    let transformSeed = Data(repeating: 0xAB, count: 32)
+    let masterSeed = Data(repeating: 0xB3, count: 32)
+    let derivedKey = try decodeHexData("1a882a2cc11e63af5aeddcfa9655bd8821f671fcca019df38f13a0005649615a")
+    var hmacBaseInput = Data()
+    hmacBaseInput.append(masterSeed)
+    hmacBaseInput.append(derivedKey)
+    hmacBaseInput.append(0x01)
+    let hmacBaseKey = Data(SHA512.hash(data: hmacBaseInput))
+    let header = makeKdbx4Header(
+        cipherID: Data([0xAD, 0x68, 0xF2, 0x9F, 0x57, 0x6F, 0x4B, 0xB9, 0xA3, 0x6A, 0xD4, 0x7A, 0xF9, 0x65, 0x34, 0x6C]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: masterSeed,
+        encryptionIV: Data(repeating: 0xC3, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xE3, count: 32),
+        innerRandomStreamID: 2,
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])),
+            kdbxVariantByteArray(key: "S", value: transformSeed),
+            kdbxVariantUInt64(key: "R", value: 1)
+        ])
+    )
+    let encryptedPayload = try decodeHexData("""
+    20a3bf5908b20605f55a7a062ece8d446fa3527b0d61bb5f01b0e77bfa0fc98648b2
+    be39f3538fbff00a3d6d94629f681421a1a9c4dfbfcff3237788cc7c458bfb4c9803
+    9a5cf5193cd4cff63fe368e6c1dc5b942d41606a16fc9bc423ebb6a01704ad0a7b14
+    4b41d41ae62c46b290c95d579546aca51840e77b2a18cffa92720e1f25915b635b30
+    492aa2bf30682da826d47c6168ca95c04220b1beebe9db22712bbfff6136864d3ee4
+    f36981ea1fbde08468377b34f08a59541ad6ffdbae77e728aac88c520cb8aabd0a87
+    7dc1b620d6a9f5b0dd0ee079a487483a8d7d1540b47e824c878c569617cebfac74bc
+    a06e3308e4f60c0dcdbf233854e12ea336d1aaf77f563a6b157c8e4f7926644739c8
+    09bf66e1bc0c1aca48839db97ac782b03005ee65526b2da63f7802254cbe0cf188d3
+    5d3331995baa1824a956b7c67be046b40fb501ada8f601282de444012ad25e061206
+    16afc431ffef5d90388df4b7a04fb296aecd4eb9cacb2c612da60d62a75ee879a00e
+    42837b6474bfba6bc4eb19760f37bfa25893fe4ab8c633e6e0e23cbbf62ef36babf4
+    baf3297b1c60116a64441c9df01386c4f4aaf1bc089745198a532457f968fc8eb6d9
+    11b3fdf41af9962d50be18fbba0b6967eaf1cbc37434
+    """)
+    var payloadSection = Data(SHA256.hash(data: header))
+    payloadSection.append(kdbx4HeaderHmac(headerBytes: header, hmacBaseKey: hmacBaseKey))
+    payloadSection.append(makeKdbx4HmacBlockStream(hmacBaseKey: hmacBaseKey, blocks: [encryptedPayload]))
+    let database = header + payloadSection
+    let reader = DefaultKeePassDatabaseReader()
+
+    let snapshot = try reader.readSnapshot(
+        database: database,
+        sourceName: "kdbx4-twofish-fixture.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(snapshot.headerSummary?.cryptoSummary?.cipher == .twofish)
+    #expect(snapshot.headerSummary?.kdfParameters?.aesKdf?.rounds == 1)
+    #expect(snapshot.entries.first?.title == "KDBX4 Twofish")
+    #expect(snapshot.entries.first?.username == "jules")
+    #expect(snapshot.entries.first?.decodedPassword == "twofish-decoded-secret")
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains("twofish-decoded-secret"))
+    #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
 }
 
 @Test func defaultKeePassDatabaseReaderDecryptsKdbx4AesKdfFixtureWithKeyFileCandidateWithoutLeakingCredentials() throws {

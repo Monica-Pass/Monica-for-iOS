@@ -1,6 +1,7 @@
 import Foundation
 import CryptoKit
 import MonicaMDBX
+import MonicaStorageTwofish
 import ZIPFoundation
 import argon2
 import zlib
@@ -513,9 +514,10 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
                 nonce: iv
             ).xor(encryptedPayload)
         case .twofish:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "KDBX Twofish payload 解密尚未接入"
+            return try KeePassTwofishCBC.decrypt(
+                encryptedPayload,
+                key: masterKey.material,
+                iv: cryptoInputs.encryptionIV
             )
         case .unknown:
             throw KeePassOperationError(
@@ -1393,6 +1395,57 @@ private enum KeePassAES256CBC {
             output.append(decryptedBlock)
             previousBlock = encryptedBlock
             offset += blockSize
+        }
+        return output.removingPKCS7Padding(blockSize: blockSize)
+    }
+}
+
+private enum KeePassTwofishCBC {
+    private static let blockSize = 16
+
+    static func decrypt(_ data: Data, key: Data, iv: Data?) throws -> Data {
+        guard key.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish master key 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard let iv, iv.count == blockSize else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish IV 缺失或长度无效；请确认文件未损坏。"
+            )
+        }
+        guard !data.isEmpty, data.count.isMultiple(of: blockSize) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish payload 长度无效；请确认文件未损坏。"
+            )
+        }
+
+        var output = Data(repeating: 0, count: data.count)
+        let status = output.withUnsafeMutableBytes { outputBuffer in
+            data.withUnsafeBytes { dataBuffer in
+                key.withUnsafeBytes { keyBuffer in
+                    iv.withUnsafeBytes { ivBuffer in
+                        monica_twofish_decrypt_cbc(
+                            keyBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            key.count,
+                            ivBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            iv.count,
+                            dataBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            data.count,
+                            outputBuffer.bindMemory(to: UInt8.self).baseAddress
+                        )
+                    }
+                }
+            }
+        }
+        guard status == 1 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish payload 解密失败；请确认文件未损坏。"
+            )
         }
         return output.removingPKCS7Padding(blockSize: blockSize)
     }
