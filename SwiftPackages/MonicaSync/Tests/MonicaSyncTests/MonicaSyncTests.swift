@@ -6,6 +6,49 @@ import Foundation
     #expect(MonicaSyncBaseline.firstBackupProvider == "WebDAV")
 }
 
+@Test func cloudFileProviderKindsExposeOneDriveAndGoogleDriveAdapters() {
+    #expect(CloudFileProviderKind.oneDrive.displayName == "OneDrive")
+    #expect(CloudFileProviderKind.googleDrive.displayName == "Google Drive")
+    #expect(CloudFileProviderKind.oneDrive.defaultBackupFileName == "monica-onedrive.mdbx")
+    #expect(CloudFileProviderKind.googleDrive.defaultBackupFileName == "monica-google-drive.mdbx")
+}
+
+@Test func cloudFileProviderSummariesAvoidProviderSecretsAndRemoteIdentifiers() throws {
+    let item = CloudFileItem(
+        id: "remote-item-secret-id",
+        name: "Mobile.mdbx",
+        path: "/Apps/Monica/private-folder/Mobile.mdbx",
+        byteCount: 11,
+        modifiedAt: Date(timeIntervalSince1970: 1_804_000_000),
+        sha256: "remote-sha-secret"
+    )
+    let downloaded = CloudFileDownload(
+        item: item,
+        data: Data("remote-vault-secret-bytes".utf8),
+        sha256: "download-sha-secret"
+    )
+    let receipt = CloudFileWriteReceipt(
+        provider: .oneDrive,
+        itemID: "uploaded-item-secret-id",
+        name: "Mobile.mdbx",
+        byteCount: 11,
+        sha256: "upload-sha-secret"
+    )
+
+    #expect(item.redactedSummary == "Mobile.mdbx 11 字节")
+    #expect(downloaded.redactedSummary == "Mobile.mdbx 25 字节")
+    #expect(receipt.redactedSummary == "OneDrive Mobile.mdbx 11 字节")
+
+    let visibleText = [item.redactedSummary, downloaded.redactedSummary, receipt.redactedSummary]
+        .joined(separator: " ")
+    #expect(!visibleText.contains("remote-item-secret-id"))
+    #expect(!visibleText.contains("private-folder"))
+    #expect(!visibleText.contains("remote-sha-secret"))
+    #expect(!visibleText.contains("remote-vault-secret-bytes"))
+    #expect(!visibleText.contains("uploaded-item-secret-id"))
+    #expect(!visibleText.contains("upload-sha-secret"))
+}
+
 @Test func webDAVClientUploadsBackupWithBasicAuthAndIntegrityHeader() async throws {
     let transport = RecordingWebDAVTransport(
         responses: [

@@ -7210,6 +7210,77 @@ final class VaultSessionModelTests: XCTestCase {
             "网络不可用，请检查连接后重试。"
         )
     }
+
+    func testCloudFileSourcesListDownloadUploadAndOverwriteWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let oneDrive = RecordingCloudFileProvider(kind: .oneDrive)
+        let googleDrive = RecordingCloudFileProvider(kind: .googleDrive)
+        oneDrive.items = [
+            CloudFileItem(
+                id: "onedrive-remote-secret-id",
+                name: "Mobile-OneDrive.mdbx",
+                path: "/Apps/Monica/private-folder/Mobile-OneDrive.mdbx",
+                byteCount: 17,
+                modifiedAt: Date(timeIntervalSince1970: 1_804_010_000),
+                sha256: "onedrive-list-sha-secret"
+            )
+        ]
+        oneDrive.downloads["onedrive-remote-secret-id"] = CloudFileDownload(
+            item: oneDrive.items[0],
+            data: Data("onedrive-remote-vault-secret".utf8),
+            sha256: "onedrive-download-sha-secret"
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            cloudFileProviders: [.oneDrive: oneDrive, .googleDrive: googleDrive]
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        try Data("local-vault-backup-secret".utf8).write(to: directory.appendingPathComponent("Mobile.mdbx"))
+
+        let listed = try await model.refreshCloudFileItems(provider: .oneDrive)
+        let downloaded = try await model.downloadCloudFileRestorePreview(
+            itemID: "onedrive-remote-secret-id",
+            provider: .oneDrive
+        )
+        let uploadReceipt = try await model.uploadActiveVaultToCloud(provider: .googleDrive)
+        let overwriteReceipt = try await model.overwriteCloudFile(
+            provider: .oneDrive,
+            itemID: "onedrive-remote-secret-id",
+            data: Data("keepass-writeback-secret-bytes".utf8),
+            fileName: "Mobile-OneDrive.mdbx"
+        )
+
+        XCTAssertEqual(listed.map(\.name), ["Mobile-OneDrive.mdbx"])
+        XCTAssertEqual(model.cloudFileItemsByProvider[.oneDrive]?.map(\.name), ["Mobile-OneDrive.mdbx"])
+        XCTAssertEqual(downloaded.item.name, "Mobile-OneDrive.mdbx")
+        XCTAssertEqual(model.cloudFileRestorePreview?.fileName, "Mobile-OneDrive.mdbx")
+        XCTAssertEqual(oneDrive.downloadRequests, ["onedrive-remote-secret-id"])
+        XCTAssertEqual(googleDrive.uploads.first?.fileName, "monica-google-drive.mdbx")
+        XCTAssertEqual(googleDrive.uploads.first?.data, Data("local-vault-backup-secret".utf8))
+        XCTAssertEqual(oneDrive.overwrites.first?.itemID, "onedrive-remote-secret-id")
+        XCTAssertEqual(oneDrive.overwrites.first?.data, Data("keepass-writeback-secret-bytes".utf8))
+        XCTAssertEqual(uploadReceipt.provider, .googleDrive)
+        XCTAssertEqual(overwriteReceipt.provider, .oneDrive)
+
+        let visibleText = ([model.cloudFileState.label] + model.cloudFileItemsByProvider.values.flatMap { $0.map(\.redactedSummary) })
+            .joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("onedrive-remote-secret-id"))
+        XCTAssertFalse(visibleText.contains("private-folder"))
+        XCTAssertFalse(visibleText.contains("onedrive-list-sha-secret"))
+        XCTAssertFalse(visibleText.contains("onedrive-remote-vault-secret"))
+        XCTAssertFalse(visibleText.contains("local-vault-backup-secret"))
+        XCTAssertFalse(visibleText.contains("keepass-writeback-secret-bytes"))
+        XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
+    }
 }
 
 private final class RecordingAppAutoFillIndexKeyMaterialStore: AppAutoFillIndexKeyMaterialStore {
@@ -7384,6 +7455,77 @@ private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @un
             throw downloadError
         }
         return downloadedBackup
+    }
+}
+
+private final class RecordingCloudFileProvider: CloudFileProvider, @unchecked Sendable {
+    let kind: CloudFileProviderKind
+    var connection: CloudFileConnectionState
+    var items: [CloudFileItem] = []
+    var downloads: [String: CloudFileDownload] = [:]
+    private(set) var listCallCount = 0
+    private(set) var downloadRequests: [String] = []
+    private(set) var uploads: [(fileName: String, data: Data)] = []
+    private(set) var overwrites: [(itemID: String, fileName: String, data: Data)] = []
+    var error: Error?
+
+    init(kind: CloudFileProviderKind) {
+        self.kind = kind
+        self.connection = .connected(accountLabel: "\(kind.displayName) account")
+    }
+
+    func connectionState() async throws -> CloudFileConnectionState {
+        if let error {
+            throw error
+        }
+        return connection
+    }
+
+    func listFiles() async throws -> [CloudFileItem] {
+        listCallCount += 1
+        if let error {
+            throw error
+        }
+        return items
+    }
+
+    func downloadFile(id: String) async throws -> CloudFileDownload {
+        downloadRequests.append(id)
+        if let error {
+            throw error
+        }
+        guard let download = downloads[id] else {
+            throw CloudFileProviderError.itemNotFound(provider: kind)
+        }
+        return download
+    }
+
+    func uploadFile(named fileName: String, data: Data) async throws -> CloudFileWriteReceipt {
+        uploads.append((fileName, data))
+        if let error {
+            throw error
+        }
+        return CloudFileWriteReceipt(
+            provider: kind,
+            itemID: "\(kind.rawValue)-uploaded-secret-id",
+            name: fileName,
+            byteCount: data.count,
+            sha256: "\(kind.rawValue)-upload-sha-secret"
+        )
+    }
+
+    func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt {
+        overwrites.append((id, fileName, data))
+        if let error {
+            throw error
+        }
+        return CloudFileWriteReceipt(
+            provider: kind,
+            itemID: id,
+            name: fileName,
+            byteCount: data.count,
+            sha256: "\(kind.rawValue)-overwrite-sha-secret"
+        )
     }
 }
 

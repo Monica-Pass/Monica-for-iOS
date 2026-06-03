@@ -609,6 +609,32 @@ struct AppWidgetSnapshot: Sendable, Equatable {
     }
 }
 
+struct AppCloudFileRestorePreview: Sendable, Equatable {
+    let provider: CloudFileProviderKind
+    let fileName: String
+    let byteCount: Int
+
+    init(provider: CloudFileProviderKind, download: CloudFileDownload) {
+        self.provider = provider
+        self.fileName = Self.sanitizedFileName(download.item.name)
+        self.byteCount = download.data.count
+    }
+
+    var redactedSummary: String {
+        "\(provider.displayName) \(fileName) \(byteCount) 字节"
+    }
+
+    private static func sanitizedFileName(_ value: String) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? value
+        let sanitized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized.isEmpty ? "未命名文件" : sanitized
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1505,6 +1531,9 @@ final class AppSessionModel {
     var webDAVRestoreVaultPassword = ""
     var webDAVBackupState: WebDAVBackupState = .idle
     var webDAVRestorePreview: WebDAVRestorePreview?
+    var cloudFileState: CloudFileState = .idle
+    var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
+    var cloudFileRestorePreview: AppCloudFileRestorePreview?
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
@@ -1541,6 +1570,7 @@ final class AppSessionModel {
         }
     }
     private var downloadedWebDAVRestoreBackup: WebDAVDownloadedBackup?
+    private var downloadedCloudFileRestore: CloudFileDownload?
 
     private let vaultRepository: LocalVaultRepository
     private let vaultKeychainService: (any AppVaultKeychainService)?
@@ -1553,6 +1583,7 @@ final class AppSessionModel {
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
     private let webDAVBackupService: any AppWebDAVBackupService
+    private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -1589,6 +1620,7 @@ final class AppSessionModel {
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
         securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
+        cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -1620,6 +1652,7 @@ final class AppSessionModel {
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
         self.webDAVBackupService = webDAVBackupService
+        self.cloudFileProviders = cloudFileProviders
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -7603,6 +7636,101 @@ final class AppSessionModel {
         }
     }
 
+    func refreshCloudFileItems(provider kind: CloudFileProviderKind) async throws -> [CloudFileItem] {
+        recordUserActivity()
+        cloudFileState = .running(kind)
+
+        do {
+            let provider = try cloudFileProvider(for: kind)
+            let items = try await provider.listFiles()
+            cloudFileItemsByProvider[kind] = items
+            cloudFileState = .listed(provider: kind, count: items.count)
+            return items
+        } catch {
+            cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            throw error
+        }
+    }
+
+    func downloadCloudFileRestorePreview(
+        itemID: String,
+        provider kind: CloudFileProviderKind
+    ) async throws -> CloudFileDownload {
+        recordUserActivity()
+        cloudFileState = .running(kind)
+
+        do {
+            _ = try requireActiveVaultSession()
+            let provider = try cloudFileProvider(for: kind)
+            let download = try await provider.downloadFile(id: itemID)
+            let preview = AppCloudFileRestorePreview(provider: kind, download: download)
+            downloadedCloudFileRestore = download
+            cloudFileRestorePreview = preview
+            cloudFileState = .restorePreviewReady(
+                provider: kind,
+                fileName: preview.fileName,
+                byteCount: preview.byteCount
+            )
+            return download
+        } catch {
+            cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            throw error
+        }
+    }
+
+    func uploadActiveVaultToCloud(provider kind: CloudFileProviderKind) async throws -> CloudFileWriteReceipt {
+        recordUserActivity()
+        cloudFileState = .running(kind)
+
+        do {
+            let session = try requireActiveVaultSession()
+            let provider = try cloudFileProvider(for: kind)
+            let data = try Data(contentsOf: session.descriptor.fileURL)
+            let receipt = try await provider.uploadFile(
+                named: kind.defaultBackupFileName,
+                data: data
+            )
+            cloudFileState = .backupSucceeded(
+                provider: kind,
+                fileName: sanitizedCloudFileName(receipt.name),
+                byteCount: receipt.byteCount
+            )
+            return receipt
+        } catch {
+            cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            throw error
+        }
+    }
+
+    func overwriteCloudFile(
+        provider kind: CloudFileProviderKind,
+        itemID: String,
+        data: Data,
+        fileName: String
+    ) async throws -> CloudFileWriteReceipt {
+        recordUserActivity()
+        cloudFileState = .running(kind)
+
+        do {
+            _ = try requireActiveVaultSession()
+            let provider = try cloudFileProvider(for: kind)
+            let receipt = try await provider.overwriteFile(
+                id: itemID,
+                data: data,
+                fileName: sanitizedCloudFileName(fileName)
+            )
+            cloudFileState = .writeSucceeded(
+                provider: kind,
+                fileName: sanitizedCloudFileName(receipt.name),
+                byteCount: receipt.byteCount
+            )
+            return receipt
+        } catch {
+            cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            throw error
+        }
+    }
+
     func downloadWebDAVRestorePreview() async throws {
         recordUserActivity()
         webDAVBackupState = .running
@@ -7714,6 +7842,46 @@ final class AppSessionModel {
         return error.localizedDescription
     }
 
+    private func cloudFileProvider(for kind: CloudFileProviderKind) throws -> any CloudFileProvider {
+        guard let provider = cloudFileProviders[kind] else {
+            throw AppCloudFileError.providerUnavailable(kind)
+        }
+        return provider
+    }
+
+    private func readableCloudFileErrorMessage(
+        for error: Error,
+        provider kind: CloudFileProviderKind
+    ) -> String {
+        if let appError = error as? AppCloudFileError {
+            return appError.localizedDescription
+        }
+        if let providerError = error as? CloudFileProviderError {
+            return providerError.localizedDescription
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "网络不可用，请检查连接后重试。"
+            case .timedOut:
+                return "\(kind.displayName) 请求超时，请稍后再试。"
+            default:
+                return "\(kind.displayName) 连接失败，请检查网络后重试。"
+            }
+        }
+        return "\(kind.displayName) 操作失败，请稍后重试。"
+    }
+
+    private func sanitizedCloudFileName(_ value: String) -> String {
+        let normalized = value
+            .replacingOccurrences(of: "\\", with: "/")
+            .split(separator: "/")
+            .last
+            .map(String.init) ?? value
+        let sanitized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+        return sanitized.isEmpty ? "未命名文件" : sanitized
+    }
+
     func lockLocalVault() {
         isPrivacyShieldVisible = false
         if let activeVaultSession {
@@ -7726,6 +7894,9 @@ final class AppSessionModel {
         webDAVRestorePreview = nil
         webDAVRestoreVaultPassword = ""
         downloadedWebDAVRestoreBackup = nil
+        cloudFileState = .idle
+        cloudFileRestorePreview = nil
+        downloadedCloudFileRestore = nil
         clearPendingAndroidEncryptedBackup()
         dismissAttachmentQuickLookPreview()
     }
@@ -9028,6 +9199,42 @@ enum WebDAVBackupState: Sendable, Equatable {
     }
 }
 
+enum CloudFileState: Sendable, Equatable {
+    case idle
+    case running(CloudFileProviderKind)
+    case listed(provider: CloudFileProviderKind, count: Int)
+    case restorePreviewReady(provider: CloudFileProviderKind, fileName: String, byteCount: Int)
+    case backupSucceeded(provider: CloudFileProviderKind, fileName: String, byteCount: Int)
+    case writeSucceeded(provider: CloudFileProviderKind, fileName: String, byteCount: Int)
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .idle:
+            return "就绪"
+        case .running(let provider):
+            return "正在处理 \(provider.displayName)"
+        case .listed(let provider, let count):
+            return "\(provider.displayName) 已列出 \(count) 个文件"
+        case .restorePreviewReady(let provider, let fileName, let byteCount):
+            return "\(provider.displayName) 预览 \(fileName) (\(byteCount) 字节)"
+        case .backupSucceeded(let provider, let fileName, let byteCount):
+            return "\(provider.displayName) 已备份 \(fileName) (\(byteCount) 字节)"
+        case .writeSucceeded(let provider, let fileName, let byteCount):
+            return "\(provider.displayName) 已写回 \(fileName) (\(byteCount) 字节)"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var isRunning: Bool {
+        if case .running = self {
+            return true
+        }
+        return false
+    }
+}
+
 enum PlusActivationState: Sendable, Equatable {
     case idle
     case running
@@ -9140,6 +9347,17 @@ enum AppWebDAVBackupError: Error, Sendable, Equatable, LocalizedError {
             return "请输入待恢复保险库的密码。"
         case .restoreValidationFailed:
             return "无法打开恢复备份，请检查保险库密码。"
+        }
+    }
+}
+
+enum AppCloudFileError: Error, Sendable, Equatable, LocalizedError {
+    case providerUnavailable(CloudFileProviderKind)
+
+    var errorDescription: String? {
+        switch self {
+        case .providerUnavailable(let provider):
+            return "\(provider.displayName) 云文件源尚未配置。"
         }
     }
 }
