@@ -744,6 +744,118 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbx4PayloadSectionWriterAddsHeaderAuthenticationWithoutLeakingSecrets() throws {
+    final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
+        func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
+            KeePassKdbxDerivedKey(
+                algorithm: .aesKdf,
+                material: Data(repeating: 0x22, count: 32),
+                rounds: 1
+            )
+        }
+    }
+
+    final class FixedMasterKeyComposer: KeePassKdbxMasterKeyComposer, @unchecked Sendable {
+        func composeMasterKey(
+            from derivedKey: KeePassKdbxDerivedKey,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> KeePassKdbxMasterKeyMaterial {
+            KeePassKdbxMasterKeyMaterial(
+                algorithm: derivedKey.algorithm,
+                material: Data(repeating: 0x33, count: 32)
+            )
+        }
+    }
+
+    final class RecordingPayloadCipher: KeePassKdbxPayloadCipher, @unchecked Sendable {
+        var payloads: [Data] = []
+
+        func decryptPayload(
+            _ encryptedPayload: Data,
+            cipher: KeePassKdbxCipherAlgorithm,
+            masterKey: KeePassKdbxMasterKeyMaterial,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs
+        ) throws -> Data {
+            payloads.append(encryptedPayload)
+            return Data("<KeePassFile />".utf8)
+        }
+    }
+
+    let masterSeed = Data(repeating: 0x44, count: 32)
+    let derivedMaterial = Data(repeating: 0x22, count: 32)
+    let headerBytes = Data("header bytes secret".utf8)
+    let encryptedPayload = Data("encrypted-payload-secret".utf8)
+    let payloadSection = try DefaultKeePassKdbx4PayloadSectionWriter().writePayloadSection(
+        encryptedPayloadBlocks: [encryptedPayload],
+        headerBytes: headerBytes,
+        masterSeed: masterSeed,
+        derivedKey: KeePassKdbxDerivedKey(algorithm: .aesKdf, material: derivedMaterial, rounds: 1)
+    )
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .aesKdf,
+        aesKdf: KeePassKdbxAesKdfParameters(seed: Data(repeating: 0xA5, count: 32), rounds: 1)
+    )
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "kdbx4-writeback-section.kdbx",
+        candidateLabel: "password-only",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                cryptoSummary: KeePassKdbxCryptoSummary(cipher: .aes256, compression: KeePassKdbxCompressionAlgorithm.none, kdf: .aesKdf),
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerBytes: headerBytes,
+            headerByteRange: 0..<0,
+            encryptedPayload: payloadSection
+        ),
+        kdfParameters: kdfParameters,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: Data(repeating: 0x66, count: 16)
+        ),
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: Data("password-key-secret".utf8),
+            keyFileKey: nil,
+            compositeKey: Data(repeating: 0x77, count: 32)
+        )
+    )
+    let payloadCipher = RecordingPayloadCipher()
+    let decryptor = DefaultKeePassKdbxPayloadDecryptor(
+        keyDeriver: FixedKeyDeriver(),
+        masterKeyComposer: FixedMasterKeyComposer(),
+        payloadCipher: payloadCipher
+    )
+
+    let decoded = try decryptor.decryptPayload(context)
+
+    #expect(decoded == Data("<KeePassFile />".utf8))
+    #expect(payloadCipher.payloads == [encryptedPayload])
+    #expect(payloadSection.prefix(SHA256.byteCount) == Data(SHA256.hash(data: headerBytes)))
+    #expect(!payloadSection.description.contains("header bytes secret"))
+    #expect(!payloadSection.description.contains("encrypted-payload-secret"))
+    #expect(!payloadSection.description.contains(masterSeed.map { String(format: "%02x", $0) }.joined()))
+    #expect(!payloadSection.description.contains(derivedMaterial.map { String(format: "%02x", $0) }.joined()))
+
+    do {
+        _ = try DefaultKeePassKdbx4PayloadSectionWriter().writePayloadSection(
+            encryptedPayloadBlocks: [encryptedPayload],
+            headerBytes: headerBytes,
+            masterSeed: Data("short-master-seed-secret".utf8),
+            derivedKey: KeePassKdbxDerivedKey(algorithm: .aesKdf, material: derivedMaterial, rounds: 1)
+        )
+        Issue.record("Expected invalid master seed to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(!error.message.contains("header bytes secret"))
+        #expect(!error.message.contains("encrypted-payload-secret"))
+        #expect(!error.message.contains("short-master-seed-secret"))
+        #expect(!error.message.contains(derivedMaterial.map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {

@@ -698,6 +698,74 @@ public struct DefaultKeePassKdbxBlockStreamEncoder: KeePassKdbxBlockStreamEncode
     }
 }
 
+public protocol KeePassKdbx4PayloadSectionWriter: Sendable {
+    func writePayloadSection(
+        encryptedPayloadBlocks: [Data],
+        headerBytes: Data,
+        masterSeed: Data,
+        derivedKey: KeePassKdbxDerivedKey
+    ) throws -> Data
+}
+
+public struct DefaultKeePassKdbx4PayloadSectionWriter: KeePassKdbx4PayloadSectionWriter {
+    private let blockStreamEncoder: any KeePassKdbxBlockStreamEncoder
+
+    public init(blockStreamEncoder: any KeePassKdbxBlockStreamEncoder = DefaultKeePassKdbxBlockStreamEncoder()) {
+        self.blockStreamEncoder = blockStreamEncoder
+    }
+
+    public func writePayloadSection(
+        encryptedPayloadBlocks: [Data],
+        headerBytes: Data,
+        masterSeed: Data,
+        derivedKey: KeePassKdbxDerivedKey
+    ) throws -> Data {
+        let hmacBlockBaseKey = try kdbx4HmacBlockBaseKey(masterSeed: masterSeed, derivedKey: derivedKey)
+        var payloadSection = Data(SHA256.hash(data: headerBytes))
+        payloadSection.append(kdbx4HeaderHmac(headerBytes: headerBytes, hmacBlockBaseKey: hmacBlockBaseKey))
+        payloadSection.append(try blockStreamEncoder.encodeBlockStream(
+            encryptedPayloadBlocks.reduce(into: Data()) { output, block in
+                output.append(block)
+            },
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: .kdbx4,
+                streamStartBytes: nil,
+                hmacBlockBaseKey: hmacBlockBaseKey
+            )
+        ))
+        return payloadSection
+    }
+
+    private func kdbx4HmacBlockBaseKey(masterSeed: Data, derivedKey: KeePassKdbxDerivedKey) throws -> Data {
+        guard masterSeed.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC master seed 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard derivedKey.material.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC derived key 长度无效；请确认文件未损坏。"
+            )
+        }
+        var input = Data()
+        input.append(masterSeed)
+        input.append(derivedKey.material)
+        input.append(0x01)
+        return Data(SHA512.hash(data: input))
+    }
+
+    private func kdbx4HeaderHmac(headerBytes: Data, hmacBlockBaseKey: Data) -> Data {
+        let headerKey = Data(SHA512.hash(data: littleEndianUInt64(UInt64.max) + hmacBlockBaseKey))
+        return Data(HMAC<SHA256>.authenticationCode(for: headerBytes, using: SymmetricKey(data: headerKey)))
+    }
+
+    private func littleEndianUInt64(_ value: UInt64) -> Data {
+        Data((0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) })
+    }
+}
+
 public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecoder {
     public init() {}
 
