@@ -5,7 +5,7 @@ import MonicaStorage
 import UIKit
 
 final class AutoFillCredentialProviderViewController: ASCredentialProviderViewController, UISearchBarDelegate {
-    private let appGroupIdentifier = "group.takagi.ru.monica"
+    private let appGroupIdentifier = "group.monica-pass.monica"
     private var loadTask: Task<Void, Never>?
     private var credentialResolver: AutoFillCredentialResolver?
     private var matchedCredentialRecords: [AutoFillCredentialIndexRecord] = []

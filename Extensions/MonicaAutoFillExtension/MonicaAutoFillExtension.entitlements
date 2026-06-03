@@ -4,12 +4,11 @@
 <dict>
 	<key>com.apple.security.application-groups</key>
 	<array>
-		<string>group.takagi.ru.monica</string>
-		<string>group.test.monica</string>
+		<string>group.monica-pass.monica</string>
 	</array>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)takagi.ru.monica</string>
+		<string>$(AppIdentifierPrefix)com.monica-pass.monica.autofill</string>
 	</array>
 </dict>
 </plist>

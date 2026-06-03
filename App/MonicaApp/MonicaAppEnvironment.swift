@@ -11,7 +11,7 @@ struct MonicaAppEnvironment: Sendable {
     let localDeviceIdentifier: String
 
     init(
-        appGroupIdentifier: String = "group.takagi.ru.monica",
+        appGroupIdentifier: String = "group.monica-pass.monica",
         minimumIOSVersion: String = "17.0",
         firstBackupProvider: String = "WebDAV",
         localDeviceIdentifier: String = "ios-local-device"

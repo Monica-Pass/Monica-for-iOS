@@ -301,6 +301,100 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(userVisibleText.contains(blobStore.savedBlobs.first?.localPath ?? ""))
     }
 
+    func testShareExtensionInboxPersistsImportRequestsWithoutManifestSecrets() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-share-inbox-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let sourceFileURL = directory
+            .appendingPathComponent("source", isDirectory: true)
+            .appendingPathComponent("monica-shared-secret.txt")
+        try FileManager.default.createDirectory(
+            at: sourceFileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("shared-file-secret".utf8).write(to: sourceFileURL)
+        let store = AppShareExtensionInboxStore(containerURL: directory)
+
+        try store.saveIncomingItems(
+            [
+                .url(URL(string: "https://vault.example.com/login?token=secret-query")!),
+                .text("shared note body secret"),
+                .file(url: sourceFileURL, mediaType: "text/plain")
+            ],
+            now: Date(timeIntervalSince1970: 1_803_300_000)
+        )
+
+        let manifestText = try String(contentsOf: store.manifestURL, encoding: .utf8)
+        XCTAssertFalse(manifestText.contains("secret-query"))
+        XCTAssertFalse(manifestText.contains("shared note body secret"))
+        XCTAssertFalse(manifestText.contains(sourceFileURL.path))
+        XCTAssertFalse(manifestText.contains("shared-file-secret"))
+
+        let requests = try store.loadPendingImportRequests()
+        XCTAssertEqual(requests.count, 3)
+        guard case .url(let importedURL) = requests[0] else {
+            return XCTFail("Expected URL request.")
+        }
+        XCTAssertEqual(importedURL.absoluteString, "https://vault.example.com/login?token=secret-query")
+        guard case .text(let importedText) = requests[1] else {
+            return XCTFail("Expected text request.")
+        }
+        XCTAssertEqual(importedText, "shared note body secret")
+        guard case .file(let importedFileURL, let mediaType) = requests[2] else {
+            return XCTFail("Expected file request.")
+        }
+        XCTAssertEqual(mediaType, "text/plain")
+        XCTAssertEqual(importedFileURL.lastPathComponent, "monica-shared-secret.txt")
+        XCTAssertEqual(try Data(contentsOf: importedFileURL), Data("shared-file-secret".utf8))
+    }
+
+    func testShareExtensionInboxImportCreatesEntriesAndClearsPendingRequests() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-share-inbox-import-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let fileURL = directory
+            .appendingPathComponent("source", isDirectory: true)
+            .appendingPathComponent("imported-share.txt")
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("imported-file-secret".utf8).write(to: fileURL)
+
+        let store = AppShareExtensionInboxStore(containerURL: directory)
+        try store.saveIncomingItems(
+            [
+                .url(URL(string: "https://share.example.com/login?token=secret-query")!),
+                .text("shared inbox note"),
+                .file(url: fileURL, mediaType: "text/plain")
+            ]
+        )
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        try unlockNewVault(model)
+
+        let result = try model.importPendingShareExtensionItems(
+            inboxStore: store,
+            projectTitle: "Shared"
+        )
+
+        XCTAssertEqual(result.totalCount, 3)
+        XCTAssertEqual(model.loginEntries.first?.url, "https://share.example.com/login?token=secret-query")
+        XCTAssertEqual(model.noteEntries.first?.body, "shared inbox note")
+        XCTAssertEqual(blobStore.savedBlobs.first?.data, Data("imported-file-secret".utf8))
+        XCTAssertEqual(try store.loadPendingImportRequests(), [])
+    }
+
     func testWidgetSnapshotSummarizesSafeTotpAndShortcutStateWithoutLeakingSecrets() throws {
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
         let lockedSnapshot = model.widgetSnapshot(

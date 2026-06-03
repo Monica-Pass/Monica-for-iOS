@@ -528,12 +528,6 @@ struct AppAutoFillCredentialSaveRequest: Sendable, Equatable {
     }
 }
 
-enum AppShareImportRequest: Sendable, Equatable {
-    case url(URL)
-    case text(String)
-    case file(url: URL, mediaType: String)
-}
-
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
 
@@ -4348,6 +4342,20 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    @discardableResult
+    func importPendingShareExtensionItems(
+        inboxStore: AppShareExtensionInboxStore,
+        projectTitle: String
+    ) throws -> AppShareImportResult {
+        let requests = try inboxStore.loadPendingImportRequests()
+        guard !requests.isEmpty else {
+            return AppShareImportResult(importedCounts: [:], importedTitles: [])
+        }
+        let result = try importSharedItems(requests, projectTitle: projectTitle)
+        try inboxStore.clearPendingImportRequests()
+        return result
     }
 
     @discardableResult

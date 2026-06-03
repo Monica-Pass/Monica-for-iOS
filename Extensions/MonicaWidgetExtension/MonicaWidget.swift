@@ -2,7 +2,7 @@ import Foundation
 import SwiftUI
 import WidgetKit
 
-private let monicaWidgetAppGroupIdentifier = "group.takagi.ru.monica"
+private let monicaWidgetAppGroupIdentifier = "group.monica-pass.monica"
 private let monicaWidgetSnapshotFileName = "widget-snapshot-v1.json"
 
 private enum MonicaWidgetVaultState: String, Codable {
