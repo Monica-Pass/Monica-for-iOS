@@ -1090,6 +1090,81 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbx4WritebackCoordinatorBuildsReadableDatabaseWithoutLeakingSecrets() throws {
+    let password = "writeback-coordinator-password-secret"
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "coordinator-edited.kdbx",
+        headerSummary: nil,
+        groups: [
+            KeePassReadOnlyGroup(id: "root-group-uuid", title: "Root", path: "/", depth: 0),
+            KeePassReadOnlyGroup(id: "team-group-uuid", title: "Team", path: "/Team", depth: 1)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-coordinator-uuid",
+                title: "Coordinator Login",
+                username: "writer@example.com",
+                url: "https://example.com/login",
+                groupPath: "/Team",
+                groupID: "team-group-uuid",
+                notes: "coordinator edited notes secret",
+                hasPassword: true,
+                decodedPassword: "coordinator decoded password",
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: false
+            )
+        ]
+    )
+    let request = KeePassKdbx4WritebackRequest(
+        snapshot: snapshot,
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil),
+        cipher: .aes256,
+        compression: .gzip,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xA1, count: 32),
+            encryptionIV: Data(repeating: 0xA2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xA3, count: 32),
+            innerRandomStreamID: 2
+        ),
+        kdfParameters: KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xA4, count: 32),
+                iterations: 1,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+    )
+
+    let result = try DefaultKeePassKdbx4WritebackCoordinator().writeDatabase(request)
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(result.database)
+    let reparsed = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: result.database,
+        sourceName: "coordinator-edited.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(result.displaySummary.contains("KDBX4 writeback"))
+    #expect(result.displaySummary.contains("2 个分组"))
+    #expect(result.displaySummary.contains("1 个条目"))
+    #expect(envelope.headerSummary.cryptoSummary?.compression == .gzip)
+    #expect(envelope.headerSummary.cryptoSummary?.kdf == .argon2id)
+    #expect(reparsed.groups.map(\.path) == ["/", "/Team"])
+    let entry = try #require(reparsed.entries.first)
+    #expect(entry.title == "Coordinator Login")
+    #expect(entry.username == "writer@example.com")
+    #expect(entry.decodedPassword == "coordinator decoded password")
+    #expect(entry.notes == "coordinator edited notes secret")
+    #expect(!result.displaySummary.contains(password))
+    #expect(!result.displaySummary.contains("coordinator decoded password"))
+    #expect(!result.displaySummary.contains("coordinator edited notes secret"))
+    #expect(!result.database.description.contains(password))
+    #expect(!result.database.description.contains("coordinator decoded password"))
+}
+
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {

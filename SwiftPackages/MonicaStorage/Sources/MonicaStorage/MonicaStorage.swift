@@ -2483,8 +2483,17 @@ public struct KeePassXMLWritebackPayload: Sendable, Equatable {
     }
 }
 
+public enum KeePassXMLProtectedValueWritebackMode: Sendable, Equatable {
+    case preserveProtectedAttributes
+    case writePlainValues
+}
+
 public struct KeePassXMLPayloadWriter: Sendable {
-    public init() {}
+    private let protectedValueMode: KeePassXMLProtectedValueWritebackMode
+
+    public init(protectedValueMode: KeePassXMLProtectedValueWritebackMode = .preserveProtectedAttributes) {
+        self.protectedValueMode = protectedValueMode
+    }
 
     public func write(_ snapshot: KeePassReadOnlySnapshot) throws -> KeePassXMLWritebackPayload {
         let tree = KeePassXMLWritebackTree(snapshot: snapshot)
@@ -2561,7 +2570,7 @@ public struct KeePassXMLPayloadWriter: Sendable {
         appendString(
             key: "Password",
             value: entry.decodedPassword ?? "",
-            isProtected: entry.hasPassword,
+            isProtected: shouldMarkProtected(entry.hasPassword),
             into: &xml,
             indent: indent + "  "
         )
@@ -2571,7 +2580,7 @@ public struct KeePassXMLPayloadWriter: Sendable {
             appendString(key: "otp", value: Self.otpAuthURI(from: decodedTotp, fallbackTitle: entry.title), into: &xml, indent: indent + "  ")
         }
         for field in entry.customFields {
-            appendString(key: field.title, value: field.value, isProtected: field.isProtected, into: &xml, indent: indent + "  ")
+            appendString(key: field.title, value: field.value, isProtected: shouldMarkProtected(field.isProtected), into: &xml, indent: indent + "  ")
         }
         for (index, attachment) in entry.attachments.enumerated() {
             let ref = binaryRefsByEntryAttachment[
@@ -2600,6 +2609,15 @@ public struct KeePassXMLPayloadWriter: Sendable {
             xml.append("\(indent)  <Value>\(Self.escapeText(value))</Value>")
         }
         xml.append("\(indent)</String>")
+    }
+
+    private func shouldMarkProtected(_ isProtected: Bool) -> Bool {
+        switch protectedValueMode {
+        case .preserveProtectedAttributes:
+            return isProtected
+        case .writePlainValues:
+            return false
+        }
     }
 
     private static func uniqueBinaryID(preferred: String, existing: Set<String>) -> String {
@@ -3285,6 +3303,187 @@ public struct KeePassGzipPayloadCompressor: Sendable {
             )
         }
         return output
+    }
+}
+
+public struct KeePassKdbx4WritebackRequest: Sendable, Equatable {
+    public let snapshot: KeePassReadOnlySnapshot
+    public let credentials: KeePassUnlockCredentials
+    public let cipher: KeePassKdbxCipherAlgorithm
+    public let compression: KeePassKdbxCompressionAlgorithm
+    public let cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    public let kdfParameters: KeePassKdbxKdfParameters
+
+    public init(
+        snapshot: KeePassReadOnlySnapshot,
+        credentials: KeePassUnlockCredentials,
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters
+    ) {
+        self.snapshot = snapshot
+        self.credentials = credentials
+        self.cipher = cipher
+        self.compression = compression
+        self.cryptoInputs = cryptoInputs
+        self.kdfParameters = kdfParameters
+    }
+}
+
+public struct KeePassKdbx4WritebackResult: Sendable, Equatable {
+    public let database: Data
+    public let headerBytes: Data
+    public let payloadSection: Data
+    public let xmlPayloadByteCount: Int
+    public let groupCount: Int
+    public let entryCount: Int
+    public let attachmentCount: Int
+
+    public init(
+        database: Data,
+        headerBytes: Data,
+        payloadSection: Data,
+        xmlPayloadByteCount: Int,
+        groupCount: Int,
+        entryCount: Int,
+        attachmentCount: Int
+    ) {
+        self.database = database
+        self.headerBytes = headerBytes
+        self.payloadSection = payloadSection
+        self.xmlPayloadByteCount = xmlPayloadByteCount
+        self.groupCount = groupCount
+        self.entryCount = entryCount
+        self.attachmentCount = attachmentCount
+    }
+
+    public var displaySummary: String {
+        "KDBX4 writeback，\(groupCount) 个分组，\(entryCount) 个条目，\(attachmentCount) 个附件，XML \(xmlPayloadByteCount) bytes，database \(database.count) bytes"
+    }
+}
+
+public protocol KeePassKdbx4WritebackCoordinator: Sendable {
+    func writeDatabase(_ request: KeePassKdbx4WritebackRequest) throws -> KeePassKdbx4WritebackResult
+}
+
+public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoordinator {
+    private let xmlPayloadWriter: KeePassXMLPayloadWriter
+    private let gzipPayloadCompressor: KeePassGzipPayloadCompressor
+    private let headerWriter: any KeePassKdbx4HeaderWriter
+    private let keyDeriver: any KeePassKdbxKeyDeriver
+    private let masterKeyComposer: any KeePassKdbxMasterKeyComposer
+    private let payloadCipher: any KeePassKdbxPayloadCipher
+    private let payloadSectionWriter: any KeePassKdbx4PayloadSectionWriter
+    private let fileAssembler: any KeePassKdbxFileAssembler
+
+    public init(
+        xmlPayloadWriter: KeePassXMLPayloadWriter = KeePassXMLPayloadWriter(protectedValueMode: .writePlainValues),
+        gzipPayloadCompressor: KeePassGzipPayloadCompressor = KeePassGzipPayloadCompressor(),
+        headerWriter: any KeePassKdbx4HeaderWriter = DefaultKeePassKdbx4HeaderWriter(),
+        keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
+        masterKeyComposer: any KeePassKdbxMasterKeyComposer = DefaultKeePassKdbxMasterKeyComposer(),
+        payloadCipher: any KeePassKdbxPayloadCipher = DefaultKeePassKdbxPayloadCipher(),
+        payloadSectionWriter: any KeePassKdbx4PayloadSectionWriter = DefaultKeePassKdbx4PayloadSectionWriter(),
+        fileAssembler: any KeePassKdbxFileAssembler = DefaultKeePassKdbxFileAssembler()
+    ) {
+        self.xmlPayloadWriter = xmlPayloadWriter
+        self.gzipPayloadCompressor = gzipPayloadCompressor
+        self.headerWriter = headerWriter
+        self.keyDeriver = keyDeriver
+        self.masterKeyComposer = masterKeyComposer
+        self.payloadCipher = payloadCipher
+        self.payloadSectionWriter = payloadSectionWriter
+        self.fileAssembler = fileAssembler
+    }
+
+    public func writeDatabase(_ request: KeePassKdbx4WritebackRequest) throws -> KeePassKdbx4WritebackResult {
+        let headerBytes = try headerWriter.writeHeader(
+            cipher: request.cipher,
+            compression: request.compression,
+            cryptoInputs: request.cryptoInputs,
+            kdfParameters: request.kdfParameters
+        )
+        let xmlPayload = try xmlPayloadWriter.write(request.snapshot)
+        let payloadPlaintext = try compressedPayloadIfNeeded(
+            xmlPayload.xmlPayload,
+            compression: request.compression
+        )
+        let credentialCandidate = try writebackCredentialCandidate(from: request.credentials)
+        let context = try KeePassKdbxDecryptInputContext.build(
+            database: headerBytes + Data("writeback-placeholder".utf8),
+            sourceName: request.snapshot.sourceName,
+            credentialCandidate: credentialCandidate
+        )
+        let derivedKey = try keyDeriver.deriveKey(from: context)
+        let masterKey = try masterKeyComposer.composeMasterKey(
+            from: derivedKey,
+            cryptoInputs: request.cryptoInputs
+        )
+        let encryptedPayload = try payloadCipher.encryptPayload(
+            payloadPlaintext,
+            cipher: request.cipher,
+            masterKey: masterKey,
+            cryptoInputs: request.cryptoInputs
+        )
+        let masterSeed = try requireMasterSeed(request.cryptoInputs.masterSeed)
+        let payloadSection = try payloadSectionWriter.writePayloadSection(
+            encryptedPayloadBlocks: [encryptedPayload],
+            headerBytes: headerBytes,
+            masterSeed: masterSeed,
+            derivedKey: derivedKey
+        )
+        let database = try fileAssembler.assemble(headerBytes: headerBytes, payloadSection: payloadSection)
+        return KeePassKdbx4WritebackResult(
+            database: database,
+            headerBytes: headerBytes,
+            payloadSection: payloadSection,
+            xmlPayloadByteCount: xmlPayload.xmlPayload.count,
+            groupCount: xmlPayload.groupCount,
+            entryCount: xmlPayload.entryCount,
+            attachmentCount: xmlPayload.attachmentCount
+        )
+    }
+
+    private func compressedPayloadIfNeeded(
+        _ xmlPayload: Data,
+        compression: KeePassKdbxCompressionAlgorithm
+    ) throws -> Data {
+        switch compression {
+        case .none:
+            return xmlPayload
+        case .gzip:
+            return try gzipPayloadCompressor.compress(xmlPayload)
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX compression writeback 尚未接入"
+            )
+        }
+    }
+
+    private func writebackCredentialCandidate(from credentials: KeePassUnlockCredentials) throws -> KeePassCredentialCandidate {
+        if let candidateLabel = credentials.candidateLabel,
+           let candidate = credentials.credentialCandidates.first(where: { $0.label == candidateLabel }) {
+            return candidate
+        }
+        guard let candidate = credentials.credentialCandidates.first else {
+            throw KeePassOperationError(
+                code: .invalidCredential,
+                message: "KDBX 写回需要数据库密码或密钥文件"
+            )
+        }
+        return candidate
+    }
+
+    private func requireMasterSeed(_ masterSeed: Data?) throws -> Data {
+        guard let masterSeed, masterSeed.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 writeback master seed 长度无效；请确认写回参数完整。"
+            )
+        }
+        return masterSeed
     }
 }
 
