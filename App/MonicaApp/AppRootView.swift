@@ -6507,6 +6507,43 @@ final class AppSessionModel {
         }
     }
 
+    func replaceKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
+        entryID: String,
+        attachmentID: String,
+        fileURL: URL,
+        mediaType: String? = nil
+    ) throws -> KeePassKdbx4WritebackResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let content = try Data(contentsOf: fileURL)
+            let fileName = sanitizedAttachmentPreviewFileName(fileURL.lastPathComponent)
+            _ = try replaceKeePassReadOnlyAttachmentContent(
+                entryID: entryID,
+                attachmentID: attachmentID,
+                decodedContent: content,
+                fileName: fileName,
+                mediaType: mediaType
+            )
+            let result = try writeKeePassReadOnlySnapshotBackToSource()
+            entryOperationState = .succeeded(
+                "KeePass 附件已替换并写回：\(fileName) \(content.count) 字节"
+            )
+            return result
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func previewAndroidBackupImport(
         _ data: Data,
         fileName: String? = nil,

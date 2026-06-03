@@ -18,6 +18,9 @@ struct SettingsRootView: View {
     @State private var csvExportDocument = CSVExportDocument()
     @State private var isKeePassImporterPresented = false
     @State private var isKeePassKeyFileImporterPresented = false
+    @State private var isKeePassAttachmentReplacementImporterPresented = false
+    @State private var pendingKeePassAttachmentReplacementEntryID: String?
+    @State private var pendingKeePassAttachmentReplacementAttachmentID: String?
     @State private var isAndroidBackupImporterPresented = false
     @State private var isAndroidBackupExporterPresented = false
     @State private var isAndroidBackupPasswordPromptPresented = false
@@ -523,6 +526,23 @@ struct SettingsRootView: View {
                                     title: entry.title.isEmpty ? "未命名条目" : entry.title,
                                     value: entry.username.isEmpty ? entry.groupPath : entry.username
                                 )
+                                ForEach(entry.attachments.prefix(2)) { attachment in
+                                    HStack(spacing: 12) {
+                                        AndroidParityInfoRow(
+                                            title: attachment.fileName,
+                                            value: "\(attachment.originalSize) 字节"
+                                        )
+                                        Button {
+                                            pendingKeePassAttachmentReplacementEntryID = entry.id
+                                            pendingKeePassAttachmentReplacementAttachmentID = attachment.id
+                                            isKeePassAttachmentReplacementImporterPresented = true
+                                        } label: {
+                                            Label("替换并写回", systemImage: "arrow.triangle.2.circlepath")
+                                        }
+                                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                        .disabled(session.keePassSourceFileURL == nil)
+                                    }
+                                }
                             }
                         }
                         Button {
@@ -810,6 +830,25 @@ struct SettingsRootView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
+        .fileImporter(
+            isPresented: $isKeePassAttachmentReplacementImporterPresented,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            defer {
+                pendingKeePassAttachmentReplacementEntryID = nil
+                pendingKeePassAttachmentReplacementAttachmentID = nil
+            }
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                replacePendingKeePassAttachment(with: fileURL)
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
         .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
             SecureField("备份密码", text: $session.androidBackupDecryptPassword)
             Button("取消", role: .cancel) {
@@ -829,6 +868,23 @@ struct SettingsRootView: View {
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func replacePendingKeePassAttachment(with fileURL: URL) {
+        guard let entryID = pendingKeePassAttachmentReplacementEntryID,
+              let attachmentID = pendingKeePassAttachmentReplacementAttachmentID else {
+            session.entryOperationState = .failed("请先选择要替换的 KeePass 附件。")
+            return
+        }
+        do {
+            _ = try session.replaceKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
+                entryID: entryID,
+                attachmentID: attachmentID,
+                fileURL: fileURL
+            )
+        } catch {
+            session.entryOperationState = .failed(error.localizedDescription)
+        }
     }
 
     private var shouldShowSecurityQuestionState: Bool {

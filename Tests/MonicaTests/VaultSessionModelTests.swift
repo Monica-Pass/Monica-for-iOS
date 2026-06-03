@@ -3859,6 +3859,128 @@ final class VaultSessionModelTests: XCTestCase {
         }
     }
 
+    func testKeePassSnapshotAttachmentFileReplacementWritesBackSelectedFileWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let oldAttachmentSecret = Data("old keepass attachment secret".utf8)
+        let selectedFileSecret = Data("selected replacement keepass file secret".utf8)
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-attachment",
+                    title: "Contract",
+                    username: "owner@example.com",
+                    url: "https://example.com/contract",
+                    groupPath: "/",
+                    groupID: "root",
+                    notes: "entry note",
+                    hasPassword: true,
+                    decodedPassword: "entry-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-1",
+                            fileName: "contract.pdf",
+                            mediaType: "application/pdf",
+                            originalSize: Int64(oldAttachmentSecret.count),
+                            contentHash: "sha256:old-attachment-secret-hash",
+                            decodedContent: oldAttachmentSecret
+                        )
+                    ]
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            keePassDatabaseReader: RecordingKeePassDatabaseReader(snapshot: snapshot),
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx4WritebackCoordinator: coordinator
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx-attachment-file-replace-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("personal.kdbx")
+        let replacementURL = directory.appendingPathComponent("replacement report.txt")
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xC1, count: 32),
+            encryptionIV: Data(repeating: 0xC2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xC3, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xC4, count: 32),
+                iterations: 2,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-placeholder".utf8)
+        try sourceDatabase.write(to: databaseURL)
+        try selectedFileSecret.write(to: replacementURL)
+        let expectedResult = KeePassKdbx4WritebackResult(
+            database: Data("coordinated-kdbx-with-selected-file".utf8),
+            headerBytes: Data([0x05]),
+            payloadSection: Data([0x06]),
+            xmlPayloadByteCount: 144,
+            groupCount: 1,
+            entryCount: 1,
+            attachmentCount: 1
+        )
+        coordinator.result = expectedResult
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyTree()
+
+        let result = try model.replaceKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
+            entryID: "entry-attachment",
+            attachmentID: "attachment-1",
+            fileURL: replacementURL,
+            mediaType: "text/plain"
+        )
+
+        let request = try XCTUnwrap(coordinator.requests.first)
+        let writtenAttachment = try XCTUnwrap(request.snapshot.entries.first?.attachments.first)
+        let expectedHash = Data(SHA256.hash(data: selectedFileSecret))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        XCTAssertEqual(result.database, expectedResult.database)
+        XCTAssertEqual(writtenAttachment.fileName, "replacement_report.txt")
+        XCTAssertEqual(writtenAttachment.mediaType, "text/plain")
+        XCTAssertEqual(writtenAttachment.originalSize, Int64(selectedFileSecret.count))
+        XCTAssertEqual(writtenAttachment.contentHash, "sha256:\(expectedHash)")
+        XCTAssertEqual(writtenAttachment.decodedContent, selectedFileSecret)
+        XCTAssertEqual(writer.replacements.first?.data, expectedResult.database)
+        [
+            "old keepass attachment secret",
+            "selected replacement keepass file secret",
+            "entry-password-secret",
+            "old-attachment-secret-hash",
+            expectedHash,
+            "coordinated-kdbx-with-selected-file"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 附件已替换并写回：replacement_report.txt \(selectedFileSecret.count) 字节")
+        )
+    }
+
     func testKeePassSnapshotAttachmentContentEditFailureIsRedactedAndKeepsSnapshot() throws {
         let snapshot = KeePassReadOnlySnapshot(
             sourceName: "personal.kdbx",
