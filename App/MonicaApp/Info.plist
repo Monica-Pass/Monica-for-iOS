@@ -35,6 +35,11 @@
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>msauthv2</string>
+		<string>msauthv3</string>
+	</array>
 	<key>NSCameraUsageDescription</key>
 	<string>用于扫描 TOTP 设置二维码。</string>
 	<key>UIApplicationSceneManifest</key>

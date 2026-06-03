@@ -1258,6 +1258,10 @@ final class VaultSessionModelTests: XCTestCase {
             .flatMap { $0 }
 
         XCTAssertTrue(schemes.contains("msauth.com.monica-pass.monica"))
+
+        let querySchemes = plist["LSApplicationQueriesSchemes"] as? [String] ?? []
+        XCTAssertTrue(querySchemes.contains("msauthv2"))
+        XCTAssertTrue(querySchemes.contains("msauthv3"))
     }
 
     func testSecurityCenterSummarizesWeakAndReusedPasswordsWithoutLeakingSecrets() {
