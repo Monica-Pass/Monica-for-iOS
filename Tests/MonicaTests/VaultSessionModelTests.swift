@@ -1206,7 +1206,10 @@ final class VaultSessionModelTests: XCTestCase {
                 domain: "MSALErrorDomain",
                 code: -50000,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "AADSTS50011 callback failed code=auth-code-secret&state=state-secret access_token=token-secret"
+                    NSLocalizedDescriptionKey: "AADSTS50011 callback failed code=auth-code-secret&state=state-secret access_token=token-secret",
+                    "MSALInternalErrorCodeKey": -42011,
+                    "MSALOAuthErrorKey": "invalid_request",
+                    "MSALCorrelationIDKey": "correlation-id-visible"
                 ]
             )
         )
@@ -1220,6 +1223,9 @@ final class VaultSessionModelTests: XCTestCase {
 
             XCTAssertTrue(message.contains("MSALErrorDomain -50000"))
             XCTAssertTrue(message.contains("AADSTS50011"))
+            XCTAssertTrue(message.contains("MSALInternalErrorCodeKey=-42011"))
+            XCTAssertTrue(message.contains("MSALOAuthErrorKey=invalid_request"))
+            XCTAssertTrue(message.contains("MSALCorrelationIDKey=correlation-id-visible"))
             XCTAssertFalse(message.contains("auth-code-secret"))
             XCTAssertFalse(message.contains("state-secret"))
             XCTAssertFalse(message.contains("token-secret"))

@@ -142,6 +142,9 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
             ("MSALCorrelationIDKey", MSALCorrelationIDKey),
             ("MSALHTTPResponseCodeKey", MSALHTTPResponseCodeKey)
         ]
+        var knownKeys = Set(fields.map(\.key))
+        knownKeys.insert(NSLocalizedDescriptionKey)
+        knownKeys.insert(NSUnderlyingErrorKey)
         for field in fields {
             guard let value = error.userInfo[field.key] else {
                 continue
@@ -151,6 +154,15 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
                 parts.append("\(field.label)=\(text)")
             }
         }
+        let extraFields = error.userInfo
+            .filter { !knownKeys.contains($0.key) && !isSensitiveDiagnosticKey($0.key) }
+            .sorted { $0.key < $1.key }
+        for field in extraFields {
+            let text = String(describing: field.value).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty {
+                parts.append("\(field.key)=\(text)")
+            }
+        }
         if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
             parts.append("underlying=\(diagnosticMessage(for: underlying))")
         }
@@ -158,6 +170,17 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .joined(separator: " ")
+    }
+
+    private static func isSensitiveDiagnosticKey(_ key: String) -> Bool {
+        let normalized = key.lowercased()
+        return normalized.contains("token")
+            || normalized.contains("secret")
+            || normalized.contains("password")
+            || normalized.contains("credential")
+            || normalized.contains("assertion")
+            || normalized.contains("code")
+            || normalized.contains("state")
     }
 
     private func currentAccount(application: MSALPublicClientApplication) throws -> MSALAccount? {

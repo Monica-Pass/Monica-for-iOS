@@ -8599,7 +8599,7 @@ final class AppSessionModel {
         return AppOneDriveAuthenticationError.authenticationFailed(
             domain: nsError.domain,
             code: nsError.code,
-            message: nsError.localizedDescription
+            message: DefaultAppOneDriveMSALAuthenticationService.diagnosticMessage(for: nsError)
         ).localizedDescription
     }
 
