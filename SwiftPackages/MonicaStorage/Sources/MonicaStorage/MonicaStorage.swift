@@ -478,6 +478,27 @@ public protocol KeePassKdbxPayloadCipher: Sendable {
         masterKey: KeePassKdbxMasterKeyMaterial,
         cryptoInputs: KeePassKdbxPayloadCryptoInputs
     ) throws -> Data
+
+    func encryptPayload(
+        _ plaintextPayload: Data,
+        cipher: KeePassKdbxCipherAlgorithm,
+        masterKey: KeePassKdbxMasterKeyMaterial,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> Data
+}
+
+public extension KeePassKdbxPayloadCipher {
+    func encryptPayload(
+        _ plaintextPayload: Data,
+        cipher: KeePassKdbxCipherAlgorithm,
+        masterKey: KeePassKdbxMasterKeyMaterial,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> Data {
+        throw KeePassOperationError(
+            code: .formatUnsupported,
+            message: "KDBX payload 加密尚未接入"
+        )
+    }
 }
 
 public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
@@ -523,6 +544,37 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
             throw KeePassOperationError(
                 code: .formatUnsupported,
                 message: "未知 KDBX cipher 尚未接入"
+            )
+        }
+    }
+
+    public func encryptPayload(
+        _ plaintextPayload: Data,
+        cipher: KeePassKdbxCipherAlgorithm,
+        masterKey: KeePassKdbxMasterKeyMaterial,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> Data {
+        switch cipher {
+        case .aes256:
+            return try KeePassAES256CBC.encrypt(
+                plaintextPayload,
+                key: masterKey.material,
+                iv: cryptoInputs.encryptionIV
+            )
+        case .chacha20:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX ChaCha20 payload 加密尚未接入"
+            )
+        case .twofish:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish payload 加密尚未接入"
+            )
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX cipher 写回尚未接入"
             )
         }
     }
@@ -1208,6 +1260,22 @@ private enum KeePassAES256ECB {
     private static let blockSize = 16
     private static let rounds = 14
 
+    static func encryptBlock(_ block: Data, key: Data) throws -> Data {
+        guard block.count == blockSize else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES block 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard key.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES key 长度无效；请确认文件未损坏。"
+            )
+        }
+        return Data(encryptBlock([UInt8](block), roundKeys: expandKey([UInt8](key))))
+    }
+
     static func decryptBlock(_ block: Data, key: Data) throws -> Data {
         guard block.count == blockSize else {
             throw KeePassOperationError(
@@ -1464,6 +1532,38 @@ private enum KeePassAES256ECB {
 private enum KeePassAES256CBC {
     private static let blockSize = 16
 
+    static func encrypt(_ data: Data, key: Data, iv: Data?) throws -> Data {
+        guard key.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES master key 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard let iv, iv.count == blockSize else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX AES IV 缺失或长度无效；请确认文件未损坏。"
+            )
+        }
+
+        let padded = data.addingPKCS7Padding(blockSize: blockSize)
+        var output = Data()
+        output.reserveCapacity(padded.count)
+        var previousBlock = iv
+        var offset = 0
+        while offset < padded.count {
+            var plainBlock = Data(padded[offset..<offset + blockSize])
+            for index in 0..<blockSize {
+                plainBlock[index] ^= previousBlock[index]
+            }
+            let encryptedBlock = try KeePassAES256ECB.encryptBlock(plainBlock, key: key)
+            output.append(encryptedBlock)
+            previousBlock = encryptedBlock
+            offset += blockSize
+        }
+        return output
+    }
+
     static func decrypt(_ data: Data, key: Data, iv: Data?) throws -> Data {
         guard key.count == 32 else {
             throw KeePassOperationError(
@@ -1554,6 +1654,13 @@ private enum KeePassTwofishCBC {
 }
 
 private extension Data {
+    func addingPKCS7Padding(blockSize: Int) -> Data {
+        let paddingLength = blockSize - (count % blockSize)
+        var output = self
+        output.append(contentsOf: repeatElement(UInt8(paddingLength), count: paddingLength))
+        return output
+    }
+
     func removingPKCS7Padding(blockSize: Int) -> Data {
         guard let lastByte = self.last else {
             return self
@@ -2803,6 +2910,74 @@ private enum KeePassGzipPayloadInflator {
         }
 
         return status == Z_STREAM_END ? output : nil
+    }
+}
+
+public struct KeePassGzipPayloadCompressor: Sendable {
+    private static let chunkSize = 64 * 1024
+
+    public init() {}
+
+    public func compress(_ data: Data) throws -> Data {
+        var stream = z_stream()
+        let initStatus = deflateInit2_(
+            &stream,
+            Z_DEFAULT_COMPRESSION,
+            Z_DEFLATED,
+            16 + MAX_WBITS,
+            8,
+            Z_DEFAULT_STRATEGY,
+            ZLIB_VERSION,
+            Int32(MemoryLayout<z_stream>.size)
+        )
+        guard initStatus == Z_OK else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass GZip payload 压缩器初始化失败；请重试。"
+            )
+        }
+        defer {
+            deflateEnd(&stream)
+        }
+
+        var output = Data()
+        let status = data.withUnsafeBytes { inputBuffer -> Int32 in
+            guard data.isEmpty || inputBuffer.baseAddress != nil else {
+                return Z_DATA_ERROR
+            }
+            if let inputBase = inputBuffer.baseAddress {
+                stream.next_in = UnsafeMutablePointer<Bytef>(mutating: inputBase.assumingMemoryBound(to: Bytef.self))
+                stream.avail_in = uInt(data.count)
+            }
+
+            var status: Int32 = Z_OK
+            var buffer = [UInt8](repeating: 0, count: Self.chunkSize)
+            repeat {
+                let produced = buffer.withUnsafeMutableBytes { outputBuffer -> Int32 in
+                    guard let outputBase = outputBuffer.baseAddress else {
+                        return Z_BUF_ERROR
+                    }
+                    stream.next_out = outputBase.assumingMemoryBound(to: Bytef.self)
+                    stream.avail_out = uInt(Self.chunkSize)
+                    let stepStatus = zlib.deflate(&stream, Z_FINISH)
+                    let written = Self.chunkSize - Int(stream.avail_out)
+                    if written > 0 {
+                        output.append(outputBase.assumingMemoryBound(to: UInt8.self), count: written)
+                    }
+                    return stepStatus
+                }
+                status = produced
+            } while status == Z_OK
+            return status
+        }
+
+        guard status == Z_STREAM_END else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KeePass GZip payload 压缩失败；请重试。"
+            )
+        }
+        return output
     }
 }
 

@@ -529,6 +529,72 @@ import MonicaStorage
     #expect(!decrypted.description.contains(masterKey.material.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func keePassGzipPayloadCompressorRoundTripsXmlPayloadWithoutLeakingSecrets() throws {
+    let xmlPayload = Data("<KeePassFile><Root><Group><Name>secret xml</Name></Group></Root></KeePassFile>".utf8)
+
+    let compressed = try KeePassGzipPayloadCompressor().compress(xmlPayload)
+    let snapshot = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: compressed,
+        sourceName: "writeback.xml.gz",
+        credentials: KeePassUnlockCredentials(
+            password: "database-password",
+            keyFile: nil,
+            keyFileName: nil
+        )
+    )
+
+    #expect(snapshot.groupCount == 1)
+    #expect(snapshot.groups.first?.title == "secret xml")
+    #expect(compressed.starts(with: Data([0x1F, 0x8B])))
+    #expect(!compressed.description.contains("secret xml"))
+}
+
+@Test func keepPassKdbxAesPayloadCipherEncryptsCbcPayloadWithoutLeakingSecrets() throws {
+    let masterKey = KeePassKdbxMasterKeyMaterial(
+        algorithm: .aesKdf,
+        material: try decodeHexData("603deb1015ca71be2b73aef0857d77811f352c073b6108d72d9810a30914dff4")
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xA1, count: 32),
+        encryptionIV: try decodeHexData("000102030405060708090a0b0c0d0e0f"),
+        innerRandomStreamKey: Data(repeating: 0xB2, count: 32),
+        streamStartBytes: Data(repeating: 0xC3, count: 32),
+        innerRandomStreamID: 2
+    )
+    let plaintext = try decodeHexData("6bc1bee22e409f96e93d7e117393172a")
+
+    let encrypted = try DefaultKeePassKdbxPayloadCipher().encryptPayload(
+        plaintext,
+        cipher: .aes256,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+    let decrypted = try DefaultKeePassKdbxPayloadCipher().decryptPayload(
+        encrypted,
+        cipher: .aes256,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    #expect(decrypted == plaintext)
+    #expect(encrypted != plaintext)
+
+    do {
+        _ = try DefaultKeePassKdbxPayloadCipher().encryptPayload(
+            Data("secret xml".utf8),
+            cipher: .aes256,
+            masterKey: KeePassKdbxMasterKeyMaterial(algorithm: .aesKdf, material: Data("short-key-secret".utf8)),
+            cryptoInputs: cryptoInputs
+        )
+        Issue.record("Expected invalid AES key to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(!error.message.contains("secret xml"))
+        #expect(!error.message.contains("short-key-secret"))
+        #expect(!error.message.contains(masterKey.material.map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
 @Test func keepPassKdbx3BlockStreamDecoderValidatesStreamStartAndHashesBlocksWithoutLeakingSecrets() throws {
     let streamStartBytes = Data("stream-start-secret".utf8)
     let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
