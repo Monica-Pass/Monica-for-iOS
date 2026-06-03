@@ -1452,6 +1452,7 @@ final class AppSessionModel {
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
     private let keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService
+    private let keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
@@ -1462,6 +1463,7 @@ final class AppSessionModel {
     private var rememberedVaultID: String?
     private var lastUserActivityAt: Date?
     private var pendingAndroidEncryptedBackupData: Data?
+    private var keePassLastSuccessfulUnlockCredentials: KeePassUnlockCredentials?
 
     init(
         vaultRepository: LocalVaultRepository = LocalVaultRepository(),
@@ -1485,6 +1487,7 @@ final class AppSessionModel {
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
         keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService = FileSystemAppKeePassKdbxFileWritebackService(),
+        keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator = DefaultKeePassKdbx4WritebackCoordinator(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
@@ -1514,6 +1517,7 @@ final class AppSessionModel {
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
         self.keePassKdbxFileWritebackService = keePassKdbxFileWritebackService
+        self.keePassKdbx4WritebackCoordinator = keePassKdbx4WritebackCoordinator
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
@@ -6100,6 +6104,7 @@ final class AppSessionModel {
         }
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
+        keePassLastSuccessfulUnlockCredentials = nil
 
         let preflight = KeePassFormatInspector.prepareUnlock(
             databaseData,
@@ -6135,8 +6140,7 @@ final class AppSessionModel {
 
         do {
             _ = try prepareKeePassUnlockPreflight()
-            let reader = KeePassCandidateTryingDatabaseReader(baseReader: keePassDatabaseReader)
-            let snapshot = try reader.readSnapshot(
+            let (snapshot, successfulCredentials) = try readKeePassSnapshotTryingCredentialCandidates(
                 database: databaseData,
                 sourceName: keePassPendingDatabaseName,
                 credentials: KeePassUnlockCredentials(
@@ -6146,12 +6150,14 @@ final class AppSessionModel {
                 )
             )
             keePassReadOnlySnapshot = snapshot
+            keePassLastSuccessfulUnlockCredentials = successfulCredentials
             keePassReadOnlyImportPlan = nil
             entryOperationState = .succeeded("KeePass 只读预览：\(snapshot.displaySummary)")
             return snapshot
         } catch {
             keePassReadOnlySnapshot = nil
             keePassReadOnlyImportPlan = nil
+            keePassLastSuccessfulUnlockCredentials = nil
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
@@ -6398,6 +6404,27 @@ final class AppSessionModel {
             entryOperationState = .succeeded(
                 "KeePass 数据库已写回：\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes"
             )
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func writeKeePassReadOnlySnapshotBackToSource() throws -> KeePassKdbx4WritebackResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let snapshot: KeePassReadOnlySnapshot
+            if let existingSnapshot = keePassReadOnlySnapshot {
+                snapshot = existingSnapshot
+            } else {
+                snapshot = try previewKeePassReadOnlyTree()
+            }
+            let request = try makeKeePassKdbx4WritebackRequest(snapshot: snapshot)
+            let result = try keePassKdbx4WritebackCoordinator.writeDatabase(request)
+            try writeKeePassKdbx4Database(result)
+            return result
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7147,6 +7174,7 @@ final class AppSessionModel {
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
+        keePassLastSuccessfulUnlockCredentials = nil
         if !preservingLastMetadataImportReferences {
             keePassLastMetadataImportReferences = []
         }
@@ -7189,6 +7217,95 @@ final class AppSessionModel {
             throw AppWebDAVBackupError.vaultLocked
         }
         return activeVaultSession
+    }
+
+    private func readKeePassSnapshotTryingCredentialCandidates(
+        database: Data,
+        sourceName: String?,
+        credentials: KeePassUnlockCredentials
+    ) throws -> (snapshot: KeePassReadOnlySnapshot, credentials: KeePassUnlockCredentials) {
+        let candidates = credentials.credentialCandidates
+        guard !candidates.isEmpty else {
+            let snapshot = try keePassDatabaseReader.readSnapshot(
+                database: database,
+                sourceName: sourceName,
+                credentials: credentials
+            )
+            return (snapshot, credentials)
+        }
+
+        var attemptedLabels: [String] = []
+        for candidate in candidates {
+            attemptedLabels.append(candidate.label)
+            let attemptCredentials = KeePassUnlockCredentials(
+                password: candidate.password,
+                keyFile: candidate.keyMaterial,
+                keyFileName: credentials.keyFileName,
+                candidateLabel: candidate.label
+            )
+            do {
+                let snapshot = try keePassDatabaseReader.readSnapshot(
+                    database: database,
+                    sourceName: sourceName,
+                    credentials: attemptCredentials
+                )
+                return (snapshot, attemptCredentials)
+            } catch let error as KeePassOperationError where error.code == .invalidCredential {
+                continue
+            }
+        }
+
+        throw KeePassOperationError(
+            code: .invalidCredential,
+            message: KeePassCredentialSupport.invalidCredentialMessage(attemptedLabels: attemptedLabels)
+        )
+    }
+
+    private func makeKeePassKdbx4WritebackRequest(
+        snapshot: KeePassReadOnlySnapshot
+    ) throws -> KeePassKdbx4WritebackRequest {
+        guard let databaseData = keePassPendingDatabaseData else {
+            let message = "请先选择 KDBX 数据库文件"
+            throw KeePassOperationError(code: .formatUnsupported, message: message)
+        }
+        let envelope = try KeePassKdbxPayloadEnvelope.parse(databaseData)
+        guard envelope.headerSummary.formatVersion == .kdbx4 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "当前仅支持 KDBX4 数据库写回。"
+            )
+        }
+        guard let cipher = envelope.headerSummary.cryptoSummary?.cipher else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX cipher 参数缺失；请确认文件未损坏。"
+            )
+        }
+        guard let compression = envelope.headerSummary.cryptoSummary?.compression else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX compression 参数缺失；请确认文件未损坏。"
+            )
+        }
+        guard let kdfParameters = envelope.headerSummary.kdfParameters else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX KDF 参数缺失；请确认文件未损坏。"
+            )
+        }
+        let credentials = keePassLastSuccessfulUnlockCredentials ?? KeePassUnlockCredentials(
+            password: keePassUnlockPassword,
+            keyFile: keePassKeyFileData,
+            keyFileName: keePassKeyFileName
+        )
+        return KeePassKdbx4WritebackRequest(
+            snapshot: snapshot,
+            credentials: credentials,
+            cipher: cipher,
+            compression: compression,
+            cryptoInputs: KeePassFormatInspector.parseKdbxPayloadCryptoInputs(from: envelope),
+            kdfParameters: kdfParameters
+        )
     }
 
     private func activateVaultCategory(

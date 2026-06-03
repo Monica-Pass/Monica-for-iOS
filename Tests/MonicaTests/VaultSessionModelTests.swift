@@ -3626,6 +3626,121 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassKdbxSnapshotSaveBuildsWritebackRequestAndWritesSourceFileWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0),
+                KeePassReadOnlyGroup(id: "work", title: "Work", path: "/Work", depth: 1)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-1",
+                    title: "Edited Login",
+                    username: "writer@example.com",
+                    url: "https://example.com/login",
+                    groupPath: "/Work",
+                    groupID: "work",
+                    notes: "edited notes secret",
+                    hasPassword: true,
+                    decodedPassword: "decoded-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 0,
+                    isDeleted: false
+                )
+            ]
+        )
+        let reader = RecordingKeePassDatabaseReader(snapshot: snapshot)
+        reader.queuedResults = [
+            .failure(KeePassOperationError(code: .invalidCredential, message: "invalid password-only candidate")),
+            .success(snapshot)
+        ]
+        let model = AppSessionModel(
+            keePassDatabaseReader: reader,
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx4WritebackCoordinator: coordinator
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx-save-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("personal.kdbx")
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xA1, count: 32),
+            encryptionIV: Data(repeating: 0xA2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xA3, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xA4, count: 32),
+                iterations: 2,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-placeholder".utf8)
+        try sourceDatabase.write(to: databaseURL)
+        let expectedResult = KeePassKdbx4WritebackResult(
+            database: Data("coordinated-kdbx-secret-bytes".utf8),
+            headerBytes: Data([0x01]),
+            payloadSection: Data([0x02]),
+            xmlPayloadByteCount: 88,
+            groupCount: 2,
+            entryCount: 1,
+            attachmentCount: 0
+        )
+        coordinator.result = expectedResult
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+        _ = try model.previewKeePassReadOnlyTree()
+
+        let result = try model.writeKeePassReadOnlySnapshotBackToSource()
+
+        let request = try XCTUnwrap(coordinator.requests.first)
+        XCTAssertEqual(request.snapshot, snapshot)
+        XCTAssertEqual(request.credentials.password, "database-password")
+        XCTAssertEqual(request.credentials.keyFile, Data("key-file-secret".utf8))
+        XCTAssertEqual(request.credentials.keyFileName, "personal.key")
+        XCTAssertEqual(request.cipher, .aes256)
+        XCTAssertEqual(request.compression, .gzip)
+        XCTAssertEqual(request.cryptoInputs, cryptoInputs)
+        XCTAssertEqual(request.kdfParameters, kdfParameters)
+        XCTAssertEqual(result.database, expectedResult.database)
+        XCTAssertEqual(
+            writer.replacements,
+            [
+                RecordedKeePassKdbxFileReplacement(
+                    url: databaseURL,
+                    data: expectedResult.database
+                )
+            ]
+        )
+        XCTAssertEqual(model.keePassPendingDatabaseData, expectedResult.database)
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("decoded-password-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("coordinated-kdbx-secret-bytes"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 数据库已写回：1 个条目，0 个附件，29 bytes")
+        )
+    }
+
     func testKeePassConfirmImportCreatesLoginMetadataWithoutSecretsAndClearsPreviewState() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(
@@ -6213,6 +6328,28 @@ private final class RecordingAutoFillCredentialIdentityStore: AppAutoFillCredent
 
     func replaceCredentialIdentities(_ identities: [AppAutoFillCredentialIdentity]) {
         savedIdentities.append(identities)
+    }
+}
+
+private final class RecordingKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoordinator, @unchecked Sendable {
+    private(set) var requests: [KeePassKdbx4WritebackRequest] = []
+    var result = KeePassKdbx4WritebackResult(
+        database: Data("recorded-kdbx".utf8),
+        headerBytes: Data(),
+        payloadSection: Data(),
+        xmlPayloadByteCount: 0,
+        groupCount: 0,
+        entryCount: 0,
+        attachmentCount: 0
+    )
+    var error: Error?
+
+    func writeDatabase(_ request: KeePassKdbx4WritebackRequest) throws -> KeePassKdbx4WritebackResult {
+        requests.append(request)
+        if let error {
+            throw error
+        }
+        return result
     }
 }
 
