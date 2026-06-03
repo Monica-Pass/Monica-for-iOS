@@ -617,6 +617,67 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbx3BlockStreamEncoderRoundTripsXmlPayloadWithoutLeakingSecrets() throws {
+    let streamStartBytes = Data(repeating: 0x42, count: 32)
+    let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
+    let context = KeePassKdbxBlockStreamContext(
+        formatVersion: .kdbx3,
+        streamStartBytes: streamStartBytes
+    )
+
+    let encoded = try DefaultKeePassKdbxBlockStreamEncoder().encodeBlockStream(xmlPayload, context: context)
+    let decoded = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(encoded, context: context)
+
+    #expect(decoded == xmlPayload)
+
+    do {
+        _ = try DefaultKeePassKdbxBlockStreamEncoder().encodeBlockStream(
+            xmlPayload,
+            context: KeePassKdbxBlockStreamContext(formatVersion: .kdbx3, streamStartBytes: nil)
+        )
+        Issue.record("Expected missing stream start bytes to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(!error.message.contains("secret xml"))
+        #expect(!error.message.contains(streamStartBytes.map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
+@Test func keepPassKdbx4BlockStreamEncoderRoundTripsXmlPayloadWithoutLeakingSecrets() throws {
+    let hmacBaseKey = Data(SHA512.hash(data: Data("hmac-base-key-secret".utf8)))
+    let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
+    let context = KeePassKdbxBlockStreamContext(
+        formatVersion: .kdbx4,
+        streamStartBytes: nil,
+        hmacBlockBaseKey: hmacBaseKey
+    )
+
+    let encoded = try DefaultKeePassKdbxBlockStreamEncoder().encodeBlockStream(xmlPayload, context: context)
+    let decoded = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(encoded, context: context)
+
+    #expect(decoded == xmlPayload)
+
+    var tampered = encoded
+    let firstBlockDataOffset = SHA256.byteCount + 4
+    tampered[firstBlockDataOffset] ^= 0x01
+    #expect(throws: KeePassOperationError.self) {
+        _ = try DefaultKeePassKdbxBlockStreamDecoder().decodeBlockStream(tampered, context: context)
+    }
+
+    do {
+        _ = try DefaultKeePassKdbxBlockStreamEncoder().encodeBlockStream(
+            xmlPayload,
+            context: KeePassKdbxBlockStreamContext(formatVersion: .kdbx4, streamStartBytes: nil)
+        )
+        Issue.record("Expected missing HMAC key to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(!error.message.contains("hmac-base-key-secret"))
+        #expect(!error.message.contains("secret xml"))
+        #expect(!error.message.contains(hmacBaseKey.map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {

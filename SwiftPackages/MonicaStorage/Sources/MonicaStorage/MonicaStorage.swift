@@ -544,6 +544,108 @@ public protocol KeePassKdbxBlockStreamDecoder: Sendable {
     func decodeBlockStream(_ decryptedPayload: Data, context: KeePassKdbxBlockStreamContext) throws -> Data
 }
 
+public protocol KeePassKdbxBlockStreamEncoder: Sendable {
+    func encodeBlockStream(_ xmlPayload: Data, context: KeePassKdbxBlockStreamContext) throws -> Data
+}
+
+public struct DefaultKeePassKdbxBlockStreamEncoder: KeePassKdbxBlockStreamEncoder {
+    public init() {}
+
+    public func encodeBlockStream(_ xmlPayload: Data, context: KeePassKdbxBlockStreamContext) throws -> Data {
+        switch context.formatVersion {
+        case .kdbx3:
+            return try encodeKdbx3HashedBlockStream(xmlPayload, streamStartBytes: context.streamStartBytes)
+        case .kdbx4:
+            return try encodeKdbx4HmacBlockStream(xmlPayload, hmacBlockBaseKey: context.hmacBlockBaseKey)
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX block stream 写回尚未接入"
+            )
+        }
+    }
+
+    private func encodeKdbx3HashedBlockStream(_ xmlPayload: Data, streamStartBytes: Data?) throws -> Data {
+        guard let streamStartBytes, !streamStartBytes.isEmpty else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX stream start bytes 缺失；请确认文件未损坏。"
+            )
+        }
+        guard xmlPayload.count <= Int(UInt32.max) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX block stream 写回 payload 过大；请拆分后重试。"
+            )
+        }
+
+        var encoded = Data()
+        encoded.append(streamStartBytes)
+        if !xmlPayload.isEmpty {
+            encoded.append(littleEndianUInt32(0))
+            encoded.append(Data(SHA256.hash(data: xmlPayload)))
+            encoded.append(littleEndianUInt32(UInt32(xmlPayload.count)))
+            encoded.append(xmlPayload)
+        }
+        encoded.append(littleEndianUInt32(xmlPayload.isEmpty ? 0 : 1))
+        encoded.append(Data(repeating: 0x00, count: SHA256.byteCount))
+        encoded.append(littleEndianUInt32(0))
+        return encoded
+    }
+
+    private func encodeKdbx4HmacBlockStream(_ xmlPayload: Data, hmacBlockBaseKey: Data?) throws -> Data {
+        guard let hmacBlockBaseKey, hmacBlockBaseKey.count == SHA512.byteCount else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 HMAC key 缺失；请确认文件未损坏。"
+            )
+        }
+        guard xmlPayload.count <= Int(UInt32.max) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX4 block stream 写回 payload 过大；请拆分后重试。"
+            )
+        }
+
+        var encoded = Data()
+        var nextBlockIndex: UInt64 = 0
+        if !xmlPayload.isEmpty {
+            encoded.append(kdbx4BlockHmac(blockIndex: nextBlockIndex, blockLength: UInt32(xmlPayload.count), block: xmlPayload, hmacBlockBaseKey: hmacBlockBaseKey))
+            encoded.append(littleEndianUInt32(UInt32(xmlPayload.count)))
+            encoded.append(xmlPayload)
+            nextBlockIndex += 1
+        }
+
+        let terminator = Data()
+        encoded.append(kdbx4BlockHmac(blockIndex: nextBlockIndex, blockLength: 0, block: terminator, hmacBlockBaseKey: hmacBlockBaseKey))
+        encoded.append(littleEndianUInt32(0))
+        return encoded
+    }
+
+    private func kdbx4BlockHmac(blockIndex: UInt64, blockLength: UInt32, block: Data, hmacBlockBaseKey: Data) -> Data {
+        let blockKeyInput = littleEndianUInt64(blockIndex) + hmacBlockBaseKey
+        let blockKey = SymmetricKey(data: Data(SHA512.hash(data: blockKeyInput)))
+        var hmacInput = Data()
+        hmacInput.append(littleEndianUInt64(blockIndex))
+        hmacInput.append(littleEndianUInt32(blockLength))
+        hmacInput.append(block)
+        return Data(HMAC<SHA256>.authenticationCode(for: hmacInput, using: blockKey))
+    }
+
+    private func littleEndianUInt32(_ value: UInt32) -> Data {
+        Data([
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ])
+    }
+
+    private func littleEndianUInt64(_ value: UInt64) -> Data {
+        Data((0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) })
+    }
+}
+
 public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecoder {
     public init() {}
 
