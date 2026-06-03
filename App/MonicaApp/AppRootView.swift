@@ -554,19 +554,67 @@ struct AppShareImportResult: Sendable, Equatable {
     }
 }
 
-struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable {
+struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable, Codable {
     let id: String
     let kind: UnifiedVaultItemKind
     let title: String
     let subtitle: String
     let searchableText: String
 
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case title
+        case subtitle
+        case searchableText
+    }
+
+    init(
+        id: String,
+        kind: UnifiedVaultItemKind,
+        title: String,
+        subtitle: String,
+        searchableText: String
+    ) {
+        self.id = id
+        self.kind = kind
+        self.title = title
+        self.subtitle = subtitle
+        self.searchableText = searchableText
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        let kindRawValue = try container.decode(String.self, forKey: .kind)
+        guard let decodedKind = UnifiedVaultItemKind(rawValue: kindRawValue) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind,
+                in: container,
+                debugDescription: "Unknown widget shortcut item kind."
+            )
+        }
+        kind = decodedKind
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decode(String.self, forKey: .subtitle)
+        searchableText = try container.decode(String.self, forKey: .searchableText)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind.rawValue, forKey: .kind)
+        try container.encode(title, forKey: .title)
+        try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(searchableText, forKey: .searchableText)
+    }
+
     var route: VaultItemRoute {
         VaultItemRoute(kind: kind, entryID: id)
     }
 }
 
-enum AppWidgetVaultState: Sendable, Equatable {
+enum AppWidgetVaultState: String, Sendable, Equatable, Codable {
     case locked
     case unlocked
 
@@ -580,7 +628,7 @@ enum AppWidgetVaultState: Sendable, Equatable {
     }
 }
 
-struct AppWidgetTotpItem: Sendable, Equatable, Identifiable {
+struct AppWidgetTotpItem: Sendable, Equatable, Identifiable, Codable {
     let id: String
     let title: String
     let issuer: String
@@ -592,7 +640,7 @@ struct AppWidgetTotpItem: Sendable, Equatable, Identifiable {
     }
 }
 
-struct AppWidgetSnapshot: Sendable, Equatable {
+struct AppWidgetSnapshot: Sendable, Equatable, Codable {
     let vaultState: AppWidgetVaultState
     let totalEntryCount: Int
     let totpItems: [AppWidgetTotpItem]
@@ -617,6 +665,35 @@ struct AppWidgetSnapshot: Sendable, Equatable {
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " ")
+    }
+}
+
+struct AppWidgetSnapshotFileStore: Sendable {
+    let snapshotFileURL: URL
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL) {
+        snapshotFileURL = containerURL.appendingPathComponent("widget-snapshot-v1.json")
+        encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        decoder = JSONDecoder()
+    }
+
+    func saveSnapshot(_ snapshot: AppWidgetSnapshot) throws {
+        let data = try encoder.encode(snapshot)
+        try data.write(
+            to: snapshotFileURL,
+            options: [.atomic, .completeFileProtection]
+        )
+    }
+
+    func loadSnapshot() throws -> AppWidgetSnapshot? {
+        guard FileManager.default.fileExists(atPath: snapshotFileURL.path) else {
+            return nil
+        }
+        let data = try Data(contentsOf: snapshotFileURL)
+        return try decoder.decode(AppWidgetSnapshot.self, from: data)
     }
 }
 
@@ -1646,6 +1723,7 @@ final class AppSessionModel {
     private let keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService
     private let keePassKdbx3WritebackCoordinator: any KeePassKdbx3WritebackCoordinator
     private let keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator
+    private let widgetSnapshotStore: AppWidgetSnapshotFileStore?
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
@@ -1684,6 +1762,7 @@ final class AppSessionModel {
         keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService = FileSystemAppKeePassKdbxFileWritebackService(),
         keePassKdbx3WritebackCoordinator: any KeePassKdbx3WritebackCoordinator = DefaultKeePassKdbx3WritebackCoordinator(),
         keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator = DefaultKeePassKdbx4WritebackCoordinator(),
+        widgetSnapshotStore: AppWidgetSnapshotFileStore? = nil,
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
@@ -1717,6 +1796,7 @@ final class AppSessionModel {
         self.keePassKdbxFileWritebackService = keePassKdbxFileWritebackService
         self.keePassKdbx3WritebackCoordinator = keePassKdbx3WritebackCoordinator
         self.keePassKdbx4WritebackCoordinator = keePassKdbx4WritebackCoordinator
+        self.widgetSnapshotStore = widgetSnapshotStore
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
@@ -2026,6 +2106,13 @@ final class AppSessionModel {
             totpItems: Array(totpItems),
             shortcutItems: Array(allShortcutEntrySummaries().prefix(4))
         )
+    }
+
+    func refreshWidgetSnapshotIfConfigured(now: Date = Date()) throws {
+        guard let widgetSnapshotStore else {
+            return
+        }
+        try widgetSnapshotStore.saveSnapshot(widgetSnapshot(now: now))
     }
 
     func openShortcutEntry(_ summary: AppShortcutEntrySummary) throws {
@@ -3784,6 +3871,7 @@ final class AppSessionModel {
             clearExtendedParityEntries()
             clearOperationTimelineEvents()
             recordUserActivity(at: now)
+            try refreshWidgetSnapshotIfConfigured(now: now)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
             clearVaultAccessAfterFailure()
@@ -3831,6 +3919,7 @@ final class AppSessionModel {
             clearExtendedParityEntries()
             clearOperationTimelineEvents()
             recordUserActivity(at: now)
+            try refreshWidgetSnapshotIfConfigured(now: now)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
             clearVaultAccessAfterFailure()
@@ -8035,6 +8124,7 @@ final class AppSessionModel {
         bitwardenSyncPreview = nil
         clearPendingAndroidEncryptedBackup()
         dismissAttachmentQuickLookPreview()
+        try? refreshWidgetSnapshotIfConfigured()
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
@@ -8529,6 +8619,7 @@ final class AppSessionModel {
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+        try refreshWidgetSnapshotIfConfigured()
     }
 
     private func clearAllEntryLists() {

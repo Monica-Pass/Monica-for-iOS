@@ -18,6 +18,8 @@
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
 		A10000000000000000000004 /* AutoFillCredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */; };
 		A10000000000000000000005 /* MonicaAutoFillExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000032 /* MonicaAutoFillExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A20000000000000000000001 /* MonicaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* MonicaWidget.swift */; };
+		A20000000000000000000002 /* MonicaWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* MonicaWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A10000000000000000000006 /* MonicaCore in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D1 /* MonicaCore */; };
 		A10000000000000000000007 /* MonicaMDBX in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D2 /* MonicaMDBX */; };
 		A10000000000000000000008 /* MonicaSecurity in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D3 /* MonicaSecurity */; };
@@ -42,6 +44,13 @@
 			remoteGlobalIDString = A10000000000000000000062;
 			remoteInfo = MonicaAutoFillExtension;
 		};
+		A20000000000000000000003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A10000000000000000000080 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A20000000000000000000020;
+			remoteInfo = MonicaWidgetExtension;
+		};
 		A10000000000000000000043 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = A10000000000000000000080 /* Project object */;
@@ -59,6 +68,7 @@
 			dstSubfolderSpec = 13;
 			files = (
 				A10000000000000000000005 /* MonicaAutoFillExtension.appex in Embed App Extensions */,
+				A20000000000000000000002 /* MonicaWidgetExtension.appex in Embed App Extensions */,
 			);
 			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -83,9 +93,13 @@
 		A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillCredentialProviderViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000023 /* MonicaAutoFillExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaAutoFillExtension.entitlements; sourceTree = "<group>"; };
+		A20000000000000000000011 /* MonicaWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaWidget.swift; sourceTree = "<group>"; };
+		A20000000000000000000012 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A20000000000000000000013 /* MonicaWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaWidgetExtension.entitlements; sourceTree = "<group>"; };
 		A10000000000000000000031 /* Monica.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monica.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000032 /* MonicaAutoFillExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonicaAutoFillExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000033 /* MonicaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MonicaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A20000000000000000000014 /* MonicaWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonicaWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -118,6 +132,13 @@
 			files = (
 				A10000000000000000000010 /* MonicaMDBX in Frameworks */,
 				A10000000000000000000019 /* MonicaStorage in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A20000000000000000000021 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -165,6 +186,7 @@
 			isa = PBXGroup;
 			children = (
 				A10000000000000000000075 /* MonicaAutoFillExtension */,
+				A20000000000000000000016 /* MonicaWidgetExtension */,
 			);
 			path = Extensions;
 			sourceTree = "<group>";
@@ -177,6 +199,16 @@
 				A10000000000000000000023 /* MonicaAutoFillExtension.entitlements */,
 			);
 			path = MonicaAutoFillExtension;
+			sourceTree = "<group>";
+		};
+		A20000000000000000000016 /* MonicaWidgetExtension */ = {
+			isa = PBXGroup;
+			children = (
+				A20000000000000000000011 /* MonicaWidget.swift */,
+				A20000000000000000000012 /* Info.plist */,
+				A20000000000000000000013 /* MonicaWidgetExtension.entitlements */,
+			);
+			path = MonicaWidgetExtension;
 			sourceTree = "<group>";
 		};
 		A10000000000000000000076 /* Tests */ = {
@@ -192,6 +224,7 @@
 			children = (
 				A10000000000000000000031 /* Monica.app */,
 				A10000000000000000000032 /* MonicaAutoFillExtension.appex */,
+				A20000000000000000000014 /* MonicaWidgetExtension.appex */,
 				A10000000000000000000033 /* MonicaTests.xctest */,
 			);
 			name = Products;
@@ -222,6 +255,7 @@
 			);
 			dependencies = (
 				A10000000000000000000042 /* PBXTargetDependency */,
+				A20000000000000000000004 /* PBXTargetDependency */,
 			);
 			name = Monica;
 			packageProductDependencies = (
@@ -255,6 +289,24 @@
 			);
 			productName = MonicaAutoFillExtension;
 			productReference = A10000000000000000000032 /* MonicaAutoFillExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+		A20000000000000000000020 /* MonicaWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A20000000000000000000030 /* Build configuration list for PBXNativeTarget "MonicaWidgetExtension" */;
+			buildPhases = (
+				A20000000000000000000022 /* Sources */,
+				A20000000000000000000021 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MonicaWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = MonicaWidgetExtension;
+			productReference = A20000000000000000000014 /* MonicaWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
 		A10000000000000000000063 /* MonicaTests */ = {
@@ -294,6 +346,9 @@
 					A10000000000000000000062 = {
 						CreatedOnToolsVersion = 26.5;
 					};
+					A20000000000000000000020 = {
+						CreatedOnToolsVersion = 26.5;
+					};
 					A10000000000000000000063 = {
 						CreatedOnToolsVersion = 26.5;
 						TestTargetID = A10000000000000000000061;
@@ -324,6 +379,7 @@
 			targets = (
 				A10000000000000000000061 /* Monica */,
 				A10000000000000000000062 /* MonicaAutoFillExtension */,
+				A20000000000000000000020 /* MonicaWidgetExtension */,
 				A10000000000000000000063 /* MonicaTests */,
 			);
 		};
@@ -374,6 +430,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A20000000000000000000022 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				A20000000000000000000001 /* MonicaWidget.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -386,6 +450,11 @@
 			isa = PBXTargetDependency;
 			target = A10000000000000000000061 /* Monica */;
 			targetProxy = A10000000000000000000043 /* PBXContainerItemProxy */;
+		};
+		A20000000000000000000004 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A20000000000000000000020 /* MonicaWidgetExtension */;
+			targetProxy = A20000000000000000000003 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -618,6 +687,60 @@
 			};
 			name = Release;
 		};
+		A20000000000000000000031 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Extensions/MonicaWidgetExtension/MonicaWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4884UYF643;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/MonicaWidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = takagi.ru.monica.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A20000000000000000000032 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = Extensions/MonicaWidgetExtension/MonicaWidgetExtension.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4884UYF643;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = Extensions/MonicaWidgetExtension/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.1;
+				PRODUCT_BUNDLE_IDENTIFIER = takagi.ru.monica.widget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 		A10000000000000000000101 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -692,6 +815,15 @@
 			buildConfigurations = (
 				A100000000000000000000C1 /* Debug */,
 				A100000000000000000000C2 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A20000000000000000000030 /* Build configuration list for PBXNativeTarget "MonicaWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A20000000000000000000031 /* Debug */,
+				A20000000000000000000032 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

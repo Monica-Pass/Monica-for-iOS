@@ -271,6 +271,7 @@ extension AppSessionModel {
         }
         let indexStore = FileAutoFillEncryptedIndexStore(appGroupContainerURL: appGroupContainerURL)
         let secretStore = FileAutoFillCredentialSecretStore(appGroupContainerURL: appGroupContainerURL)
+        let widgetSnapshotStore = AppWidgetSnapshotFileStore(containerURL: appGroupContainerURL)
         let keyMaterialStore = AppKeychainAutoFillIndexKeyMaterialStore()
         let keyMaterialProvider = AppAutoFillIndexKeyMaterialProvider(store: keyMaterialStore)
         let vaultKeychainService = KeychainAppVaultKeychainService(
@@ -296,7 +297,8 @@ extension AppSessionModel {
             autoFillIndexKeyMaterialProvider: { vaultID in
                 try keyMaterialProvider.keyMaterial(for: vaultID)
             },
-            plusResourceUnlockService: DefaultAppPlusResourceUnlockService()
+            plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
+            widgetSnapshotStore: widgetSnapshotStore
         )
         session.refreshNotificationPermissionStatus()
         return session

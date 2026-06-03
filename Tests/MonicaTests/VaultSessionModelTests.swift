@@ -348,6 +348,60 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(widgetText.contains(try model.totpCode(for: try XCTUnwrap(model.totpEntries.first))))
     }
 
+    func testWidgetSnapshotStorePersistsAppGroupSafeSnapshotWithoutLeakingSecrets() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-widget-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let store = AppWidgetSnapshotFileStore(containerURL: directory)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            widgetSnapshotStore: store
+        )
+
+        try model.refreshWidgetSnapshotIfConfigured(now: Date(timeIntervalSince1970: 1_800_000_000))
+        let lockedSnapshot = try XCTUnwrap(try store.loadSnapshot())
+        XCTAssertEqual(lockedSnapshot.vaultState, .locked)
+        XCTAssertTrue(lockedSnapshot.totpItems.isEmpty)
+        XCTAssertTrue(lockedSnapshot.shortcutItems.isEmpty)
+
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub Login"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "github-login-secret"
+        model.loginURL = "https://github.com/login?token=private"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.noteTitle = "Recovery Note"
+        model.noteBody = "backup-code-secret"
+        try model.createNoteEntry(projectTitle: "Personal")
+        model.totpTitle = "GitHub TOTP"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        model.totpIssuer = "GitHub"
+        model.totpAccountName = "alice@example.com"
+        model.totpPeriod = 30
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        try model.refreshWidgetSnapshotIfConfigured(now: Date(timeIntervalSince1970: 1_800_000_017))
+
+        let persistedData = try Data(contentsOf: store.snapshotFileURL)
+        let persistedText = String(decoding: persistedData, as: UTF8.self)
+        XCTAssertFalse(persistedText.contains("github-login-secret"))
+        XCTAssertFalse(persistedText.contains("backup-code-secret"))
+        XCTAssertFalse(persistedText.contains("JBSWY3DPEHPK3PXP"))
+        XCTAssertFalse(persistedText.contains("private"))
+        XCTAssertFalse(persistedText.contains(try model.totpCode(for: try XCTUnwrap(model.totpEntries.first))))
+
+        let snapshot = try XCTUnwrap(try store.loadSnapshot())
+        XCTAssertEqual(snapshot.vaultState, .unlocked)
+        XCTAssertEqual(snapshot.totalEntryCount, 3)
+        XCTAssertEqual(snapshot.totpItems.first?.title, "GitHub TOTP")
+        XCTAssertEqual(snapshot.totpItems.first?.secondsRemaining, 13)
+        XCTAssertEqual(snapshot.shortcutItems.map(\.kind), [.login, .note, .totp])
+    }
+
     func testPlusResourceButtonActivatesAndroidCompatiblePlusWithoutPurchase() async throws {
         let service = RecordingAppPlusResourceUnlockService()
         let model = AppSessionModel(plusResourceUnlockService: service)
