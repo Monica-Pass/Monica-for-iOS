@@ -6453,6 +6453,23 @@ public protocol LocalVaultEngine {
         projectID: String
     ) throws -> [LocalAttachmentMetadata]
 
+    func updateAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        attachmentID: String,
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        storedSize: Int64,
+        contentHash: String,
+        storageMode: String,
+        source: String,
+        downloadState: String,
+        wrappedContentEncryptionKey: String?,
+        localPath: String?
+    ) throws -> LocalAttachmentMetadata
+
     func deleteAttachmentMetadata(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -6524,6 +6541,7 @@ public extension LocalVaultEngine {
 
     func createAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, entryID: String?, fileName: String, mediaType: String, originalSize: Int64, storedSize: Int64, contentHash: String, storageMode: String, source: String = "", downloadState: String = "", wrappedContentEncryptionKey: String? = nil, localPath: String? = nil) throws -> LocalAttachmentMetadata { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func listAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
+    func updateAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String, entryID: String?, fileName: String, mediaType: String, originalSize: Int64, storedSize: Int64, contentHash: String, storageMode: String, source: String = "", downloadState: String = "", wrappedContentEncryptionKey: String? = nil, localPath: String? = nil) throws -> LocalAttachmentMetadata { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func deleteAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func listDeletedAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
     func restoreAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws -> LocalAttachmentMetadata { throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef) }
@@ -8594,6 +8612,43 @@ public struct LocalVaultEntryRepository {
         try engine.listAttachmentMetadata(in: session.handle, projectID: projectID)
     }
 
+    public func updateAttachmentMetadata(
+        projectID: String,
+        attachmentID: String,
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        storedSize: Int64,
+        contentHash: String,
+        storageMode: String,
+        source: String = "",
+        downloadState: String = "",
+        wrappedContentEncryptionKey: String? = nil,
+        localPath: String? = nil
+    ) throws -> LocalAttachmentMetadata {
+        let normalizedFileName = fileName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedFileName.isEmpty else {
+            throw LocalVaultRepositoryError.emptyEntryTitle
+        }
+        return try engine.updateAttachmentMetadata(
+            in: session.handle,
+            projectID: projectID,
+            attachmentID: attachmentID,
+            entryID: entryID,
+            fileName: normalizedFileName,
+            mediaType: mediaType,
+            originalSize: originalSize,
+            storedSize: storedSize,
+            contentHash: contentHash,
+            storageMode: storageMode,
+            source: source,
+            downloadState: downloadState,
+            wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+            localPath: localPath
+        )
+    }
+
     public func deleteAttachmentMetadata(projectID: String, attachmentID: String) throws {
         try engine.deleteAttachmentMetadata(in: session.handle, projectID: projectID, attachmentID: attachmentID)
     }
@@ -9731,6 +9786,53 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
     public func listAttachmentMetadata(in handle: LocalVaultHandle, projectID: String) throws -> [LocalAttachmentMetadata] {
         try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "attachment-ref")
             .map { try LocalAttachmentMetadata($0, deleted: false) }
+    }
+
+    public func updateAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        attachmentID: String,
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        storedSize: Int64,
+        contentHash: String,
+        storageMode: String,
+        source: String = "",
+        downloadState: String = "",
+        wrappedContentEncryptionKey: String? = nil,
+        localPath: String? = nil
+    ) throws -> LocalAttachmentMetadata {
+        var payload: [String: Any] = [
+            "fileName": fileName,
+            "mediaType": mediaType,
+            "originalSize": originalSize,
+            "storedSize": storedSize,
+            "contentHash": contentHash,
+            "storageMode": storageMode,
+            "source": source,
+            "downloadState": downloadState
+        ]
+        if let entryID {
+            payload["entryID"] = entryID
+        }
+        if let wrappedContentEncryptionKey {
+            payload["wrappedContentEncryptionKey"] = wrappedContentEncryptionKey
+        }
+        if let localPath {
+            payload["localPath"] = localPath
+        }
+        let entry = try updateParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryID: attachmentID,
+            entryType: "document-ref",
+            kind: "attachment-ref",
+            title: fileName,
+            payload: payload
+        )
+        return try LocalAttachmentMetadata(entry, deleted: false)
     }
 
     public func deleteAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws {

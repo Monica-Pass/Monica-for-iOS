@@ -177,6 +177,7 @@ struct AppAttachmentPreviewFile: Sendable, Equatable {
 enum AppAttachmentPreviewError: Error, Sendable, Equatable, LocalizedError {
     case contentEncryptionKeyUnavailable
     case previewFailed
+    case contentWriteFailed
 
     var errorDescription: String? {
         switch self {
@@ -184,6 +185,8 @@ enum AppAttachmentPreviewError: Error, Sendable, Equatable, LocalizedError {
             return "附件内容密钥尚未可用。"
         case .previewFailed:
             return "附件预览准备失败。"
+        case .contentWriteFailed:
+            return "附件内容写回失败。"
         }
     }
 }
@@ -1738,6 +1741,75 @@ final class AppSessionModel {
             )
             entryOperationState = .succeeded("附件密文已读取：\(entry.fileName) \(blob.count) 字节")
             return blob
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func replaceAttachmentContent(
+        _ entry: LocalAttachmentMetadata,
+        plaintext: Data,
+        mediaType: String? = nil
+    ) throws -> LocalAttachmentMetadata {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let vaultSession = try requireActiveVaultSession()
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            guard let attachmentContentEncryptionKeyProvider else {
+                throw AppAttachmentPreviewError.contentEncryptionKeyUnavailable
+            }
+            let contentEncryptionKey = try attachmentContentEncryptionKeyProvider(entry)
+            guard contentEncryptionKey.count == LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount else {
+                throw LocalAttachmentContentCryptoError.invalidContentEncryptionKeyLength
+            }
+
+            let sealedBox = try AES.GCM.seal(
+                plaintext,
+                using: SymmetricKey(data: contentEncryptionKey)
+            )
+            guard let encryptedBlob = sealedBox.combined else {
+                throw AppAttachmentPreviewError.contentWriteFailed
+            }
+            let requestedLocalPath = entry.localPath?.isEmpty == false ? entry.localPath! : "\(entry.id).enc"
+            let localPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
+                encryptedBlob,
+                vaultID: vaultSession.handle.vaultID,
+                localPath: requestedLocalPath
+            )
+            let contentHash = Data(SHA256.hash(data: plaintext))
+                .map { String(format: "%02x", $0) }
+                .joined()
+            let updated = try entryRepository.updateAttachmentMetadata(
+                projectID: projectID,
+                attachmentID: entry.id,
+                entryID: entry.entryID,
+                fileName: entry.fileName,
+                mediaType: mediaType ?? entry.mediaType,
+                originalSize: Int64(plaintext.count),
+                storedSize: Int64(encryptedBlob.count),
+                contentHash: "sha256:\(contentHash)",
+                storageMode: "ios-edited-encrypted-blob",
+                source: entry.source.isEmpty ? "ios-local-edit" : entry.source,
+                downloadState: "downloaded",
+                wrappedContentEncryptionKey: entry.wrappedContentEncryptionKey,
+                localPath: localPath
+            )
+            attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .attachmentRef,
+                itemID: updated.id,
+                itemTitle: sanitizedAttachmentPreviewFileName(updated.fileName)
+            )
+            entryOperationState = .succeeded("附件内容已替换：\(sanitizedAttachmentPreviewFileName(updated.fileName)) \(plaintext.count) 字节")
+            return updated
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error

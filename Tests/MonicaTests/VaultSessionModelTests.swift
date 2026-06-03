@@ -4523,9 +4523,10 @@ final class VaultSessionModelTests: XCTestCase {
         let encryptedBlob = try XCTUnwrap(sealedBox.combined)
 
         try unlockNewVault(model)
+        let project = try model.createVaultCategory(title: "Attachments")
         let attachment = LocalAttachmentMetadata(
             id: "attachment-1",
-            projectID: "project-1",
+            projectID: project.id,
             entryID: "entry-1",
             fileName: "../contract secret.pdf",
             mediaType: "application/pdf",
@@ -4593,9 +4594,10 @@ final class VaultSessionModelTests: XCTestCase {
         let encryptedBlob = try XCTUnwrap(sealedBox.combined)
 
         try unlockNewVault(model)
+        let project = try model.createVaultCategory(title: "Attachments")
         let attachment = LocalAttachmentMetadata(
             id: "attachment-1",
-            projectID: "project-1",
+            projectID: project.id,
             entryID: "entry-1",
             fileName: "contract.pdf",
             mediaType: "application/pdf",
@@ -4651,9 +4653,10 @@ final class VaultSessionModelTests: XCTestCase {
         let encryptedBlob = try XCTUnwrap(sealedBox.combined)
 
         try unlockNewVault(model)
+        let project = try model.createVaultCategory(title: "Attachments")
         let attachment = LocalAttachmentMetadata(
             id: "attachment-1",
-            projectID: "project-1",
+            projectID: project.id,
             entryID: "entry-1",
             fileName: "../contract.pdf",
             mediaType: "application/pdf",
@@ -4690,6 +4693,98 @@ final class VaultSessionModelTests: XCTestCase {
             "timeline plaintext"
         ].forEach { secret in
             XCTAssertFalse(timelineText.contains(secret))
+        }
+    }
+
+    func testReplacingAttachmentContentUpdatesEncryptedBlobMetadataAndTimelineWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let cek = Data((0..<32).map(UInt8.init))
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore,
+            attachmentContentEncryptionKeyProvider: { attachment in
+                XCTAssertEqual(attachment.id, "attachment-1")
+                return cek
+            }
+        )
+        let oldPlaintext = Data("old attachment secret".utf8)
+        let oldSealedBox = try AES.GCM.seal(
+            oldPlaintext,
+            using: SymmetricKey(data: cek),
+            nonce: try AES.GCM.Nonce(data: Data((40..<52).map(UInt8.init)))
+        )
+        let oldEncryptedBlob = try XCTUnwrap(oldSealedBox.combined)
+        let newPlaintext = Data("replacement attachment secret".utf8)
+
+        try unlockNewVault(model)
+        let project = try model.createVaultCategory(title: "Attachments")
+        let attachment = LocalAttachmentMetadata(
+            id: "attachment-1",
+            projectID: project.id,
+            entryID: "entry-1",
+            fileName: "contract.pdf",
+            mediaType: "application/pdf",
+            originalSize: Int64(oldPlaintext.count),
+            storedSize: Int64(oldEncryptedBlob.count),
+            contentHash: "sha256:old-secret-hash",
+            storageMode: "android-backup-encrypted-blob",
+            source: "android-backup-local",
+            downloadState: "downloaded",
+            wrappedContentEncryptionKey: "wrapped-replace-secret-key",
+            localPath: "attachment-1.enc",
+            deleted: false
+        )
+        engine.seedAttachmentMetadata(attachment, projectID: project.id)
+        model.attachmentEntries = [attachment]
+        _ = try blobStore.saveEncryptedBlob(
+            oldEncryptedBlob,
+            vaultID: "created-vault",
+            localPath: "attachment-1.enc"
+        )
+
+        let updated = try model.replaceAttachmentContent(
+            attachment,
+            plaintext: newPlaintext,
+            mediaType: "application/pdf"
+        )
+
+        let storedBlob = try blobStore.encryptedBlobData(
+            vaultID: "created-vault",
+            localPath: "attachment-1.enc"
+        )
+        let decrypted = try LocalAttachmentContentDecryptor.decryptAndroidLocalBlob(
+            storedBlob,
+            contentEncryptionKey: cek
+        )
+        let expectedHash = Data(SHA256.hash(data: newPlaintext)).map { String(format: "%02x", $0) }.joined()
+
+        XCTAssertEqual(decrypted, newPlaintext)
+        XCTAssertEqual(updated.id, attachment.id)
+        XCTAssertEqual(updated.originalSize, Int64(newPlaintext.count))
+        XCTAssertEqual(updated.storedSize, Int64(storedBlob.count))
+        XCTAssertEqual(updated.contentHash, "sha256:\(expectedHash)")
+        XCTAssertEqual(updated.storageMode, "ios-edited-encrypted-blob")
+        XCTAssertEqual(updated.downloadState, "downloaded")
+        XCTAssertEqual(updated.localPath, "attachment-1.enc")
+        XCTAssertEqual(model.attachmentEntries, [updated])
+        XCTAssertEqual(engine.updatedAttachmentMetadata.map(\.attachmentID), ["attachment-1"])
+
+        let event = try XCTUnwrap(model.operationTimelineEvents.first)
+        XCTAssertEqual(event.action, .updated)
+        XCTAssertEqual(event.itemKind, .attachmentRef)
+        XCTAssertEqual(event.itemID, attachment.id)
+        XCTAssertEqual(event.itemTitle, "contract.pdf")
+        [
+            "old attachment secret",
+            "replacement attachment secret",
+            "sha256:old-secret-hash",
+            expectedHash,
+            "wrapped-replace-secret-key",
+            "attachment-1.enc"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+            XCTAssertFalse("\(event.title) \(event.detail)".contains(secret))
         }
     }
 
@@ -5852,6 +5947,9 @@ private final class RecordingAndroidBackupAttachmentBlobStore: AndroidBackupAtta
     private(set) var savedBlobs: [RecordedAndroidBackupAttachmentBlob] = []
 
     func saveEncryptedBlob(_ data: Data, vaultID: String, localPath: String) throws -> String {
+        savedBlobs.removeAll {
+            $0.vaultID == vaultID && $0.localPath == localPath
+        }
         savedBlobs.append(
             RecordedAndroidBackupAttachmentBlob(
                 vaultID: vaultID,
@@ -5869,7 +5967,7 @@ private final class RecordingAndroidBackupAttachmentBlobStore: AndroidBackupAtta
     }
 
     func encryptedBlobData(vaultID: String, localPath: String) throws -> Data {
-        guard let blob = savedBlobs.first(where: {
+        guard let blob = savedBlobs.last(where: {
             $0.vaultID == vaultID && $0.localPath == localPath
         }) else {
             throw LocalAttachmentContentStoreError.missingBlob(localPath)
@@ -5992,6 +6090,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var deletedSendEntries: [RecordedEntryMutationCall] = []
     private(set) var restoredSendEntries: [RecordedEntryMutationCall] = []
     private(set) var createdAttachmentMetadata: [RecordedAttachmentMetadataCall] = []
+    private(set) var updatedAttachmentMetadata: [RecordedUpdatedAttachmentMetadataCall] = []
     private var projects: [String: [LocalVaultProject]] = [:]
     private var loginEntries: [String: [LocalLoginEntry]] = [:]
     private var deletedEntries: [String: [LocalLoginEntry]] = [:]
@@ -6015,6 +6114,10 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedSends: [String: [LocalSendEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
+
+    func seedAttachmentMetadata(_ metadata: LocalAttachmentMetadata, projectID: String) {
+        attachmentMetadata[projectID, default: []].append(metadata)
+    }
 
     func createVault(
         at fileURL: URL,
@@ -7684,6 +7787,63 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         attachmentMetadata[projectID, default: []]
     }
 
+    func updateAttachmentMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        attachmentID: String,
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        originalSize: Int64,
+        storedSize: Int64,
+        contentHash: String,
+        storageMode: String,
+        source: String,
+        downloadState: String,
+        wrappedContentEncryptionKey: String?,
+        localPath: String?
+    ) throws -> LocalAttachmentMetadata {
+        guard let index = attachmentMetadata[projectID, default: []].firstIndex(where: { $0.id == attachmentID }) else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        let metadata = LocalAttachmentMetadata(
+            id: attachmentID,
+            projectID: projectID,
+            entryID: entryID,
+            fileName: fileName,
+            mediaType: mediaType,
+            originalSize: originalSize,
+            storedSize: storedSize,
+            contentHash: contentHash,
+            storageMode: storageMode,
+            source: source,
+            downloadState: downloadState,
+            wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+            localPath: localPath,
+            deleted: false
+        )
+        updatedAttachmentMetadata.append(
+            .init(
+                vaultID: handle.vaultID,
+                projectID: projectID,
+                attachmentID: attachmentID,
+                entryID: entryID,
+                fileName: fileName,
+                mediaType: mediaType,
+                originalSize: originalSize,
+                storedSize: storedSize,
+                contentHash: contentHash,
+                storageMode: storageMode,
+                source: source,
+                downloadState: downloadState,
+                wrappedContentEncryptionKey: wrappedContentEncryptionKey,
+                localPath: localPath
+            )
+        )
+        attachmentMetadata[projectID, default: []][index] = metadata
+        return metadata
+    }
+
     func deleteAttachmentMetadata(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -7961,6 +8121,23 @@ private struct RecordedUpdatedSendEntryCall {
 private struct RecordedAttachmentMetadataCall: Equatable {
     let vaultID: String
     let projectID: String
+    let entryID: String?
+    let fileName: String
+    let mediaType: String
+    let originalSize: Int64
+    let storedSize: Int64
+    let contentHash: String
+    let storageMode: String
+    let source: String
+    let downloadState: String
+    let wrappedContentEncryptionKey: String?
+    let localPath: String?
+}
+
+private struct RecordedUpdatedAttachmentMetadataCall: Equatable {
+    let vaultID: String
+    let projectID: String
+    let attachmentID: String
     let entryID: String?
     let fileName: String
     let mediaType: String
