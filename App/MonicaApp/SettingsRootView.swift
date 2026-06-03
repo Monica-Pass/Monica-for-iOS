@@ -19,8 +19,11 @@ struct SettingsRootView: View {
     @State private var isKeePassImporterPresented = false
     @State private var isKeePassKeyFileImporterPresented = false
     @State private var isKeePassAttachmentReplacementImporterPresented = false
+    @State private var isKeePassAttachmentAdditionImporterPresented = false
     @State private var pendingKeePassAttachmentReplacementEntryID: String?
     @State private var pendingKeePassAttachmentReplacementAttachmentID: String?
+    @State private var pendingKeePassAttachmentAdditionEntryID: String?
+    @State private var keePassAttachmentSearchText = ""
     @State private var isAndroidBackupImporterPresented = false
     @State private var isAndroidBackupExporterPresented = false
     @State private var isAndroidBackupPasswordPromptPresented = false
@@ -521,25 +524,68 @@ struct SettingsRootView: View {
                                     value: group.path
                                 )
                             }
-                            ForEach(snapshot.entries.prefix(3)) { entry in
+                            ForEach(snapshot.entries) { entry in
                                 AndroidParityInfoRow(
                                     title: entry.title.isEmpty ? "未命名条目" : entry.title,
                                     value: entry.username.isEmpty ? entry.groupPath : entry.username
                                 )
-                                ForEach(entry.attachments.prefix(2)) { attachment in
+                                HStack(spacing: 12) {
+                                    Button {
+                                        pendingKeePassAttachmentAdditionEntryID = entry.id
+                                        isKeePassAttachmentAdditionImporterPresented = true
+                                    } label: {
+                                        Label("添加附件并写回", systemImage: "paperclip.badge.plus")
+                                            .frame(maxWidth: .infinity)
+                                    }
+                                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                    .disabled(session.keePassSourceFileURL == nil)
+                                }
+                            }
+                            AndroidParityDivider()
+                            TextField("搜索 KeePass 附件", text: $keePassAttachmentSearchText)
+                                .textInputAutocapitalization(.never)
+                                .autocorrectionDisabled()
+                                .padding(.vertical, 6)
+                            let candidates = (try? session.keePassAttachmentEditCandidates(
+                                matching: keePassAttachmentSearchText
+                            )) ?? []
+                            AndroidParityInfoRow(title: "可编辑附件", value: "\(candidates.count)")
+                            ForEach(candidates) { candidate in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    AndroidParityInfoRow(
+                                        title: candidate.fileName,
+                                        value: "\(candidate.originalSize) 字节"
+                                    )
+                                    AndroidParityInfoRow(
+                                        title: candidate.entryTitle.isEmpty ? "未命名条目" : candidate.entryTitle,
+                                        value: candidate.entryUsername.isEmpty ? candidate.groupPath : candidate.entryUsername
+                                    )
                                     HStack(spacing: 12) {
-                                        AndroidParityInfoRow(
-                                            title: attachment.fileName,
-                                            value: "\(attachment.originalSize) 字节"
-                                        )
                                         Button {
-                                            pendingKeePassAttachmentReplacementEntryID = entry.id
-                                            pendingKeePassAttachmentReplacementAttachmentID = attachment.id
+                                            pendingKeePassAttachmentReplacementEntryID = candidate.entryID
+                                            pendingKeePassAttachmentReplacementAttachmentID = candidate.attachmentID
                                             isKeePassAttachmentReplacementImporterPresented = true
                                         } label: {
                                             Label("替换并写回", systemImage: "arrow.triangle.2.circlepath")
+                                                .frame(maxWidth: .infinity)
                                         }
                                         .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                        .disabled(session.keePassSourceFileURL == nil)
+
+                                        Button(role: .destructive) {
+                                            do {
+                                                _ = try session.deleteKeePassReadOnlyAttachmentAndWriteBack(
+                                                    entryID: candidate.entryID,
+                                                    attachmentID: candidate.attachmentID
+                                                )
+                                            } catch {
+                                                session.entryOperationState = .failed(error.localizedDescription)
+                                            }
+                                        } label: {
+                                            Label("删除并写回", systemImage: "trash")
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
                                         .disabled(session.keePassSourceFileURL == nil)
                                     }
                                 }
@@ -849,6 +895,24 @@ struct SettingsRootView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
+        .fileImporter(
+            isPresented: $isKeePassAttachmentAdditionImporterPresented,
+            allowedContentTypes: [.data],
+            allowsMultipleSelection: false
+        ) { result in
+            defer {
+                pendingKeePassAttachmentAdditionEntryID = nil
+            }
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                addPendingKeePassAttachment(from: fileURL)
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
         .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
             SecureField("备份密码", text: $session.androidBackupDecryptPassword)
             Button("取消", role: .cancel) {
@@ -880,6 +944,21 @@ struct SettingsRootView: View {
             _ = try session.replaceKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
                 entryID: entryID,
                 attachmentID: attachmentID,
+                fileURL: fileURL
+            )
+        } catch {
+            session.entryOperationState = .failed(error.localizedDescription)
+        }
+    }
+
+    private func addPendingKeePassAttachment(from fileURL: URL) {
+        guard let entryID = pendingKeePassAttachmentAdditionEntryID else {
+            session.entryOperationState = .failed("请先选择要添加附件的 KeePass 条目。")
+            return
+        }
+        do {
+            _ = try session.addKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
+                entryID: entryID,
                 fileURL: fileURL
             )
         } catch {

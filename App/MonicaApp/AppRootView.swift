@@ -744,6 +744,20 @@ struct AppKeePassImportedEntryReference: Sendable, Equatable {
     }
 }
 
+struct AppKeePassAttachmentEditCandidate: Sendable, Equatable, Identifiable {
+    let id: String
+    let entryID: String
+    let attachmentID: String
+    let entryTitle: String
+    let entryUsername: String
+    let groupPath: String
+    let fileName: String
+    let mediaType: String
+    let originalSize: Int64
+    let isDeletedEntry: Bool
+    let searchableText: String
+}
+
 struct CSVExportDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
@@ -6435,6 +6449,51 @@ final class AppSessionModel {
         }
     }
 
+    func keePassAttachmentEditCandidates(
+        matching query: String = ""
+    ) throws -> [AppKeePassAttachmentEditCandidate] {
+        let snapshot: KeePassReadOnlySnapshot
+        if let existingSnapshot = keePassReadOnlySnapshot {
+            snapshot = existingSnapshot
+        } else {
+            snapshot = try previewKeePassReadOnlyTree()
+        }
+        let normalizedQuery = query
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return snapshot.entries
+            .flatMap { entry in
+                entry.attachments.map { attachment in
+                    let fileName = sanitizedAttachmentPreviewFileName(attachment.fileName)
+                    let searchableText = [
+                        entry.title,
+                        entry.username,
+                        entry.groupPath,
+                        fileName,
+                        attachment.mediaType,
+                        attachment.id
+                    ]
+                    .joined(separator: " ")
+                    return AppKeePassAttachmentEditCandidate(
+                        id: "\(entry.id)::\(attachment.id)",
+                        entryID: entry.id,
+                        attachmentID: attachment.id,
+                        entryTitle: entry.title,
+                        entryUsername: entry.username,
+                        groupPath: entry.groupPath,
+                        fileName: fileName,
+                        mediaType: attachment.mediaType,
+                        originalSize: attachment.originalSize,
+                        isDeletedEntry: entry.isDeleted,
+                        searchableText: searchableText
+                    )
+                }
+            }
+            .filter { candidate in
+                normalizedQuery.isEmpty || candidate.searchableText.lowercased().contains(normalizedQuery)
+            }
+    }
+
     func replaceKeePassReadOnlyAttachmentContent(
         entryID: String,
         attachmentID: String,
@@ -6501,6 +6560,170 @@ final class AppSessionModel {
                 "KeePass 附件内容已替换：\(updatedAttachment.fileName) \(content.count) 字节"
             )
             return updatedSnapshot
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func addKeePassReadOnlyAttachmentContent(
+        entryID: String,
+        decodedContent content: Data,
+        fileName: String,
+        mediaType: String? = nil
+    ) throws -> KeePassReadOnlySnapshot {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let snapshot: KeePassReadOnlySnapshot
+            if let existingSnapshot = keePassReadOnlySnapshot {
+                snapshot = existingSnapshot
+            } else {
+                snapshot = try previewKeePassReadOnlyTree()
+            }
+            guard let entryIndex = snapshot.entries.firstIndex(where: { $0.id == entryID }) else {
+                throw AppKeePassSnapshotEditError.entryUnavailable
+            }
+            let entry = snapshot.entries[entryIndex]
+            let sanitizedFileName = sanitizedAttachmentPreviewFileName(fileName)
+            let attachment = KeePassReadOnlyAttachment(
+                id: "ios-added-\(UUID().uuidString)",
+                fileName: sanitizedFileName,
+                mediaType: mediaType ?? "application/octet-stream",
+                originalSize: Int64(content.count),
+                contentHash: "sha256:\(sha256Hex(content))",
+                decodedContent: content
+            )
+            let updatedAttachments = entry.attachments + [attachment]
+            let updatedEntry = KeePassReadOnlyEntry(
+                id: entry.id,
+                title: entry.title,
+                username: entry.username,
+                url: entry.url,
+                groupPath: entry.groupPath,
+                groupID: entry.groupID,
+                notes: entry.notes,
+                customFields: entry.customFields,
+                hasPassword: entry.hasPassword,
+                decodedPassword: entry.decodedPassword,
+                hasTotp: entry.hasTotp,
+                decodedTotp: entry.decodedTotp,
+                attachmentCount: updatedAttachments.count,
+                isDeleted: entry.isDeleted,
+                attachments: updatedAttachments
+            )
+            var updatedEntries = snapshot.entries
+            updatedEntries[entryIndex] = updatedEntry
+            let updatedSnapshot = KeePassReadOnlySnapshot(
+                sourceName: snapshot.sourceName,
+                headerSummary: snapshot.headerSummary,
+                groups: snapshot.groups,
+                entries: updatedEntries
+            )
+            keePassReadOnlySnapshot = updatedSnapshot
+            keePassReadOnlyImportPlan = nil
+            entryOperationState = .succeeded(
+                "KeePass 附件已添加：\(sanitizedFileName) \(content.count) 字节"
+            )
+            return updatedSnapshot
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func addKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
+        entryID: String,
+        fileURL: URL,
+        mediaType: String? = nil
+    ) throws -> KeePassKdbx4WritebackResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let content = try Data(contentsOf: fileURL)
+            let fileName = sanitizedAttachmentPreviewFileName(fileURL.lastPathComponent)
+            _ = try addKeePassReadOnlyAttachmentContent(
+                entryID: entryID,
+                decodedContent: content,
+                fileName: fileName,
+                mediaType: mediaType
+            )
+            let result = try writeKeePassReadOnlySnapshotBackToSource()
+            entryOperationState = .succeeded(
+                "KeePass 附件已添加并写回：\(fileName) \(content.count) 字节"
+            )
+            return result
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteKeePassReadOnlyAttachmentAndWriteBack(
+        entryID: String,
+        attachmentID: String
+    ) throws -> KeePassKdbx4WritebackResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let snapshot: KeePassReadOnlySnapshot
+            if let existingSnapshot = keePassReadOnlySnapshot {
+                snapshot = existingSnapshot
+            } else {
+                snapshot = try previewKeePassReadOnlyTree()
+            }
+            guard let entryIndex = snapshot.entries.firstIndex(where: { $0.id == entryID }) else {
+                throw AppKeePassSnapshotEditError.entryUnavailable
+            }
+            let entry = snapshot.entries[entryIndex]
+            guard let attachmentIndex = entry.attachments.firstIndex(where: { $0.id == attachmentID }) else {
+                throw AppKeePassSnapshotEditError.attachmentUnavailable
+            }
+            let attachment = entry.attachments[attachmentIndex]
+            var updatedAttachments = entry.attachments
+            updatedAttachments.remove(at: attachmentIndex)
+            let updatedEntry = KeePassReadOnlyEntry(
+                id: entry.id,
+                title: entry.title,
+                username: entry.username,
+                url: entry.url,
+                groupPath: entry.groupPath,
+                groupID: entry.groupID,
+                notes: entry.notes,
+                customFields: entry.customFields,
+                hasPassword: entry.hasPassword,
+                decodedPassword: entry.decodedPassword,
+                hasTotp: entry.hasTotp,
+                decodedTotp: entry.decodedTotp,
+                attachmentCount: updatedAttachments.count,
+                isDeleted: entry.isDeleted,
+                attachments: updatedAttachments
+            )
+            var updatedEntries = snapshot.entries
+            updatedEntries[entryIndex] = updatedEntry
+            let updatedSnapshot = KeePassReadOnlySnapshot(
+                sourceName: snapshot.sourceName,
+                headerSummary: snapshot.headerSummary,
+                groups: snapshot.groups,
+                entries: updatedEntries
+            )
+            keePassReadOnlySnapshot = updatedSnapshot
+            keePassReadOnlyImportPlan = nil
+            let result = try writeKeePassReadOnlySnapshotBackToSource()
+            entryOperationState = .succeeded(
+                "KeePass 附件已删除并写回：\(sanitizedAttachmentPreviewFileName(attachment.fileName))"
+            )
+            return result
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error

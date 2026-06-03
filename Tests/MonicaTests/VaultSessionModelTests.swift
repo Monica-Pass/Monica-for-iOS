@@ -3981,6 +3981,315 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassAttachmentEditCandidatesSearchAllAttachmentsWithoutLeakingSecrets() throws {
+        let hiddenSecret = Data("hidden attachment decoded secret".utf8)
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-1",
+                    title: "First",
+                    username: "first@example.com",
+                    url: "https://example.com/first",
+                    groupPath: "/Root",
+                    notes: "first note secret",
+                    hasPassword: true,
+                    decodedPassword: "first-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-1",
+                            fileName: "first.txt",
+                            originalSize: 1,
+                            contentHash: "sha256:first-secret-hash",
+                            decodedContent: Data([0x01])
+                        )
+                    ]
+                ),
+                KeePassReadOnlyEntry(
+                    id: "entry-2",
+                    title: "Second",
+                    username: "second@example.com",
+                    url: "https://example.com/second",
+                    groupPath: "/Root",
+                    hasPassword: true,
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-2",
+                            fileName: "second.txt",
+                            originalSize: 2,
+                            contentHash: "sha256:second-secret-hash",
+                            decodedContent: Data([0x02])
+                        )
+                    ]
+                ),
+                KeePassReadOnlyEntry(
+                    id: "entry-3",
+                    title: "Third",
+                    username: "third@example.com",
+                    url: "https://example.com/third",
+                    groupPath: "/Root",
+                    hasPassword: true,
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-3",
+                            fileName: "third.txt",
+                            originalSize: 3,
+                            contentHash: "sha256:third-secret-hash",
+                            decodedContent: Data([0x03])
+                        )
+                    ]
+                ),
+                KeePassReadOnlyEntry(
+                    id: "entry-4",
+                    title: "Archive",
+                    username: "owner@example.com",
+                    url: "https://example.com/archive",
+                    groupPath: "/Root/Later",
+                    notes: "late note secret",
+                    hasPassword: true,
+                    decodedPassword: "late-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 3,
+                    isDeleted: true,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-4-a",
+                            fileName: "later-a.txt",
+                            originalSize: 4,
+                            contentHash: "sha256:later-a-secret-hash",
+                            decodedContent: Data([0x04])
+                        ),
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-4-b",
+                            fileName: "later-b.txt",
+                            originalSize: 5,
+                            contentHash: "sha256:later-b-secret-hash",
+                            decodedContent: Data([0x05])
+                        ),
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-hidden",
+                            fileName: "quarterly-hidden.txt",
+                            mediaType: "text/plain",
+                            originalSize: Int64(hiddenSecret.count),
+                            contentHash: "sha256:hidden-secret-hash",
+                            decodedContent: hiddenSecret
+                        )
+                    ]
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            keePassDatabaseReader: RecordingKeePassDatabaseReader(snapshot: snapshot)
+        )
+        model.keePassReadOnlySnapshot = snapshot
+
+        let allCandidates = try model.keePassAttachmentEditCandidates()
+        let filteredCandidates = try model.keePassAttachmentEditCandidates(matching: "quarterly")
+        let candidate = try XCTUnwrap(filteredCandidates.first)
+
+        XCTAssertEqual(allCandidates.map(\.attachmentID), [
+            "attachment-1",
+            "attachment-2",
+            "attachment-3",
+            "attachment-4-a",
+            "attachment-4-b",
+            "attachment-hidden"
+        ])
+        XCTAssertEqual(filteredCandidates.count, 1)
+        XCTAssertEqual(candidate.entryID, "entry-4")
+        XCTAssertEqual(candidate.attachmentID, "attachment-hidden")
+        XCTAssertEqual(candidate.entryTitle, "Archive")
+        XCTAssertEqual(candidate.entryUsername, "owner@example.com")
+        XCTAssertEqual(candidate.groupPath, "/Root/Later")
+        XCTAssertEqual(candidate.fileName, "quarterly-hidden.txt")
+        XCTAssertEqual(candidate.mediaType, "text/plain")
+        XCTAssertEqual(candidate.originalSize, Int64(hiddenSecret.count))
+        XCTAssertTrue(candidate.isDeletedEntry)
+        [
+            "hidden attachment decoded secret",
+            "hidden-secret-hash",
+            "late-password-secret",
+            "late note secret",
+            "first-secret-hash"
+        ].forEach { secret in
+            XCTAssertFalse(candidate.searchableText.contains(secret))
+        }
+    }
+
+    func testKeePassSnapshotAttachmentAddAndDeleteWriteBackWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let addedAttachmentSecret = Data("added keepass attachment secret".utf8)
+        let removedAttachmentSecret = Data("removed keepass attachment secret".utf8)
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "personal.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-attachment",
+                    title: "Contract",
+                    username: "owner@example.com",
+                    url: "https://example.com/contract",
+                    groupPath: "/",
+                    groupID: "root",
+                    notes: "entry note secret",
+                    hasPassword: true,
+                    decodedPassword: "entry-password-secret",
+                    hasTotp: false,
+                    attachmentCount: 1,
+                    isDeleted: false,
+                    attachments: [
+                        KeePassReadOnlyAttachment(
+                            id: "attachment-remove",
+                            fileName: "remove.txt",
+                            mediaType: "text/plain",
+                            originalSize: Int64(removedAttachmentSecret.count),
+                            contentHash: "sha256:removed-secret-hash",
+                            decodedContent: removedAttachmentSecret
+                        )
+                    ]
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            keePassDatabaseReader: RecordingKeePassDatabaseReader(snapshot: snapshot),
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx4WritebackCoordinator: coordinator
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx-attachment-add-delete-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("personal.kdbx")
+        let addedFileURL = directory.appendingPathComponent("added report.txt")
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xD1, count: 32),
+            encryptionIV: Data(repeating: 0xD2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xD3, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xD4, count: 32),
+                iterations: 2,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-placeholder".utf8)
+        let addResultDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-after-add".utf8)
+        let deleteResultDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("encrypted-payload-after-delete".utf8)
+        try sourceDatabase.write(to: databaseURL)
+        try addedAttachmentSecret.write(to: addedFileURL)
+        let addResult = KeePassKdbx4WritebackResult(
+            database: addResultDatabase,
+            headerBytes: Data([0x07]),
+            payloadSection: Data([0x08]),
+            xmlPayloadByteCount: 160,
+            groupCount: 1,
+            entryCount: 1,
+            attachmentCount: 2
+        )
+        let deleteResult = KeePassKdbx4WritebackResult(
+            database: deleteResultDatabase,
+            headerBytes: Data([0x09]),
+            payloadSection: Data([0x0A]),
+            xmlPayloadByteCount: 96,
+            groupCount: 1,
+            entryCount: 1,
+            attachmentCount: 1
+        )
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyTree()
+
+        coordinator.result = addResult
+        let addedResult = try model.addKeePassReadOnlyAttachmentContentFromFileAndWriteBack(
+            entryID: "entry-attachment",
+            fileURL: addedFileURL,
+            mediaType: "text/plain"
+        )
+
+        let addRequest = try XCTUnwrap(coordinator.requests.first)
+        let addedAttachment = try XCTUnwrap(
+            addRequest.snapshot.entries.first?.attachments.first {
+                $0.fileName == "added_report.txt"
+            }
+        )
+        let addedHash = Data(SHA256.hash(data: addedAttachmentSecret))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        XCTAssertEqual(addedResult.database, addResult.database)
+        XCTAssertEqual(addRequest.snapshot.entries.first?.attachmentCount, 2)
+        XCTAssertEqual(addedAttachment.mediaType, "text/plain")
+        XCTAssertEqual(addedAttachment.originalSize, Int64(addedAttachmentSecret.count))
+        XCTAssertEqual(addedAttachment.contentHash, "sha256:\(addedHash)")
+        XCTAssertEqual(addedAttachment.decodedContent, addedAttachmentSecret)
+        XCTAssertEqual(writer.replacements.first?.data, addResult.database)
+
+        coordinator.result = deleteResult
+        let deletedResult = try model.deleteKeePassReadOnlyAttachmentAndWriteBack(
+            entryID: "entry-attachment",
+            attachmentID: "attachment-remove"
+        )
+
+        let deleteRequest = try XCTUnwrap(coordinator.requests.last)
+        let remainingAttachments = try XCTUnwrap(deleteRequest.snapshot.entries.first?.attachments)
+        XCTAssertEqual(deletedResult.database, deleteResult.database)
+        XCTAssertEqual(remainingAttachments.map(\.fileName), ["added_report.txt"])
+        XCTAssertEqual(deleteRequest.snapshot.entries.first?.attachmentCount, 1)
+        XCTAssertEqual(writer.replacements.map(\.data), [addResult.database, deleteResult.database])
+        [
+            "added keepass attachment secret",
+            "removed keepass attachment secret",
+            "entry-password-secret",
+            "entry note secret",
+            "removed-secret-hash",
+            addedHash,
+            "encrypted-payload-after-add",
+            "encrypted-payload-after-delete"
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 附件已删除并写回：remove.txt")
+        )
+    }
+
     func testKeePassSnapshotAttachmentContentEditFailureIsRedactedAndKeepsSnapshot() throws {
         let snapshot = KeePassReadOnlySnapshot(
             sourceName: "personal.kdbx",
