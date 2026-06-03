@@ -1411,6 +1411,88 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbx3WritebackCoordinatorBuildsReadableDatabaseWithoutLeakingSecrets() throws {
+    let password = "kdbx3-writeback-password-secret"
+    let attachmentSecret = Data("kdbx3 writeback attachment secret".utf8)
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "kdbx3-writeback.kdbx",
+        headerSummary: KeePassHeaderSummary(majorVersion: 3, minorVersion: 1, formatVersion: .kdbx3),
+        groups: [
+            KeePassReadOnlyGroup(id: "root-group-uuid", title: "Root", path: "/", depth: 0)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-kdbx3-uuid",
+                title: "KDBX3 Login",
+                username: "kdbx3@example.com",
+                url: "https://kdbx3.example.com",
+                groupPath: "/",
+                groupID: "root-group-uuid",
+                notes: "kdbx3 edited notes secret",
+                hasPassword: true,
+                decodedPassword: "kdbx3 decoded password secret",
+                hasTotp: false,
+                attachmentCount: 1,
+                isDeleted: false,
+                attachments: [
+                    KeePassReadOnlyAttachment(
+                        id: "attachment-kdbx3-uuid",
+                        fileName: "kdbx3.txt",
+                        originalSize: Int64(attachmentSecret.count),
+                        contentHash: "sha256:kdbx3-attachment-hash",
+                        decodedContent: attachmentSecret
+                    )
+                ]
+            )
+        ]
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xF1, count: 32),
+        encryptionIV: Data(repeating: 0xF2, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xF3, count: 32),
+        streamStartBytes: Data(repeating: 0xF4, count: 32),
+        innerRandomStreamID: 2
+    )
+    let request = KeePassKdbx3WritebackRequest(
+        snapshot: snapshot,
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil),
+        cipher: .aes256,
+        compression: .gzip,
+        cryptoInputs: cryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters(
+            algorithm: .aesKdf,
+            aesKdf: KeePassKdbxAesKdfParameters(
+                seed: Data(repeating: 0xF5, count: 32),
+                rounds: 1
+            )
+        )
+    )
+
+    let result = try DefaultKeePassKdbx3WritebackCoordinator().writeDatabase(request)
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(result.database)
+    let reparsed = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: result.database,
+        sourceName: "kdbx3-writeback.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(result.displaySummary.contains("KDBX3 writeback"))
+    #expect(envelope.headerSummary.formatVersion == .kdbx3)
+    #expect(envelope.headerSummary.cryptoSummary?.cipher == .aes256)
+    #expect(envelope.headerSummary.cryptoSummary?.compression == .gzip)
+    #expect(envelope.headerSummary.cryptoSummary?.kdf == .aesKdf)
+    let entry = try #require(reparsed.entries.first)
+    #expect(entry.title == "KDBX3 Login")
+    #expect(entry.decodedPassword == "kdbx3 decoded password secret")
+    #expect(entry.notes == "kdbx3 edited notes secret")
+    #expect(entry.attachments.first?.decodedContent == attachmentSecret)
+    #expect(!String(decoding: envelope.encryptedPayload, as: UTF8.self).contains("kdbx3 decoded password secret"))
+    #expect(!String(decoding: envelope.encryptedPayload, as: UTF8.self).contains("kdbx3 writeback attachment secret"))
+    #expect(!result.displaySummary.contains(password))
+    #expect(!result.displaySummary.contains("kdbx3 decoded password secret"))
+    #expect(!result.displaySummary.contains("kdbx3 writeback attachment secret"))
+}
+
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {

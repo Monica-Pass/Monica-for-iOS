@@ -3741,6 +3741,106 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testKeePassKdbx3SnapshotSaveBuildsWritebackRequestAndWritesSourceFileWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let kdbx4Coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let kdbx3Coordinator = RecordingKeePassKdbx3WritebackCoordinator()
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "legacy.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 3, minorVersion: 1, formatVersion: .kdbx3),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-legacy",
+                    title: "Legacy Login",
+                    username: "legacy@example.com",
+                    url: "https://legacy.example.com",
+                    groupPath: "/",
+                    groupID: "root",
+                    notes: "legacy edited notes secret",
+                    hasPassword: true,
+                    decodedPassword: "legacy decoded password secret",
+                    hasTotp: false,
+                    attachmentCount: 0,
+                    isDeleted: false
+                )
+            ]
+        )
+        let reader = RecordingKeePassDatabaseReader(snapshot: snapshot)
+        let model = AppSessionModel(
+            keePassDatabaseReader: reader,
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx3WritebackCoordinator: kdbx3Coordinator,
+            keePassKdbx4WritebackCoordinator: kdbx4Coordinator
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx3-save-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("legacy.kdbx")
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xB1, count: 32),
+            encryptionIV: Data(repeating: 0xB2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xB3, count: 32),
+            streamStartBytes: Data(repeating: 0xB4, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .aesKdf,
+            aesKdf: KeePassKdbxAesKdfParameters(
+                seed: Data(repeating: 0xB5, count: 32),
+                rounds: 2
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx3HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("legacy-encrypted-payload-placeholder".utf8)
+        try sourceDatabase.write(to: databaseURL)
+        let expectedResult = KeePassKdbx3WritebackResult(
+            database: Data("coordinated-kdbx3-secret-bytes".utf8),
+            headerBytes: Data([0x03]),
+            encryptedPayload: Data([0x04]),
+            xmlPayloadByteCount: 91,
+            groupCount: 1,
+            entryCount: 1,
+            attachmentCount: 0
+        )
+        kdbx3Coordinator.result = expectedResult
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(password: "database-password")
+        _ = try model.previewKeePassReadOnlyTree()
+
+        let result = try model.writeKeePassReadOnlySnapshotBackToSource()
+
+        let request = try XCTUnwrap(kdbx3Coordinator.requests.first)
+        XCTAssertEqual(request.snapshot, snapshot)
+        XCTAssertEqual(request.credentials.password, "database-password")
+        XCTAssertEqual(request.cipher, .aes256)
+        XCTAssertEqual(request.compression, .gzip)
+        XCTAssertEqual(request.cryptoInputs, cryptoInputs)
+        XCTAssertEqual(request.kdfParameters, kdfParameters)
+        XCTAssertTrue(kdbx4Coordinator.requests.isEmpty)
+        XCTAssertEqual(result.database, expectedResult.database)
+        XCTAssertEqual(
+            writer.replacements,
+            [
+                RecordedKeePassKdbxFileReplacement(
+                    url: databaseURL,
+                    data: expectedResult.database
+                )
+            ]
+        )
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("legacy decoded password secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("coordinated-kdbx3-secret-bytes"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 数据库已写回：1 个条目，0 个附件，30 bytes"))
+    }
+
     func testKeePassSnapshotAttachmentContentEditWritesUpdatedAttachmentWithoutLeakingSecrets() throws {
         let writer = RecordingAppKeePassKdbxFileWritebackService()
         let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
@@ -7075,6 +7175,28 @@ private final class RecordingKeePassKdbx4WritebackCoordinator: KeePassKdbx4Write
     var error: Error?
 
     func writeDatabase(_ request: KeePassKdbx4WritebackRequest) throws -> KeePassKdbx4WritebackResult {
+        requests.append(request)
+        if let error {
+            throw error
+        }
+        return result
+    }
+}
+
+private final class RecordingKeePassKdbx3WritebackCoordinator: KeePassKdbx3WritebackCoordinator, @unchecked Sendable {
+    private(set) var requests: [KeePassKdbx3WritebackRequest] = []
+    var result = KeePassKdbx3WritebackResult(
+        database: Data("recorded-kdbx3".utf8),
+        headerBytes: Data(),
+        encryptedPayload: Data(),
+        xmlPayloadByteCount: 0,
+        groupCount: 0,
+        entryCount: 0,
+        attachmentCount: 0
+    )
+    var error: Error?
+
+    func writeDatabase(_ request: KeePassKdbx3WritebackRequest) throws -> KeePassKdbx3WritebackResult {
         requests.append(request)
         if let error {
             throw error

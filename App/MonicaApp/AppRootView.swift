@@ -758,6 +758,34 @@ struct AppKeePassAttachmentEditCandidate: Sendable, Equatable, Identifiable {
     let searchableText: String
 }
 
+struct AppKeePassKdbxWritebackResult: Sendable, Equatable {
+    let database: Data
+    let entryCount: Int
+    let attachmentCount: Int
+
+    init(database: Data, entryCount: Int, attachmentCount: Int) {
+        self.database = database
+        self.entryCount = entryCount
+        self.attachmentCount = attachmentCount
+    }
+
+    init(_ result: KeePassKdbx3WritebackResult) {
+        self.init(
+            database: result.database,
+            entryCount: result.entryCount,
+            attachmentCount: result.attachmentCount
+        )
+    }
+
+    init(_ result: KeePassKdbx4WritebackResult) {
+        self.init(
+            database: result.database,
+            entryCount: result.entryCount,
+            attachmentCount: result.attachmentCount
+        )
+    }
+}
+
 struct CSVExportDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
@@ -1466,6 +1494,7 @@ final class AppSessionModel {
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
     private let keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService
+    private let keePassKdbx3WritebackCoordinator: any KeePassKdbx3WritebackCoordinator
     private let keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
@@ -1501,6 +1530,7 @@ final class AppSessionModel {
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
         keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService = FileSystemAppKeePassKdbxFileWritebackService(),
+        keePassKdbx3WritebackCoordinator: any KeePassKdbx3WritebackCoordinator = DefaultKeePassKdbx3WritebackCoordinator(),
         keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator = DefaultKeePassKdbx4WritebackCoordinator(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
@@ -1531,6 +1561,7 @@ final class AppSessionModel {
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
         self.keePassKdbxFileWritebackService = keePassKdbxFileWritebackService
+        self.keePassKdbx3WritebackCoordinator = keePassKdbx3WritebackCoordinator
         self.keePassKdbx4WritebackCoordinator = keePassKdbx4WritebackCoordinator
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
@@ -6400,6 +6431,10 @@ final class AppSessionModel {
     }
 
     func writeKeePassKdbx4Database(_ result: KeePassKdbx4WritebackResult) throws {
+        try writeKeePassKdbxDatabase(AppKeePassKdbxWritebackResult(result))
+    }
+
+    private func writeKeePassKdbxDatabase(_ result: AppKeePassKdbxWritebackResult) throws {
         recordUserActivity()
         entryOperationState = .running
 
@@ -6428,7 +6463,7 @@ final class AppSessionModel {
         }
     }
 
-    func writeKeePassReadOnlySnapshotBackToSource() throws -> KeePassKdbx4WritebackResult {
+    func writeKeePassReadOnlySnapshotBackToSource() throws -> AppKeePassKdbxWritebackResult {
         recordUserActivity()
         entryOperationState = .running
 
@@ -6439,9 +6474,27 @@ final class AppSessionModel {
             } else {
                 snapshot = try previewKeePassReadOnlyTree()
             }
-            let request = try makeKeePassKdbx4WritebackRequest(snapshot: snapshot)
-            let result = try keePassKdbx4WritebackCoordinator.writeDatabase(request)
-            try writeKeePassKdbx4Database(result)
+            let result: AppKeePassKdbxWritebackResult
+            switch try currentKeePassKdbxEnvelope().headerSummary.formatVersion {
+            case .kdbx3:
+                result = AppKeePassKdbxWritebackResult(
+                    try keePassKdbx3WritebackCoordinator.writeDatabase(
+                        try makeKeePassKdbx3WritebackRequest(snapshot: snapshot)
+                    )
+                )
+            case .kdbx4:
+                result = AppKeePassKdbxWritebackResult(
+                    try keePassKdbx4WritebackCoordinator.writeDatabase(
+                        try makeKeePassKdbx4WritebackRequest(snapshot: snapshot)
+                    )
+                )
+            case .unknown:
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "未知 KDBX 版本写回尚未接入。"
+                )
+            }
+            try writeKeePassKdbxDatabase(result)
             return result
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -6637,7 +6690,7 @@ final class AppSessionModel {
         entryID: String,
         fileURL: URL,
         mediaType: String? = nil
-    ) throws -> KeePassKdbx4WritebackResult {
+    ) throws -> AppKeePassKdbxWritebackResult {
         recordUserActivity()
         entryOperationState = .running
 
@@ -6671,7 +6724,7 @@ final class AppSessionModel {
     func deleteKeePassReadOnlyAttachmentAndWriteBack(
         entryID: String,
         attachmentID: String
-    ) throws -> KeePassKdbx4WritebackResult {
+    ) throws -> AppKeePassKdbxWritebackResult {
         recordUserActivity()
         entryOperationState = .running
 
@@ -6735,7 +6788,7 @@ final class AppSessionModel {
         attachmentID: String,
         fileURL: URL,
         mediaType: String? = nil
-    ) throws -> KeePassKdbx4WritebackResult {
+    ) throws -> AppKeePassKdbxWritebackResult {
         recordUserActivity()
         entryOperationState = .running
 
@@ -6770,7 +6823,7 @@ final class AppSessionModel {
     func restoreKeePassReadOnlyRecycleBinEntryAndWriteBack(
         entryID: String,
         targetGroupID: String? = nil
-    ) throws -> KeePassKdbx4WritebackResult {
+    ) throws -> AppKeePassKdbxWritebackResult {
         recordUserActivity()
         entryOperationState = .running
 
@@ -7678,20 +7731,23 @@ final class AppSessionModel {
         )
     }
 
-    private func makeKeePassKdbx4WritebackRequest(
-        snapshot: KeePassReadOnlySnapshot
-    ) throws -> KeePassKdbx4WritebackRequest {
+    private func currentKeePassKdbxEnvelope() throws -> KeePassKdbxPayloadEnvelope {
         guard let databaseData = keePassPendingDatabaseData else {
             let message = "请先选择 KDBX 数据库文件"
             throw KeePassOperationError(code: .formatUnsupported, message: message)
         }
-        let envelope = try KeePassKdbxPayloadEnvelope.parse(databaseData)
-        guard envelope.headerSummary.formatVersion == .kdbx4 else {
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "当前仅支持 KDBX4 数据库写回。"
-            )
-        }
+        return try KeePassKdbxPayloadEnvelope.parse(databaseData)
+    }
+
+    private func keePassKdbxWritebackParameters() throws -> (
+        envelope: KeePassKdbxPayloadEnvelope,
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters,
+        credentials: KeePassUnlockCredentials
+    ) {
+        let envelope = try currentKeePassKdbxEnvelope()
         guard let cipher = envelope.headerSummary.cryptoSummary?.cipher else {
             throw KeePassOperationError(
                 code: .formatUnsupported,
@@ -7715,13 +7771,54 @@ final class AppSessionModel {
             keyFile: keePassKeyFileData,
             keyFileName: keePassKeyFileName
         )
+        return (
+            envelope,
+            cipher,
+            compression,
+            KeePassFormatInspector.parseKdbxPayloadCryptoInputs(from: envelope),
+            kdfParameters,
+            credentials
+        )
+    }
+
+    private func makeKeePassKdbx3WritebackRequest(
+        snapshot: KeePassReadOnlySnapshot
+    ) throws -> KeePassKdbx3WritebackRequest {
+        let parameters = try keePassKdbxWritebackParameters()
+        guard parameters.envelope.headerSummary.formatVersion == .kdbx3 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "当前仅支持 KDBX3 数据库写回。"
+            )
+        }
+        return KeePassKdbx3WritebackRequest(
+            snapshot: snapshot,
+            credentials: parameters.credentials,
+            cipher: parameters.cipher,
+            compression: parameters.compression,
+            cryptoInputs: parameters.cryptoInputs,
+            kdfParameters: parameters.kdfParameters
+        )
+    }
+
+    private func makeKeePassKdbx4WritebackRequest(
+        snapshot: KeePassReadOnlySnapshot
+    ) throws -> KeePassKdbx4WritebackRequest {
+        let parameters = try keePassKdbxWritebackParameters()
+        let envelope = parameters.envelope
+        guard envelope.headerSummary.formatVersion == .kdbx4 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "当前仅支持 KDBX4 数据库写回。"
+            )
+        }
         return KeePassKdbx4WritebackRequest(
             snapshot: snapshot,
-            credentials: credentials,
-            cipher: cipher,
-            compression: compression,
-            cryptoInputs: KeePassFormatInspector.parseKdbxPayloadCryptoInputs(from: envelope),
-            kdfParameters: kdfParameters
+            credentials: parameters.credentials,
+            cipher: parameters.cipher,
+            compression: parameters.compression,
+            cryptoInputs: parameters.cryptoInputs,
+            kdfParameters: parameters.kdfParameters
         )
     }
 

@@ -808,6 +808,160 @@ public struct DefaultKeePassKdbx4HeaderWriter: KeePassKdbx4HeaderWriter {
     }
 }
 
+public protocol KeePassKdbx3HeaderWriter: Sendable {
+    func writeHeader(
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters
+    ) throws -> Data
+}
+
+public struct DefaultKeePassKdbx3HeaderWriter: KeePassKdbx3HeaderWriter {
+    public init() {}
+
+    public func writeHeader(
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters
+    ) throws -> Data {
+        guard kdfParameters.algorithm == .aesKdf,
+              let aesKdf = kdfParameters.aesKdf else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX3 writeback 仅支持 legacy AES-KDF 参数。"
+            )
+        }
+        let masterSeed = try requireLength(
+            cryptoInputs.masterSeed,
+            expected: 32,
+            message: "KDBX3 master seed 长度无效；请确认写回参数完整。"
+        )
+        let transformSeed = try requireLength(
+            aesKdf.seed,
+            expected: 32,
+            message: "KDBX3 AES-KDF seed 长度无效；请确认写回参数完整。"
+        )
+        guard let transformRounds = aesKdf.rounds else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX3 AES-KDF rounds 缺失；请确认写回参数完整。"
+            )
+        }
+        let encryptionIV = try requireLength(
+            cryptoInputs.encryptionIV,
+            expected: encryptionIVLength(for: cipher),
+            message: "KDBX3 encryption IV 长度无效；请确认写回参数完整。"
+        )
+        let innerRandomStreamKey = try requireLength(
+            cryptoInputs.innerRandomStreamKey,
+            expected: 32,
+            message: "KDBX3 protected stream key 长度无效；请确认写回参数完整。"
+        )
+        let streamStartBytes = try requireLength(
+            cryptoInputs.streamStartBytes,
+            expected: 32,
+            message: "KDBX3 stream start bytes 长度无效；请确认写回参数完整。"
+        )
+        guard let innerRandomStreamID = cryptoInputs.innerRandomStreamID else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX3 inner stream 参数缺失；请确认写回参数完整。"
+            )
+        }
+
+        var header = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x01, 0x00, 0x03, 0x00
+        ])
+        header.append(headerField(id: 2, value: try cipherUUID(for: cipher)))
+        header.append(headerField(id: 3, value: try compressionFlags(for: compression)))
+        header.append(headerField(id: 4, value: masterSeed))
+        header.append(headerField(id: 5, value: transformSeed))
+        header.append(headerField(id: 6, value: littleEndianUInt64(transformRounds)))
+        header.append(headerField(id: 7, value: encryptionIV))
+        header.append(headerField(id: 8, value: innerRandomStreamKey))
+        header.append(headerField(id: 9, value: streamStartBytes))
+        header.append(headerField(id: 10, value: littleEndianUInt32(innerRandomStreamID)))
+        header.append(headerField(id: 0, value: Data([0x0D, 0x0A, 0x0D, 0x0A])))
+        return header
+    }
+
+    private func requireLength(_ data: Data?, expected: Int, message: String) throws -> Data {
+        guard let data, data.count == expected else {
+            throw KeePassOperationError(code: .formatUnsupported, message: message)
+        }
+        return data
+    }
+
+    private func encryptionIVLength(for cipher: KeePassKdbxCipherAlgorithm) throws -> Int {
+        switch cipher {
+        case .aes256, .twofish:
+            return 16
+        case .chacha20:
+            return 12
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX3 cipher header 写回尚未接入"
+            )
+        }
+    }
+
+    private func cipherUUID(for cipher: KeePassKdbxCipherAlgorithm) throws -> Data {
+        switch cipher {
+        case .aes256:
+            return Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF])
+        case .chacha20:
+            return Data([0xD6, 0x03, 0x8A, 0x2B, 0x8B, 0x6F, 0x4C, 0xB5, 0xA5, 0x24, 0x33, 0x9A, 0x31, 0xDB, 0xB5, 0x9A])
+        case .twofish:
+            return Data([0xAD, 0x68, 0xF2, 0x9F, 0x57, 0x6F, 0x4B, 0xB9, 0xA3, 0x6A, 0xD4, 0x7A, 0xF9, 0x65, 0x34, 0x6C])
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX3 cipher header 写回尚未接入"
+            )
+        }
+    }
+
+    private func compressionFlags(for compression: KeePassKdbxCompressionAlgorithm) throws -> Data {
+        switch compression {
+        case .none:
+            return littleEndianUInt32(0)
+        case .gzip:
+            return littleEndianUInt32(1)
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX3 compression header 写回尚未接入"
+            )
+        }
+    }
+
+    private func headerField(id: UInt8, value: Data) -> Data {
+        var field = Data([id])
+        var length = UInt16(value.count).littleEndian
+        field.append(Data(bytes: &length, count: MemoryLayout<UInt16>.size))
+        field.append(value)
+        return field
+    }
+
+    private func littleEndianUInt32(_ value: UInt32) -> Data {
+        Data([
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ])
+    }
+
+    private func littleEndianUInt64(_ value: UInt64) -> Data {
+        Data((0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) })
+    }
+}
+
 public struct KeePassKdbxBlockStreamContext: Sendable, Equatable {
     public let formatVersion: KeePassKdbxFormatVersion
     public let streamStartBytes: Data?
@@ -3488,6 +3642,181 @@ public struct KeePassKdbx4WritebackResult: Sendable, Equatable {
 
     public var displaySummary: String {
         "KDBX4 writeback，\(groupCount) 个分组，\(entryCount) 个条目，\(attachmentCount) 个附件，XML \(xmlPayloadByteCount) bytes，database \(database.count) bytes"
+    }
+}
+
+public struct KeePassKdbx3WritebackRequest: Sendable, Equatable {
+    public let snapshot: KeePassReadOnlySnapshot
+    public let credentials: KeePassUnlockCredentials
+    public let cipher: KeePassKdbxCipherAlgorithm
+    public let compression: KeePassKdbxCompressionAlgorithm
+    public let cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    public let kdfParameters: KeePassKdbxKdfParameters
+
+    public init(
+        snapshot: KeePassReadOnlySnapshot,
+        credentials: KeePassUnlockCredentials,
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters
+    ) {
+        self.snapshot = snapshot
+        self.credentials = credentials
+        self.cipher = cipher
+        self.compression = compression
+        self.cryptoInputs = cryptoInputs
+        self.kdfParameters = kdfParameters
+    }
+}
+
+public struct KeePassKdbx3WritebackResult: Sendable, Equatable {
+    public let database: Data
+    public let headerBytes: Data
+    public let encryptedPayload: Data
+    public let xmlPayloadByteCount: Int
+    public let groupCount: Int
+    public let entryCount: Int
+    public let attachmentCount: Int
+
+    public init(
+        database: Data,
+        headerBytes: Data,
+        encryptedPayload: Data,
+        xmlPayloadByteCount: Int,
+        groupCount: Int,
+        entryCount: Int,
+        attachmentCount: Int
+    ) {
+        self.database = database
+        self.headerBytes = headerBytes
+        self.encryptedPayload = encryptedPayload
+        self.xmlPayloadByteCount = xmlPayloadByteCount
+        self.groupCount = groupCount
+        self.entryCount = entryCount
+        self.attachmentCount = attachmentCount
+    }
+
+    public var displaySummary: String {
+        "KDBX3 writeback，\(groupCount) 个分组，\(entryCount) 个条目，\(attachmentCount) 个附件，XML \(xmlPayloadByteCount) bytes，database \(database.count) bytes"
+    }
+}
+
+public protocol KeePassKdbx3WritebackCoordinator: Sendable {
+    func writeDatabase(_ request: KeePassKdbx3WritebackRequest) throws -> KeePassKdbx3WritebackResult
+}
+
+public struct DefaultKeePassKdbx3WritebackCoordinator: KeePassKdbx3WritebackCoordinator {
+    private let xmlPayloadWriter: KeePassXMLPayloadWriter?
+    private let gzipPayloadCompressor: KeePassGzipPayloadCompressor
+    private let headerWriter: any KeePassKdbx3HeaderWriter
+    private let keyDeriver: any KeePassKdbxKeyDeriver
+    private let masterKeyComposer: any KeePassKdbxMasterKeyComposer
+    private let blockStreamEncoder: any KeePassKdbxBlockStreamEncoder
+    private let payloadCipher: any KeePassKdbxPayloadCipher
+
+    public init(
+        xmlPayloadWriter: KeePassXMLPayloadWriter? = nil,
+        gzipPayloadCompressor: KeePassGzipPayloadCompressor = KeePassGzipPayloadCompressor(),
+        headerWriter: any KeePassKdbx3HeaderWriter = DefaultKeePassKdbx3HeaderWriter(),
+        keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
+        masterKeyComposer: any KeePassKdbxMasterKeyComposer = DefaultKeePassKdbxMasterKeyComposer(),
+        blockStreamEncoder: any KeePassKdbxBlockStreamEncoder = DefaultKeePassKdbxBlockStreamEncoder(),
+        payloadCipher: any KeePassKdbxPayloadCipher = DefaultKeePassKdbxPayloadCipher()
+    ) {
+        self.xmlPayloadWriter = xmlPayloadWriter
+        self.gzipPayloadCompressor = gzipPayloadCompressor
+        self.headerWriter = headerWriter
+        self.keyDeriver = keyDeriver
+        self.masterKeyComposer = masterKeyComposer
+        self.blockStreamEncoder = blockStreamEncoder
+        self.payloadCipher = payloadCipher
+    }
+
+    public func writeDatabase(_ request: KeePassKdbx3WritebackRequest) throws -> KeePassKdbx3WritebackResult {
+        let headerBytes = try headerWriter.writeHeader(
+            cipher: request.cipher,
+            compression: request.compression,
+            cryptoInputs: request.cryptoInputs,
+            kdfParameters: request.kdfParameters
+        )
+        let xmlPayloadWriter = xmlPayloadWriter ?? KeePassXMLPayloadWriter(
+            protectedValueMode: .encryptProtectedValues(request.cryptoInputs),
+            binaryMode: .inlineMetaBinaries
+        )
+        let xmlPayload = try xmlPayloadWriter.write(request.snapshot)
+        let payloadPlaintext = try compressedPayloadIfNeeded(
+            xmlPayload.xmlPayload,
+            compression: request.compression
+        )
+        let blockStream = try blockStreamEncoder.encodeBlockStream(
+            payloadPlaintext,
+            context: KeePassKdbxBlockStreamContext(
+                formatVersion: .kdbx3,
+                streamStartBytes: request.cryptoInputs.streamStartBytes
+            )
+        )
+        let credentialCandidate = try writebackCredentialCandidate(from: request.credentials)
+        let context = try KeePassKdbxDecryptInputContext.build(
+            database: headerBytes + Data("writeback-placeholder".utf8),
+            sourceName: request.snapshot.sourceName,
+            credentialCandidate: credentialCandidate
+        )
+        let derivedKey = try keyDeriver.deriveKey(from: context)
+        let masterKey = try masterKeyComposer.composeMasterKey(
+            from: derivedKey,
+            cryptoInputs: request.cryptoInputs
+        )
+        let encryptedPayload = try payloadCipher.encryptPayload(
+            blockStream,
+            cipher: request.cipher,
+            masterKey: masterKey,
+            cryptoInputs: request.cryptoInputs
+        )
+        var database = Data()
+        database.reserveCapacity(headerBytes.count + encryptedPayload.count)
+        database.append(headerBytes)
+        database.append(encryptedPayload)
+        return KeePassKdbx3WritebackResult(
+            database: database,
+            headerBytes: headerBytes,
+            encryptedPayload: encryptedPayload,
+            xmlPayloadByteCount: xmlPayload.xmlPayload.count,
+            groupCount: xmlPayload.groupCount,
+            entryCount: xmlPayload.entryCount,
+            attachmentCount: xmlPayload.attachmentCount
+        )
+    }
+
+    private func compressedPayloadIfNeeded(
+        _ xmlPayload: Data,
+        compression: KeePassKdbxCompressionAlgorithm
+    ) throws -> Data {
+        switch compression {
+        case .none:
+            return xmlPayload
+        case .gzip:
+            return try gzipPayloadCompressor.compress(xmlPayload)
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX3 compression writeback 尚未接入"
+            )
+        }
+    }
+
+    private func writebackCredentialCandidate(from credentials: KeePassUnlockCredentials) throws -> KeePassCredentialCandidate {
+        if let candidateLabel = credentials.candidateLabel,
+           let candidate = credentials.credentialCandidates.first(where: { $0.label == candidateLabel }) {
+            return candidate
+        }
+        guard let candidate = credentials.credentialCandidates.first else {
+            throw KeePassOperationError(
+                code: .invalidCredential,
+                message: "KDBX3 写回需要数据库密码或密钥文件"
+            )
+        }
+        return candidate
     }
 }
 
