@@ -5610,6 +5610,133 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(rawSnapshot.contains("correct horse battery staple"))
     }
 
+    func testAutoFillSaveRequestCreatesLoginAndRefreshesSharedArtifactsWithoutLeakingSecret() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let indexStore = FileAutoFillEncryptedIndexStore(appGroupContainerURL: directory)
+        let secretStore = FileAutoFillCredentialSecretStore(appGroupContainerURL: directory)
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let keyMaterial = AutoFillIndexKeyMaterial(
+            vaultID: "created-vault",
+            keyIdentifier: "autofill-key-1",
+            keyMaterial: Data(repeating: 37, count: 32),
+            createdAt: Date(timeIntervalSince1970: 1_800_710_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            autoFillIndexStore: indexStore,
+            autoFillCredentialSecretStore: secretStore,
+            autoFillCredentialIdentityStore: identityStore,
+            autoFillIndexKeyMaterialProvider: { _ in keyMaterial }
+        )
+        try unlockNewVault(model)
+
+        try model.saveAutoFillCredential(
+            AppAutoFillCredentialSaveRequest(
+                serviceIdentifier: "https://accounts.example.com/login?token=secret-query",
+                username: "saved-user@example.com",
+                password: "autofill-generated-secret",
+                title: "Example Accounts"
+            ),
+            projectTitle: "Personal"
+        )
+
+        let entry = try XCTUnwrap(model.loginEntries.first)
+        XCTAssertEqual(model.loginEntries.count, 1)
+        XCTAssertEqual(entry.title, "Example Accounts")
+        XCTAssertEqual(entry.username, "saved-user@example.com")
+        XCTAssertEqual(entry.password, "autofill-generated-secret")
+        XCTAssertEqual(entry.url, "https://accounts.example.com/login?token=secret-query")
+        XCTAssertEqual(model.entryOperationState, .succeeded("AutoFill 已保存 Example Accounts"))
+        XCTAssertEqual(model.operationTimelineEvents.first?.action, .created)
+
+        let storageKey = try AutoFillIndexEncryptionKey(rawValue: keyMaterial.keyMaterial)
+        let unlockedIndex = try AutoFillCredentialIndexUnlocker().unlock(
+            try XCTUnwrap(try indexStore.load()),
+            vaultID: keyMaterial.vaultID,
+            keyIdentifier: keyMaterial.keyIdentifier,
+            key: storageKey
+        )
+        XCTAssertEqual(unlockedIndex.records(matchingServiceIdentifier: "accounts.example.com").map(\.id), [entry.id])
+
+        let unlockedSnapshot = try AutoFillCredentialSecretUnlocker().unlock(
+            try XCTUnwrap(try secretStore.load()),
+            vaultID: keyMaterial.vaultID,
+            keyIdentifier: keyMaterial.keyIdentifier,
+            key: storageKey
+        )
+        XCTAssertEqual(
+            unlockedSnapshot.secret(id: entry.id),
+            AutoFillCredentialSecretRecord(
+                id: entry.id,
+                username: "saved-user@example.com",
+                password: "autofill-generated-secret"
+            )
+        )
+        XCTAssertEqual(identityStore.savedIdentities.last?.map(\.recordIdentifier), [entry.id, entry.id])
+
+        let userVisibleText = ([model.entryOperationState.label] + model.operationTimelineEvents.map(\.detail))
+            .joined(separator: " ")
+        XCTAssertFalse(userVisibleText.contains("autofill-generated-secret"))
+        XCTAssertFalse(userVisibleText.contains("saved-user@example.com"))
+        XCTAssertFalse(userVisibleText.contains("secret-query"))
+    }
+
+    func testAutoFillSaveRequestUpdatesMatchingLoginInsteadOfDuplicating() throws {
+        let indexStore = RecordingAutoFillEncryptedIndexStore()
+        let secretStore = RecordingAutoFillCredentialSecretStore()
+        let keyMaterial = AutoFillIndexKeyMaterial(
+            vaultID: "created-vault",
+            keyIdentifier: "autofill-key-1",
+            keyMaterial: Data(repeating: 41, count: 32),
+            createdAt: Date(timeIntervalSince1970: 1_800_720_000)
+        )
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            autoFillIndexStore: indexStore,
+            autoFillCredentialSecretStore: secretStore,
+            autoFillIndexKeyMaterialProvider: { _ in keyMaterial }
+        )
+        try unlockNewVault(model)
+
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "old-secret"
+        model.loginURL = "https://github.com/login"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        try model.saveAutoFillCredential(
+            AppAutoFillCredentialSaveRequest(
+                serviceIdentifier: "https://github.com/session",
+                username: "alice@example.com",
+                password: "new-autofill-secret",
+                title: "Ignored Suggested Title"
+            ),
+            projectTitle: "Personal"
+        )
+
+        let entry = try XCTUnwrap(model.loginEntries.first)
+        XCTAssertEqual(model.loginEntries.count, 1)
+        XCTAssertEqual(entry.id, "entry-1")
+        XCTAssertEqual(entry.title, "GitHub")
+        XCTAssertEqual(entry.username, "alice@example.com")
+        XCTAssertEqual(entry.password, "new-autofill-secret")
+        XCTAssertEqual(entry.url, "https://github.com/login")
+        XCTAssertEqual(engine.createdLoginEntries.count, 1)
+        XCTAssertEqual(engine.updatedLoginEntries.last?.entryID, "entry-1")
+        XCTAssertEqual(model.entryOperationState, .succeeded("AutoFill 已更新 GitHub"))
+        XCTAssertEqual(model.operationTimelineEvents.first?.action, .updated)
+        XCTAssertEqual(model.autoFillIndexState, .succeeded(1))
+        XCTAssertEqual(indexStore.savedIndexes.last?.records.count, 1)
+        XCTAssertEqual(secretStore.savedSnapshots.last?.records.count, 1)
+
+        let userVisibleText = ([model.entryOperationState.label] + model.operationTimelineEvents.map(\.detail))
+            .joined(separator: " ")
+        XCTAssertFalse(userVisibleText.contains("new-autofill-secret"))
+        XCTAssertFalse(userVisibleText.contains("alice@example.com"))
+    }
+
     func testWebDAVBackupUploadsActiveVaultFileAndStoresReceiptState() async throws {
         let engine = RecordingVaultEngine()
         let webDAVService = RecordingAppWebDAVBackupService()

@@ -465,6 +465,25 @@ struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
     }
 }
 
+struct AppAutoFillCredentialSaveRequest: Sendable, Equatable {
+    let serviceIdentifier: String
+    let username: String
+    let password: String
+    let title: String
+
+    init(
+        serviceIdentifier: String,
+        username: String,
+        password: String,
+        title: String = ""
+    ) {
+        self.serviceIdentifier = serviceIdentifier
+        self.username = username
+        self.password = password
+        self.title = title
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -3594,6 +3613,76 @@ final class AppSessionModel {
                 itemTitle: entry.title
             )
             entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func saveAutoFillCredential(
+        _ request: AppAutoFillCredentialSaveRequest,
+        projectTitle: String
+    ) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let normalizedRequest = try normalizedAutoFillSaveRequest(request)
+            let project: LocalVaultProject
+            if let activeProject {
+                project = activeProject
+            } else {
+                project = try entryRepository.createProject(title: projectTitle)
+                activeProject = project
+            }
+
+            if let existing = matchingLoginEntry(for: normalizedRequest, in: loginEntries) {
+                let updated = try entryRepository.updateLoginEntry(
+                    projectID: project.id,
+                    entryID: existing.id,
+                    draft: LocalLoginEntryDraft(
+                        title: existing.title,
+                        username: normalizedRequest.username,
+                        password: normalizedRequest.password,
+                        url: existing.url,
+                        notes: existing.notes
+                    )
+                )
+                loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
+                deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
+                try refreshAutoFillEncryptedIndexIfConfigured()
+                appendOperationTimelineEvent(
+                    action: .updated,
+                    itemKind: .login,
+                    itemID: updated.id,
+                    itemTitle: updated.title
+                )
+                entryOperationState = .succeeded("AutoFill 已更新 \(updated.title)")
+            } else {
+                let title = autoFillSaveTitle(for: normalizedRequest)
+                let entry = try entryRepository.createLoginEntry(
+                    projectID: project.id,
+                    draft: LocalLoginEntryDraft(
+                        title: title,
+                        username: normalizedRequest.username,
+                        password: normalizedRequest.password,
+                        url: normalizedRequest.serviceIdentifier
+                    )
+                )
+                loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
+                deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
+                try refreshAutoFillEncryptedIndexIfConfigured()
+                appendOperationTimelineEvent(
+                    action: .created,
+                    itemKind: .login,
+                    itemID: entry.id,
+                    itemTitle: entry.title
+                )
+                entryOperationState = .succeeded("AutoFill 已保存 \(entry.title)")
+            }
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7290,6 +7379,69 @@ final class AppSessionModel {
         }
         identifiers.append(trimmed)
         return Array(NSOrderedSet(array: identifiers)) as? [String] ?? identifiers
+    }
+
+    private func normalizedAutoFillSaveRequest(
+        _ request: AppAutoFillCredentialSaveRequest
+    ) throws -> AppAutoFillCredentialSaveRequest {
+        let serviceIdentifier = request.serviceIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+        let username = request.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let password = request.password
+        let title = request.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !serviceIdentifier.isEmpty else {
+            throw LocalVaultRepositoryError.emptyEntryTitle
+        }
+        guard !username.isEmpty else {
+            throw LocalVaultRepositoryError.emptyEntryTitle
+        }
+        guard !password.isEmpty else {
+            throw LocalVaultRepositoryError.emptyPassword
+        }
+        return AppAutoFillCredentialSaveRequest(
+            serviceIdentifier: serviceIdentifier,
+            username: username,
+            password: password,
+            title: title
+        )
+    }
+
+    private func autoFillSaveTitle(
+        for request: AppAutoFillCredentialSaveRequest
+    ) -> String {
+        if !request.title.isEmpty {
+            return request.title
+        }
+        return serviceIdentifiers(for: request.serviceIdentifier).first ?? "AutoFill 登录"
+    }
+
+    private func matchingLoginEntry(
+        for request: AppAutoFillCredentialSaveRequest,
+        in entries: [LocalLoginEntry]
+    ) -> LocalLoginEntry? {
+        let username = request.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        let requestIdentifiers = Set(serviceIdentifiers(for: request.serviceIdentifier).map(normalizedAutoFillIdentifier))
+        guard !username.isEmpty, !requestIdentifiers.isEmpty else {
+            return nil
+        }
+
+        return entries.first { entry in
+            guard entry.username.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(username) == .orderedSame else {
+                return false
+            }
+            let entryIdentifiers = Set(serviceIdentifiers(for: entry.url).map(normalizedAutoFillIdentifier))
+            return !entryIdentifiers.isDisjoint(with: requestIdentifiers)
+        }
+    }
+
+    private func normalizedAutoFillIdentifier(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let url = URL(string: trimmed),
+           let host = url.host(),
+           !host.isEmpty {
+            return host.lowercased()
+        }
+        return trimmed
     }
 
     private func autoFillCredentialIdentities(
