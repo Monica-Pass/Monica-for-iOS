@@ -555,6 +555,60 @@ struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable {
     }
 }
 
+enum AppWidgetVaultState: Sendable, Equatable {
+    case locked
+    case unlocked
+
+    var label: String {
+        switch self {
+        case .locked:
+            "已锁定"
+        case .unlocked:
+            "已解锁"
+        }
+    }
+}
+
+struct AppWidgetTotpItem: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let issuer: String
+    let accountName: String
+    let secondsRemaining: Int
+
+    var timeRemainingLabel: String {
+        "\(secondsRemaining) 秒"
+    }
+}
+
+struct AppWidgetSnapshot: Sendable, Equatable {
+    let vaultState: AppWidgetVaultState
+    let totalEntryCount: Int
+    let totpItems: [AppWidgetTotpItem]
+    let shortcutItems: [AppShortcutEntrySummary]
+
+    var totalEntryLabel: String {
+        "\(totalEntryCount) 项"
+    }
+
+    var redactedDebugSummary: String {
+        let totpText = totpItems
+            .map { "\($0.title) \($0.issuer) \($0.accountName) \($0.timeRemainingLabel)" }
+            .joined(separator: " ")
+        let shortcutText = shortcutItems
+            .map { "\($0.kind.displayName) \($0.title) \($0.subtitle) \($0.searchableText)" }
+            .joined(separator: " ")
+        return [
+            vaultState.label,
+            totalEntryLabel,
+            totpText,
+            shortcutText
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1860,6 +1914,33 @@ final class AppSessionModel {
                 || summary.subtitle.localizedCaseInsensitiveContains(normalizedQuery)
                 || summary.searchableText.localizedCaseInsensitiveContains(normalizedQuery)
         }
+    }
+
+    func widgetSnapshot(now: Date = Date()) -> AppWidgetSnapshot {
+        guard vaultState == .unlocked else {
+            return AppWidgetSnapshot(
+                vaultState: .locked,
+                totalEntryCount: 0,
+                totpItems: [],
+                shortcutItems: []
+            )
+        }
+
+        let totpItems = totpEntries.prefix(3).map { entry in
+            AppWidgetTotpItem(
+                id: entry.id,
+                title: shortcutTitle(entry.title),
+                issuer: entry.issuer,
+                accountName: entry.accountName,
+                secondsRemaining: totpTimeRemaining(for: entry, at: now)
+            )
+        }
+        return AppWidgetSnapshot(
+            vaultState: .unlocked,
+            totalEntryCount: activeVaultEntryCount,
+            totpItems: Array(totpItems),
+            shortcutItems: Array(allShortcutEntrySummaries().prefix(4))
+        )
     }
 
     func openShortcutEntry(_ summary: AppShortcutEntrySummary) throws {

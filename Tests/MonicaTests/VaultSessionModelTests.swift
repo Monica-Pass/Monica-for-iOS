@@ -301,6 +301,53 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(userVisibleText.contains(blobStore.savedBlobs.first?.localPath ?? ""))
     }
 
+    func testWidgetSnapshotSummarizesSafeTotpAndShortcutStateWithoutLeakingSecrets() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        let lockedSnapshot = model.widgetSnapshot(
+            now: Date(timeIntervalSince1970: 1_800_000_000)
+        )
+
+        XCTAssertEqual(lockedSnapshot.vaultState, .locked)
+        XCTAssertTrue(lockedSnapshot.totpItems.isEmpty)
+        XCTAssertTrue(lockedSnapshot.shortcutItems.isEmpty)
+
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub Login"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "github-login-secret"
+        model.loginURL = "https://github.com/login?token=private"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.noteTitle = "Recovery Note"
+        model.noteBody = "backup-code-secret"
+        try model.createNoteEntry(projectTitle: "Personal")
+        model.totpTitle = "GitHub TOTP"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        model.totpIssuer = "GitHub"
+        model.totpAccountName = "alice@example.com"
+        model.totpPeriod = 30
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let snapshot = model.widgetSnapshot(
+            now: Date(timeIntervalSince1970: 1_800_000_017)
+        )
+
+        XCTAssertEqual(snapshot.vaultState, .unlocked)
+        XCTAssertEqual(snapshot.totalEntryCount, 3)
+        XCTAssertEqual(snapshot.totpItems.map(\.title), ["GitHub TOTP"])
+        XCTAssertEqual(snapshot.totpItems.first?.issuer, "GitHub")
+        XCTAssertEqual(snapshot.totpItems.first?.accountName, "alice@example.com")
+        XCTAssertEqual(snapshot.totpItems.first?.secondsRemaining, 13)
+        XCTAssertEqual(snapshot.shortcutItems.map(\.kind), [.login, .note, .totp])
+        XCTAssertEqual(snapshot.shortcutItems.first?.title, "GitHub Login")
+
+        let widgetText = snapshot.redactedDebugSummary
+        XCTAssertFalse(widgetText.contains("github-login-secret"))
+        XCTAssertFalse(widgetText.contains("backup-code-secret"))
+        XCTAssertFalse(widgetText.contains("JBSWY3DPEHPK3PXP"))
+        XCTAssertFalse(widgetText.contains("private"))
+        XCTAssertFalse(widgetText.contains(try model.totpCode(for: try XCTUnwrap(model.totpEntries.first))))
+    }
+
     func testPlusResourceButtonActivatesAndroidCompatiblePlusWithoutPurchase() async throws {
         let service = RecordingAppPlusResourceUnlockService()
         let model = AppSessionModel(plusResourceUnlockService: service)
