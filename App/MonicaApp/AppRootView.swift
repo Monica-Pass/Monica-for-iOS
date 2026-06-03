@@ -10299,19 +10299,15 @@ struct AppRootView: View {
                     forgotPassword: session.showForgotPasswordGuidance
                 )
             } else {
-                TabView(selection: $session.selectedTab) {
-                    ForEach(MonicaAppTab.phaseOneAndroidParityTabs, id: \.self) { tab in
-                        tabContent(for: tab)
-                            .tabItem {
-                                if session.vaultDisplayPreferences.showsTabLabels {
-                                    Label(tab.title, systemImage: tab.systemImage)
-                                } else {
-                                    Image(systemName: tab.systemImage)
-                                }
-                            }
-                            .tag(tab)
-                    }
+                VStack(spacing: 0) {
+                    tabContent(for: session.selectedTab)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    AndroidParityBottomNavigation(
+                        tabs: MonicaAppTab.phaseOneAndroidParityTabs,
+                        selectedTab: $session.selectedTab
+                    )
                 }
+                .background(AndroidParityPalette.background.ignoresSafeArea())
             }
 
             if session.isPrivacyShieldVisible {
