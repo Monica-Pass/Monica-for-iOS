@@ -1462,6 +1462,79 @@ import MonicaStorage
     #expect(!snapshot.displaySummary.contains(transformSeed.map { String(format: "%02x", $0) }.joined()))
 }
 
+@Test func defaultKeePassDatabaseReaderDecryptsKdbx4Argon2idFixtureToSnapshotWithoutLeakingCredentials() throws {
+    let password = "argon2id-password"
+    let salt = Data(repeating: 0xD2, count: 32)
+    let masterSeed = Data(repeating: 0xB2, count: 32)
+    let derivedKey = try decodeHexData("578c9c4377533e23dbacd1f01ae517ffcffec77d717ec4a7d5fd64eb72585192")
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: masterSeed,
+        encryptionIV: Data(repeating: 0xC2, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xE2, count: 64),
+        innerRandomStreamID: 3,
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(key: "$UUID", value: Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])),
+            kdbxVariantByteArray(key: "S", value: salt),
+            kdbxVariantUInt64(key: "M", value: 1_048_576),
+            kdbxVariantUInt64(key: "I", value: 2),
+            kdbxVariantUInt32(key: "P", value: 1),
+            kdbxVariantUInt32(key: "V", value: 0x13)
+        ])
+    )
+    var hmacBaseInput = Data()
+    hmacBaseInput.append(masterSeed)
+    hmacBaseInput.append(derivedKey)
+    hmacBaseInput.append(0x01)
+    let hmacBaseKey = Data(SHA512.hash(data: hmacBaseInput))
+    let encryptedPayload = try decodeHexData("""
+    3d2a1e875deb7bcfe3c2f2b8d56b83b8520504667a60133ee1e65289bc4b98c39655
+    83fcd00213ec87d6d4b58237abed08a90899be444285c638738b77989e740134cddb
+    c777b16731e560e4eb738e25cf59505e5b8cde4b151ec821240e5dd98e78cbd812b7
+    9f36169d26b350ca8a7ffeee94fded11a3c2d00fa57bfd7fa645fa68eb12498f017d
+    f41cec10e0c567a9a01f3eee4f41d03cd831233f4fcda60bbfdadbad9ff12af949ec
+    69bed55451243aa0e408c1089dff041aeac2dcebac74cc153ba0f510e53dcbd7cda2
+    04d0a007b19518d7758baed85f335780136fc48821125f167e94b22356930d3d1946
+    defbdf561cb96360afcf1ce6915cd91c58eee0a9b9cf2c3acd90a66b4e64e71e730f
+    e28ea88432c5f5f697f61360dc9fd1313dfc4a09063d1dd1b5d80dcf37af0389d889
+    cc0fc35114f0567e403af231e8f93723cf833002fe26f3ed9b84b0c8cad36e541527
+    edfffb01f37c54114cd7d5876390d8627dfb89b323d6a5c373a7abfc7c6ee40f56d3
+    10e4a298eee8b9db3509619068e373edde19779c195ed753994d677103136683ad54
+    e88df054588b76d79d680d29e191ac319a13df043d0e62918f0e12efdc323db2ec20
+    0a074816a98a4f5b0ee23518b04422d3fcfbfc60f3b35912ae2b65bebd4d695ca95c
+    199f3f7d892f0d92670063e377d24e7a7201183bc7d306269614b5346f37f2ce33e6
+    3faf7f51f63a635fadfce38dd157492a2ce58dd20c2d2ef0da68547aaf1d2c90237c
+    3c22f3a66fe5debf8d7e6168f09b129f8e65fdc4a9e63a59003b3582339fd55bbb88
+    5b5f1c5d0c80494f44d017330f1e312ede108318cc8ec91a54966afea9cd
+    """)
+    var payloadSection = Data(SHA256.hash(data: header))
+    payloadSection.append(kdbx4HeaderHmac(headerBytes: header, hmacBaseKey: hmacBaseKey))
+    payloadSection.append(makeKdbx4HmacBlockStream(hmacBaseKey: hmacBaseKey, blocks: [encryptedPayload]))
+    let database = header + payloadSection
+    let reader = DefaultKeePassDatabaseReader()
+
+    let snapshot = try reader.readSnapshot(
+        database: database,
+        sourceName: "kdbx4-argon2id-fixture.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    let parameters = try #require(snapshot.headerSummary?.kdfParameters?.argon2)
+    #expect(snapshot.headerSummary?.formatVersion == KeePassKdbxFormatVersion.kdbx4)
+    #expect(snapshot.headerSummary?.kdfParameters?.algorithm == .argon2id)
+    #expect(parameters.memoryBytes == 1_048_576)
+    #expect(parameters.iterations == 2)
+    #expect(parameters.parallelism == 1)
+    #expect(parameters.version == 0x13)
+    #expect(snapshot.entries.first?.title == "KDBX4 Argon2id")
+    #expect(snapshot.entries.first?.username == "ivy")
+    #expect(snapshot.entries.first?.decodedPassword == "argon2id-decoded-secret")
+    #expect(!snapshot.displaySummary.contains(password))
+    #expect(!snapshot.displaySummary.contains("argon2id-decoded-secret"))
+    #expect(!snapshot.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func defaultKeePassDatabaseReaderDecryptsKdbx4AesKdfFixtureWithKeyFileCandidateWithoutLeakingCredentials() throws {
     let password = "keyfile-password"
     let rawKey = Data((1...32).map(UInt8.init))
