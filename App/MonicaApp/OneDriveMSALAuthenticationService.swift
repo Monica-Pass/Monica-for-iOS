@@ -118,7 +118,7 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
                 continuation.resume(throwing: AppOneDriveAuthenticationError.authenticationFailed(
                     domain: nsError.domain,
                     code: nsError.code,
-                    message: nsError.localizedDescription
+                    message: diagnosticMessage(for: nsError)
                 ))
             }
             return
@@ -128,6 +128,36 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
             return
         }
         continuation.resume(returning: result)
+    }
+
+    static func diagnosticMessage(for error: NSError) -> String {
+        var parts = [error.localizedDescription]
+        let fields: [(label: String, key: String)] = [
+            ("MSALInternalErrorCodeKey", MSALInternalErrorCodeKey),
+            ("MSALOAuthErrorKey", MSALOAuthErrorKey),
+            ("MSALOAuthSubErrorKey", MSALOAuthSubErrorKey),
+            ("MSALOAuthSubErrorDescriptionKey", MSALOAuthSubErrorDescriptionKey),
+            ("MSALErrorDescriptionKey", MSALErrorDescriptionKey),
+            ("MSALSTSErrorCodesKey", MSALSTSErrorCodesKey),
+            ("MSALCorrelationIDKey", MSALCorrelationIDKey),
+            ("MSALHTTPResponseCodeKey", MSALHTTPResponseCodeKey)
+        ]
+        for field in fields {
+            guard let value = error.userInfo[field.key] else {
+                continue
+            }
+            let text = String(describing: value).trimmingCharacters(in: .whitespacesAndNewlines)
+            if !text.isEmpty, !parts.contains(text) {
+                parts.append("\(field.label)=\(text)")
+            }
+        }
+        if let underlying = error.userInfo[NSUnderlyingErrorKey] as? NSError {
+            parts.append("underlying=\(diagnosticMessage(for: underlying))")
+        }
+        return parts
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
     }
 
     private func currentAccount(application: MSALPublicClientApplication) throws -> MSALAccount? {

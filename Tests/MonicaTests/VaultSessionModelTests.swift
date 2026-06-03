@@ -1170,6 +1170,32 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(message.contains("code=<redacted>"))
         XCTAssertTrue(message.contains("state=<redacted>"))
         XCTAssertTrue(message.contains("access_token=<redacted>"))
+
+        let internalError = NSError(
+            domain: "MSALErrorDomain",
+            code: -50000,
+            userInfo: [
+                "MSALInternalErrorCodeKey": -42011,
+                "MSALOAuthErrorKey": "invalid_request",
+                "MSALErrorDescriptionKey": "Redirect mismatch code=auth-code-secret&state=state-secret",
+                "MSALCorrelationIDKey": "correlation-id-visible"
+            ]
+        )
+
+        let internalMessage = AppOneDriveAuthenticationError.authenticationFailed(
+            domain: internalError.domain,
+            code: internalError.code,
+            message: DefaultAppOneDriveMSALAuthenticationService.diagnosticMessage(for: internalError)
+        ).localizedDescription
+
+        XCTAssertTrue(internalMessage.contains("MSALInternalErrorCodeKey=-42011"))
+        XCTAssertTrue(internalMessage.contains("MSALOAuthErrorKey=invalid_request"))
+        XCTAssertTrue(internalMessage.contains("MSALErrorDescriptionKey=Redirect mismatch"))
+        XCTAssertTrue(internalMessage.contains("MSALCorrelationIDKey=correlation-id-visible"))
+        XCTAssertFalse(internalMessage.contains("auth-code-secret"))
+        XCTAssertFalse(internalMessage.contains("state-secret"))
+        XCTAssertTrue(internalMessage.contains("code=<redacted>"))
+        XCTAssertTrue(internalMessage.contains("state=<redacted>"))
     }
 
     func testOneDriveUnknownAuthenticationErrorShowsRedactedDiagnosticDetails() async {
