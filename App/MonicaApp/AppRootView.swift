@@ -8481,6 +8481,9 @@ final class AppSessionModel {
         if let providerError = error as? CloudFileProviderError {
             return providerError.localizedDescription
         }
+        if kind == .oneDrive {
+            return readableOneDriveAuthenticationErrorMessage(error)
+        }
         if let urlError = error as? URLError {
             switch urlError.code {
             case .notConnectedToInternet, .networkConnectionLost:

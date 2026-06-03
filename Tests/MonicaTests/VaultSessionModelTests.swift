@@ -1251,6 +1251,36 @@ final class VaultSessionModelTests: XCTestCase {
         }
     }
 
+    func testOneDriveCloudRefreshSurfacesMSALKeychainDiagnosticsWithoutSecrets() async {
+        let oneDrive = RecordingCloudFileProvider(kind: .oneDrive)
+        oneDrive.error = NSError(
+            domain: "MSALErrorDomain",
+            code: -34018,
+            userInfo: [
+                NSLocalizedDescriptionKey: "操作未能完成。 code=auth-code-secret&state=state-secret",
+                "MSALInternalErrorCodeKey": -34018,
+                "MSALCorrelationIDKey": "correlation-id-visible"
+            ]
+        )
+        let model = AppSessionModel(cloudFileProviders: [.oneDrive: oneDrive])
+
+        do {
+            _ = try await model.refreshCloudFileItems(provider: .oneDrive)
+            XCTFail("Expected OneDrive refresh to fail")
+        } catch {
+            let message = model.cloudFileState.label
+
+            XCTAssertTrue(message.contains("OneDrive 登录失败"))
+            XCTAssertTrue(message.contains("MSALErrorDomain -34018"))
+            XCTAssertTrue(message.contains("MSALInternalErrorCodeKey=-34018"))
+            XCTAssertTrue(message.contains("MSALCorrelationIDKey=correlation-id-visible"))
+            XCTAssertFalse(message.contains("auth-code-secret"))
+            XCTAssertFalse(message.contains("state-secret"))
+            XCTAssertTrue(message.contains("code=<redacted>"))
+            XCTAssertTrue(message.contains("state=<redacted>"))
+        }
+    }
+
     func testAppInfoPlistRegistersOneDriveMSALRedirectScheme() throws {
         let plistURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -1278,6 +1308,31 @@ final class VaultSessionModelTests: XCTestCase {
         let querySchemes = plist["LSApplicationQueriesSchemes"] as? [String] ?? []
         XCTAssertTrue(querySchemes.contains("msauthv2"))
         XCTAssertTrue(querySchemes.contains("msauthv3"))
+    }
+
+    func testOneDriveMSALUsesRegisteredAppPrivateKeychainGroup() throws {
+        XCTAssertEqual(
+            DefaultAppOneDriveMSALAuthenticationService.keychainSharingGroup,
+            "com.monica-pass.monica"
+        )
+
+        let entitlementsURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("App/MonicaApp/MonicaApp.entitlements")
+        let data = try Data(contentsOf: entitlementsURL)
+        guard let entitlements = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) as? [String: Any] else {
+            XCTFail("MonicaApp.entitlements should be readable.")
+            return
+        }
+
+        let accessGroups = entitlements["keychain-access-groups"] as? [String] ?? []
+        XCTAssertTrue(accessGroups.contains("$(AppIdentifierPrefix)com.monica-pass.monica"))
     }
 
     func testSecurityCenterSummarizesWeakAndReusedPasswordsWithoutLeakingSecrets() {
