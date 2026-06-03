@@ -397,15 +397,18 @@ public struct OneDriveCloudFileConfiguration: Sendable, Equatable {
     public let clientID: String
     public let redirectURI: URL
     public let scopes: [String]
+    public let graphBaseURL: URL
 
     public init(
         clientID: String,
         redirectURI: URL,
-        scopes: [String] = ["Files.ReadWrite.AppFolder"]
+        scopes: [String] = ["Files.ReadWrite.AppFolder"],
+        graphBaseURL: URL = URL(string: "https://graph.microsoft.com/v1.0")!
     ) {
         self.clientID = clientID
         self.redirectURI = redirectURI
         self.scopes = scopes
+        self.graphBaseURL = graphBaseURL
     }
 
     public static let monicaProduction = OneDriveCloudFileConfiguration(
@@ -422,32 +425,339 @@ public struct OneDriveCloudFileConfiguration: Sendable, Equatable {
     }
 }
 
+public protocol OneDriveAccessTokenProvider: Sendable {
+    func accessToken() async throws -> String
+}
+
+public struct EmptyOneDriveAccessTokenProvider: OneDriveAccessTokenProvider {
+    public init() {}
+
+    public func accessToken() async throws -> String {
+        throw CloudFileProviderError.authenticationRequired(provider: .oneDrive)
+    }
+}
+
+public struct OneDriveGraphRequest: Sendable, Equatable {
+    public let method: String
+    public let url: URL
+    public let headers: [String: String]
+    public let body: Data?
+
+    public init(
+        method: String,
+        url: URL,
+        headers: [String: String] = [:],
+        body: Data? = nil
+    ) {
+        self.method = method
+        self.url = url
+        self.headers = headers
+        self.body = body
+    }
+}
+
+public struct OneDriveGraphResponse: Sendable, Equatable {
+    public let statusCode: Int
+    public let headers: [String: String]
+    public let body: Data
+
+    public init(statusCode: Int, headers: [String: String] = [:], body: Data) {
+        self.statusCode = statusCode
+        self.headers = headers
+        self.body = body
+    }
+}
+
+public protocol OneDriveGraphTransport: Sendable {
+    func send(_ request: OneDriveGraphRequest) async throws -> OneDriveGraphResponse
+}
+
 public struct OneDriveCloudFileProvider: CloudFileProvider {
     public let kind: CloudFileProviderKind = .oneDrive
     public let configuration: OneDriveCloudFileConfiguration
+    private let tokenProvider: any OneDriveAccessTokenProvider
+    private let graphTransport: any OneDriveGraphTransport
 
-    public init(configuration: OneDriveCloudFileConfiguration = .monicaProduction) {
+    public init(
+        configuration: OneDriveCloudFileConfiguration = .monicaProduction,
+        tokenProvider: any OneDriveAccessTokenProvider = EmptyOneDriveAccessTokenProvider(),
+        graphTransport: any OneDriveGraphTransport = URLSessionOneDriveGraphTransport()
+    ) {
         self.configuration = configuration
+        self.tokenProvider = tokenProvider
+        self.graphTransport = graphTransport
     }
 
     public func connectionState() async throws -> CloudFileConnectionState {
-        .disconnected
+        do {
+            _ = try await tokenProvider.accessToken()
+            return .connected(accountLabel: "OneDrive")
+        } catch let error as CloudFileProviderError {
+            if case .authenticationRequired = error {
+                return .disconnected
+            }
+            throw error
+        }
     }
 
     public func listFiles() async throws -> [CloudFileItem] {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        let response = try await sendGraphRequest(
+            method: "GET",
+            path: "/me/drive/special/approot/children",
+            accept: "application/json"
+        )
+        try validateSuccess(response, allowedStatusCodes: [200])
+        return try OneDriveDriveItemListResponse(response.body)
+            .items
+            .filter { $0.isFile }
+            .map { $0.cloudFileItem }
     }
 
     public func downloadFile(id: String) async throws -> CloudFileDownload {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        let metadata = try await loadDriveItem(id: id)
+        let response = try await sendGraphRequest(
+            method: "GET",
+            path: "/me/drive/items/\(Self.percentEncodePathComponent(id))/content",
+            accept: "application/octet-stream"
+        )
+        try validateSuccess(response, allowedStatusCodes: [200])
+        return CloudFileDownload(
+            item: metadata.cloudFileItem,
+            data: response.body,
+            sha256: response.body.monicaSHA256Hex,
+            revision: metadata.revision
+        )
     }
 
     public func uploadFile(named fileName: String, data: Data) async throws -> CloudFileWriteReceipt {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        let response = try await sendGraphRequest(
+            method: "PUT",
+            path: "/me/drive/special/approot:/\(Self.percentEncodeGraphPath(fileName)):/content",
+            headers: ["Content-Type": "application/octet-stream"],
+            body: data
+        )
+        try validateSuccess(response, allowedStatusCodes: [200, 201])
+        let item = try OneDriveDriveItem(response.body)
+        return writeReceipt(from: item, data: data, fallbackFileName: fileName)
     }
 
     public func overwriteFile(id: String, data: Data, fileName: String, expectedRevision: String? = nil) async throws -> CloudFileWriteReceipt {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        var headers = ["Content-Type": "application/octet-stream"]
+        if let expectedRevision, !expectedRevision.isEmpty {
+            headers["If-Match"] = expectedRevision
+        }
+        let response = try await sendGraphRequest(
+            method: "PUT",
+            path: "/me/drive/items/\(Self.percentEncodePathComponent(id))/content",
+            headers: headers,
+            body: data
+        )
+        if response.statusCode == 412 {
+            throw CloudFileProviderError.conflict(provider: kind)
+        }
+        try validateSuccess(response, allowedStatusCodes: [200, 201])
+        let item = try OneDriveDriveItem(response.body)
+        return writeReceipt(from: item, data: data, fallbackFileName: fileName)
+    }
+
+    private func loadDriveItem(id: String) async throws -> OneDriveDriveItem {
+        let response = try await sendGraphRequest(
+            method: "GET",
+            path: "/me/drive/items/\(Self.percentEncodePathComponent(id))",
+            accept: "application/json"
+        )
+        try validateSuccess(response, allowedStatusCodes: [200])
+        return try OneDriveDriveItem(response.body)
+    }
+
+    private func sendGraphRequest(
+        method: String,
+        path: String,
+        headers: [String: String] = [:],
+        accept: String? = nil,
+        body: Data? = nil
+    ) async throws -> OneDriveGraphResponse {
+        let token = try await tokenProvider.accessToken()
+        var requestHeaders = headers
+        requestHeaders["Authorization"] = "Bearer \(token)"
+        if let accept {
+            requestHeaders["Accept"] = accept
+        }
+        return try await graphTransport.send(
+            OneDriveGraphRequest(
+                method: method,
+                url: configuration.graphBaseURL.appendingGraphPath(path),
+                headers: requestHeaders,
+                body: body
+            )
+        )
+    }
+
+    private func validateSuccess(
+        _ response: OneDriveGraphResponse,
+        allowedStatusCodes: Set<Int>
+    ) throws {
+        if response.statusCode == 401 || response.statusCode == 403 {
+            throw CloudFileProviderError.authenticationRequired(provider: kind)
+        }
+        if response.statusCode == 404 {
+            throw CloudFileProviderError.itemNotFound(provider: kind)
+        }
+        if response.statusCode == 412 {
+            throw CloudFileProviderError.conflict(provider: kind)
+        }
+        guard allowedStatusCodes.contains(response.statusCode) else {
+            throw CloudFileProviderError.unsupportedOperation(provider: kind)
+        }
+    }
+
+    private func writeReceipt(
+        from item: OneDriveDriveItem,
+        data: Data,
+        fallbackFileName: String
+    ) -> CloudFileWriteReceipt {
+        CloudFileWriteReceipt(
+            provider: kind,
+            itemID: item.id,
+            name: item.name.isEmpty ? fallbackFileName : item.name,
+            byteCount: data.count,
+            sha256: data.monicaSHA256Hex,
+            revision: item.revision
+        )
+    }
+
+    private static func percentEncodeGraphPath(_ value: String) -> String {
+        value
+            .split(separator: "/")
+            .map { percentEncodePathComponent(String($0)) }
+            .joined(separator: "/")
+    }
+
+    private static func percentEncodePathComponent(_ value: String) -> String {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+}
+
+public final class URLSessionOneDriveGraphTransport: OneDriveGraphTransport, @unchecked Sendable {
+    private let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    public func send(_ request: OneDriveGraphRequest) async throws -> OneDriveGraphResponse {
+        var urlRequest = URLRequest(url: request.url)
+        urlRequest.httpMethod = request.method
+        urlRequest.httpBody = request.body
+        request.headers.forEach { key, value in
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        let (data, response) = try await session.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw CloudFileProviderError.unsupportedOperation(provider: .oneDrive)
+        }
+        var headers: [String: String] = [:]
+        httpResponse.allHeaderFields.forEach { key, value in
+            guard let key = key as? String else { return }
+            headers[key] = "\(value)"
+        }
+        return OneDriveGraphResponse(
+            statusCode: httpResponse.statusCode,
+            headers: headers,
+            body: data
+        )
+    }
+}
+
+private struct OneDriveDriveItemListResponse {
+    let items: [OneDriveDriveItem]
+
+    init(_ data: Data) throws {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let values = root["value"] as? [[String: Any]]
+        else {
+            throw CloudFileProviderError.unsupportedOperation(provider: .oneDrive)
+        }
+        self.items = try values.map(OneDriveDriveItem.init)
+    }
+}
+
+private struct OneDriveDriveItem {
+    let id: String
+    let name: String
+    let path: String
+    let byteCount: Int
+    let modifiedAt: Date?
+    let revision: String?
+    let isFile: Bool
+
+    init(_ data: Data) throws {
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw CloudFileProviderError.unsupportedOperation(provider: .oneDrive)
+        }
+        try self.init(json)
+    }
+
+    init(_ json: [String: Any]) throws {
+        guard let id = json["id"] as? String else {
+            throw CloudFileProviderError.unsupportedOperation(provider: .oneDrive)
+        }
+        let name = json["name"] as? String ?? ""
+        let parentPath = (json["parentReference"] as? [String: Any])?["path"] as? String ?? ""
+        self.id = id
+        self.name = name
+        self.path = Self.combinedPath(parentPath: parentPath, name: name)
+        self.byteCount = Self.intValue(json["size"])
+        self.modifiedAt = (json["lastModifiedDateTime"] as? String).flatMap(Self.dateValue)
+        self.revision = (json["eTag"] as? String) ?? (json["cTag"] as? String)
+        self.isFile = json["file"] != nil && json["folder"] == nil
+    }
+
+    var cloudFileItem: CloudFileItem {
+        CloudFileItem(
+            id: id,
+            name: name,
+            path: path,
+            byteCount: byteCount,
+            modifiedAt: modifiedAt,
+            sha256: nil,
+            revision: revision
+        )
+    }
+
+    private static func combinedPath(parentPath: String, name: String) -> String {
+        let trimmedParent = parentPath.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedParent.isEmpty else { return name }
+        if trimmedParent.hasSuffix("/") || trimmedParent.hasSuffix(":") {
+            return trimmedParent + name
+        }
+        return trimmedParent + "/" + name
+    }
+
+    private static func intValue(_ value: Any?) -> Int {
+        if let int = value as? Int {
+            return int
+        }
+        if let double = value as? Double {
+            return Int(double)
+        }
+        if let string = value as? String, let int = Int(string) {
+            return int
+        }
+        return 0
+    }
+
+    private static func dateValue(_ value: String) -> Date? {
+        ISO8601DateFormatter().date(from: value)
+    }
+}
+
+private extension URL {
+    func appendingGraphPath(_ path: String) -> URL {
+        let base = absoluteString.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        let suffix = path.hasPrefix("/") ? path : "/" + path
+        return URL(string: base + suffix) ?? self
     }
 }
 

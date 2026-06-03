@@ -34,6 +34,138 @@ import Foundation
     }
 }
 
+@Test func oneDriveGraphProviderListsDownloadsUploadsAndConditionallyOverwritesAppFolderFilesWithoutLeakingSecrets() async throws {
+    let tokenProvider = RecordingOneDriveAccessTokenProvider(token: "onedrive-access-token-secret")
+    let transport = RecordingOneDriveGraphTransport()
+    let provider = OneDriveCloudFileProvider(
+        tokenProvider: tokenProvider,
+        graphTransport: transport
+    )
+    transport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "value": [
+            {
+              "id": "remote-item-secret-id",
+              "name": "Mobile.kdbx",
+              "size": 25,
+              "eTag": "\\"etag-list-secret\\"",
+              "lastModifiedDateTime": "2026-06-03T14:00:00Z",
+              "parentReference": { "path": "/drive/special/approot:/MonicaPrivate" },
+              "file": {}
+            },
+            {
+              "id": "folder-secret-id",
+              "name": "Folder",
+              "size": 0,
+              "folder": {}
+            }
+          ]
+        }
+        """
+    )
+    transport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "id": "remote-item-secret-id",
+          "name": "Mobile.kdbx",
+          "size": 25,
+          "eTag": "\\"etag-download-secret\\"",
+          "parentReference": { "path": "/drive/special/approot:" },
+          "file": {}
+        }
+        """
+    )
+    transport.enqueue(statusCode: 200, bodyData: Data("downloaded-kdbx-secret".utf8))
+    transport.enqueue(
+        statusCode: 201,
+        body: """
+        {
+          "id": "uploaded-item-secret-id",
+          "name": "Upload.kdbx",
+          "size": 18,
+          "eTag": "\\"etag-upload-secret\\"",
+          "file": {}
+        }
+        """
+    )
+    transport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "id": "remote-item-secret-id",
+          "name": "Mobile.kdbx",
+          "size": 19,
+          "eTag": "\\"etag-overwrite-secret\\"",
+          "file": {}
+        }
+        """
+    )
+    transport.enqueue(statusCode: 412, body: "{}")
+
+    #expect(try await provider.connectionState() == .connected(accountLabel: "OneDrive"))
+    let listed = try await provider.listFiles()
+    let downloaded = try await provider.downloadFile(id: "remote-item-secret-id")
+    let uploadReceipt = try await provider.uploadFile(
+        named: "Upload.kdbx",
+        data: Data("uploaded-kdbx-secret".utf8)
+    )
+    let overwriteReceipt = try await provider.overwriteFile(
+        id: "remote-item-secret-id",
+        data: Data("overwritten-kdbx-secret".utf8),
+        fileName: "Mobile.kdbx",
+        expectedRevision: "\"etag-download-secret\""
+    )
+    await #expect(throws: CloudFileProviderError.conflict(provider: .oneDrive)) {
+        _ = try await provider.overwriteFile(
+            id: "remote-item-secret-id",
+            data: Data("conflicting-kdbx-secret".utf8),
+            fileName: "Mobile.kdbx",
+            expectedRevision: "\"stale-etag-secret\""
+        )
+    }
+
+    #expect(listed.map(\.name) == ["Mobile.kdbx"])
+    #expect(listed.first?.revision == "\"etag-list-secret\"")
+    #expect(downloaded.data == Data("downloaded-kdbx-secret".utf8))
+    #expect(downloaded.revision == "\"etag-download-secret\"")
+    #expect(uploadReceipt.itemID == "uploaded-item-secret-id")
+    #expect(uploadReceipt.revision == "\"etag-upload-secret\"")
+    #expect(overwriteReceipt.revision == "\"etag-overwrite-secret\"")
+    #expect(transport.requests.map(\.method) == ["GET", "GET", "GET", "PUT", "PUT", "PUT"])
+    #expect(transport.requests[0].url.absoluteString == "https://graph.microsoft.com/v1.0/me/drive/special/approot/children")
+    #expect(transport.requests[1].url.absoluteString == "https://graph.microsoft.com/v1.0/me/drive/items/remote-item-secret-id")
+    #expect(transport.requests[2].url.absoluteString == "https://graph.microsoft.com/v1.0/me/drive/items/remote-item-secret-id/content")
+    #expect(transport.requests[3].url.absoluteString == "https://graph.microsoft.com/v1.0/me/drive/special/approot:/Upload.kdbx:/content")
+    #expect(transport.requests[4].headers["If-Match"] == "\"etag-download-secret\"")
+    #expect(transport.requests[5].headers["If-Match"] == "\"stale-etag-secret\"")
+    #expect(transport.requests.allSatisfy { $0.headers["Authorization"] == "Bearer onedrive-access-token-secret" })
+
+    let visibleText = [
+        listed.first?.redactedSummary ?? "",
+        downloaded.redactedSummary,
+        uploadReceipt.redactedSummary,
+        overwriteReceipt.redactedSummary
+    ].joined(separator: " ")
+    [
+        "onedrive-access-token-secret",
+        "remote-item-secret-id",
+        "uploaded-item-secret-id",
+        "etag-list-secret",
+        "etag-download-secret",
+        "etag-upload-secret",
+        "etag-overwrite-secret",
+        "MonicaPrivate",
+        "downloaded-kdbx-secret",
+        "uploaded-kdbx-secret",
+        "overwritten-kdbx-secret"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
 @Test func cloudFileProviderSummariesAvoidProviderSecretsAndRemoteIdentifiers() throws {
     let item = CloudFileItem(
         id: "remote-item-secret-id",
@@ -358,6 +490,45 @@ private final class RecordingWebDAVTransport: WebDAVTransport {
     }
 
     func send(_ request: WebDAVTransportRequest) async throws -> WebDAVTransportResponse {
+        requests.append(request)
+        return responses.removeFirst()
+    }
+}
+
+private final class RecordingOneDriveAccessTokenProvider: OneDriveAccessTokenProvider {
+    let token: String?
+
+    init(token: String?) {
+        self.token = token
+    }
+
+    func accessToken() async throws -> String {
+        guard let token else {
+            throw CloudFileProviderError.authenticationRequired(provider: .oneDrive)
+        }
+        return token
+    }
+}
+
+private final class RecordingOneDriveGraphTransport: OneDriveGraphTransport, @unchecked Sendable {
+    private(set) var requests: [OneDriveGraphRequest] = []
+    private var responses: [OneDriveGraphResponse] = []
+
+    func enqueue(statusCode: Int, body: String, headers: [String: String] = [:]) {
+        enqueue(statusCode: statusCode, bodyData: Data(body.utf8), headers: headers)
+    }
+
+    func enqueue(statusCode: Int, bodyData: Data, headers: [String: String] = [:]) {
+        responses.append(
+            OneDriveGraphResponse(
+                statusCode: statusCode,
+                headers: headers,
+                body: bodyData
+            )
+        )
+    }
+
+    func send(_ request: OneDriveGraphRequest) async throws -> OneDriveGraphResponse {
         requests.append(request)
         return responses.removeFirst()
     }
