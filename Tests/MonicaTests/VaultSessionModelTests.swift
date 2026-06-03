@@ -975,6 +975,41 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(rows[6].value, "就绪")
     }
 
+    func testCloudFileEnvironmentConfiguresOneDriveAndDefersGoogleDrive() throws {
+        let environment = MonicaAppEnvironment()
+
+        XCTAssertEqual(environment.oneDriveConfiguration.clientID, "2aaf8c2c-b817-4085-9517-586a4a113dfc")
+        XCTAssertEqual(environment.oneDriveConfiguration.redirectURI.absoluteString, "msauth.com.monica-pass.monica://auth")
+        XCTAssertEqual(environment.productionCloudFileProviders.keys.sorted(by: { $0.rawValue < $1.rawValue }), [.oneDrive])
+        XCTAssertNil(environment.productionCloudFileProviders[.googleDrive])
+        XCTAssertFalse(environment.oneDriveConfiguration.redactedSummary.contains(environment.oneDriveConfiguration.clientID))
+    }
+
+    func testAppInfoPlistRegistersOneDriveMSALRedirectScheme() throws {
+        let plistURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("App/MonicaApp/Info.plist")
+        let data = try Data(contentsOf: plistURL)
+        guard let plist = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) as? [String: Any],
+              let urlTypes = plist["CFBundleURLTypes"] as? [[String: Any]]
+        else {
+            XCTFail("Info.plist should include URL types.")
+            return
+        }
+
+        let schemes = urlTypes
+            .compactMap { $0["CFBundleURLSchemes"] as? [String] }
+            .flatMap { $0 }
+
+        XCTAssertTrue(schemes.contains("msauth.com.monica-pass.monica"))
+    }
+
     func testSecurityCenterSummarizesWeakAndReusedPasswordsWithoutLeakingSecrets() {
         let model = AppSessionModel()
         model.loginEntries = [

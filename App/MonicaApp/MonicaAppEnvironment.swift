@@ -2,6 +2,7 @@ import Foundation
 import AuthenticationServices
 import MonicaSecurity
 import MonicaStorage
+import MonicaSync
 import Security
 
 struct MonicaAppEnvironment: Sendable {
@@ -9,17 +10,26 @@ struct MonicaAppEnvironment: Sendable {
     let minimumIOSVersion: String
     let firstBackupProvider: String
     let localDeviceIdentifier: String
+    let oneDriveConfiguration: OneDriveCloudFileConfiguration
 
     init(
         appGroupIdentifier: String = "group.monica-pass.monica",
         minimumIOSVersion: String = "17.0",
         firstBackupProvider: String = "WebDAV",
-        localDeviceIdentifier: String = "ios-local-device"
+        localDeviceIdentifier: String = "ios-local-device",
+        oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction
     ) {
         self.appGroupIdentifier = appGroupIdentifier
         self.minimumIOSVersion = minimumIOSVersion
         self.firstBackupProvider = firstBackupProvider
         self.localDeviceIdentifier = localDeviceIdentifier
+        self.oneDriveConfiguration = oneDriveConfiguration
+    }
+
+    var productionCloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] {
+        [
+            .oneDrive: OneDriveCloudFileProvider(configuration: oneDriveConfiguration)
+        ]
     }
 }
 
@@ -266,6 +276,7 @@ extension AppSessionModel {
             return AppSessionModel(
                 vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
                 appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
+                cloudFileProviders: environment.productionCloudFileProviders,
                 plusResourceUnlockService: DefaultAppPlusResourceUnlockService()
             )
         }
@@ -292,6 +303,7 @@ extension AppSessionModel {
             appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
             biometricUnlockAuthorizer: DeviceBiometricUnlockAuthorizer(),
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
+            cloudFileProviders: environment.productionCloudFileProviders,
             autoFillIndexStore: indexStore,
             autoFillCredentialSecretStore: secretStore,
             autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(),

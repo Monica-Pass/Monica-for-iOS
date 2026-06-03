@@ -379,10 +379,42 @@ public protocol CloudFileProvider: Sendable {
     func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt
 }
 
+public struct OneDriveCloudFileConfiguration: Sendable, Equatable {
+    public let clientID: String
+    public let redirectURI: URL
+    public let scopes: [String]
+
+    public init(
+        clientID: String,
+        redirectURI: URL,
+        scopes: [String] = ["Files.ReadWrite.AppFolder"]
+    ) {
+        self.clientID = clientID
+        self.redirectURI = redirectURI
+        self.scopes = scopes
+    }
+
+    public static let monicaProduction = OneDriveCloudFileConfiguration(
+        clientID: "2aaf8c2c-b817-4085-9517-586a4a113dfc",
+        redirectURI: URL(string: "msauth.com.monica-pass.monica://auth")!
+    )
+
+    public var redirectScheme: String {
+        redirectURI.scheme ?? ""
+    }
+
+    public var redactedSummary: String {
+        "OneDrive MSAL \(redirectScheme)"
+    }
+}
+
 public struct OneDriveCloudFileProvider: CloudFileProvider {
     public let kind: CloudFileProviderKind = .oneDrive
+    public let configuration: OneDriveCloudFileConfiguration
 
-    public init() {}
+    public init(configuration: OneDriveCloudFileConfiguration = .monicaProduction) {
+        self.configuration = configuration
+    }
 
     public func connectionState() async throws -> CloudFileConnectionState {
         .disconnected
@@ -415,19 +447,19 @@ public struct GoogleDriveCloudFileProvider: CloudFileProvider {
     }
 
     public func listFiles() async throws -> [CloudFileItem] {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 
     public func downloadFile(id: String) async throws -> CloudFileDownload {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 
     public func uploadFile(named fileName: String, data: Data) async throws -> CloudFileWriteReceipt {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 
     public func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt {
-        throw CloudFileProviderError.authenticationRequired(provider: kind)
+        throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 }
 

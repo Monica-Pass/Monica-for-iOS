@@ -13,6 +13,27 @@ import Foundation
     #expect(CloudFileProviderKind.googleDrive.defaultBackupFileName == "monica-google-drive.mdbx")
 }
 
+@Test func oneDriveConfigurationCarriesMSALClientAndRedirectWithoutLeakingSecrets() throws {
+    let configuration = OneDriveCloudFileConfiguration.monicaProduction
+
+    #expect(configuration.clientID == "2aaf8c2c-b817-4085-9517-586a4a113dfc")
+    #expect(configuration.redirectURI == URL(string: "msauth.com.monica-pass.monica://auth"))
+    #expect(configuration.redirectScheme == "msauth.com.monica-pass.monica")
+    #expect(configuration.redactedSummary == "OneDrive MSAL msauth.com.monica-pass.monica")
+    #expect(!configuration.redactedSummary.contains(configuration.clientID))
+    #expect(!configuration.redactedSummary.contains(configuration.redirectURI.absoluteString))
+    #expect(!configuration.redactedSummary.contains("://auth"))
+}
+
+@Test func googleDriveProviderIsDeferredUntilExplicitlyEnabled() async throws {
+    let provider = GoogleDriveCloudFileProvider()
+
+    #expect(try await provider.connectionState() == .disconnected)
+    await #expect(throws: CloudFileProviderError.unsupportedOperation(provider: .googleDrive)) {
+        _ = try await provider.listFiles()
+    }
+}
+
 @Test func cloudFileProviderSummariesAvoidProviderSecretsAndRemoteIdentifiers() throws {
     let item = CloudFileItem(
         id: "remote-item-secret-id",
