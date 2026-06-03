@@ -766,6 +766,30 @@ public struct DefaultKeePassKdbx4PayloadSectionWriter: KeePassKdbx4PayloadSectio
     }
 }
 
+public protocol KeePassKdbxFileAssembler: Sendable {
+    func assemble(headerBytes: Data, payloadSection: Data) throws -> Data
+}
+
+public struct DefaultKeePassKdbxFileAssembler: KeePassKdbxFileAssembler {
+    public init() {}
+
+    public func assemble(headerBytes: Data, payloadSection: Data) throws -> Data {
+        guard !payloadSection.isEmpty else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX payload section 缺失；请确认写回数据完整。"
+            )
+        }
+        _ = try KeePassKdbxPayloadEnvelope.parse(headerBytes)
+
+        var database = Data()
+        database.reserveCapacity(headerBytes.count + payloadSection.count)
+        database.append(headerBytes)
+        database.append(payloadSection)
+        return database
+    }
+}
+
 public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecoder {
     public init() {}
 

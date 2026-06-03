@@ -856,6 +856,111 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbx4FileAssemblerBuildsReadableDatabaseWithExistingHeaderWithoutLeakingSecrets() throws {
+    let masterSeed = Data(repeating: 0xB8, count: 32)
+    let encryptionIV = Data(repeating: 0xC8, count: 16)
+    let transformSeed = Data(repeating: 0xA8, count: 32)
+    let password = "assembled-password-secret"
+    let xmlPayload = Data("""
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>assembly-root</UUID>
+          <Name>Assembly Root</Name>
+          <Entry>
+            <UUID>assembly-entry</UUID>
+            <String><Key>Title</Key><Value>Assembled Login</Value></String>
+            <String><Key>UserName</Key><Value>writer</Value></String>
+            <String><Key>Password</Key><Value>assembled password</Value></String>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """.utf8)
+    let header = makeKdbx4Header(
+        cipherID: Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF]),
+        compressionFlags: Data([0x00, 0x00, 0x00, 0x00]),
+        masterSeed: masterSeed,
+        encryptionIV: encryptionIV,
+        innerRandomStreamKey: Data(repeating: 0xE8, count: 32),
+        innerRandomStreamID: 2,
+        kdfParameters: makeKdbxVariantDictionary(entries: [
+            kdbxVariantByteArray(
+                key: "$UUID",
+                value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])
+            ),
+            kdbxVariantByteArray(key: "S", value: transformSeed),
+            kdbxVariantUInt64(key: "R", value: 1)
+        ])
+    )
+    let derivedKey = try DefaultKeePassKdbxKeyDeriver().deriveKey(
+        from: try KeePassKdbxDecryptInputContext.build(
+            database: header + Data("placeholder".utf8),
+            sourceName: "assembled.kdbx",
+            credentialCandidate: KeePassCredentialCandidate(
+                label: "password-only",
+                password: password,
+                keyMaterial: nil
+            )
+        )
+    )
+    let masterKey = try DefaultKeePassKdbxMasterKeyComposer().composeMasterKey(
+        from: derivedKey,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: encryptionIV
+        )
+    )
+    let encryptedPayload = try DefaultKeePassKdbxPayloadCipher().encryptPayload(
+        xmlPayload,
+        cipher: .aes256,
+        masterKey: masterKey,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: encryptionIV
+        )
+    )
+    let payloadSection = try DefaultKeePassKdbx4PayloadSectionWriter().writePayloadSection(
+        encryptedPayloadBlocks: [encryptedPayload],
+        headerBytes: header,
+        masterSeed: masterSeed,
+        derivedKey: derivedKey
+    )
+
+    let database = try DefaultKeePassKdbxFileAssembler().assemble(
+        headerBytes: header,
+        payloadSection: payloadSection
+    )
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(database)
+    let snapshot = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: database,
+        sourceName: "assembled.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(envelope.headerBytes == header)
+    #expect(envelope.encryptedPayload == payloadSection)
+    #expect(snapshot.entries.first?.title == "Assembled Login")
+    #expect(snapshot.entries.first?.username == "writer")
+    #expect(snapshot.entries.first?.decodedPassword == "assembled password")
+    #expect(!database.description.contains(password))
+    #expect(!database.description.contains("assembled password"))
+    #expect(!database.description.contains(xmlPayload.map { String(format: "%02x", $0) }.joined()))
+
+    do {
+        _ = try DefaultKeePassKdbxFileAssembler().assemble(
+            headerBytes: Data("not-a-kdbx-header-secret".utf8),
+            payloadSection: payloadSection
+        )
+        Issue.record("Expected invalid KDBX header to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(!error.message.contains("not-a-kdbx-header-secret"))
+        #expect(!error.message.contains("assembled password"))
+    }
+}
+
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
