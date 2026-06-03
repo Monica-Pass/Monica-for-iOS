@@ -3595,6 +3595,7 @@ public struct KeePassKdbx4WritebackRequest: Sendable, Equatable {
     public let compression: KeePassKdbxCompressionAlgorithm
     public let cryptoInputs: KeePassKdbxPayloadCryptoInputs
     public let kdfParameters: KeePassKdbxKdfParameters
+    public let existingHeaderBytes: Data?
 
     public init(
         snapshot: KeePassReadOnlySnapshot,
@@ -3602,7 +3603,8 @@ public struct KeePassKdbx4WritebackRequest: Sendable, Equatable {
         cipher: KeePassKdbxCipherAlgorithm,
         compression: KeePassKdbxCompressionAlgorithm,
         cryptoInputs: KeePassKdbxPayloadCryptoInputs,
-        kdfParameters: KeePassKdbxKdfParameters
+        kdfParameters: KeePassKdbxKdfParameters,
+        existingHeaderBytes: Data? = nil
     ) {
         self.snapshot = snapshot
         self.credentials = credentials
@@ -3610,6 +3612,7 @@ public struct KeePassKdbx4WritebackRequest: Sendable, Equatable {
         self.compression = compression
         self.cryptoInputs = cryptoInputs
         self.kdfParameters = kdfParameters
+        self.existingHeaderBytes = existingHeaderBytes
     }
 }
 
@@ -3652,6 +3655,7 @@ public struct KeePassKdbx3WritebackRequest: Sendable, Equatable {
     public let compression: KeePassKdbxCompressionAlgorithm
     public let cryptoInputs: KeePassKdbxPayloadCryptoInputs
     public let kdfParameters: KeePassKdbxKdfParameters
+    public let existingHeaderBytes: Data?
 
     public init(
         snapshot: KeePassReadOnlySnapshot,
@@ -3659,7 +3663,8 @@ public struct KeePassKdbx3WritebackRequest: Sendable, Equatable {
         cipher: KeePassKdbxCipherAlgorithm,
         compression: KeePassKdbxCompressionAlgorithm,
         cryptoInputs: KeePassKdbxPayloadCryptoInputs,
-        kdfParameters: KeePassKdbxKdfParameters
+        kdfParameters: KeePassKdbxKdfParameters,
+        existingHeaderBytes: Data? = nil
     ) {
         self.snapshot = snapshot
         self.credentials = credentials
@@ -3667,6 +3672,7 @@ public struct KeePassKdbx3WritebackRequest: Sendable, Equatable {
         self.compression = compression
         self.cryptoInputs = cryptoInputs
         self.kdfParameters = kdfParameters
+        self.existingHeaderBytes = existingHeaderBytes
     }
 }
 
@@ -3734,12 +3740,18 @@ public struct DefaultKeePassKdbx3WritebackCoordinator: KeePassKdbx3WritebackCoor
     }
 
     public func writeDatabase(_ request: KeePassKdbx3WritebackRequest) throws -> KeePassKdbx3WritebackResult {
-        let headerBytes = try headerWriter.writeHeader(
-            cipher: request.cipher,
-            compression: request.compression,
-            cryptoInputs: request.cryptoInputs,
-            kdfParameters: request.kdfParameters
-        )
+        let headerBytes: Data
+        if let existingHeaderBytes = request.existingHeaderBytes {
+            try validateExistingHeaderBytes(existingHeaderBytes, expectedVersion: .kdbx3)
+            headerBytes = existingHeaderBytes
+        } else {
+            headerBytes = try headerWriter.writeHeader(
+                cipher: request.cipher,
+                compression: request.compression,
+                cryptoInputs: request.cryptoInputs,
+                kdfParameters: request.kdfParameters
+            )
+        }
         let xmlPayloadWriter = xmlPayloadWriter ?? KeePassXMLPayloadWriter(
             protectedValueMode: .encryptProtectedValues(request.cryptoInputs),
             binaryMode: .inlineMetaBinaries
@@ -3818,6 +3830,21 @@ public struct DefaultKeePassKdbx3WritebackCoordinator: KeePassKdbx3WritebackCoor
         }
         return candidate
     }
+
+    private func validateExistingHeaderBytes(
+        _ headerBytes: Data,
+        expectedVersion: KeePassKdbxFormatVersion
+    ) throws {
+        let envelope = try KeePassKdbxPayloadEnvelope.parse(headerBytes)
+        guard envelope.headerSummary.formatVersion == expectedVersion,
+              envelope.headerBytes == headerBytes,
+              envelope.encryptedPayload.isEmpty else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX 原始 header 无法复用；请确认文件未损坏。"
+            )
+        }
+    }
 }
 
 public protocol KeePassKdbx4WritebackCoordinator: Sendable {
@@ -3855,12 +3882,18 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
     }
 
     public func writeDatabase(_ request: KeePassKdbx4WritebackRequest) throws -> KeePassKdbx4WritebackResult {
-        let headerBytes = try headerWriter.writeHeader(
-            cipher: request.cipher,
-            compression: request.compression,
-            cryptoInputs: request.cryptoInputs,
-            kdfParameters: request.kdfParameters
-        )
+        let headerBytes: Data
+        if let existingHeaderBytes = request.existingHeaderBytes {
+            try validateExistingHeaderBytes(existingHeaderBytes, expectedVersion: .kdbx4)
+            headerBytes = existingHeaderBytes
+        } else {
+            headerBytes = try headerWriter.writeHeader(
+                cipher: request.cipher,
+                compression: request.compression,
+                cryptoInputs: request.cryptoInputs,
+                kdfParameters: request.kdfParameters
+            )
+        }
         let xmlPayloadWriter = xmlPayloadWriter ?? KeePassXMLPayloadWriter(
             protectedValueMode: .encryptProtectedValues(request.cryptoInputs),
             binaryMode: .externalReferences
@@ -3956,6 +3989,21 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
             throw KeePassOperationError(
                 code: .formatUnsupported,
                 message: "未知 KDBX compression writeback 尚未接入"
+            )
+        }
+    }
+
+    private func validateExistingHeaderBytes(
+        _ headerBytes: Data,
+        expectedVersion: KeePassKdbxFormatVersion
+    ) throws {
+        let envelope = try KeePassKdbxPayloadEnvelope.parse(headerBytes)
+        guard envelope.headerSummary.formatVersion == expectedVersion,
+              envelope.headerBytes == headerBytes,
+              envelope.encryptedPayload.isEmpty else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX 原始 header 无法复用；请确认文件未损坏。"
             )
         }
     }

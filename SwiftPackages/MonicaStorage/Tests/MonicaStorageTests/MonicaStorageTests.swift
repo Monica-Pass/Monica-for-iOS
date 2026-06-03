@@ -1227,6 +1227,80 @@ import MonicaStorage
     #expect(!result.database.description.contains("coordinator decoded password"))
 }
 
+@Test func keepPassKdbx4WritebackCoordinatorReusesExistingHeaderBytesWithoutLeakingSecrets() throws {
+    let password = "existing-header-writeback-password-secret"
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xB1, count: 32),
+        encryptionIV: Data(repeating: 0xB2, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xB3, count: 64),
+        innerRandomStreamID: 3
+    )
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .argon2id,
+        argon2: KeePassKdbxArgon2Parameters(
+            salt: Data(repeating: 0xB4, count: 32),
+            iterations: 1,
+            memoryBytes: 8 * 1024,
+            parallelism: 1,
+            version: 0x13
+        )
+    )
+    let existingHeaderBytes = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+        cipher: .aes256,
+        compression: .gzip,
+        cryptoInputs: cryptoInputs,
+        kdfParameters: kdfParameters
+    )
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "existing-header.kdbx",
+        headerSummary: nil,
+        groups: [
+            KeePassReadOnlyGroup(id: "root-group-uuid", title: "Root", path: "/", depth: 0)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-existing-header-uuid",
+                title: "Existing Header Login",
+                username: "header@example.com",
+                url: "https://header.example.com",
+                groupPath: "/",
+                groupID: "root-group-uuid",
+                notes: "existing header notes secret",
+                hasPassword: true,
+                decodedPassword: "existing header decoded password",
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: false
+            )
+        ]
+    )
+    let request = KeePassKdbx4WritebackRequest(
+        snapshot: snapshot,
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil),
+        cipher: .aes256,
+        compression: .gzip,
+        cryptoInputs: cryptoInputs,
+        kdfParameters: kdfParameters,
+        existingHeaderBytes: existingHeaderBytes
+    )
+
+    let result = try DefaultKeePassKdbx4WritebackCoordinator().writeDatabase(request)
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(result.database)
+    let reparsed = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: result.database,
+        sourceName: "existing-header.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(result.headerBytes == existingHeaderBytes)
+    #expect(envelope.headerBytes == existingHeaderBytes)
+    #expect(result.database.prefix(existingHeaderBytes.count) == existingHeaderBytes)
+    #expect(reparsed.entries.first?.decodedPassword == "existing header decoded password")
+    #expect(!result.displaySummary.contains(password))
+    #expect(!result.displaySummary.contains("existing header decoded password"))
+    #expect(!result.database.description.contains(password))
+}
+
 @Test func keepPassKdbx4WritebackCoordinatorProtectsValuesAndRoundTripsWithoutLeakingSecrets() throws {
     let password = "protected-writeback-password-secret"
     let attachmentSecret = Data("protected binary writeback secret".utf8)

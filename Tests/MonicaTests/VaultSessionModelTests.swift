@@ -4133,6 +4133,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(request.compression, .gzip)
         XCTAssertEqual(request.cryptoInputs, cryptoInputs)
         XCTAssertEqual(request.kdfParameters, kdfParameters)
+        XCTAssertEqual(request.existingHeaderBytes, try KeePassKdbxPayloadEnvelope.parse(sourceDatabase).headerBytes)
         XCTAssertEqual(result.database, expectedResult.database)
         XCTAssertEqual(
             writer.replacements,
@@ -4237,6 +4238,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(request.compression, .gzip)
         XCTAssertEqual(request.cryptoInputs, cryptoInputs)
         XCTAssertEqual(request.kdfParameters, kdfParameters)
+        XCTAssertEqual(request.existingHeaderBytes, try KeePassKdbxPayloadEnvelope.parse(sourceDatabase).headerBytes)
         XCTAssertTrue(kdbx4Coordinator.requests.isEmpty)
         XCTAssertEqual(result.database, expectedResult.database)
         XCTAssertEqual(
@@ -4347,6 +4349,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(request.compression, .gzip)
         XCTAssertEqual(request.cryptoInputs, cryptoInputs)
         XCTAssertEqual(request.kdfParameters, kdfParameters)
+        XCTAssertEqual(request.existingHeaderBytes, try KeePassKdbxPayloadEnvelope.parse(sourceDatabase).headerBytes)
         XCTAssertEqual(result.database, expectedResult.database)
         XCTAssertTrue(writer.replacements.isEmpty)
         XCTAssertEqual(oneDrive.overwrites.first?.itemID, "remote-kdbx-secret-id")

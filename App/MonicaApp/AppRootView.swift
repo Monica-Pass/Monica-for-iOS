@@ -8723,7 +8723,8 @@ final class AppSessionModel {
             cipher: parameters.cipher,
             compression: parameters.compression,
             cryptoInputs: parameters.cryptoInputs,
-            kdfParameters: parameters.kdfParameters
+            kdfParameters: parameters.kdfParameters,
+            existingHeaderBytes: parameters.envelope.headerBytes
         )
     }
 
@@ -8744,7 +8745,8 @@ final class AppSessionModel {
             cipher: parameters.cipher,
             compression: parameters.compression,
             cryptoInputs: parameters.cryptoInputs,
-            kdfParameters: parameters.kdfParameters
+            kdfParameters: parameters.kdfParameters,
+            existingHeaderBytes: envelope.headerBytes
         )
     }
 
