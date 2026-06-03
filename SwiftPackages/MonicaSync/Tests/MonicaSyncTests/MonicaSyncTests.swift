@@ -41,33 +41,42 @@ import Foundation
         path: "/Apps/Monica/private-folder/Mobile.mdbx",
         byteCount: 11,
         modifiedAt: Date(timeIntervalSince1970: 1_804_000_000),
-        sha256: "remote-sha-secret"
+        sha256: "remote-sha-secret",
+        revision: "remote-etag-secret"
     )
     let downloaded = CloudFileDownload(
         item: item,
         data: Data("remote-vault-secret-bytes".utf8),
-        sha256: "download-sha-secret"
+        sha256: "download-sha-secret",
+        revision: "download-etag-secret"
     )
     let receipt = CloudFileWriteReceipt(
         provider: .oneDrive,
         itemID: "uploaded-item-secret-id",
         name: "Mobile.mdbx",
         byteCount: 11,
-        sha256: "upload-sha-secret"
+        sha256: "upload-sha-secret",
+        revision: "write-etag-secret"
     )
 
     #expect(item.redactedSummary == "Mobile.mdbx 11 字节")
     #expect(downloaded.redactedSummary == "Mobile.mdbx 25 字节")
     #expect(receipt.redactedSummary == "OneDrive Mobile.mdbx 11 字节")
+    #expect(downloaded.revision == "download-etag-secret")
+    #expect(receipt.revision == "write-etag-secret")
 
     let visibleText = [item.redactedSummary, downloaded.redactedSummary, receipt.redactedSummary]
         .joined(separator: " ")
     #expect(!visibleText.contains("remote-item-secret-id"))
     #expect(!visibleText.contains("private-folder"))
     #expect(!visibleText.contains("remote-sha-secret"))
+    #expect(!visibleText.contains("remote-etag-secret"))
+    #expect(!visibleText.contains("download-etag-secret"))
     #expect(!visibleText.contains("remote-vault-secret-bytes"))
     #expect(!visibleText.contains("uploaded-item-secret-id"))
     #expect(!visibleText.contains("upload-sha-secret"))
+    #expect(!visibleText.contains("write-etag-secret"))
+    #expect(CloudFileProviderError.conflict(provider: .oneDrive).errorDescription == "OneDrive 远端文件已变化，请重新下载后再写回。")
 }
 
 @Test func bitwardenSyncSnapshotAndMutationSummariesAvoidSecrets() throws {

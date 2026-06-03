@@ -1094,6 +1094,7 @@ struct AppKeePassCloudFileSource: Sendable, Equatable {
     let provider: CloudFileProviderKind
     let itemID: String
     let fileName: String
+    let revision: String?
 }
 
 struct CSVExportDocument: FileDocument, Sendable {
@@ -6771,7 +6772,8 @@ final class AppSessionModel {
         keePassCloudFileSource = AppKeePassCloudFileSource(
             provider: kind,
             itemID: download.item.id,
-            fileName: fileName
+            fileName: fileName,
+            revision: download.revision
         )
         cloudFileRestorePreview = AppCloudFileRestorePreview(
             provider: kind,
@@ -7170,7 +7172,8 @@ final class AppSessionModel {
             let receipt = try await provider.overwriteFile(
                 id: source.itemID,
                 data: result.database,
-                fileName: source.fileName
+                fileName: source.fileName,
+                expectedRevision: source.revision
             )
             let fileName = sanitizedCloudFileName(receipt.name)
             keePassPendingDatabaseData = result.database
@@ -7179,7 +7182,8 @@ final class AppSessionModel {
             keePassCloudFileSource = AppKeePassCloudFileSource(
                 provider: source.provider,
                 itemID: source.itemID,
-                fileName: fileName
+                fileName: fileName,
+                revision: receipt.revision ?? source.revision
             )
             cloudFileState = .writeSucceeded(
                 provider: source.provider,

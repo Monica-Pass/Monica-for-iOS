@@ -305,6 +305,7 @@ public struct CloudFileItem: Sendable, Equatable, Identifiable {
     public let byteCount: Int
     public let modifiedAt: Date?
     public let sha256: String?
+    public let revision: String?
 
     public init(
         id: String,
@@ -312,7 +313,8 @@ public struct CloudFileItem: Sendable, Equatable, Identifiable {
         path: String,
         byteCount: Int,
         modifiedAt: Date? = nil,
-        sha256: String? = nil
+        sha256: String? = nil,
+        revision: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -320,6 +322,7 @@ public struct CloudFileItem: Sendable, Equatable, Identifiable {
         self.byteCount = byteCount
         self.modifiedAt = modifiedAt
         self.sha256 = sha256
+        self.revision = revision
     }
 
     public var redactedSummary: String {
@@ -331,11 +334,13 @@ public struct CloudFileDownload: Sendable, Equatable {
     public let item: CloudFileItem
     public let data: Data
     public let sha256: String
+    public let revision: String?
 
-    public init(item: CloudFileItem, data: Data, sha256: String? = nil) {
+    public init(item: CloudFileItem, data: Data, sha256: String? = nil, revision: String? = nil) {
         self.item = item
         self.data = data
         self.sha256 = sha256 ?? data.monicaSHA256Hex
+        self.revision = revision ?? item.revision
     }
 
     public var redactedSummary: String {
@@ -349,19 +354,22 @@ public struct CloudFileWriteReceipt: Sendable, Equatable {
     public let name: String
     public let byteCount: Int
     public let sha256: String
+    public let revision: String?
 
     public init(
         provider: CloudFileProviderKind,
         itemID: String,
         name: String,
         byteCount: Int,
-        sha256: String
+        sha256: String,
+        revision: String? = nil
     ) {
         self.provider = provider
         self.itemID = itemID
         self.name = name
         self.byteCount = byteCount
         self.sha256 = sha256
+        self.revision = revision
     }
 
     public var redactedSummary: String {
@@ -376,7 +384,13 @@ public protocol CloudFileProvider: Sendable {
     func listFiles() async throws -> [CloudFileItem]
     func downloadFile(id: String) async throws -> CloudFileDownload
     func uploadFile(named fileName: String, data: Data) async throws -> CloudFileWriteReceipt
-    func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt
+    func overwriteFile(id: String, data: Data, fileName: String, expectedRevision: String?) async throws -> CloudFileWriteReceipt
+}
+
+public extension CloudFileProvider {
+    func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt {
+        try await overwriteFile(id: id, data: data, fileName: fileName, expectedRevision: nil)
+    }
 }
 
 public struct OneDriveCloudFileConfiguration: Sendable, Equatable {
@@ -432,7 +446,7 @@ public struct OneDriveCloudFileProvider: CloudFileProvider {
         throw CloudFileProviderError.authenticationRequired(provider: kind)
     }
 
-    public func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt {
+    public func overwriteFile(id: String, data: Data, fileName: String, expectedRevision: String? = nil) async throws -> CloudFileWriteReceipt {
         throw CloudFileProviderError.authenticationRequired(provider: kind)
     }
 }
@@ -458,7 +472,7 @@ public struct GoogleDriveCloudFileProvider: CloudFileProvider {
         throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 
-    public func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt {
+    public func overwriteFile(id: String, data: Data, fileName: String, expectedRevision: String? = nil) async throws -> CloudFileWriteReceipt {
         throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 }
@@ -467,6 +481,7 @@ public enum CloudFileProviderError: Error, Sendable, Equatable, LocalizedError {
     case authenticationRequired(provider: CloudFileProviderKind)
     case itemNotFound(provider: CloudFileProviderKind)
     case unsupportedOperation(provider: CloudFileProviderKind)
+    case conflict(provider: CloudFileProviderKind)
 
     public var errorDescription: String? {
         switch self {
@@ -476,6 +491,8 @@ public enum CloudFileProviderError: Error, Sendable, Equatable, LocalizedError {
             "\(provider.displayName) 未找到远端文件。"
         case .unsupportedOperation(let provider):
             "\(provider.displayName) 当前操作尚未接入。"
+        case .conflict(let provider):
+            "\(provider.displayName) 远端文件已变化，请重新下载后再写回。"
         }
     }
 }
