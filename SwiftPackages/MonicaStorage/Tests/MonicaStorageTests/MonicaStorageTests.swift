@@ -4047,6 +4047,39 @@ import MonicaStorage
     #expect(!LocalAttachmentContentCryptoError.authenticationFailed.localizedDescription.contains("secret"))
 }
 
+@Test func androidWrappedAttachmentContentKeyUnwrapperOpensMdkWrappedCekWithoutLeakingSecrets() throws {
+    let cek = Data((0..<32).map(UInt8.init))
+    let mdk = Data((100..<132).map(UInt8.init))
+    let nonceData = Data((40..<52).map(UInt8.init))
+    let base64Cek = cek.base64EncodedString()
+    let sealedBox = try AES.GCM.seal(
+        Data(base64Cek.utf8),
+        using: SymmetricKey(data: mdk),
+        nonce: try AES.GCM.Nonce(data: nonceData)
+    )
+    let wrappedPayload = try #require(sealedBox.combined)
+    let wrapped = "MDK|" + wrappedPayload.base64EncodedString()
+
+    let unwrapped = try AndroidWrappedAttachmentContentKeyUnwrapper.unwrap(
+        wrapped,
+        using: .mdk(mdk)
+    )
+
+    #expect(unwrapped == cek)
+
+    var corruptedPayload = wrappedPayload
+    corruptedPayload[corruptedPayload.count - 1] ^= 0x01
+    let corruptedWrapped = "MDK|" + corruptedPayload.base64EncodedString()
+    #expect(throws: LocalAttachmentContentCryptoError.authenticationFailed) {
+        _ = try AndroidWrappedAttachmentContentKeyUnwrapper.unwrap(
+            corruptedWrapped,
+            using: .mdk(mdk)
+        )
+    }
+    #expect(!LocalAttachmentContentCryptoError.authenticationFailed.localizedDescription.contains(base64Cek))
+    #expect(!LocalAttachmentContentCryptoError.authenticationFailed.localizedDescription.contains(mdk.map { String(format: "%02x", $0) }.joined()))
+}
+
 @Test func encryptedAutoFillIndexStoreSavesAndLoadsEnvelope() throws {
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent(UUID().uuidString, isDirectory: true)

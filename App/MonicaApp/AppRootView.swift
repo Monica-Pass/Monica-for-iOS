@@ -1373,6 +1373,7 @@ final class AppSessionModel {
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
+    private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
     private var activeVaultSession: LocalVaultSession?
     private var activeEntryRepository: LocalVaultEntryRepository?
@@ -1403,6 +1404,7 @@ final class AppSessionModel {
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
+        androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
         passwordGenerator: @escaping () throws -> String = {
             try PasswordGenerator.generate()
@@ -1429,6 +1431,7 @@ final class AppSessionModel {
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
+        self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
         self.autoLockPolicy = autoLockPolicy
         self.notificationPermissionState = notificationPermissionStatusProvider()
@@ -1747,6 +1750,22 @@ final class AppSessionModel {
         }
     }
 
+    private func resolveAttachmentContentEncryptionKey(_ entry: LocalAttachmentMetadata) throws -> Data {
+        if let attachmentContentEncryptionKeyProvider {
+            return try attachmentContentEncryptionKeyProvider(entry)
+        }
+        guard let wrappedContentEncryptionKey = entry.wrappedContentEncryptionKey,
+              !wrappedContentEncryptionKey.isEmpty,
+              let androidAttachmentWrappingKeyProvider
+        else {
+            throw AppAttachmentPreviewError.contentEncryptionKeyUnavailable
+        }
+        return try AndroidWrappedAttachmentContentKeyUnwrapper.unwrap(
+            wrappedContentEncryptionKey,
+            using: try androidAttachmentWrappingKeyProvider(entry)
+        )
+    }
+
     func replaceAttachmentContent(
         _ entry: LocalAttachmentMetadata,
         plaintext: Data,
@@ -1762,10 +1781,7 @@ final class AppSessionModel {
             else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            guard let attachmentContentEncryptionKeyProvider else {
-                throw AppAttachmentPreviewError.contentEncryptionKeyUnavailable
-            }
-            let contentEncryptionKey = try attachmentContentEncryptionKeyProvider(entry)
+            let contentEncryptionKey = try resolveAttachmentContentEncryptionKey(entry)
             guard contentEncryptionKey.count == LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount else {
                 throw LocalAttachmentContentCryptoError.invalidContentEncryptionKeyLength
             }
@@ -1905,15 +1921,9 @@ final class AppSessionModel {
             }
         }
 
-        guard let attachmentContentEncryptionKeyProvider else {
-            let error = AppAttachmentPreviewError.contentEncryptionKeyUnavailable
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-
         let contentEncryptionKey: Data
         do {
-            contentEncryptionKey = try attachmentContentEncryptionKeyProvider(entry)
+            contentEncryptionKey = try resolveAttachmentContentEncryptionKey(entry)
         } catch {
             let previewError = AppAttachmentPreviewError.contentEncryptionKeyUnavailable
             entryOperationState = .failed(previewError.localizedDescription)

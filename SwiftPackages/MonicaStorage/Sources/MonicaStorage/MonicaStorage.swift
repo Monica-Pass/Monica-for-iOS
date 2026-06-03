@@ -3856,6 +3856,7 @@ public enum LocalAttachmentContentCryptoError: Error, Sendable, Equatable, Local
     case invalidContentEncryptionKeyLength
     case invalidEncryptedBlob
     case authenticationFailed
+    case unsupportedWrappedContentEncryptionKey
 
     public var errorDescription: String? {
         switch self {
@@ -3865,7 +3866,99 @@ public enum LocalAttachmentContentCryptoError: Error, Sendable, Equatable, Local
             return "附件密文格式无效。"
         case .authenticationFailed:
             return "附件解密认证失败。"
+        case .unsupportedWrappedContentEncryptionKey:
+            return "附件内容密钥包裹格式暂不支持。"
         }
+    }
+}
+
+public enum AndroidAttachmentContentWrappingKey: Sendable, Equatable {
+    case mdk(Data)
+    case legacyKey(Data)
+    case legacyMasterKeyDescription(String)
+
+    fileprivate var keyMaterial: Data {
+        switch self {
+        case .mdk(let data), .legacyKey(let data):
+            return data
+        case .legacyMasterKeyDescription(let description):
+            var bytes = Array(description.utf8)
+            if bytes.count < LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount {
+                bytes.append(
+                    contentsOf: Array(
+                        repeating: 0,
+                        count: LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount - bytes.count
+                    )
+                )
+            }
+            return Data(bytes.prefix(LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount))
+        }
+    }
+}
+
+public enum AndroidWrappedAttachmentContentKeyUnwrapper {
+    private static let mdkPrefix = "MDK|"
+    private static let v2Prefix = "V2|"
+
+    public static func unwrap(
+        _ wrappedContentEncryptionKey: String,
+        using wrappingKey: AndroidAttachmentContentWrappingKey
+    ) throws -> Data {
+        let trimmed = wrappedContentEncryptionKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw LocalAttachmentContentCryptoError.invalidEncryptedBlob
+        }
+        if trimmed.hasPrefix(v2Prefix) {
+            throw LocalAttachmentContentCryptoError.unsupportedWrappedContentEncryptionKey
+        }
+
+        let payloadBase64: String
+        if trimmed.hasPrefix(mdkPrefix) {
+            payloadBase64 = String(trimmed.dropFirst(mdkPrefix.count))
+        } else {
+            payloadBase64 = trimmed
+        }
+
+        let keyMaterial = wrappingKey.keyMaterial
+        guard keyMaterial.count == LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount else {
+            throw LocalAttachmentContentCryptoError.invalidContentEncryptionKeyLength
+        }
+        guard let combined = Data(base64Encoded: payloadBase64, options: [.ignoreUnknownCharacters]),
+              combined.count >= LocalAttachmentContentDecryptor.androidIVByteCount
+                + LocalAttachmentContentDecryptor.androidAuthenticationTagByteCount
+        else {
+            throw LocalAttachmentContentCryptoError.invalidEncryptedBlob
+        }
+
+        let nonceData = combined.prefix(LocalAttachmentContentDecryptor.androidIVByteCount)
+        let sealedPayload = combined.dropFirst(LocalAttachmentContentDecryptor.androidIVByteCount)
+        let ciphertext = sealedPayload.dropLast(LocalAttachmentContentDecryptor.androidAuthenticationTagByteCount)
+        let tag = sealedPayload.suffix(LocalAttachmentContentDecryptor.androidAuthenticationTagByteCount)
+
+        let decryptedBase64: Data
+        do {
+            let sealedBox = try AES.GCM.SealedBox(
+                nonce: AES.GCM.Nonce(data: nonceData),
+                ciphertext: Data(ciphertext),
+                tag: Data(tag)
+            )
+            decryptedBase64 = try AES.GCM.open(
+                sealedBox,
+                using: SymmetricKey(data: keyMaterial)
+            )
+        } catch is CryptoKitError {
+            throw LocalAttachmentContentCryptoError.authenticationFailed
+        } catch {
+            throw LocalAttachmentContentCryptoError.invalidEncryptedBlob
+        }
+
+        guard let base64String = String(data: decryptedBase64, encoding: .utf8),
+              let cek = Data(base64Encoded: base64String, options: [.ignoreUnknownCharacters]),
+              cek.count == LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount
+        else {
+            throw LocalAttachmentContentCryptoError.invalidContentEncryptionKeyLength
+        }
+        return cek
     }
 }
 

@@ -4634,6 +4634,79 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: previewURL.path))
     }
 
+    func testAttachmentQuickLookPreviewUnwrapsAndroidWrappedCekWithoutRawKeyProvider() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let cek = Data((0..<32).map(UInt8.init))
+        let mdk = Data((100..<132).map(UInt8.init))
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore,
+            androidAttachmentWrappingKeyProvider: { attachment in
+                XCTAssertEqual(attachment.id, "attachment-1")
+                return .mdk(mdk)
+            }
+        )
+        let nonceData = Data((120..<132).map(UInt8.init))
+        let plaintext = Data("wrapped cek quicklook plaintext".utf8)
+        let sealedBlob = try AES.GCM.seal(
+            plaintext,
+            using: SymmetricKey(data: cek),
+            nonce: try AES.GCM.Nonce(data: nonceData)
+        )
+        let encryptedBlob = try XCTUnwrap(sealedBlob.combined)
+        let wrappedCekPayload = try AES.GCM.seal(
+            Data(cek.base64EncodedString().utf8),
+            using: SymmetricKey(data: mdk),
+            nonce: try AES.GCM.Nonce(data: Data((40..<52).map(UInt8.init)))
+        )
+        let wrappedCekCombined = try XCTUnwrap(wrappedCekPayload.combined)
+        let wrappedCek = "MDK|" + wrappedCekCombined.base64EncodedString()
+
+        try unlockNewVault(model)
+        let project = try model.createVaultCategory(title: "Attachments")
+        let attachment = LocalAttachmentMetadata(
+            id: "attachment-1",
+            projectID: project.id,
+            entryID: "entry-1",
+            fileName: "contract.pdf",
+            mediaType: "application/pdf",
+            originalSize: Int64(plaintext.count),
+            storedSize: Int64(encryptedBlob.count),
+            contentHash: "sha256:wrapped-cek-secret-hash",
+            storageMode: "android-backup-encrypted-blob",
+            source: "android-backup-local",
+            downloadState: "downloaded",
+            wrappedContentEncryptionKey: wrappedCek,
+            localPath: "attachment-1.enc",
+            deleted: false
+        )
+        model.attachmentEntries = [attachment]
+        _ = try blobStore.saveEncryptedBlob(
+            encryptedBlob,
+            vaultID: "created-vault",
+            localPath: "attachment-1.enc"
+        )
+
+        try model.presentAttachmentQuickLookPreview(attachment)
+
+        let previewURL = try XCTUnwrap(model.attachmentQuickLookPreviewURL)
+        XCTAssertEqual(try Data(contentsOf: previewURL), plaintext)
+        XCTAssertEqual(previewURL.lastPathComponent, "contract.pdf")
+        [
+            "wrapped cek quicklook plaintext",
+            "sha256:wrapped-cek-secret-hash",
+            wrappedCek,
+            cek.base64EncodedString(),
+            mdk.map { String(format: "%02x", $0) }.joined()
+        ].forEach { secret in
+            XCTAssertFalse(model.entryOperationState.label.contains(secret))
+        }
+
+        model.dismissAttachmentQuickLookPreview()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: previewURL.path))
+    }
+
     func testAttachmentQuickLookPreviewAppendsRedactedContentTimelineEvent() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()
