@@ -1202,6 +1202,11 @@ protocol AppAppearancePreferenceStore: Sendable {
     func savePreferences(_ preferences: AppAppearancePreferences)
 }
 
+protocol AppPlusEntitlementStore: Sendable {
+    func loadIsResourceUnlocked() -> Bool
+    func saveIsResourceUnlocked(_ isUnlocked: Bool)
+}
+
 protocol BiometricUnlockAuthorizer: Sendable {
     func authenticate(reason: String) async throws
 }
@@ -1454,6 +1459,66 @@ final class MemoryAppAppearancePreferenceStore: AppAppearancePreferenceStore, @u
 
     func savePreferences(_ preferences: AppAppearancePreferences) {
         self.preferences = preferences
+    }
+}
+
+private struct AppPlusPersistedEntitlement: Codable, Equatable {
+    let source: String?
+
+    static let inactive = AppPlusPersistedEntitlement(source: nil)
+    static let resourceUnlock = AppPlusPersistedEntitlement(source: "resourceUnlock")
+
+    var isResourceUnlocked: Bool {
+        source == Self.resourceUnlock.source
+    }
+}
+
+final class UserDefaultsAppPlusEntitlementStore: AppPlusEntitlementStore, @unchecked Sendable {
+    private let userDefaults: UserDefaults
+    private let key = "monica.plusEntitlement"
+
+    init(userDefaults: UserDefaults = .standard) {
+        self.userDefaults = userDefaults
+    }
+
+    func loadIsResourceUnlocked() -> Bool {
+        guard let data = userDefaults.data(forKey: key),
+              let entitlement = try? JSONDecoder().decode(AppPlusPersistedEntitlement.self, from: data)
+        else {
+            return false
+        }
+        return entitlement.isResourceUnlocked
+    }
+
+    func saveIsResourceUnlocked(_ isUnlocked: Bool) {
+        let entitlement: AppPlusPersistedEntitlement = isUnlocked ? .resourceUnlock : .inactive
+        guard let data = try? JSONEncoder().encode(entitlement) else {
+            return
+        }
+        userDefaults.set(data, forKey: key)
+    }
+}
+
+final class MemoryAppPlusEntitlementStore: AppPlusEntitlementStore, @unchecked Sendable {
+    private var entitlement: AppPlusPersistedEntitlement
+
+    init(isResourceUnlocked: Bool = false) {
+        self.entitlement = isResourceUnlocked ? .resourceUnlock : .inactive
+    }
+
+    var persistedDebugText: String {
+        guard let data = try? JSONEncoder().encode(entitlement) else {
+            return ""
+        }
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    func loadIsResourceUnlocked() -> Bool {
+        entitlement.isResourceUnlocked
+    }
+
+    func saveIsResourceUnlocked(_ isUnlocked: Bool) {
+        entitlement = isUnlocked ? .resourceUnlock : .inactive
     }
 }
 
@@ -1803,6 +1868,7 @@ final class AppSessionModel {
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
     private let plusResourceUnlockService: (any AppPlusResourceUnlockService)?
+    private let plusEntitlementStore: any AppPlusEntitlementStore
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
     private let keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService
@@ -1843,6 +1909,7 @@ final class AppSessionModel {
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
         plusResourceUnlockService: (any AppPlusResourceUnlockService)? = nil,
+        plusEntitlementStore: any AppPlusEntitlementStore = MemoryAppPlusEntitlementStore(),
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
         keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService = FileSystemAppKeePassKdbxFileWritebackService(),
@@ -1878,6 +1945,7 @@ final class AppSessionModel {
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
         self.plusResourceUnlockService = plusResourceUnlockService
+        self.plusEntitlementStore = plusEntitlementStore
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
         self.keePassKdbxFileWritebackService = keePassKdbxFileWritebackService
@@ -1893,6 +1961,9 @@ final class AppSessionModel {
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
+        if plusEntitlementStore.loadIsResourceUnlocked() {
+            self.plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
+        }
         if let remembered = try? rememberedVaultStore.load() {
             self.rememberedVaultDescriptor = LocalVaultDescriptor(
                 fileURL: remembered.fileURL,
@@ -3164,6 +3235,7 @@ final class AppSessionModel {
                 throw AppPlusResourceUnlockError.activationRejected
             }
             plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
+            plusEntitlementStore.saveIsResourceUnlocked(true)
             plusActivationState = .activated
             recordUserActivity(at: now)
         } catch {
@@ -3175,6 +3247,7 @@ final class AppSessionModel {
     func deactivatePlus(now: Date = Date()) {
         recordUserActivity()
         plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
+        plusEntitlementStore.saveIsResourceUnlocked(false)
         plusActivationState = .deactivated
         recordUserActivity(at: now)
     }

@@ -11,19 +11,22 @@ struct MonicaAppEnvironment: Sendable {
     let firstBackupProvider: String
     let localDeviceIdentifier: String
     let oneDriveConfiguration: OneDriveCloudFileConfiguration
+    let plusEntitlementStore: any AppPlusEntitlementStore
 
     init(
         appGroupIdentifier: String = "group.monica-pass.monica",
         minimumIOSVersion: String = "17.0",
         firstBackupProvider: String = "WebDAV",
         localDeviceIdentifier: String = "ios-local-device",
-        oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction
+        oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction,
+        plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore()
     ) {
         self.appGroupIdentifier = appGroupIdentifier
         self.minimumIOSVersion = minimumIOSVersion
         self.firstBackupProvider = firstBackupProvider
         self.localDeviceIdentifier = localDeviceIdentifier
         self.oneDriveConfiguration = oneDriveConfiguration
+        self.plusEntitlementStore = plusEntitlementStore
     }
 
     var productionCloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] {
@@ -277,7 +280,8 @@ extension AppSessionModel {
                 vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
                 appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
                 cloudFileProviders: environment.productionCloudFileProviders,
-                plusResourceUnlockService: DefaultAppPlusResourceUnlockService()
+                plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
+                plusEntitlementStore: environment.plusEntitlementStore
             )
         }
         let indexStore = FileAutoFillEncryptedIndexStore(appGroupContainerURL: appGroupContainerURL)
@@ -311,6 +315,7 @@ extension AppSessionModel {
                 try keyMaterialProvider.keyMaterial(for: vaultID)
             },
             plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
+            plusEntitlementStore: environment.plusEntitlementStore,
             widgetSnapshotStore: widgetSnapshotStore,
             shortcutSnapshotStore: shortcutSnapshotStore
         )

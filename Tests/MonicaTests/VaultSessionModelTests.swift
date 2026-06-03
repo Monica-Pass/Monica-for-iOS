@@ -623,6 +623,62 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
     }
 
+    func testPlusResourceUnlockPersistsAcrossSessionsWithoutPurchaseArtifacts() async throws {
+        let service = RecordingAppPlusResourceUnlockService()
+        let store = MemoryAppPlusEntitlementStore()
+        let model = AppSessionModel(
+            plusResourceUnlockService: service,
+            plusEntitlementStore: store
+        )
+
+        try await model.activatePlusFromResource()
+
+        let reloadedModel = AppSessionModel(
+            plusResourceUnlockService: service,
+            plusEntitlementStore: store
+        )
+        XCTAssertTrue(reloadedModel.isPlusActive)
+        XCTAssertEqual(reloadedModel.plusEntitlementStatusRow.detail, "已通过 Android 同口径资源按钮解锁 Monica Plus。")
+        XCTAssertTrue(reloadedModel.plusFeatureRows.allSatisfy(\.isUnlocked))
+
+        let persistedDebugText = store.persistedDebugText
+        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("storekit"))
+        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("transaction"))
+        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("receipt"))
+        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("license"))
+        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("iap"))
+
+        reloadedModel.deactivatePlus()
+
+        let deactivatedModel = AppSessionModel(
+            plusResourceUnlockService: service,
+            plusEntitlementStore: store
+        )
+        XCTAssertFalse(deactivatedModel.isPlusActive)
+        XCTAssertEqual(deactivatedModel.plusEntitlementStatusRow.value, "未激活")
+        XCTAssertTrue(deactivatedModel.plusFeatureRows.allSatisfy { !$0.isUnlocked })
+    }
+
+    func testProductionPlusEntitlementUsesPersistedResourceUnlockWithoutIAP() throws {
+        let suiteName = "monica.plus.production-test.\(UUID().uuidString)"
+        let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { userDefaults.removePersistentDomain(forName: suiteName) }
+        let store = UserDefaultsAppPlusEntitlementStore(userDefaults: userDefaults)
+        store.saveIsResourceUnlocked(true)
+
+        let model = AppSessionModel.production(
+            environment: MonicaAppEnvironment(
+                plusEntitlementStore: store
+            )
+        )
+
+        XCTAssertTrue(model.isPlusActive)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.isUnlocked })
+        XCTAssertFalse(model.plusEntitlementStatusRow.detail.localizedCaseInsensitiveContains("iap"))
+        XCTAssertFalse(model.plusEntitlementStatusRow.detail.localizedCaseInsensitiveContains("storekit"))
+    }
+
     func testSavingPresentedAddPasswordEditorUsesExistingCreateFlow() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
