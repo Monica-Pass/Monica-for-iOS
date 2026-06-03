@@ -1944,6 +1944,262 @@ public struct KeePassReadOnlySnapshot: Sendable, Equatable {
     }
 }
 
+public struct KeePassXMLWritebackPayload: Sendable, Equatable {
+    public let xmlPayload: Data
+    public let groupCount: Int
+    public let entryCount: Int
+    public let attachmentCount: Int
+
+    public init(
+        xmlPayload: Data,
+        groupCount: Int,
+        entryCount: Int,
+        attachmentCount: Int
+    ) {
+        self.xmlPayload = xmlPayload
+        self.groupCount = groupCount
+        self.entryCount = entryCount
+        self.attachmentCount = attachmentCount
+    }
+
+    public var displaySummary: String {
+        "KeePass XML writeback payload，\(groupCount) 个分组，\(entryCount) 个条目，\(attachmentCount) 个附件"
+    }
+}
+
+public struct KeePassXMLPayloadWriter: Sendable {
+    public init() {}
+
+    public func write(_ snapshot: KeePassReadOnlySnapshot) throws -> KeePassXMLWritebackPayload {
+        let tree = KeePassXMLWritebackTree(snapshot: snapshot)
+        var binaries: [(id: String, content: Data)] = []
+        var binaryRefsByEntryAttachment: [KeePassXMLWritebackAttachmentKey: String] = [:]
+        var xml: [String] = [
+            "<?xml version=\"1.0\" encoding=\"utf-8\"?>",
+            "<KeePassFile>",
+            "  <Meta>"
+        ]
+        if let recycleBinUUID = tree.recycleBinUUID {
+            xml.append("    <RecycleBinUUID>\(Self.escapeText(recycleBinUUID))</RecycleBinUUID>")
+        }
+        xml.append("    <Binaries>")
+        for entry in snapshot.entries {
+            for (index, attachment) in entry.attachments.enumerated() {
+                guard let content = attachment.decodedContent else {
+                    throw KeePassOperationError(
+                        code: .formatUnsupported,
+                        message: "KeePass XML 写回需要已解码的附件内容；请先完成附件解码。"
+                    )
+                }
+                let id = Self.uniqueBinaryID(preferred: attachment.id, existing: Set(binaries.map(\.id)))
+                binaryRefsByEntryAttachment[
+                    KeePassXMLWritebackAttachmentKey(entryID: entry.id, attachmentIndex: index)
+                ] = id
+                binaries.append((id: id, content: content))
+                xml.append("      <Binary ID=\"\(Self.escapeAttribute(id))\">\(content.base64EncodedString())</Binary>")
+            }
+        }
+        xml.append("    </Binaries>")
+        xml.append("  </Meta>")
+        xml.append("  <Root>")
+        appendGroup(tree.root, into: &xml, binaryRefsByEntryAttachment: binaryRefsByEntryAttachment, indent: "    ")
+        xml.append("  </Root>")
+        xml.append("</KeePassFile>")
+        let payload = Data(xml.joined(separator: "\n").utf8)
+        return KeePassXMLWritebackPayload(
+            xmlPayload: payload,
+            groupCount: snapshot.groups.count,
+            entryCount: snapshot.entries.count,
+            attachmentCount: binaries.count
+        )
+    }
+
+    private func appendGroup(
+        _ node: KeePassXMLWritebackTree.Node,
+        into xml: inout [String],
+        binaryRefsByEntryAttachment: [KeePassXMLWritebackAttachmentKey: String],
+        indent: String
+    ) {
+        xml.append("\(indent)<Group>")
+        xml.append("\(indent)  <UUID>\(Self.escapeText(node.group.id))</UUID>")
+        xml.append("\(indent)  <Name>\(Self.escapeText(node.group.title))</Name>")
+        for entry in node.entries {
+            appendEntry(entry, into: &xml, binaryRefsByEntryAttachment: binaryRefsByEntryAttachment, indent: indent + "  ")
+        }
+        for child in node.children {
+            appendGroup(child, into: &xml, binaryRefsByEntryAttachment: binaryRefsByEntryAttachment, indent: indent + "  ")
+        }
+        xml.append("\(indent)</Group>")
+    }
+
+    private func appendEntry(
+        _ entry: KeePassReadOnlyEntry,
+        into xml: inout [String],
+        binaryRefsByEntryAttachment: [KeePassXMLWritebackAttachmentKey: String],
+        indent: String
+    ) {
+        xml.append("\(indent)<Entry>")
+        xml.append("\(indent)  <UUID>\(Self.escapeText(entry.id))</UUID>")
+        appendString(key: "Title", value: entry.title, into: &xml, indent: indent + "  ")
+        appendString(key: "UserName", value: entry.username, into: &xml, indent: indent + "  ")
+        appendString(
+            key: "Password",
+            value: entry.decodedPassword ?? "",
+            isProtected: entry.hasPassword,
+            into: &xml,
+            indent: indent + "  "
+        )
+        appendString(key: "URL", value: entry.url, into: &xml, indent: indent + "  ")
+        appendString(key: "Notes", value: entry.notes, into: &xml, indent: indent + "  ")
+        if let decodedTotp = entry.decodedTotp {
+            appendString(key: "otp", value: Self.otpAuthURI(from: decodedTotp, fallbackTitle: entry.title), into: &xml, indent: indent + "  ")
+        }
+        for field in entry.customFields {
+            appendString(key: field.title, value: field.value, isProtected: field.isProtected, into: &xml, indent: indent + "  ")
+        }
+        for (index, attachment) in entry.attachments.enumerated() {
+            let ref = binaryRefsByEntryAttachment[
+                KeePassXMLWritebackAttachmentKey(entryID: entry.id, attachmentIndex: index)
+            ] ?? attachment.id
+            xml.append("\(indent)  <Binary>")
+            xml.append("\(indent)    <Key>\(Self.escapeText(attachment.fileName))</Key>")
+            xml.append("\(indent)    <Value Ref=\"\(Self.escapeAttribute(ref))\" />")
+            xml.append("\(indent)  </Binary>")
+        }
+        xml.append("\(indent)</Entry>")
+    }
+
+    private func appendString(
+        key: String,
+        value: String,
+        isProtected: Bool = false,
+        into xml: inout [String],
+        indent: String
+    ) {
+        xml.append("\(indent)<String>")
+        xml.append("\(indent)  <Key>\(Self.escapeText(key))</Key>")
+        if isProtected {
+            xml.append("\(indent)  <Value Protected=\"True\">\(Self.escapeText(value))</Value>")
+        } else {
+            xml.append("\(indent)  <Value>\(Self.escapeText(value))</Value>")
+        }
+        xml.append("\(indent)</String>")
+    }
+
+    private static func uniqueBinaryID(preferred: String, existing: Set<String>) -> String {
+        let trimmed = preferred.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty, !existing.contains(trimmed) {
+            return trimmed
+        }
+        var candidate = "\(existing.count)"
+        while existing.contains(candidate) {
+            candidate = "\(Int(candidate).map { $0 + 1 } ?? existing.count + 1)"
+        }
+        return candidate
+    }
+
+    private static func otpAuthURI(from secret: KeePassReadOnlyTotpSecret, fallbackTitle: String) -> String {
+        let issuer = secret.issuer ?? fallbackTitle
+        let account = secret.accountName ?? ""
+        let label = account.isEmpty ? issuer : "\(issuer):\(account)"
+        var query = [("secret", secret.secret)]
+        if let issuer = secret.issuer, !issuer.isEmpty {
+            query.append(("issuer", issuer))
+        }
+        if let period = secret.period {
+            query.append(("period", "\(period)"))
+        }
+        if let digits = secret.digits {
+            query.append(("digits", "\(digits)"))
+        }
+        if let algorithm = secret.algorithm, !algorithm.isEmpty {
+            query.append(("algorithm", algorithm.uppercased()))
+        }
+        return "otpauth://totp/\(percentEncode(label))?"
+            + query.map { "\(percentEncode($0.0))=\(percentEncode($0.1))" }.joined(separator: "&")
+    }
+
+    private static func escapeText(_ value: String) -> String {
+        value
+            .replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private static func escapeAttribute(_ value: String) -> String {
+        escapeText(value)
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "'", with: "&apos;")
+    }
+
+    private static func percentEncode(_ value: String) -> String {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+}
+
+private struct KeePassXMLWritebackTree {
+    final class Node {
+        let group: KeePassReadOnlyGroup
+        var children: [Node] = []
+        var entries: [KeePassReadOnlyEntry] = []
+
+        init(group: KeePassReadOnlyGroup) {
+            self.group = group
+        }
+    }
+
+    let root: Node
+    let recycleBinUUID: String?
+
+    init(snapshot: KeePassReadOnlySnapshot) {
+        let rootGroup = snapshot.groups.first { $0.path == "/" }
+            ?? KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+        var nodesByPath: [String: Node] = ["/": Node(group: rootGroup)]
+        for group in snapshot.groups where group.path != "/" {
+            nodesByPath[group.path] = Node(group: group)
+        }
+        for group in snapshot.groups where group.path != "/" {
+            let parentPath = Self.parentPath(for: group.path)
+            let parent = nodesByPath[parentPath] ?? nodesByPath["/"]
+            if let child = nodesByPath[group.path] {
+                parent?.children.append(child)
+            }
+        }
+        for entry in snapshot.entries {
+            let path = entry.groupPath.isEmpty ? "/" : entry.groupPath
+            let node = nodesByPath[path] ?? nodesByPath["/"]
+            node?.entries.append(entry)
+        }
+        self.root = nodesByPath["/"] ?? Node(group: rootGroup)
+        self.recycleBinUUID = Self.recycleBinUUID(in: snapshot)
+    }
+
+    private static func parentPath(for path: String) -> String {
+        let normalized = path.hasPrefix("/") ? path : "/" + path
+        guard normalized != "/" else { return "/" }
+        let components = normalized.split(separator: "/").map(String.init)
+        guard components.count > 1 else { return "/" }
+        return "/" + components.dropLast().joined(separator: "/")
+    }
+
+    private static func recycleBinUUID(in snapshot: KeePassReadOnlySnapshot) -> String? {
+        if let deletedGroupID = snapshot.entries.first(where: \.isDeleted)?.groupID,
+           !deletedGroupID.isEmpty {
+            return deletedGroupID
+        }
+        return snapshot.groups.first {
+            $0.path.localizedCaseInsensitiveContains("recycle bin")
+                || $0.title.localizedCaseInsensitiveContains("recycle bin")
+        }?.id
+    }
+}
+
+private struct KeePassXMLWritebackAttachmentKey: Hashable {
+    let entryID: String
+    let attachmentIndex: Int
+}
+
 public enum KeePassReadOnlyImportCandidateKind: Sendable, Equatable {
     case login
 
