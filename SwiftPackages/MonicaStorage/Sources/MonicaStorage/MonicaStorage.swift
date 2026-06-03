@@ -580,6 +580,221 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
     }
 }
 
+public protocol KeePassKdbx4HeaderWriter: Sendable {
+    func writeHeader(
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters
+    ) throws -> Data
+}
+
+public struct DefaultKeePassKdbx4HeaderWriter: KeePassKdbx4HeaderWriter {
+    public init() {}
+
+    public func writeHeader(
+        cipher: KeePassKdbxCipherAlgorithm,
+        compression: KeePassKdbxCompressionAlgorithm,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs,
+        kdfParameters: KeePassKdbxKdfParameters
+    ) throws -> Data {
+        let masterSeed = try requireLength(
+            cryptoInputs.masterSeed,
+            expected: 32,
+            message: "KDBX4 master seed 长度无效；请确认写回参数完整。"
+        )
+        let encryptionIV = try requireLength(
+            cryptoInputs.encryptionIV,
+            expected: encryptionIVLength(for: cipher),
+            message: "KDBX4 encryption IV 长度无效；请确认写回参数完整。"
+        )
+
+        var header = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+        header.append(headerField(id: 2, value: try cipherUUID(for: cipher)))
+        header.append(headerField(id: 3, value: try compressionFlags(for: compression)))
+        header.append(headerField(id: 4, value: masterSeed))
+        header.append(headerField(id: 7, value: encryptionIV))
+        if let innerRandomStreamKey = cryptoInputs.innerRandomStreamKey {
+            header.append(headerField(id: 8, value: innerRandomStreamKey))
+        }
+        if let streamStartBytes = cryptoInputs.streamStartBytes {
+            header.append(headerField(id: 9, value: streamStartBytes))
+        }
+        if let innerRandomStreamID = cryptoInputs.innerRandomStreamID {
+            header.append(headerField(id: 10, value: littleEndianUInt32(innerRandomStreamID)))
+        }
+        header.append(headerField(id: 11, value: try variantDictionary(for: kdfParameters)))
+        header.append(headerField(id: 0, value: Data([0x0D, 0x0A, 0x0D, 0x0A])))
+        return header
+    }
+
+    private func requireLength(_ data: Data?, expected: Int, message: String) throws -> Data {
+        guard let data, data.count == expected else {
+            throw KeePassOperationError(code: .formatUnsupported, message: message)
+        }
+        return data
+    }
+
+    private func encryptionIVLength(for cipher: KeePassKdbxCipherAlgorithm) throws -> Int {
+        switch cipher {
+        case .aes256, .twofish:
+            return 16
+        case .chacha20:
+            return 12
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX cipher header 写回尚未接入"
+            )
+        }
+    }
+
+    private func cipherUUID(for cipher: KeePassKdbxCipherAlgorithm) throws -> Data {
+        switch cipher {
+        case .aes256:
+            return Data([0x31, 0xC1, 0xF2, 0xE6, 0xBF, 0x71, 0x43, 0x50, 0xBE, 0x58, 0x05, 0x21, 0x6A, 0xFC, 0x5A, 0xFF])
+        case .chacha20:
+            return Data([0xD6, 0x03, 0x8A, 0x2B, 0x8B, 0x6F, 0x4C, 0xB5, 0xA5, 0x24, 0x33, 0x9A, 0x31, 0xDB, 0xB5, 0x9A])
+        case .twofish:
+            return Data([0xAD, 0x68, 0xF2, 0x9F, 0x57, 0x6F, 0x4B, 0xB9, 0xA3, 0x6A, 0xD4, 0x7A, 0xF9, 0x65, 0x34, 0x6C])
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX cipher header 写回尚未接入"
+            )
+        }
+    }
+
+    private func compressionFlags(for compression: KeePassKdbxCompressionAlgorithm) throws -> Data {
+        switch compression {
+        case .none:
+            return littleEndianUInt32(0)
+        case .gzip:
+            return littleEndianUInt32(1)
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX compression header 写回尚未接入"
+            )
+        }
+    }
+
+    private func variantDictionary(for parameters: KeePassKdbxKdfParameters) throws -> Data {
+        var entries: [Data] = []
+        switch parameters.algorithm {
+        case .aesKdf:
+            guard let aesKdf = parameters.aesKdf else {
+                throw KeePassOperationError(code: .formatUnsupported, message: "KDBX AES-KDF 参数缺失；请确认写回参数完整。")
+            }
+            entries.append(variantByteArray(key: "$UUID", value: Data([0xC9, 0xD9, 0xF3, 0x9A, 0x62, 0x8A, 0x44, 0x60, 0xBF, 0x74, 0x0D, 0x08, 0xC1, 0x8A, 0x4F, 0xEA])))
+            entries.append(variantByteArray(
+                key: "S",
+                value: try requireLength(aesKdf.seed, expected: 32, message: "KDBX AES-KDF seed 长度无效；请确认写回参数完整。")
+            ))
+            guard let rounds = aesKdf.rounds else {
+                throw KeePassOperationError(code: .formatUnsupported, message: "KDBX AES-KDF rounds 缺失；请确认写回参数完整。")
+            }
+            entries.append(variantUInt64(key: "R", value: rounds))
+        case .argon2d, .argon2id:
+            guard let argon2 = parameters.argon2 else {
+                throw KeePassOperationError(code: .formatUnsupported, message: "KDBX Argon2 参数缺失；请确认写回参数完整。")
+            }
+            entries.append(variantByteArray(key: "$UUID", value: argon2UUID(for: parameters.algorithm)))
+            guard let salt = argon2.salt, !salt.isEmpty else {
+                throw KeePassOperationError(code: .formatUnsupported, message: "KDBX Argon2 salt 缺失；请确认写回参数完整。")
+            }
+            guard let iterations = argon2.iterations,
+                  let memoryBytes = argon2.memoryBytes,
+                  let parallelism = argon2.parallelism,
+                  let version = argon2.version else {
+                throw KeePassOperationError(code: .formatUnsupported, message: "KDBX Argon2 参数不完整；请确认写回参数完整。")
+            }
+            entries.append(variantByteArray(key: "S", value: salt))
+            entries.append(variantUInt64(key: "I", value: iterations))
+            entries.append(variantUInt64(key: "M", value: memoryBytes))
+            entries.append(variantUInt32(key: "P", value: parallelism))
+            entries.append(variantUInt32(key: "V", value: version))
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX KDF header 写回尚未接入"
+            )
+        }
+
+        var dictionary = Data([0x00, 0x01])
+        for entry in entries {
+            dictionary.append(entry)
+        }
+        dictionary.append(0x00)
+        return dictionary
+    }
+
+    private func argon2UUID(for algorithm: KeePassKdbxKdfAlgorithm) -> Data {
+        switch algorithm {
+        case .argon2d:
+            return Data([0xEF, 0x63, 0x6D, 0xDF, 0x8C, 0x29, 0x44, 0x4B, 0x91, 0xF7, 0xA9, 0xA4, 0x03, 0xE3, 0x0A, 0x0C])
+        case .argon2id:
+            return Data([0x9E, 0x29, 0x8B, 0x19, 0x56, 0xDB, 0x47, 0x73, 0xB2, 0x3D, 0xFC, 0x3E, 0xC6, 0xF0, 0xA1, 0xE6])
+        default:
+            return Data()
+        }
+    }
+
+    private func headerField(id: UInt8, value: Data) -> Data {
+        var field = Data([id])
+        field.append(littleEndianUInt32(UInt32(value.count)))
+        field.append(value)
+        return field
+    }
+
+    private func variantByteArray(key: String, value: Data) -> Data {
+        var data = Data([0x42])
+        data.append(variantKeyAndLength(key: key, valueLength: value.count))
+        data.append(value)
+        return data
+    }
+
+    private func variantUInt32(key: String, value: UInt32) -> Data {
+        var data = Data([0x04])
+        data.append(variantKeyAndLength(key: key, valueLength: MemoryLayout<UInt32>.size))
+        data.append(littleEndianUInt32(value))
+        return data
+    }
+
+    private func variantUInt64(key: String, value: UInt64) -> Data {
+        var data = Data([0x05])
+        data.append(variantKeyAndLength(key: key, valueLength: MemoryLayout<UInt64>.size))
+        data.append(littleEndianUInt64(value))
+        return data
+    }
+
+    private func variantKeyAndLength(key: String, valueLength: Int) -> Data {
+        let keyData = Data(key.utf8)
+        var data = Data()
+        data.append(littleEndianUInt32(UInt32(keyData.count)))
+        data.append(keyData)
+        data.append(littleEndianUInt32(UInt32(valueLength)))
+        return data
+    }
+
+    private func littleEndianUInt32(_ value: UInt32) -> Data {
+        Data([
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ])
+    }
+
+    private func littleEndianUInt64(_ value: UInt64) -> Data {
+        Data((0..<8).map { UInt8((value >> UInt64($0 * 8)) & 0xFF) })
+    }
+}
+
 public struct KeePassKdbxBlockStreamContext: Sendable, Equatable {
     public let formatVersion: KeePassKdbxFormatVersion
     public let streamStartBytes: Data?

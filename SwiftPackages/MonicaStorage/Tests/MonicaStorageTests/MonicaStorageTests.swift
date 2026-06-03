@@ -961,6 +961,135 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbx4HeaderWriterBuildsArgon2idHeaderForReadableWritebackWithoutLeakingSecrets() throws {
+    let masterSeed = Data(repeating: 0x91, count: 32)
+    let encryptionIV = Data(repeating: 0x92, count: 16)
+    let argon2Salt = Data(repeating: 0x93, count: 32)
+    let password = "header-writer-password-secret"
+    let xmlPayload = Data("""
+    <?xml version="1.0" encoding="utf-8"?>
+    <KeePassFile>
+      <Root>
+        <Group>
+          <UUID>header-writer-root</UUID>
+          <Name>Header Writer Root</Name>
+          <Entry>
+            <UUID>header-writer-entry</UUID>
+            <String><Key>Title</Key><Value>Header Writer Login</Value></String>
+            <String><Key>UserName</Key><Value>argon2id</Value></String>
+            <String><Key>Password</Key><Value>header writer decoded password</Value></String>
+          </Entry>
+        </Group>
+      </Root>
+    </KeePassFile>
+    """.utf8)
+    let header = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+        cipher: .aes256,
+        compression: .none,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: encryptionIV,
+            innerRandomStreamKey: Data(repeating: 0x94, count: 32),
+            innerRandomStreamID: 2
+        ),
+        kdfParameters: KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: argon2Salt,
+                iterations: 1,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+    )
+    let envelope = try KeePassKdbxPayloadEnvelope.parse(header)
+    let derivedKey = try DefaultKeePassKdbxKeyDeriver().deriveKey(
+        from: try KeePassKdbxDecryptInputContext.build(
+            database: header + Data("placeholder".utf8),
+            sourceName: "header-writer.kdbx",
+            credentialCandidate: KeePassCredentialCandidate(
+                label: "password-only",
+                password: password,
+                keyMaterial: nil
+            )
+        )
+    )
+    let masterKey = try DefaultKeePassKdbxMasterKeyComposer().composeMasterKey(
+        from: derivedKey,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: encryptionIV
+        )
+    )
+    let encryptedPayload = try DefaultKeePassKdbxPayloadCipher().encryptPayload(
+        xmlPayload,
+        cipher: .aes256,
+        masterKey: masterKey,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: masterSeed,
+            encryptionIV: encryptionIV
+        )
+    )
+    let payloadSection = try DefaultKeePassKdbx4PayloadSectionWriter().writePayloadSection(
+        encryptedPayloadBlocks: [encryptedPayload],
+        headerBytes: header,
+        masterSeed: masterSeed,
+        derivedKey: derivedKey
+    )
+    let database = try DefaultKeePassKdbxFileAssembler().assemble(
+        headerBytes: header,
+        payloadSection: payloadSection
+    )
+    let snapshot = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: database,
+        sourceName: "header-writer.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    #expect(envelope.headerSummary.formatVersion == .kdbx4)
+    #expect(envelope.headerSummary.cryptoSummary?.cipher == .aes256)
+    #expect(envelope.headerSummary.cryptoSummary?.compression == KeePassKdbxCompressionAlgorithm.none)
+    #expect(envelope.headerSummary.cryptoSummary?.kdf == .argon2id)
+    #expect(envelope.headerSummary.kdfParameters?.argon2?.memoryBytes == 8 * 1024)
+    #expect(envelope.headerSummary.kdfParameters?.argon2?.iterations == 1)
+    #expect(envelope.headerSummary.kdfParameters?.argon2?.parallelism == 1)
+    #expect(snapshot.entries.first?.title == "Header Writer Login")
+    #expect(snapshot.entries.first?.username == "argon2id")
+    #expect(snapshot.entries.first?.decodedPassword == "header writer decoded password")
+    #expect(!header.description.contains(password))
+    #expect(!header.description.contains("header writer decoded password"))
+    #expect(!header.description.contains(xmlPayload.map { String(format: "%02x", $0) }.joined()))
+    #expect(!envelope.displaySummary.contains(argon2Salt.map { String(format: "%02x", $0) }.joined()))
+
+    do {
+        _ = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .none,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+                masterSeed: Data("short-master-seed-secret".utf8),
+                encryptionIV: encryptionIV
+            ),
+            kdfParameters: KeePassKdbxKdfParameters(
+                algorithm: .argon2id,
+                argon2: KeePassKdbxArgon2Parameters(
+                    salt: argon2Salt,
+                    iterations: 1,
+                    memoryBytes: 8 * 1024,
+                    parallelism: 1,
+                    version: 0x13
+                )
+            )
+        )
+        Issue.record("Expected invalid KDBX4 header crypto inputs to fail")
+    } catch let error as KeePassOperationError {
+        #expect(error.code == .formatUnsupported)
+        #expect(!error.message.contains("short-master-seed-secret"))
+        #expect(!error.message.contains(password))
+        #expect(!error.message.contains(argon2Salt.map { String(format: "%02x", $0) }.joined()))
+    }
+}
+
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {
     final class FixedKeyDeriver: KeePassKdbxKeyDeriver, @unchecked Sendable {
         func deriveKey(from context: KeePassKdbxDecryptInputContext) throws -> KeePassKdbxDerivedKey {
