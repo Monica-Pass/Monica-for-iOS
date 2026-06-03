@@ -1172,6 +1172,37 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(message.contains("access_token=<redacted>"))
     }
 
+    func testOneDriveUnknownAuthenticationErrorShowsRedactedDiagnosticDetails() async {
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com",
+            signInError: NSError(
+                domain: "MSALErrorDomain",
+                code: -50000,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "AADSTS50011 callback failed code=auth-code-secret&state=state-secret access_token=token-secret"
+                ]
+            )
+        )
+        let model = AppSessionModel(oneDriveAuthenticationService: authenticationService)
+
+        do {
+            _ = try await model.signInToOneDrive()
+            XCTFail("Expected OneDrive sign-in to fail")
+        } catch {
+            let message = model.oneDriveAuthenticationState.label
+
+            XCTAssertTrue(message.contains("MSALErrorDomain -50000"))
+            XCTAssertTrue(message.contains("AADSTS50011"))
+            XCTAssertFalse(message.contains("auth-code-secret"))
+            XCTAssertFalse(message.contains("state-secret"))
+            XCTAssertFalse(message.contains("token-secret"))
+            XCTAssertTrue(message.contains("code=<redacted>"))
+            XCTAssertTrue(message.contains("state=<redacted>"))
+            XCTAssertTrue(message.contains("access_token=<redacted>"))
+        }
+    }
+
     func testAppInfoPlistRegistersOneDriveMSALRedirectScheme() throws {
         let plistURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -10686,12 +10717,14 @@ private struct RecordedUpdatedAttachmentMetadataCall: Equatable {
 private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthenticationService, @unchecked Sendable {
     private let token: String
     private let accountLabel: String
+    private let signInError: Error?
     private var isSignedIn = false
     private(set) var handledRedirects: [URL] = []
 
-    init(token: String, accountLabel: String) {
+    init(token: String, accountLabel: String, signInError: Error? = nil) {
         self.token = token
         self.accountLabel = accountLabel
+        self.signInError = signInError
     }
 
     func accessToken() async throws -> String {
@@ -10702,6 +10735,9 @@ private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthen
     }
 
     func signIn() async throws -> AppOneDriveAuthenticationSession {
+        if let signInError {
+            throw signInError
+        }
         isSignedIn = true
         return AppOneDriveAuthenticationSession(accountLabel: accountLabel)
     }

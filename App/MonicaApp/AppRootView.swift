@@ -8595,7 +8595,12 @@ final class AppSessionModel {
            case .authenticationRequired = providerError {
             return "OneDrive 需要先登录。"
         }
-        return "OneDrive 登录失败，请稍后重试。"
+        let nsError = error as NSError
+        return AppOneDriveAuthenticationError.authenticationFailed(
+            domain: nsError.domain,
+            code: nsError.code,
+            message: nsError.localizedDescription
+        ).localizedDescription
     }
 
     private func clearUnlockedVaultSession() {
