@@ -808,6 +808,20 @@ struct AppCloudFileRestorePreview: Sendable, Equatable {
     }
 }
 
+struct AppOneDriveAuthenticationSession: Sendable, Equatable {
+    let accountLabel: String
+
+    var redactedSummary: String {
+        "OneDrive \(accountLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "已登录" : accountLabel)"
+    }
+}
+
+protocol AppOneDriveAuthenticationService: OneDriveAccessTokenProvider {
+    func signIn() async throws -> AppOneDriveAuthenticationSession
+    func signOut() async throws
+    func handleRedirectURL(_ url: URL) -> Bool
+}
+
 struct AppBitwardenSyncPreview: Sendable, Equatable {
     let accountLabel: String
     let remoteItemCount: Int
@@ -1815,6 +1829,7 @@ final class AppSessionModel {
     var cloudFileState: CloudFileState = .idle
     var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
+    var oneDriveAuthenticationState: OneDriveAuthenticationState = .disconnected
     var bitwardenSyncState: BitwardenSyncState = .idle
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
     var csvImportPreview: CSVImportPreview?
@@ -1868,6 +1883,7 @@ final class AppSessionModel {
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
     private let webDAVBackupService: any AppWebDAVBackupService
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
+    private let oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)?
     private let bitwardenSyncProvider: (any BitwardenSyncProvider)?
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
@@ -1909,6 +1925,7 @@ final class AppSessionModel {
         securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
+        oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         bitwardenSyncProvider: (any BitwardenSyncProvider)? = nil,
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
@@ -1945,6 +1962,7 @@ final class AppSessionModel {
         self.securityQuestionStore = securityQuestionStore
         self.webDAVBackupService = webDAVBackupService
         self.cloudFileProviders = cloudFileProviders
+        self.oneDriveAuthenticationService = oneDriveAuthenticationService
         self.bitwardenSyncProvider = bitwardenSyncProvider
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
@@ -8113,6 +8131,56 @@ final class AppSessionModel {
         }
     }
 
+    func signInToOneDrive() async throws -> AppOneDriveAuthenticationSession {
+        recordUserActivity()
+        guard let oneDriveAuthenticationService else {
+            let error = AppOneDriveAuthenticationError.serviceUnavailable
+            oneDriveAuthenticationState = .failed(error.localizedDescription)
+            throw error
+        }
+        oneDriveAuthenticationState = .running
+        do {
+            let session = try await oneDriveAuthenticationService.signIn()
+            oneDriveAuthenticationState = .connected(accountLabel: session.accountLabel)
+            return session
+        } catch {
+            oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
+            throw error
+        }
+    }
+
+    func signOutFromOneDrive() async throws {
+        recordUserActivity()
+        guard let oneDriveAuthenticationService else {
+            let error = AppOneDriveAuthenticationError.serviceUnavailable
+            oneDriveAuthenticationState = .failed(error.localizedDescription)
+            throw error
+        }
+        oneDriveAuthenticationState = .running
+        do {
+            try await oneDriveAuthenticationService.signOut()
+            cloudFileItemsByProvider[.oneDrive] = nil
+            if cloudFileRestorePreview?.provider == .oneDrive {
+                cloudFileRestorePreview = nil
+                downloadedCloudFileRestore = nil
+            }
+            oneDriveAuthenticationState = .disconnected
+        } catch {
+            oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
+            throw error
+        }
+    }
+
+    func handleOneDriveRedirectURL(_ url: URL) -> Bool {
+        guard let oneDriveAuthenticationService,
+              oneDriveAuthenticationService.handleRedirectURL(url)
+        else {
+            return false
+        }
+        oneDriveAuthenticationState = .redirectHandled
+        return true
+    }
+
     func downloadCloudFileRestorePreview(
         itemID: String,
         provider kind: CloudFileProviderKind
@@ -8470,6 +8538,17 @@ final class AppSessionModel {
         }
 
         return error.localizedDescription
+    }
+
+    private func readableOneDriveAuthenticationErrorMessage(_ error: Error) -> String {
+        if let appError = error as? AppOneDriveAuthenticationError {
+            return appError.localizedDescription
+        }
+        if let providerError = error as? CloudFileProviderError,
+           case .authenticationRequired = providerError {
+            return "OneDrive 需要先登录。"
+        }
+        return "OneDrive 登录失败，请稍后重试。"
     }
 
     private func clearUnlockedVaultSession() {
@@ -9790,6 +9869,44 @@ enum CloudFileState: Sendable, Equatable {
     }
 }
 
+enum OneDriveAuthenticationState: Sendable, Equatable {
+    case disconnected
+    case running
+    case connected(accountLabel: String)
+    case redirectHandled
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .disconnected:
+            return "OneDrive 未登录"
+        case .running:
+            return "正在登录 OneDrive"
+        case .connected(let accountLabel):
+            let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            return normalized.isEmpty ? "OneDrive 已登录" : "OneDrive 已登录 \(normalized)"
+        case .redirectHandled:
+            return "OneDrive 登录回调已处理"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var isRunning: Bool {
+        if case .running = self {
+            return true
+        }
+        return false
+    }
+
+    var isConnected: Bool {
+        if case .connected = self {
+            return true
+        }
+        return false
+    }
+}
+
 enum BitwardenSyncState: Sendable, Equatable {
     case idle
     case running
@@ -9972,6 +10089,29 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
         fileName: String
     ) async throws -> WebDAVDownloadedBackup {
         try await WebDAVClient(endpoint: endpoint).download(fileName: fileName)
+    }
+}
+
+enum AppOneDriveAuthenticationError: Error, Sendable, Equatable, LocalizedError {
+    case serviceUnavailable
+    case authenticationCancelled
+    case presentationUnavailable
+    case invalidRedirect
+    case tokenUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .serviceUnavailable:
+            return "OneDrive 登录服务尚未配置。"
+        case .authenticationCancelled:
+            return "OneDrive 登录已取消。"
+        case .presentationUnavailable:
+            return "OneDrive 登录窗口尚未就绪，请稍后重试。"
+        case .invalidRedirect:
+            return "OneDrive 登录回调无效，请重试。"
+        case .tokenUnavailable:
+            return "OneDrive 需要先登录。"
+        }
     }
 }
 
@@ -10189,7 +10329,9 @@ struct AppRootView: View {
             session.handleScenePhaseChange(phase)
         }
         .onOpenURL { url in
-            _ = session.openShortcutURL(url)
+            if !session.handleOneDriveRedirectURL(url) {
+                _ = session.openShortcutURL(url)
+            }
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(

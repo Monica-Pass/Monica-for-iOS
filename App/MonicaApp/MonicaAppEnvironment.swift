@@ -11,6 +11,8 @@ struct MonicaAppEnvironment: Sendable {
     let firstBackupProvider: String
     let localDeviceIdentifier: String
     let oneDriveConfiguration: OneDriveCloudFileConfiguration
+    let oneDriveAuthenticationService: any AppOneDriveAuthenticationService
+    let oneDriveGraphTransport: any OneDriveGraphTransport
     let plusEntitlementStore: any AppPlusEntitlementStore
 
     init(
@@ -19,6 +21,8 @@ struct MonicaAppEnvironment: Sendable {
         firstBackupProvider: String = "WebDAV",
         localDeviceIdentifier: String = "ios-local-device",
         oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction,
+        oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
+        oneDriveGraphTransport: any OneDriveGraphTransport = URLSessionOneDriveGraphTransport(),
         plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore()
     ) {
         self.appGroupIdentifier = appGroupIdentifier
@@ -26,12 +30,20 @@ struct MonicaAppEnvironment: Sendable {
         self.firstBackupProvider = firstBackupProvider
         self.localDeviceIdentifier = localDeviceIdentifier
         self.oneDriveConfiguration = oneDriveConfiguration
+        self.oneDriveAuthenticationService = oneDriveAuthenticationService ?? DefaultAppOneDriveMSALAuthenticationService(
+            configuration: oneDriveConfiguration
+        )
+        self.oneDriveGraphTransport = oneDriveGraphTransport
         self.plusEntitlementStore = plusEntitlementStore
     }
 
     var productionCloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] {
         [
-            .oneDrive: OneDriveCloudFileProvider(configuration: oneDriveConfiguration)
+            .oneDrive: OneDriveCloudFileProvider(
+                configuration: oneDriveConfiguration,
+                tokenProvider: oneDriveAuthenticationService,
+                graphTransport: oneDriveGraphTransport
+            )
         ]
     }
 }
@@ -280,6 +292,7 @@ extension AppSessionModel {
                 vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
                 appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
                 cloudFileProviders: environment.productionCloudFileProviders,
+                oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
                 plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
                 plusEntitlementStore: environment.plusEntitlementStore
             )
@@ -308,6 +321,7 @@ extension AppSessionModel {
             biometricUnlockAuthorizer: DeviceBiometricUnlockAuthorizer(),
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
             cloudFileProviders: environment.productionCloudFileProviders,
+            oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
             autoFillIndexStore: indexStore,
             autoFillCredentialSecretStore: secretStore,
             autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(),

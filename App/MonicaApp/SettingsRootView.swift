@@ -735,6 +735,79 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "OneDrive") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    AndroidParityInfoRow(title: "账号", value: session.oneDriveAuthenticationState.label)
+                    AndroidParityInfoRow(title: "文件", value: session.cloudFileState.label)
+                    if session.oneDriveAuthenticationState.isConnected {
+                        Button(role: .destructive) {
+                            Task {
+                                try? await session.signOutFromOneDrive()
+                            }
+                        } label: {
+                            Label("退出 OneDrive", systemImage: "rectangle.portrait.and.arrow.right")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+                        .disabled(session.oneDriveAuthenticationState.isRunning || session.cloudFileState.isRunning)
+                    } else {
+                        Button {
+                            Task {
+                                try? await session.signInToOneDrive()
+                            }
+                        } label: {
+                            Label("登录 OneDrive", systemImage: "person.crop.circle.badge.checkmark")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(session.oneDriveAuthenticationState.isRunning)
+                    }
+                    Button {
+                        Task {
+                            try? await session.refreshCloudFileItems(provider: .oneDrive)
+                        }
+                    } label: {
+                        Label("刷新文件", systemImage: "arrow.clockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(!session.oneDriveAuthenticationState.isConnected || session.cloudFileState.isRunning)
+                    Button {
+                        Task {
+                            try? await session.uploadActiveVaultToCloud(provider: .oneDrive)
+                        }
+                    } label: {
+                        Label("备份保险库", systemImage: "arrow.up.doc")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(
+                        !session.oneDriveAuthenticationState.isConnected
+                            || session.vaultState != .unlocked
+                            || session.cloudFileState.isRunning
+                    )
+                    if let items = session.cloudFileItemsByProvider[.oneDrive], !items.isEmpty {
+                        AndroidParityDivider()
+                        ForEach(items.prefix(3)) { item in
+                            AndroidParityInfoRow(title: item.name, value: item.redactedSummary)
+                            Button {
+                                Task {
+                                    try? await session.downloadCloudFileRestorePreview(
+                                        itemID: item.id,
+                                        provider: .oneDrive
+                                    )
+                                }
+                            } label: {
+                                Label("下载预览", systemImage: "arrow.down.doc")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                            .disabled(session.vaultState != .unlocked || session.cloudFileState.isRunning)
+                        }
+                    }
+                }
+            }
+
             AndroidParitySection(title: "WebDAV") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     TextField("服务器 URL", text: $session.webDAVBaseURL)

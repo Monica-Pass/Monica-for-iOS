@@ -1041,6 +1041,85 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(environment.oneDriveConfiguration.redactedSummary.contains(environment.oneDriveConfiguration.clientID))
     }
 
+    func testOneDriveMSALLoginConnectsProductionProviderWithoutLeakingSecrets() async throws {
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com"
+        )
+        let graphTransport = AppTestOneDriveGraphTransport()
+        graphTransport.enqueue(
+            OneDriveGraphResponse(
+                statusCode: 200,
+                body: Data(
+                    """
+                    {
+                      "value": [
+                        {
+                          "id": "remote-item-secret-id",
+                          "name": "Mobile.kdbx",
+                          "size": 25,
+                          "eTag": "\\"etag-list-secret\\"",
+                          "parentReference": { "path": "/drive/special/approot:/MonicaPrivate" },
+                          "file": {}
+                        }
+                      ]
+                    }
+                    """.utf8
+                )
+            )
+        )
+        let environment = MonicaAppEnvironment(
+            oneDriveAuthenticationService: authenticationService,
+            oneDriveGraphTransport: graphTransport
+        )
+        let model = AppSessionModel(
+            cloudFileProviders: environment.productionCloudFileProviders,
+            oneDriveAuthenticationService: authenticationService
+        )
+
+        XCTAssertEqual(model.oneDriveAuthenticationState, .disconnected)
+
+        let session = try await model.signInToOneDrive()
+        let listed = try await model.refreshCloudFileItems(provider: .oneDrive)
+
+        XCTAssertEqual(session.accountLabel, "alice@example.com")
+        XCTAssertEqual(model.oneDriveAuthenticationState, .connected(accountLabel: "alice@example.com"))
+        XCTAssertEqual(listed.map(\.name), ["Mobile.kdbx"])
+        XCTAssertEqual(graphTransport.requests.first?.headers["Authorization"], "Bearer onedrive-access-token-secret")
+        XCTAssertNil(environment.productionCloudFileProviders[.googleDrive])
+
+        let visibleText = [
+            model.oneDriveAuthenticationState.label,
+            model.cloudFileState.label,
+            listed.first?.redactedSummary ?? ""
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("onedrive-access-token-secret"))
+        XCTAssertFalse(visibleText.contains("remote-item-secret-id"))
+        XCTAssertFalse(visibleText.contains("etag-list-secret"))
+        XCTAssertFalse(visibleText.contains("MonicaPrivate"))
+    }
+
+    func testOneDriveMSALRedirectAndSignOutDoNotLeakSecrets() async throws {
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com"
+        )
+        let model = AppSessionModel(oneDriveAuthenticationService: authenticationService)
+        _ = try await model.signInToOneDrive()
+
+        let handled = model.handleOneDriveRedirectURL(
+            URL(string: "msauth.com.monica-pass.monica://auth?code=auth-code-secret&state=state-secret")!
+        )
+        try await model.signOutFromOneDrive()
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(authenticationService.handledRedirects.count, 1)
+        XCTAssertEqual(model.oneDriveAuthenticationState, .disconnected)
+        XCTAssertFalse(model.oneDriveAuthenticationState.label.contains("auth-code-secret"))
+        XCTAssertFalse(model.oneDriveAuthenticationState.label.contains("state-secret"))
+        XCTAssertFalse(model.oneDriveAuthenticationState.label.contains("onedrive-access-token-secret"))
+    }
+
     func testAppInfoPlistRegistersOneDriveMSALRedirectScheme() throws {
         let plistURL = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -10550,6 +10629,59 @@ private struct RecordedUpdatedAttachmentMetadataCall: Equatable {
     let downloadState: String
     let wrappedContentEncryptionKey: String?
     let localPath: String?
+}
+
+private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthenticationService, @unchecked Sendable {
+    private let token: String
+    private let accountLabel: String
+    private var isSignedIn = false
+    private(set) var handledRedirects: [URL] = []
+
+    init(token: String, accountLabel: String) {
+        self.token = token
+        self.accountLabel = accountLabel
+    }
+
+    func accessToken() async throws -> String {
+        guard isSignedIn else {
+            throw CloudFileProviderError.authenticationRequired(provider: .oneDrive)
+        }
+        return token
+    }
+
+    func signIn() async throws -> AppOneDriveAuthenticationSession {
+        isSignedIn = true
+        return AppOneDriveAuthenticationSession(accountLabel: accountLabel)
+    }
+
+    func signOut() async throws {
+        isSignedIn = false
+    }
+
+    func handleRedirectURL(_ url: URL) -> Bool {
+        guard url.scheme == "msauth.com.monica-pass.monica" else {
+            return false
+        }
+        handledRedirects.append(url)
+        return true
+    }
+}
+
+private final class AppTestOneDriveGraphTransport: OneDriveGraphTransport, @unchecked Sendable {
+    private(set) var requests: [OneDriveGraphRequest] = []
+    private var responses: [OneDriveGraphResponse] = []
+
+    func enqueue(_ response: OneDriveGraphResponse) {
+        responses.append(response)
+    }
+
+    func send(_ request: OneDriveGraphRequest) async throws -> OneDriveGraphResponse {
+        requests.append(request)
+        guard !responses.isEmpty else {
+            throw CloudFileProviderError.unsupportedOperation(provider: .oneDrive)
+        }
+        return responses.removeFirst()
+    }
 }
 
 private struct RecordedEntryMutationCall {

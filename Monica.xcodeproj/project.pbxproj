@@ -39,6 +39,8 @@
 		A30000000000000000000002 /* AppShareExtensionInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000011 /* AppShareExtensionInboxStore.swift */; };
 		A30000000000000000000003 /* ShareViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000012 /* ShareViewController.swift */; };
 		A30000000000000000000004 /* MonicaShareExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A30000000000000000000015 /* MonicaShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A50000000000000000000001 /* OneDriveMSALAuthenticationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */; };
+		A50000000000000000000002 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = A500000000000000000000D1 /* MSAL */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -119,6 +121,7 @@
 		A30000000000000000000013 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A30000000000000000000014 /* MonicaShareExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaShareExtension.entitlements; sourceTree = "<group>"; };
 		A30000000000000000000015 /* MonicaShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonicaShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneDriveMSALAuthenticationService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -132,6 +135,7 @@
 				A10000000000000000000009 /* MonicaStorage in Frameworks */,
 				A1000000000000000000000A /* MonicaSync in Frameworks */,
 				A1000000000000000000000B /* MonicaUI in Frameworks */,
+				A50000000000000000000002 /* MSAL in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -194,6 +198,7 @@
 			children = (
 				A10000000000000000000011 /* MonicaApp.swift */,
 				A10000000000000000000012 /* AppRootView.swift */,
+				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
 				A1000000000000000000001C /* AndroidParityDesign.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
@@ -306,6 +311,7 @@
 				A100000000000000000000D4 /* MonicaStorage */,
 				A100000000000000000000D5 /* MonicaSync */,
 				A100000000000000000000D6 /* MonicaUI */,
+				A500000000000000000000D1 /* MSAL */,
 			);
 			productName = Monica;
 			productReference = A10000000000000000000031 /* Monica.app */;
@@ -434,6 +440,7 @@
 				A100000000000000000000E4 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaStorage" */,
 				A100000000000000000000E5 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaSync" */,
 				A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaUI" */,
+				A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */,
 			);
 			productRefGroup = A10000000000000000000077 /* Products */;
 			projectDirPath = "";
@@ -466,6 +473,7 @@
 			files = (
 				A10000000000000000000001 /* MonicaApp.swift in Sources */,
 				A10000000000000000000002 /* AppRootView.swift in Sources */,
+				A50000000000000000000001 /* OneDriveMSALAuthenticationService.swift in Sources */,
 				A30000000000000000000001 /* AppShareExtensionInboxStore.swift in Sources */,
 				A1000000000000000000001B /* AndroidParityDesign.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
@@ -1008,6 +1016,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = SwiftPackages/MonicaUI;
 		};
+		A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SwiftPackages/MSAL;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1065,6 +1077,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A100000000000000000000E4 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaStorage" */;
 			productName = MonicaStorage;
+		};
+		A500000000000000000000D1 /* MSAL */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */;
+			productName = MSAL;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
