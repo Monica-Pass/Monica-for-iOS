@@ -528,6 +528,21 @@ struct AppAutoFillCredentialSaveRequest: Sendable, Equatable {
     }
 }
 
+enum AppShareImportRequest: Sendable, Equatable {
+    case url(URL)
+    case text(String)
+    case file(url: URL, mediaType: String)
+}
+
+struct AppShareImportResult: Sendable, Equatable {
+    let importedCounts: [UnifiedVaultItemKind: Int]
+    let importedTitles: [String]
+
+    var totalCount: Int {
+        importedCounts.values.reduce(0, +)
+    }
+}
+
 struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable {
     let id: String
     let kind: UnifiedVaultItemKind
@@ -3119,6 +3134,27 @@ final class AppSessionModel {
         return normalizedHost.isEmpty ? nil : normalizedHost
     }
 
+    private func sharedLoginTitle(from url: URL) -> String {
+        let host = url.host()?.lowercased() ?? normalizedLoginHost(from: url.absoluteString)
+        let normalizedHost = host.map { $0.hasPrefix("www.") ? String($0.dropFirst(4)) : $0 }
+        return normalizedHost?.nonBlankValue ?? "Shared Link"
+    }
+
+    private func sharedAttachmentMediaType(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).nonBlankValue ?? "application/octet-stream"
+    }
+
+    private func sharedAttachmentLocalPath(fileName: String) -> String {
+        sanitizedAttachmentPreviewFileName("share-extension-\(UUID().uuidString)-\(fileName)")
+    }
+
+    private func sharedContentHash(_ data: Data) -> String {
+        let digest = Data(SHA256.hash(data: data))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return "sha256:\(digest)"
+    }
+
     var isFirstTimeVaultSetup: Bool {
         rememberedVaultDescriptor == nil
     }
@@ -4053,6 +4089,112 @@ final class AppSessionModel {
                 itemTitle: entry.title
             )
             entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    @discardableResult
+    func importSharedItems(
+        _ requests: [AppShareImportRequest],
+        projectTitle: String
+    ) throws -> AppShareImportResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let vaultSession = try requireActiveVaultSession()
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            var importedCounts: [UnifiedVaultItemKind: Int] = [:]
+            var importedTitles: [String] = []
+
+            for request in requests {
+                switch request {
+                case .url(let url):
+                    let title = sharedLoginTitle(from: url)
+                    let entry = try entryRepository.createLoginEntry(
+                        projectID: project.id,
+                        draft: LocalLoginEntryDraft(
+                            title: title,
+                            username: "",
+                            password: "",
+                            url: url.absoluteString
+                        )
+                    )
+                    importedCounts[.login, default: 0] += 1
+                    importedTitles.append(entry.title)
+                    appendOperationTimelineEvent(
+                        action: .created,
+                        itemKind: .login,
+                        itemID: entry.id,
+                        itemTitle: entry.title
+                    )
+                case .text(let text):
+                    let body = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !body.isEmpty else {
+                        continue
+                    }
+                    let entry = try entryRepository.createNoteEntry(
+                        projectID: project.id,
+                        draft: LocalNoteEntryDraft(
+                            title: "来自分享的文本",
+                            body: body
+                        )
+                    )
+                    importedCounts[.note, default: 0] += 1
+                    importedTitles.append(entry.title)
+                    appendOperationTimelineEvent(
+                        action: .created,
+                        itemKind: .note,
+                        itemID: entry.id,
+                        itemTitle: entry.title
+                    )
+                case .file(let url, let mediaType):
+                    let data = try Data(contentsOf: url)
+                    let fileName = sanitizedAttachmentPreviewFileName(url.lastPathComponent)
+                    let localPath = sharedAttachmentLocalPath(fileName: fileName)
+                    let storedPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
+                        data,
+                        vaultID: vaultSession.handle.vaultID,
+                        localPath: localPath
+                    )
+                    let attachment = try entryRepository.createAttachmentMetadata(
+                        projectID: project.id,
+                        entryID: nil,
+                        fileName: fileName,
+                        mediaType: sharedAttachmentMediaType(mediaType),
+                        originalSize: Int64(data.count),
+                        storedSize: Int64(data.count),
+                        contentHash: sharedContentHash(data),
+                        storageMode: "share-extension-imported-blob",
+                        source: "ios-share-extension",
+                        downloadState: "downloaded",
+                        wrappedContentEncryptionKey: nil,
+                        localPath: storedPath
+                    )
+                    importedCounts[.attachmentRef, default: 0] += 1
+                    importedTitles.append(attachment.fileName)
+                    appendOperationTimelineEvent(
+                        action: .created,
+                        itemKind: .attachmentRef,
+                        itemID: attachment.id,
+                        itemTitle: attachment.fileName
+                    )
+                }
+            }
+
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            let result = AppShareImportResult(
+                importedCounts: importedCounts,
+                importedTitles: importedTitles
+            )
+            entryOperationState = .succeeded("Share Extension 已导入 \(result.totalCount) 项")
+            return result
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error

@@ -243,6 +243,64 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingLoginTitle, "GitHub")
     }
 
+    func testShareActionImportCreatesEntriesAndAttachmentWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent("monica-share-secret.txt")
+        try FileManager.default.createDirectory(
+            at: fileURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("shared-file-secret".utf8).write(to: fileURL)
+
+        XCTAssertThrowsError(
+            try model.importSharedItems(
+                [
+                    AppShareImportRequest.url(URL(string: "https://vault.example.com/login?token=secret-query")!),
+                    AppShareImportRequest.text("shared note body secret"),
+                    AppShareImportRequest.file(url: fileURL, mediaType: "text/plain")
+                ],
+                projectTitle: "Shared"
+            )
+        )
+
+        try unlockNewVault(model)
+        let result = try model.importSharedItems(
+            [
+                AppShareImportRequest.url(URL(string: "https://vault.example.com/login?token=secret-query")!),
+                AppShareImportRequest.text("shared note body secret"),
+                AppShareImportRequest.file(url: fileURL, mediaType: "text/plain")
+            ],
+            projectTitle: "Shared"
+        )
+
+        XCTAssertEqual(result.importedCounts[.login], 1)
+        XCTAssertEqual(result.importedCounts[.note], 1)
+        XCTAssertEqual(result.importedCounts[.attachmentRef], 1)
+        XCTAssertEqual(model.loginEntries.map(\.title), ["vault.example.com"])
+        XCTAssertEqual(model.loginEntries.first?.url, "https://vault.example.com/login?token=secret-query")
+        XCTAssertEqual(model.noteEntries.map(\.title), ["来自分享的文本"])
+        XCTAssertEqual(model.noteEntries.first?.body, "shared note body secret")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.fileName, "monica-share-secret.txt")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.source, "ios-share-extension")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.downloadState, "downloaded")
+        XCTAssertEqual(blobStore.savedBlobs.first?.data, Data("shared-file-secret".utf8))
+        XCTAssertEqual(model.entryOperationState, .succeeded("Share Extension 已导入 3 项"))
+
+        let userVisibleText = ([model.entryOperationState.label] + model.operationTimelineEvents.map(\.detail))
+            .joined(separator: " ")
+        XCTAssertFalse(userVisibleText.contains("secret-query"))
+        XCTAssertFalse(userVisibleText.contains("shared note body secret"))
+        XCTAssertFalse(userVisibleText.contains("shared-file-secret"))
+        XCTAssertFalse(userVisibleText.contains(blobStore.savedBlobs.first?.localPath ?? ""))
+    }
+
     func testPlusResourceButtonActivatesAndroidCompatiblePlusWithoutPurchase() async throws {
         let service = RecordingAppPlusResourceUnlockService()
         let model = AppSessionModel(plusResourceUnlockService: service)
