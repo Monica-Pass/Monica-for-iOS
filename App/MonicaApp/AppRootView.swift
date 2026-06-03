@@ -4165,15 +4165,20 @@ final class AppSessionModel {
 
     func unlockRememberedVaultWithPassword(
         deviceID: String,
-        now: Date = Date()
+        now: Date = Date(),
+        fallbackDirectory: URL? = nil
     ) throws {
         guard let rememberedVaultDescriptor else {
             vaultOperationState = .failed(AppVaultKeychainError.rememberedVaultUnavailable.localizedDescription)
             throw AppVaultKeychainError.rememberedVaultUnavailable
         }
 
+        let descriptor = resolvedRememberedVaultDescriptor(
+            rememberedVaultDescriptor,
+            fallbackDirectory: fallbackDirectory
+        )
         try openLocalVault(
-            at: rememberedVaultDescriptor.fileURL,
+            at: descriptor.fileURL,
             deviceID: deviceID,
             now: now
         )
@@ -7928,7 +7933,8 @@ final class AppSessionModel {
 
     func unlockRememberedVaultWithKeychain(
         deviceID: String,
-        now: Date = Date()
+        now: Date = Date(),
+        fallbackDirectory: URL? = nil
     ) async throws {
         vaultOperationState = .running
         vaultKeychainState = .running
@@ -7953,8 +7959,12 @@ final class AppSessionModel {
                 throw AppVaultKeychainError.vaultMismatch
             }
 
+            let descriptor = resolvedRememberedVaultDescriptor(
+                rememberedVaultDescriptor,
+                fallbackDirectory: fallbackDirectory
+            )
             let session = try vaultRepository.openVaultWithSecurityKey(
-                at: rememberedVaultDescriptor.fileURL,
+                at: descriptor.fileURL,
                 securityKeyMaterial: wrappedKey.wrappedKeyMaterial,
                 deviceID: deviceID
             )
@@ -8526,6 +8536,43 @@ final class AppSessionModel {
                 vaultID: session.handle.vaultID
             )
         )
+    }
+
+    private func resolvedRememberedVaultDescriptor(
+        _ descriptor: LocalVaultDescriptor,
+        fallbackDirectory: URL?
+    ) -> LocalVaultDescriptor {
+        if FileManager.default.fileExists(atPath: descriptor.fileURL.path) {
+            return descriptor
+        }
+
+        guard let fallbackDirectory else {
+            return descriptor
+        }
+
+        let relocatedURL = fallbackDirectory.appendingPathComponent(
+            descriptor.fileURL.lastPathComponent,
+            isDirectory: false
+        )
+        guard FileManager.default.fileExists(atPath: relocatedURL.path) else {
+            return descriptor
+        }
+
+        let relocatedDescriptor = LocalVaultDescriptor(
+            fileURL: relocatedURL,
+            displayName: descriptor.displayName
+        )
+        rememberedVaultDescriptor = relocatedDescriptor
+        if let rememberedVaultID {
+            try? rememberedVaultStore.save(
+                RememberedVaultRecord(
+                    fileURL: relocatedDescriptor.fileURL,
+                    displayName: relocatedDescriptor.displayName,
+                    vaultID: rememberedVaultID
+                )
+            )
+        }
+        return relocatedDescriptor
     }
 
     private func readableVaultKeychainErrorMessage(for error: Error) -> String {
@@ -10290,7 +10337,8 @@ struct AppRootView: View {
                     unlockWithKeychain: {
                         Task {
                             try? await session.unlockRememberedVaultWithKeychain(
-                                deviceID: environment.localDeviceIdentifier
+                                deviceID: environment.localDeviceIdentifier,
+                                fallbackDirectory: vaultDirectory
                             )
                         }
                     },
@@ -10454,7 +10502,8 @@ struct AppRootView: View {
                 }
             } else {
                 try session.unlockRememberedVaultWithPassword(
-                    deviceID: environment.localDeviceIdentifier
+                    deviceID: environment.localDeviceIdentifier,
+                    fallbackDirectory: vaultDirectory
                 )
             }
         } catch {

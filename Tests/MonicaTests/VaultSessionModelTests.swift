@@ -781,6 +781,40 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.activeVaultName, "Mobile")
     }
 
+    func testRememberedVaultPasswordUnlockRelocatesStaleDocumentsPathAfterAppUpdate() throws {
+        let currentDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-current-documents-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: currentDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: currentDirectory) }
+
+        let relocatedURL = currentDirectory.appendingPathComponent("Mobile.mdbx")
+        try Data("existing-vault-placeholder".utf8).write(to: relocatedURL)
+
+        let rememberedVaultStore = MemoryRememberedVaultStore()
+        try rememberedVaultStore.save(
+            RememberedVaultRecord(
+                fileURL: URL(fileURLWithPath: "/private/var/mobile/Containers/Data/Application/OLD/Documents/Mobile.mdbx"),
+                displayName: "Mobile",
+                vaultID: "created-vault"
+            )
+        )
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            rememberedVaultStore: rememberedVaultStore
+        )
+
+        model.vaultPassword = "中文 password 12345!"
+        try model.unlockRememberedVaultWithPassword(
+            deviceID: "ios-app-test-device",
+            fallbackDirectory: currentDirectory
+        )
+
+        XCTAssertEqual(engine.openedVaults.first?.fileURL, relocatedURL)
+        XCTAssertEqual(rememberedVaultStore.savedDescriptor?.fileURL, relocatedURL)
+        XCTAssertEqual(model.vaultState, .unlocked)
+    }
+
     func testFirstTimePasswordSetupRequiresMatchingConfirmationBeforeCreatingVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
