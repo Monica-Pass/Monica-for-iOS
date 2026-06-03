@@ -595,6 +595,68 @@ import MonicaStorage
     }
 }
 
+@Test func keepPassKdbxChaCha20PayloadCipherEncryptsPayloadWithoutLeakingSecrets() throws {
+    let masterKey = KeePassKdbxMasterKeyMaterial(
+        algorithm: .aesKdf,
+        material: try decodeHexData("000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xA1, count: 32),
+        encryptionIV: try decodeHexData("000000090000004a00000000"),
+        innerRandomStreamKey: Data(repeating: 0xB2, count: 64),
+        innerRandomStreamID: 3
+    )
+    let plaintext = Data("kdbx chacha20 writeback secret payload".utf8)
+
+    let encrypted = try DefaultKeePassKdbxPayloadCipher().encryptPayload(
+        plaintext,
+        cipher: .chacha20,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+    let decrypted = try DefaultKeePassKdbxPayloadCipher().decryptPayload(
+        encrypted,
+        cipher: .chacha20,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    #expect(decrypted == plaintext)
+    #expect(encrypted != plaintext)
+    #expect(!encrypted.description.contains("kdbx chacha20 writeback secret payload"))
+}
+
+@Test func keepPassKdbxTwofishPayloadCipherEncryptsCbcPayloadWithoutLeakingSecrets() throws {
+    let masterKey = KeePassKdbxMasterKeyMaterial(
+        algorithm: .aesKdf,
+        material: Data(repeating: 0x00, count: 32)
+    )
+    let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+        masterSeed: Data(repeating: 0xA1, count: 32),
+        encryptionIV: Data(repeating: 0x00, count: 16),
+        innerRandomStreamKey: Data(repeating: 0xB2, count: 32),
+        innerRandomStreamID: 2
+    )
+    let plaintext = Data("kdbx twofish writeback secret".utf8)
+
+    let encrypted = try DefaultKeePassKdbxPayloadCipher().encryptPayload(
+        plaintext,
+        cipher: .twofish,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+    let decrypted = try DefaultKeePassKdbxPayloadCipher().decryptPayload(
+        encrypted,
+        cipher: .twofish,
+        masterKey: masterKey,
+        cryptoInputs: cryptoInputs
+    )
+
+    #expect(decrypted == plaintext)
+    #expect(encrypted != plaintext)
+    #expect(!encrypted.description.contains("kdbx twofish writeback secret"))
+}
+
 @Test func keepPassKdbx3BlockStreamDecoderValidatesStreamStartAndHashesBlocksWithoutLeakingSecrets() throws {
     let streamStartBytes = Data("stream-start-secret".utf8)
     let xmlPayload = Data("<KeePassFile><Meta><DatabaseName>secret xml</DatabaseName></Meta></KeePassFile>".utf8)
@@ -1163,6 +1225,190 @@ import MonicaStorage
     #expect(!result.displaySummary.contains("coordinator edited notes secret"))
     #expect(!result.database.description.contains(password))
     #expect(!result.database.description.contains("coordinator decoded password"))
+}
+
+@Test func keepPassKdbx4WritebackCoordinatorProtectsValuesAndRoundTripsWithoutLeakingSecrets() throws {
+    let password = "protected-writeback-password-secret"
+    let attachmentSecret = Data("protected binary writeback secret".utf8)
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "protected-values.kdbx",
+        headerSummary: nil,
+        groups: [
+            KeePassReadOnlyGroup(id: "root-group-uuid", title: "Root", path: "/", depth: 0)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-protected-uuid",
+                title: "Protected Login",
+                username: "writer@example.com",
+                url: "https://protected.example.com",
+                groupPath: "/",
+                groupID: "root-group-uuid",
+                notes: "protected notes stay plain",
+                customFields: [
+                    KeePassReadOnlyCustomField(
+                        title: "Recovery Code",
+                        value: "protected custom field secret",
+                        isProtected: true,
+                        sortOrder: 0
+                    )
+                ],
+                hasPassword: true,
+                decodedPassword: "protected password writeback secret",
+                hasTotp: true,
+                decodedTotp: KeePassReadOnlyTotpSecret(
+                    secret: "JBSWY3DPEHPK3PXP",
+                    issuer: "Protected",
+                    accountName: "writer@example.com",
+                    period: 30,
+                    digits: 6,
+                    algorithm: "SHA1"
+                ),
+                attachmentCount: 1,
+                isDeleted: false,
+                attachments: [
+                    KeePassReadOnlyAttachment(
+                        id: "attachment-protected-uuid",
+                        fileName: "protected.txt",
+                        originalSize: Int64(attachmentSecret.count),
+                        contentHash: "sha256:protected-binary-secret-hash",
+                        decodedContent: attachmentSecret
+                    )
+                ]
+            )
+        ]
+    )
+    let request = KeePassKdbx4WritebackRequest(
+        snapshot: snapshot,
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil),
+        cipher: .aes256,
+        compression: .gzip,
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xD1, count: 32),
+            encryptionIV: Data(repeating: 0xD2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xD3, count: 64),
+            innerRandomStreamID: 3
+        ),
+        kdfParameters: KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xD4, count: 32),
+                iterations: 1,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+    )
+
+    let result = try DefaultKeePassKdbx4WritebackCoordinator().writeDatabase(request)
+    let encryptedPayload = try KeePassKdbxPayloadEnvelope.parse(result.database).encryptedPayload
+    let decryptedPayload = try DefaultKeePassKdbxPayloadDecryptor().decryptPayload(
+        try KeePassKdbxDecryptInputContext.build(
+            database: result.database,
+            sourceName: "protected-values.kdbx",
+            credentialCandidate: KeePassCredentialCandidate(
+                label: "password-only",
+                password: password,
+                keyMaterial: nil
+            )
+        )
+    )
+    let reparsed = try DefaultKeePassDatabaseReader().readSnapshot(
+        database: result.database,
+        sourceName: "protected-values.kdbx",
+        credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+    )
+
+    let entry = try #require(reparsed.entries.first)
+    #expect(entry.decodedPassword == "protected password writeback secret")
+    #expect(entry.customFields.first?.value == "protected custom field secret")
+    #expect(entry.customFields.first?.isProtected == true)
+    #expect(entry.decodedTotp?.secret == "JBSWY3DPEHPK3PXP")
+    #expect(entry.attachments.first?.decodedContent == attachmentSecret)
+    #expect(decryptedPayload.starts(with: makeKdbx4InnerHeader(fields: [
+        (1, littleEndianUInt32(3)),
+        (2, Data(repeating: 0xD3, count: 64)),
+        (3, Data([0x00]) + attachmentSecret)
+    ])))
+    #expect(!String(decoding: encryptedPayload, as: UTF8.self).contains("protected password writeback secret"))
+    #expect(!String(decoding: encryptedPayload, as: UTF8.self).contains("protected custom field secret"))
+    #expect(!String(decoding: encryptedPayload, as: UTF8.self).contains("JBSWY3DPEHPK3PXP"))
+    #expect(!String(decoding: encryptedPayload, as: UTF8.self).contains("protected binary writeback secret"))
+    #expect(!result.displaySummary.contains(password))
+    #expect(!result.displaySummary.contains("protected password writeback secret"))
+    #expect(!result.displaySummary.contains("protected custom field secret"))
+    #expect(!result.displaySummary.contains("protected binary writeback secret"))
+}
+
+@Test func keepPassKdbx4WritebackCoordinatorRoundTripsChaCha20AndTwofishDatabasesWithoutLeakingSecrets() throws {
+    let password = "multi-cipher-writeback-password-secret"
+    let snapshot = KeePassReadOnlySnapshot(
+        sourceName: "multi-cipher-writeback.kdbx",
+        headerSummary: nil,
+        groups: [
+            KeePassReadOnlyGroup(id: "root-group-uuid", title: "Root", path: "/", depth: 0)
+        ],
+        entries: [
+            KeePassReadOnlyEntry(
+                id: "entry-multi-cipher-uuid",
+                title: "Multi Cipher Login",
+                username: "cipher@example.com",
+                url: "https://cipher.example.com",
+                groupPath: "/",
+                groupID: "root-group-uuid",
+                notes: "multi cipher notes secret",
+                hasPassword: true,
+                decodedPassword: "multi cipher decoded password",
+                hasTotp: false,
+                attachmentCount: 0,
+                isDeleted: false
+            )
+        ]
+    )
+
+    for (cipher, iv) in [
+        (KeePassKdbxCipherAlgorithm.chacha20, Data(repeating: 0xE2, count: 12)),
+        (KeePassKdbxCipherAlgorithm.twofish, Data(repeating: 0xE3, count: 16))
+    ] {
+        let request = KeePassKdbx4WritebackRequest(
+            snapshot: snapshot,
+            credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil),
+            cipher: cipher,
+            compression: .gzip,
+            cryptoInputs: KeePassKdbxPayloadCryptoInputs(
+                masterSeed: Data(repeating: 0xE1, count: 32),
+                encryptionIV: iv,
+                innerRandomStreamKey: Data(repeating: 0xE4, count: 64),
+                innerRandomStreamID: 3
+            ),
+            kdfParameters: KeePassKdbxKdfParameters(
+                algorithm: .argon2id,
+                argon2: KeePassKdbxArgon2Parameters(
+                    salt: Data(repeating: 0xE5, count: 32),
+                    iterations: 1,
+                    memoryBytes: 8 * 1024,
+                    parallelism: 1,
+                    version: 0x13
+                )
+            )
+        )
+
+        let result = try DefaultKeePassKdbx4WritebackCoordinator().writeDatabase(request)
+        let envelope = try KeePassKdbxPayloadEnvelope.parse(result.database)
+        let reparsed = try DefaultKeePassDatabaseReader().readSnapshot(
+            database: result.database,
+            sourceName: "multi-cipher-writeback.kdbx",
+            credentials: KeePassUnlockCredentials(password: password, keyFile: nil, keyFileName: nil)
+        )
+
+        #expect(envelope.headerSummary.cryptoSummary?.cipher == cipher)
+        #expect(reparsed.entries.first?.decodedPassword == "multi cipher decoded password")
+        #expect(reparsed.entries.first?.notes == "multi cipher notes secret")
+        #expect(!result.displaySummary.contains(password))
+        #expect(!result.displaySummary.contains("multi cipher decoded password"))
+        #expect(!result.database.description.contains("multi cipher decoded password"))
+    }
 }
 
 @Test func defaultKeePassPayloadDecryptorUnwrapsKdbx4HmacBlocksBeforeAesCipherWithoutLeakingSecrets() throws {

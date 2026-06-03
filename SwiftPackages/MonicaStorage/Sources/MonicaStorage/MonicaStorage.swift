@@ -562,14 +562,27 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
                 iv: cryptoInputs.encryptionIV
             )
         case .chacha20:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "KDBX ChaCha20 payload 加密尚未接入"
-            )
+            guard masterKey.material.count == 32 else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KDBX ChaCha20 key 长度无效；请确认写回参数完整。"
+                )
+            }
+            guard let iv = cryptoInputs.encryptionIV, iv.count == 12 else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KDBX ChaCha20 IV 长度无效；请确认写回参数完整。"
+                )
+            }
+            return KeePassChaCha20KeyStream(
+                key: masterKey.material,
+                nonce: iv
+            ).xor(plaintextPayload)
         case .twofish:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "KDBX Twofish payload 加密尚未接入"
+            return try KeePassTwofishCBC.encrypt(
+                plaintextPayload,
+                key: masterKey.material,
+                iv: cryptoInputs.encryptionIV
             )
         case .unknown:
             throw KeePassOperationError(
@@ -1912,6 +1925,47 @@ private enum KeePassAES256CBC {
 private enum KeePassTwofishCBC {
     private static let blockSize = 16
 
+    static func encrypt(_ data: Data, key: Data, iv: Data?) throws -> Data {
+        guard key.count == 32 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish master key 长度无效；请确认写回参数完整。"
+            )
+        }
+        guard let iv, iv.count == blockSize else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish IV 缺失或长度无效；请确认写回参数完整。"
+            )
+        }
+        let padded = data.addingPKCS7Padding(blockSize: blockSize)
+        var output = Data(repeating: 0, count: padded.count)
+        let status = output.withUnsafeMutableBytes { outputBuffer in
+            padded.withUnsafeBytes { dataBuffer in
+                key.withUnsafeBytes { keyBuffer in
+                    iv.withUnsafeBytes { ivBuffer in
+                        monica_twofish_encrypt_cbc(
+                            keyBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            key.count,
+                            ivBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            iv.count,
+                            dataBuffer.bindMemory(to: UInt8.self).baseAddress,
+                            padded.count,
+                            outputBuffer.bindMemory(to: UInt8.self).baseAddress
+                        )
+                    }
+                }
+            }
+        }
+        guard status == 1 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "KDBX Twofish payload 加密失败；请确认写回参数完整。"
+            )
+        }
+        return output
+    }
+
     static func decrypt(_ data: Data, key: Data, iv: Data?) throws -> Data {
         guard key.count == 32 else {
             throw KeePassOperationError(
@@ -2462,17 +2516,20 @@ public struct KeePassReadOnlySnapshot: Sendable, Equatable {
 
 public struct KeePassXMLWritebackPayload: Sendable, Equatable {
     public let xmlPayload: Data
+    public let binaryContents: [Data]
     public let groupCount: Int
     public let entryCount: Int
     public let attachmentCount: Int
 
     public init(
         xmlPayload: Data,
+        binaryContents: [Data] = [],
         groupCount: Int,
         entryCount: Int,
         attachmentCount: Int
     ) {
         self.xmlPayload = xmlPayload
+        self.binaryContents = binaryContents
         self.groupCount = groupCount
         self.entryCount = entryCount
         self.attachmentCount = attachmentCount
@@ -2486,13 +2543,24 @@ public struct KeePassXMLWritebackPayload: Sendable, Equatable {
 public enum KeePassXMLProtectedValueWritebackMode: Sendable, Equatable {
     case preserveProtectedAttributes
     case writePlainValues
+    case encryptProtectedValues(KeePassKdbxPayloadCryptoInputs)
+}
+
+public enum KeePassXMLBinaryWritebackMode: Sendable, Equatable {
+    case inlineMetaBinaries
+    case externalReferences
 }
 
 public struct KeePassXMLPayloadWriter: Sendable {
     private let protectedValueMode: KeePassXMLProtectedValueWritebackMode
+    private let binaryMode: KeePassXMLBinaryWritebackMode
 
-    public init(protectedValueMode: KeePassXMLProtectedValueWritebackMode = .preserveProtectedAttributes) {
+    public init(
+        protectedValueMode: KeePassXMLProtectedValueWritebackMode = .preserveProtectedAttributes,
+        binaryMode: KeePassXMLBinaryWritebackMode = .inlineMetaBinaries
+    ) {
         self.protectedValueMode = protectedValueMode
+        self.binaryMode = binaryMode
     }
 
     public func write(_ snapshot: KeePassReadOnlySnapshot) throws -> KeePassXMLWritebackPayload {
@@ -2516,23 +2584,35 @@ public struct KeePassXMLPayloadWriter: Sendable {
                         message: "KeePass XML 写回需要已解码的附件内容；请先完成附件解码。"
                     )
                 }
-                let id = Self.uniqueBinaryID(preferred: attachment.id, existing: Set(binaries.map(\.id)))
+                let id = binaryMode == .externalReferences
+                    ? "\(binaries.count)"
+                    : Self.uniqueBinaryID(preferred: attachment.id, existing: Set(binaries.map(\.id)))
                 binaryRefsByEntryAttachment[
                     KeePassXMLWritebackAttachmentKey(entryID: entry.id, attachmentIndex: index)
                 ] = id
                 binaries.append((id: id, content: content))
-                xml.append("      <Binary ID=\"\(Self.escapeAttribute(id))\">\(content.base64EncodedString())</Binary>")
+                if binaryMode == .inlineMetaBinaries {
+                    xml.append("      <Binary ID=\"\(Self.escapeAttribute(id))\">\(content.base64EncodedString())</Binary>")
+                }
             }
         }
         xml.append("    </Binaries>")
         xml.append("  </Meta>")
+        let protectedValueEncoder = try protectedValueEncoder()
         xml.append("  <Root>")
-        appendGroup(tree.root, into: &xml, binaryRefsByEntryAttachment: binaryRefsByEntryAttachment, indent: "    ")
+        appendGroup(
+            tree.root,
+            into: &xml,
+            binaryRefsByEntryAttachment: binaryRefsByEntryAttachment,
+            protectedValueEncoder: protectedValueEncoder,
+            indent: "    "
+        )
         xml.append("  </Root>")
         xml.append("</KeePassFile>")
         let payload = Data(xml.joined(separator: "\n").utf8)
         return KeePassXMLWritebackPayload(
             xmlPayload: payload,
+            binaryContents: binaries.map(\.content),
             groupCount: snapshot.groups.count,
             entryCount: snapshot.entries.count,
             attachmentCount: binaries.count
@@ -2543,16 +2623,29 @@ public struct KeePassXMLPayloadWriter: Sendable {
         _ node: KeePassXMLWritebackTree.Node,
         into xml: inout [String],
         binaryRefsByEntryAttachment: [KeePassXMLWritebackAttachmentKey: String],
+        protectedValueEncoder: KeePassProtectedValueStreamEncoder?,
         indent: String
     ) {
         xml.append("\(indent)<Group>")
         xml.append("\(indent)  <UUID>\(Self.escapeText(node.group.id))</UUID>")
         xml.append("\(indent)  <Name>\(Self.escapeText(node.group.title))</Name>")
         for entry in node.entries {
-            appendEntry(entry, into: &xml, binaryRefsByEntryAttachment: binaryRefsByEntryAttachment, indent: indent + "  ")
+            appendEntry(
+                entry,
+                into: &xml,
+                binaryRefsByEntryAttachment: binaryRefsByEntryAttachment,
+                protectedValueEncoder: protectedValueEncoder,
+                indent: indent + "  "
+            )
         }
         for child in node.children {
-            appendGroup(child, into: &xml, binaryRefsByEntryAttachment: binaryRefsByEntryAttachment, indent: indent + "  ")
+            appendGroup(
+                child,
+                into: &xml,
+                binaryRefsByEntryAttachment: binaryRefsByEntryAttachment,
+                protectedValueEncoder: protectedValueEncoder,
+                indent: indent + "  "
+            )
         }
         xml.append("\(indent)</Group>")
     }
@@ -2561,6 +2654,7 @@ public struct KeePassXMLPayloadWriter: Sendable {
         _ entry: KeePassReadOnlyEntry,
         into xml: inout [String],
         binaryRefsByEntryAttachment: [KeePassXMLWritebackAttachmentKey: String],
+        protectedValueEncoder: KeePassProtectedValueStreamEncoder?,
         indent: String
     ) {
         xml.append("\(indent)<Entry>")
@@ -2571,16 +2665,31 @@ public struct KeePassXMLPayloadWriter: Sendable {
             key: "Password",
             value: entry.decodedPassword ?? "",
             isProtected: shouldMarkProtected(entry.hasPassword),
+            protectedValueEncoder: protectedValueEncoder,
             into: &xml,
             indent: indent + "  "
         )
         appendString(key: "URL", value: entry.url, into: &xml, indent: indent + "  ")
         appendString(key: "Notes", value: entry.notes, into: &xml, indent: indent + "  ")
         if let decodedTotp = entry.decodedTotp {
-            appendString(key: "otp", value: Self.otpAuthURI(from: decodedTotp, fallbackTitle: entry.title), into: &xml, indent: indent + "  ")
+            appendString(
+                key: "otp",
+                value: Self.otpAuthURI(from: decodedTotp, fallbackTitle: entry.title),
+                isProtected: shouldMarkProtected(true),
+                protectedValueEncoder: protectedValueEncoder,
+                into: &xml,
+                indent: indent + "  "
+            )
         }
         for field in entry.customFields {
-            appendString(key: field.title, value: field.value, isProtected: shouldMarkProtected(field.isProtected), into: &xml, indent: indent + "  ")
+            appendString(
+                key: field.title,
+                value: field.value,
+                isProtected: shouldMarkProtected(field.isProtected),
+                protectedValueEncoder: protectedValueEncoder,
+                into: &xml,
+                indent: indent + "  "
+            )
         }
         for (index, attachment) in entry.attachments.enumerated() {
             let ref = binaryRefsByEntryAttachment[
@@ -2598,13 +2707,15 @@ public struct KeePassXMLPayloadWriter: Sendable {
         key: String,
         value: String,
         isProtected: Bool = false,
+        protectedValueEncoder: KeePassProtectedValueStreamEncoder? = nil,
         into xml: inout [String],
         indent: String
     ) {
         xml.append("\(indent)<String>")
         xml.append("\(indent)  <Key>\(Self.escapeText(key))</Key>")
         if isProtected {
-            xml.append("\(indent)  <Value Protected=\"True\">\(Self.escapeText(value))</Value>")
+            let encodedValue = protectedValueEncoder?.encode(value) ?? value
+            xml.append("\(indent)  <Value Protected=\"True\">\(Self.escapeText(encodedValue))</Value>")
         } else {
             xml.append("\(indent)  <Value>\(Self.escapeText(value))</Value>")
         }
@@ -2617,6 +2728,23 @@ public struct KeePassXMLPayloadWriter: Sendable {
             return isProtected
         case .writePlainValues:
             return false
+        case .encryptProtectedValues:
+            return isProtected
+        }
+    }
+
+    private func protectedValueEncoder() throws -> KeePassProtectedValueStreamEncoder? {
+        switch protectedValueMode {
+        case .preserveProtectedAttributes, .writePlainValues:
+            return nil
+        case .encryptProtectedValues(let cryptoInputs):
+            guard let encoder = try KeePassProtectedValueStreamEncoder.make(from: cryptoInputs) else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KeePass protected value 写回需要 inner stream 参数；请确认写回参数完整。"
+                )
+            }
+            return encoder
         }
     }
 
@@ -3368,7 +3496,7 @@ public protocol KeePassKdbx4WritebackCoordinator: Sendable {
 }
 
 public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoordinator {
-    private let xmlPayloadWriter: KeePassXMLPayloadWriter
+    private let xmlPayloadWriter: KeePassXMLPayloadWriter?
     private let gzipPayloadCompressor: KeePassGzipPayloadCompressor
     private let headerWriter: any KeePassKdbx4HeaderWriter
     private let keyDeriver: any KeePassKdbxKeyDeriver
@@ -3378,7 +3506,7 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
     private let fileAssembler: any KeePassKdbxFileAssembler
 
     public init(
-        xmlPayloadWriter: KeePassXMLPayloadWriter = KeePassXMLPayloadWriter(protectedValueMode: .writePlainValues),
+        xmlPayloadWriter: KeePassXMLPayloadWriter? = nil,
         gzipPayloadCompressor: KeePassGzipPayloadCompressor = KeePassGzipPayloadCompressor(),
         headerWriter: any KeePassKdbx4HeaderWriter = DefaultKeePassKdbx4HeaderWriter(),
         keyDeriver: any KeePassKdbxKeyDeriver = DefaultKeePassKdbxKeyDeriver(),
@@ -3404,10 +3532,19 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
             cryptoInputs: request.cryptoInputs,
             kdfParameters: request.kdfParameters
         )
+        let xmlPayloadWriter = xmlPayloadWriter ?? KeePassXMLPayloadWriter(
+            protectedValueMode: .encryptProtectedValues(request.cryptoInputs),
+            binaryMode: .externalReferences
+        )
         let xmlPayload = try xmlPayloadWriter.write(request.snapshot)
         let payloadPlaintext = try compressedPayloadIfNeeded(
             xmlPayload.xmlPayload,
             compression: request.compression
+        )
+        let kdbx4Plaintext = try kdbx4Plaintext(
+            payloadPlaintext,
+            binaryContents: xmlPayload.binaryContents,
+            cryptoInputs: request.cryptoInputs
         )
         let credentialCandidate = try writebackCredentialCandidate(from: request.credentials)
         let context = try KeePassKdbxDecryptInputContext.build(
@@ -3421,7 +3558,7 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
             cryptoInputs: request.cryptoInputs
         )
         let encryptedPayload = try payloadCipher.encryptPayload(
-            payloadPlaintext,
+            kdbx4Plaintext,
             cipher: request.cipher,
             masterKey: masterKey,
             cryptoInputs: request.cryptoInputs
@@ -3443,6 +3580,38 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
             entryCount: xmlPayload.entryCount,
             attachmentCount: xmlPayload.attachmentCount
         )
+    }
+
+    private func kdbx4Plaintext(
+        _ payloadPlaintext: Data,
+        binaryContents: [Data],
+        cryptoInputs: KeePassKdbxPayloadCryptoInputs
+    ) throws -> Data {
+        var innerHeader = Data()
+        if let innerRandomStreamID = cryptoInputs.innerRandomStreamID {
+            innerHeader.append(innerHeaderField(id: 1, value: littleEndianUInt32(innerRandomStreamID)))
+        }
+        if let innerRandomStreamKey = cryptoInputs.innerRandomStreamKey {
+            innerHeader.append(innerHeaderField(id: 2, value: innerRandomStreamKey))
+        }
+        for content in binaryContents {
+            innerHeader.append(innerHeaderField(id: 3, value: Data([0x00]) + content))
+        }
+        innerHeader.append(innerHeaderField(id: 0, value: Data()))
+        return innerHeader + payloadPlaintext
+    }
+
+    private func innerHeaderField(id: UInt8, value: Data) -> Data {
+        Data([id]) + littleEndianUInt32(UInt32(value.count)) + value
+    }
+
+    private func littleEndianUInt32(_ value: UInt32) -> Data {
+        Data([
+            UInt8(value & 0xFF),
+            UInt8((value >> 8) & 0xFF),
+            UInt8((value >> 16) & 0xFF),
+            UInt8((value >> 24) & 0xFF)
+        ])
     }
 
     private func compressedPayloadIfNeeded(
@@ -3555,7 +3724,7 @@ public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
 }
 
 private final class KeePassProtectedValueStreamDecoder {
-    private static let salsa20IV = Data([0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A])
+    fileprivate static let salsa20IV = Data([0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A])
 
     private let keyStream: KeePassInnerRandomKeyStream
 
@@ -3618,6 +3787,57 @@ private final class KeePassProtectedValueStreamDecoder {
             )
         }
         return decoded
+    }
+}
+
+private final class KeePassProtectedValueStreamEncoder {
+    private let keyStream: KeePassInnerRandomKeyStream
+
+    private init(keyStream: KeePassInnerRandomKeyStream) {
+        self.keyStream = keyStream
+    }
+
+    static func make(from cryptoInputs: KeePassKdbxPayloadCryptoInputs) throws -> KeePassProtectedValueStreamEncoder? {
+        guard let innerRandomStreamKey = cryptoInputs.innerRandomStreamKey else {
+            return nil
+        }
+        switch cryptoInputs.innerRandomStreamAlgorithm {
+        case .none, .arc4Variant:
+            return nil
+        case .salsa20:
+            guard innerRandomStreamKey.count == SHA256.byteCount else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KeePass inner stream key 长度无效；请确认写回参数完整。"
+                )
+            }
+            let key = Data(SHA256.hash(data: innerRandomStreamKey))
+            return KeePassProtectedValueStreamEncoder(
+                keyStream: KeePassSalsa20KeyStream(key: key, iv: KeePassProtectedValueStreamDecoder.salsa20IV)
+            )
+        case .chacha20:
+            guard innerRandomStreamKey.count == SHA512.byteCount else {
+                throw KeePassOperationError(
+                    code: .formatUnsupported,
+                    message: "KeePass inner stream key 长度无效；请确认写回参数完整。"
+                )
+            }
+            let hash = Data(SHA512.hash(data: innerRandomStreamKey))
+            let key = Data(hash.prefix(32))
+            let nonce = Data(hash.dropFirst(32).prefix(12))
+            return KeePassProtectedValueStreamEncoder(
+                keyStream: KeePassChaCha20KeyStream(key: key, nonce: nonce)
+            )
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KeePass protected value stream 写回尚未接入"
+            )
+        }
+    }
+
+    func encode(_ value: String) -> String {
+        keyStream.xor(Data(value.utf8)).base64EncodedString()
     }
 }
 
