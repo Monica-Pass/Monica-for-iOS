@@ -3574,6 +3574,58 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 导入计划：KDBX 4，2 个可预览条目，0 个跳过"))
     }
 
+    func testKeePassKdbxWritebackReplacesSourceFileWithoutLeakingSecrets() throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let model = AppSessionModel(keePassKdbxFileWritebackService: writer)
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-kdbx-writeback-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let databaseURL = directory.appendingPathComponent("personal.kdbx")
+        let originalKdbx = Data([
+            0x03, 0xD9, 0xA2, 0x9A,
+            0x67, 0xFB, 0x4B, 0xB5,
+            0x00, 0x00, 0x04, 0x00
+        ])
+        try originalKdbx.write(to: databaseURL)
+        let newDatabaseBytes = Data("rewritten-kdbx-secret-bytes".utf8)
+        let result = KeePassKdbx4WritebackResult(
+            database: newDatabaseBytes,
+            headerBytes: Data([0xAA]),
+            payloadSection: Data([0xBB]),
+            xmlPayloadByteCount: 77,
+            groupCount: 2,
+            entryCount: 3,
+            attachmentCount: 1
+        )
+
+        _ = try model.previewKeePassImport(from: databaseURL)
+        _ = try model.prepareKeePassUnlockPreflight(
+            password: "database-password",
+            keyFile: Data("key-file-secret".utf8),
+            keyFileName: "personal.key"
+        )
+
+        try model.writeKeePassKdbx4Database(result)
+
+        XCTAssertEqual(
+            writer.replacements,
+            [
+                RecordedKeePassKdbxFileReplacement(
+                    url: databaseURL,
+                    data: newDatabaseBytes
+                )
+            ]
+        )
+        XCTAssertEqual(model.keePassPendingDatabaseData, newDatabaseBytes)
+        XCTAssertFalse(model.entryOperationState.label.contains("database-password"))
+        XCTAssertFalse(model.entryOperationState.label.contains("key-file-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("rewritten-kdbx-secret-bytes"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 数据库已写回：3 个条目，1 个附件，27 bytes")
+        )
+    }
+
     func testKeePassConfirmImportCreatesLoginMetadataWithoutSecretsAndClearsPreviewState() throws {
         let engine = RecordingVaultEngine()
         let reader = RecordingKeePassDatabaseReader(
@@ -6248,6 +6300,23 @@ private final class RecordingAppPlusResourceUnlockService: AppPlusResourceUnlock
     func unlockPlus() async throws -> Bool {
         unlockCallCount += 1
         return unlockResult
+    }
+}
+
+private struct RecordedKeePassKdbxFileReplacement: Equatable {
+    let url: URL
+    let data: Data
+}
+
+private final class RecordingAppKeePassKdbxFileWritebackService: AppKeePassKdbxFileWritebackService, @unchecked Sendable {
+    private(set) var replacements: [RecordedKeePassKdbxFileReplacement] = []
+    var error: Error?
+
+    func replaceFile(at url: URL, with data: Data) throws {
+        replacements.append(RecordedKeePassKdbxFileReplacement(url: url, data: data))
+        if let error {
+            throw error
+        }
     }
 }
 

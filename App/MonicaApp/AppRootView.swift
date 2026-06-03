@@ -1401,6 +1401,7 @@ final class AppSessionModel {
     var keePassReadOnlyImportPlan: KeePassReadOnlyImportPlan?
     var keePassPendingDatabaseData: Data?
     var keePassPendingDatabaseName: String?
+    var keePassSourceFileURL: URL?
     var keePassUnlockPassword = ""
     var keePassKeyFileData: Data?
     var keePassKeyFileName = ""
@@ -1450,6 +1451,7 @@ final class AppSessionModel {
     private let plusResourceUnlockService: (any AppPlusResourceUnlockService)?
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
+    private let keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
@@ -1482,6 +1484,7 @@ final class AppSessionModel {
         plusResourceUnlockService: (any AppPlusResourceUnlockService)? = nil,
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
+        keePassKdbxFileWritebackService: any AppKeePassKdbxFileWritebackService = FileSystemAppKeePassKdbxFileWritebackService(),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
@@ -1510,6 +1513,7 @@ final class AppSessionModel {
         self.plusResourceUnlockService = plusResourceUnlockService
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
+        self.keePassKdbxFileWritebackService = keePassKdbxFileWritebackService
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
@@ -6046,6 +6050,7 @@ final class AppSessionModel {
         keePassImportPreview = preview
         keePassPendingDatabaseData = data
         keePassPendingDatabaseName = fileName
+        keePassSourceFileURL = nil
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
         keePassLastMetadataImportReferences = []
@@ -6067,7 +6072,9 @@ final class AppSessionModel {
             }
         }
         let data = try Data(contentsOf: fileURL)
-        return try previewKeePassImport(data, fileName: fileURL.lastPathComponent)
+        let preview = try previewKeePassImport(data, fileName: fileURL.lastPathComponent)
+        keePassSourceFileURL = fileURL
+        return preview
     }
 
     func prepareKeePassUnlockPreflight(
@@ -6366,6 +6373,35 @@ final class AppSessionModel {
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
         entryOperationState = .succeeded("KeePass 密钥文件已选择：\(keePassKeyFileName)")
+    }
+
+    func writeKeePassKdbx4Database(_ result: KeePassKdbx4WritebackResult) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let sourceURL = keePassSourceFileURL else {
+                throw AppKeePassKdbxWritebackError.sourceFileUnavailable
+            }
+            let didStartAccessing = sourceURL.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccessing {
+                    sourceURL.stopAccessingSecurityScopedResource()
+                }
+            }
+            try keePassKdbxFileWritebackService.replaceFile(
+                at: sourceURL,
+                with: result.database
+            )
+            keePassPendingDatabaseData = result.database
+            keePassPendingDatabaseName = sourceURL.lastPathComponent
+            entryOperationState = .succeeded(
+                "KeePass 数据库已写回：\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes"
+            )
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
     }
 
     func previewAndroidBackupImport(
@@ -7107,6 +7143,7 @@ final class AppSessionModel {
         keePassReadOnlyImportPlan = nil
         keePassPendingDatabaseData = nil
         keePassPendingDatabaseName = nil
+        keePassSourceFileURL = nil
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
@@ -8278,6 +8315,46 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
         fileName: String
     ) async throws -> WebDAVDownloadedBackup {
         try await WebDAVClient(endpoint: endpoint).download(fileName: fileName)
+    }
+}
+
+enum AppKeePassKdbxWritebackError: Error, Sendable, Equatable, LocalizedError {
+    case sourceFileUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .sourceFileUnavailable:
+            return "请先从本地文件选择 KeePass KDBX 数据库，再执行写回。"
+        }
+    }
+}
+
+protocol AppKeePassKdbxFileWritebackService: Sendable {
+    func replaceFile(at url: URL, with data: Data) throws
+}
+
+struct FileSystemAppKeePassKdbxFileWritebackService: AppKeePassKdbxFileWritebackService {
+    func replaceFile(at url: URL, with data: Data) throws {
+        let directoryURL = url.deletingLastPathComponent()
+        try FileManager.default.createDirectory(
+            at: directoryURL,
+            withIntermediateDirectories: true
+        )
+        let temporaryURL = directoryURL.appendingPathComponent(
+            ".\(url.lastPathComponent).keepass-writeback-\(UUID().uuidString)",
+            isDirectory: false
+        )
+        try data.write(to: temporaryURL, options: [.atomic])
+        if FileManager.default.fileExists(atPath: url.path) {
+            _ = try FileManager.default.replaceItemAt(
+                url,
+                withItemAt: temporaryURL,
+                backupItemName: nil,
+                options: [.usingNewMetadataOnly]
+            )
+        } else {
+            try FileManager.default.moveItem(at: temporaryURL, to: url)
+        }
     }
 }
 
