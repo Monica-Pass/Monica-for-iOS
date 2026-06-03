@@ -32,6 +32,14 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
         return result.accessToken
     }
 
+    func restoreSession() async throws -> AppOneDriveAuthenticationSession? {
+        let application = try makeApplication()
+        guard let account = try currentAccount(application: application) else {
+            return nil
+        }
+        return AppOneDriveAuthenticationSession(accountLabel: redactedAccountLabel(for: account))
+    }
+
     func signIn() async throws -> AppOneDriveAuthenticationSession {
         let presenter = try await MainActor.run {
             guard let viewController = Self.currentPresentationViewController() else {
@@ -46,7 +54,7 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
 
         let result = try await acquireToken(application: application, parameters: parameters)
         let account = result.account
-        guard let accountIdentifier = account.homeAccountId?.identifier ?? account.identifier else {
+        guard let accountIdentifier = canonicalAccountIdentifier(for: account) else {
             throw AppOneDriveAuthenticationError.tokenUnavailable
         }
         saveAccountIdentifier(accountIdentifier)
@@ -184,17 +192,79 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
     }
 
     private func currentAccount(application: MSALPublicClientApplication) throws -> MSALAccount? {
-        guard let accountIdentifier = userDefaults.string(forKey: accountIdentifierKey),
-              !accountIdentifier.isEmpty
+        let savedIdentifier = savedAccountIdentifier()
+        var directLookupError: Error?
+
+        if let savedIdentifier {
+            do {
+                let account = try application.account(forIdentifier: savedIdentifier)
+                saveCanonicalAccountIdentifier(for: account)
+                return account
+            } catch {
+                directLookupError = error
+            }
+        }
+
+        let accounts: [MSALAccount]
+        do {
+            accounts = try application.allAccounts()
+        } catch {
+            throw directLookupError ?? error
+        }
+
+        if let savedIdentifier {
+            if let account = accounts.first(where: { accountMatches($0, identifier: savedIdentifier) }) {
+                saveCanonicalAccountIdentifier(for: account)
+                return account
+            }
+            clearAccountIdentifier()
+            return nil
+        }
+
+        guard accounts.count == 1,
+              let account = accounts.first
         else {
             return nil
         }
-        do {
-            return try application.account(forIdentifier: accountIdentifier)
-        } catch {
-            clearAccountIdentifier()
-            throw error
+        saveCanonicalAccountIdentifier(for: account)
+        return account
+    }
+
+    private func savedAccountIdentifier() -> String? {
+        let identifier = userDefaults.string(forKey: accountIdentifierKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return identifier.isEmpty ? nil : identifier
+    }
+
+    private func accountMatches(_ account: MSALAccount, identifier: String) -> Bool {
+        let identifier = normalizedAccountIdentifier(identifier)
+        return [
+            account.identifier,
+            account.homeAccountId?.identifier
+        ]
+        .compactMap { $0 }
+        .map(normalizedAccountIdentifier)
+        .contains(identifier)
+    }
+
+    private func canonicalAccountIdentifier(for account: MSALAccount) -> String? {
+        [
+            account.identifier,
+            account.homeAccountId?.identifier
+        ]
+        .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .first { !$0.isEmpty }
+    }
+
+    private func saveCanonicalAccountIdentifier(for account: MSALAccount) {
+        guard let identifier = canonicalAccountIdentifier(for: account) else {
+            return
         }
+        saveAccountIdentifier(identifier)
+    }
+
+    private func normalizedAccountIdentifier(_ identifier: String) -> String {
+        identifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
     }
 
     private func saveAccountIdentifier(_ identifier: String) {

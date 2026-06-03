@@ -1154,6 +1154,22 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.oneDriveAuthenticationState.label.contains("onedrive-access-token-secret"))
     }
 
+    func testOneDriveAuthenticationRestoreUsesPersistedMSALSessionWithoutSignIn() async throws {
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com",
+            isSignedIn: true
+        )
+        let model = AppSessionModel(oneDriveAuthenticationService: authenticationService)
+
+        let restoredSession = try await model.restoreOneDriveAuthenticationSession()
+
+        XCTAssertEqual(restoredSession?.accountLabel, "alice@example.com")
+        XCTAssertEqual(model.oneDriveAuthenticationState, .connected(accountLabel: "alice@example.com"))
+        XCTAssertEqual(authenticationService.signInCount, 0)
+        XCTAssertFalse(model.oneDriveAuthenticationState.label.contains("onedrive-access-token-secret"))
+    }
+
     func testOneDriveMSALDiagnosticErrorDoesNotLeakCallbackSecrets() {
         let error = AppOneDriveAuthenticationError.authenticationFailed(
             domain: "MSALErrorDomain",
@@ -10755,12 +10771,14 @@ private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthen
     private let accountLabel: String
     private let signInError: Error?
     private var isSignedIn = false
+    private(set) var signInCount = 0
     private(set) var handledRedirects: [URL] = []
 
-    init(token: String, accountLabel: String, signInError: Error? = nil) {
+    init(token: String, accountLabel: String, signInError: Error? = nil, isSignedIn: Bool = false) {
         self.token = token
         self.accountLabel = accountLabel
         self.signInError = signInError
+        self.isSignedIn = isSignedIn
     }
 
     func accessToken() async throws -> String {
@@ -10770,7 +10788,15 @@ private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthen
         return token
     }
 
+    func restoreSession() async throws -> AppOneDriveAuthenticationSession? {
+        guard isSignedIn else {
+            return nil
+        }
+        return AppOneDriveAuthenticationSession(accountLabel: accountLabel)
+    }
+
     func signIn() async throws -> AppOneDriveAuthenticationSession {
+        signInCount += 1
         if let signInError {
             throw signInError
         }

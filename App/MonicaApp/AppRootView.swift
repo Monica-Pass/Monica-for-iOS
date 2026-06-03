@@ -817,6 +817,7 @@ struct AppOneDriveAuthenticationSession: Sendable, Equatable {
 }
 
 protocol AppOneDriveAuthenticationService: OneDriveAccessTokenProvider {
+    func restoreSession() async throws -> AppOneDriveAuthenticationSession?
     func signIn() async throws -> AppOneDriveAuthenticationSession
     func signOut() async throws
     func handleRedirectURL(_ url: URL) -> Bool
@@ -8159,6 +8160,26 @@ final class AppSessionModel {
         }
     }
 
+    @discardableResult
+    func restoreOneDriveAuthenticationSession() async throws -> AppOneDriveAuthenticationSession? {
+        guard let oneDriveAuthenticationService else {
+            oneDriveAuthenticationState = .disconnected
+            return nil
+        }
+
+        do {
+            guard let session = try await oneDriveAuthenticationService.restoreSession() else {
+                oneDriveAuthenticationState = .disconnected
+                return nil
+            }
+            oneDriveAuthenticationState = .connected(accountLabel: session.accountLabel)
+            return session
+        } catch {
+            oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
+            throw error
+        }
+    }
+
     func signOutFromOneDrive() async throws {
         recordUserActivity()
         guard let oneDriveAuthenticationService else {
@@ -10399,11 +10420,17 @@ struct AppRootView: View {
         )
         .onChange(of: scenePhase) { _, phase in
             session.handleScenePhaseChange(phase)
+            if phase == .active {
+                restoreOneDriveAuthenticationSessionIfAvailable()
+            }
         }
         .onOpenURL { url in
             if !session.handleOneDriveRedirectURL(url) {
                 _ = session.openShortcutURL(url)
             }
+        }
+        .task {
+            restoreOneDriveAuthenticationSessionIfAvailable()
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(
@@ -10421,6 +10448,15 @@ struct AppRootView: View {
             if !isPresented {
                 session.dismissForgotPasswordRecovery()
             }
+        }
+    }
+
+    private func restoreOneDriveAuthenticationSessionIfAvailable() {
+        guard !session.oneDriveAuthenticationState.isRunning else {
+            return
+        }
+        Task {
+            try? await session.restoreOneDriveAuthenticationSession()
         }
     }
 
