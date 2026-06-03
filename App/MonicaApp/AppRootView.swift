@@ -608,6 +608,97 @@ struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable, Codable {
     }
 }
 
+struct AppShortcutSnapshotEntry: Sendable, Equatable, Identifiable, Codable {
+    let id: String
+    let kind: UnifiedVaultItemKind
+    let title: String
+    let subtitle: String
+    let searchableText: String
+    let openURL: URL
+
+    private enum CodingKeys: String, CodingKey {
+        case id
+        case kind
+        case title
+        case subtitle
+        case searchableText
+        case openURL
+    }
+
+    init(summary: AppShortcutEntrySummary) {
+        id = summary.id
+        kind = summary.kind
+        title = summary.title
+        subtitle = summary.subtitle
+        searchableText = summary.searchableText
+        openURL = URL(string: "monica://shortcut/\(summary.kind.rawValue)/\(summary.id)")!
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        let kindRawValue = try container.decode(String.self, forKey: .kind)
+        guard let decodedKind = UnifiedVaultItemKind(rawValue: kindRawValue) else {
+            throw DecodingError.dataCorruptedError(
+                forKey: .kind,
+                in: container,
+                debugDescription: "Unknown shortcut snapshot item kind."
+            )
+        }
+        kind = decodedKind
+        title = try container.decode(String.self, forKey: .title)
+        subtitle = try container.decode(String.self, forKey: .subtitle)
+        searchableText = try container.decode(String.self, forKey: .searchableText)
+        openURL = try container.decode(URL.self, forKey: .openURL)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(kind.rawValue, forKey: .kind)
+        try container.encode(title, forKey: .title)
+        try container.encode(subtitle, forKey: .subtitle)
+        try container.encode(searchableText, forKey: .searchableText)
+        try container.encode(openURL, forKey: .openURL)
+    }
+}
+
+struct AppShortcutSnapshot: Sendable, Equatable, Codable {
+    let vaultState: AppWidgetVaultState
+    let entries: [AppShortcutSnapshotEntry]
+
+    static let locked = AppShortcutSnapshot(vaultState: .locked, entries: [])
+}
+
+struct AppShortcutSnapshotFileStore: Sendable {
+    let snapshotFileURL: URL
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL) {
+        snapshotFileURL = containerURL.appendingPathComponent("shortcuts-snapshot-v1.json")
+        encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        decoder = JSONDecoder()
+    }
+
+    func saveSnapshot(_ snapshot: AppShortcutSnapshot) throws {
+        let data = try encoder.encode(snapshot)
+        try data.write(
+            to: snapshotFileURL,
+            options: [.atomic, .completeFileProtection]
+        )
+    }
+
+    func loadSnapshot() throws -> AppShortcutSnapshot? {
+        guard FileManager.default.fileExists(atPath: snapshotFileURL.path) else {
+            return nil
+        }
+        let data = try Data(contentsOf: snapshotFileURL)
+        return try decoder.decode(AppShortcutSnapshot.self, from: data)
+    }
+}
+
 enum AppWidgetVaultState: String, Sendable, Equatable, Codable {
     case locked
     case unlocked
@@ -1718,6 +1809,7 @@ final class AppSessionModel {
     private let keePassKdbx3WritebackCoordinator: any KeePassKdbx3WritebackCoordinator
     private let keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator
     private let widgetSnapshotStore: AppWidgetSnapshotFileStore?
+    private let shortcutSnapshotStore: AppShortcutSnapshotFileStore?
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
@@ -1757,6 +1849,7 @@ final class AppSessionModel {
         keePassKdbx3WritebackCoordinator: any KeePassKdbx3WritebackCoordinator = DefaultKeePassKdbx3WritebackCoordinator(),
         keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator = DefaultKeePassKdbx4WritebackCoordinator(),
         widgetSnapshotStore: AppWidgetSnapshotFileStore? = nil,
+        shortcutSnapshotStore: AppShortcutSnapshotFileStore? = nil,
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
@@ -1791,6 +1884,7 @@ final class AppSessionModel {
         self.keePassKdbx3WritebackCoordinator = keePassKdbx3WritebackCoordinator
         self.keePassKdbx4WritebackCoordinator = keePassKdbx4WritebackCoordinator
         self.widgetSnapshotStore = widgetSnapshotStore
+        self.shortcutSnapshotStore = shortcutSnapshotStore
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
@@ -2075,6 +2169,23 @@ final class AppSessionModel {
         }
     }
 
+    func shortcutSnapshot() -> AppShortcutSnapshot {
+        guard vaultState == .unlocked else {
+            return .locked
+        }
+        return AppShortcutSnapshot(
+            vaultState: .unlocked,
+            entries: allShortcutEntrySummaries().map(AppShortcutSnapshotEntry.init(summary:))
+        )
+    }
+
+    func refreshShortcutSnapshotIfConfigured() throws {
+        guard let shortcutSnapshotStore else {
+            return
+        }
+        try shortcutSnapshotStore.saveSnapshot(shortcutSnapshot())
+    }
+
     func widgetSnapshot(now: Date = Date()) -> AppWidgetSnapshot {
         guard vaultState == .unlocked else {
             return AppWidgetSnapshot(
@@ -2165,6 +2276,35 @@ final class AppSessionModel {
             presentEditEditor(for: entry)
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef)
+        }
+    }
+
+    @discardableResult
+    func openShortcutURL(_ url: URL) -> Bool {
+        guard url.scheme == "monica",
+              url.host() == "shortcut" else {
+            return false
+        }
+        let pathComponents = url.pathComponents.filter { $0 != "/" }
+        guard pathComponents.count == 2,
+              let kind = UnifiedVaultItemKind(rawValue: pathComponents[0]) else {
+            return false
+        }
+        let entryID = pathComponents[1]
+        do {
+            try openShortcutEntry(
+                AppShortcutEntrySummary(
+                    id: entryID,
+                    kind: kind,
+                    title: "",
+                    subtitle: "",
+                    searchableText: ""
+                )
+            )
+            return true
+        } catch {
+            vaultOperationState = .failed("快捷入口已失效，请重新选择条目。")
+            return false
         }
     }
 
@@ -3866,6 +4006,7 @@ final class AppSessionModel {
             clearOperationTimelineEvents()
             recordUserActivity(at: now)
             try refreshWidgetSnapshotIfConfigured(now: now)
+            try refreshShortcutSnapshotIfConfigured()
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
             clearVaultAccessAfterFailure()
@@ -3914,6 +4055,7 @@ final class AppSessionModel {
             clearOperationTimelineEvents()
             recordUserActivity(at: now)
             try refreshWidgetSnapshotIfConfigured(now: now)
+            try refreshShortcutSnapshotIfConfigured()
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
             clearVaultAccessAfterFailure()
@@ -4271,6 +4413,7 @@ final class AppSessionModel {
             loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
             try refreshAutoFillEncryptedIndexIfConfigured()
+            try refreshShortcutSnapshotIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .login,
@@ -4732,6 +4875,7 @@ final class AppSessionModel {
             )
             noteEntries = try entryRepository.listNoteEntries(projectID: project.id)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: project.id)
+            try refreshShortcutSnapshotIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .note,
@@ -4904,6 +5048,7 @@ final class AppSessionModel {
             totpSecret = ""
             totpEntries = try entryRepository.listTotpEntries(projectID: project.id)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: project.id)
+            try refreshShortcutSnapshotIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .totp,
@@ -8133,6 +8278,7 @@ final class AppSessionModel {
         clearPendingAndroidEncryptedBackup()
         dismissAttachmentQuickLookPreview()
         try? refreshWidgetSnapshotIfConfigured()
+        try? refreshShortcutSnapshotIfConfigured()
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
@@ -9868,6 +10014,9 @@ struct AppRootView: View {
         )
         .onChange(of: scenePhase) { _, phase in
             session.handleScenePhaseChange(phase)
+        }
+        .onOpenURL { url in
+            _ = session.openShortcutURL(url)
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(

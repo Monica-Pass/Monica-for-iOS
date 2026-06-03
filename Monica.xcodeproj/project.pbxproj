@@ -32,6 +32,7 @@
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
+		A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */; };
 		A20000000000000000000001 /* MonicaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* MonicaWidget.swift */; };
 		A20000000000000000000002 /* MonicaWidgetExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A20000000000000000000014 /* MonicaWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		A30000000000000000000001 /* AppShareExtensionInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A30000000000000000000011 /* AppShareExtensionInboxStore.swift */; };
@@ -105,6 +106,7 @@
 		A10000000000000000000026 /* LockScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenViews.swift; sourceTree = "<group>"; };
 		A10000000000000000000028 /* ScannerAndStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerAndStatusViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* AndroidParityVaultHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityVaultHomeView.swift; sourceTree = "<group>"; };
+		A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaShortcutsAppIntents.swift; sourceTree = "<group>"; };
 		A30000000000000000000011 /* AppShareExtensionInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShareExtensionInboxStore.swift; sourceTree = "<group>"; };
 		A10000000000000000000031 /* Monica.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monica.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A10000000000000000000032 /* MonicaAutoFillExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonicaAutoFillExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -198,6 +200,7 @@
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
+				A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */,
 				A30000000000000000000011 /* AppShareExtensionInboxStore.swift */,
 				A10000000000000000000013 /* MonicaAppEnvironment.swift */,
 				A10000000000000000000014 /* Info.plist */,
@@ -470,6 +473,7 @@
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
+				A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */,
 				A10000000000000000000003 /* MonicaAppEnvironment.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -243,6 +243,74 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingLoginTitle, "GitHub")
     }
 
+    func testShortcutSnapshotStorePersistsAppGroupSafeEntriesWithoutLeakingSecrets() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-shortcuts-snapshot-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+        let store = AppShortcutSnapshotFileStore(containerURL: directory)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            shortcutSnapshotStore: store
+        )
+
+        try model.refreshShortcutSnapshotIfConfigured()
+        var snapshotText = try String(contentsOf: store.snapshotFileURL, encoding: .utf8)
+        XCTAssertTrue(snapshotText.contains("locked"))
+        XCTAssertFalse(snapshotText.contains("github-password-secret"))
+
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "github-password-secret"
+        model.loginURL = "https://github.com/login?token=secret-query"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.noteTitle = "GitHub Recovery"
+        model.noteBody = "backup-code-secret"
+        try model.createNoteEntry(projectTitle: "Personal")
+        model.totpTitle = "GitHub TOTP"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        model.totpIssuer = "GitHub"
+        model.totpAccountName = "alice@example.com"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let snapshot = try store.loadSnapshot()
+        XCTAssertEqual(snapshot?.vaultState, .unlocked)
+        XCTAssertEqual(snapshot?.entries.map(\.kind), [.login, .note, .totp])
+        XCTAssertEqual(snapshot?.entries.first?.title, "GitHub")
+        XCTAssertEqual(snapshot?.entries.first?.subtitle, "alice@example.com / github.com")
+        XCTAssertEqual(snapshot?.entries.first?.openURL.absoluteString, "monica://shortcut/login/entry-1")
+
+        snapshotText = try String(contentsOf: store.snapshotFileURL, encoding: .utf8)
+        XCTAssertFalse(snapshotText.contains("github-password-secret"))
+        XCTAssertFalse(snapshotText.contains("secret-query"))
+        XCTAssertFalse(snapshotText.contains("backup-code-secret"))
+        XCTAssertFalse(snapshotText.contains("JBSWY3DPEHPK3PXP"))
+    }
+
+    func testShortcutDeepLinkOpensEntryWithoutLeakingSecrets() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "github-password-secret"
+        model.loginURL = "https://github.com/login?token=secret-query"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        XCTAssertFalse(model.openShortcutURL(URL(string: "https://github.com/shortcut/login/entry-1")!))
+        XCTAssertFalse(model.openShortcutURL(URL(string: "monica://wrong/login/entry-1")!))
+
+        XCTAssertTrue(model.openShortcutURL(URL(string: "monica://shortcut/login/entry-1")!))
+
+        XCTAssertEqual(model.selectedTab, .passwords)
+        XCTAssertEqual(model.presentedEditorMode, .edit(VaultItemRoute(kind: .login, entryID: "entry-1")))
+        XCTAssertEqual(model.editingLoginTitle, "GitHub")
+        XCTAssertEqual(model.editingLoginURL, "https://github.com/login?token=secret-query")
+        XCTAssertNotEqual(model.vaultOperationState, .failed("github-password-secret"))
+    }
+
     func testShareActionImportCreatesEntriesAndAttachmentWithoutLeakingSecrets() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()
