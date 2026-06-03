@@ -1090,6 +1090,12 @@ struct AppKeePassKdbxWritebackResult: Sendable, Equatable {
     }
 }
 
+struct AppKeePassCloudFileSource: Sendable, Equatable {
+    let provider: CloudFileProviderKind
+    let itemID: String
+    let fileName: String
+}
+
 struct CSVExportDocument: FileDocument, Sendable {
     static var readableContentTypes: [UTType] { [.commaSeparatedText] }
 
@@ -1818,6 +1824,7 @@ final class AppSessionModel {
     var keePassPendingDatabaseData: Data?
     var keePassPendingDatabaseName: String?
     var keePassSourceFileURL: URL?
+    var keePassCloudFileSource: AppKeePassCloudFileSource?
     var keePassUnlockPassword = ""
     var keePassKeyFileData: Data?
     var keePassKeyFileName = ""
@@ -6727,6 +6734,7 @@ final class AppSessionModel {
         keePassPendingDatabaseData = data
         keePassPendingDatabaseName = fileName
         keePassSourceFileURL = nil
+        keePassCloudFileSource = nil
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
         keePassLastMetadataImportReferences = []
@@ -6750,6 +6758,26 @@ final class AppSessionModel {
         let data = try Data(contentsOf: fileURL)
         let preview = try previewKeePassImport(data, fileName: fileURL.lastPathComponent)
         keePassSourceFileURL = fileURL
+        return preview
+    }
+
+    func previewKeePassImport(
+        fromCloudFile download: CloudFileDownload,
+        provider kind: CloudFileProviderKind
+    ) throws -> KeePassImportPreview {
+        let fileName = sanitizedCloudFileName(download.item.name)
+        let preview = try previewKeePassImport(download.data, fileName: fileName)
+        keePassSourceFileURL = nil
+        keePassCloudFileSource = AppKeePassCloudFileSource(
+            provider: kind,
+            itemID: download.item.id,
+            fileName: fileName
+        )
+        cloudFileRestorePreview = AppCloudFileRestorePreview(
+            provider: kind,
+            download: download
+        )
+        downloadedCloudFileRestore = download
         return preview
     }
 
@@ -7086,40 +7114,86 @@ final class AppSessionModel {
         }
     }
 
+    private func makeKeePassReadOnlySnapshotWritebackResult() throws -> AppKeePassKdbxWritebackResult {
+        let snapshot: KeePassReadOnlySnapshot
+        if let existingSnapshot = keePassReadOnlySnapshot {
+            snapshot = existingSnapshot
+        } else {
+            snapshot = try previewKeePassReadOnlyTree()
+        }
+        switch try currentKeePassKdbxEnvelope().headerSummary.formatVersion {
+        case .kdbx3:
+            return AppKeePassKdbxWritebackResult(
+                try keePassKdbx3WritebackCoordinator.writeDatabase(
+                    try makeKeePassKdbx3WritebackRequest(snapshot: snapshot)
+                )
+            )
+        case .kdbx4:
+            return AppKeePassKdbxWritebackResult(
+                try keePassKdbx4WritebackCoordinator.writeDatabase(
+                    try makeKeePassKdbx4WritebackRequest(snapshot: snapshot)
+                )
+            )
+        case .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "未知 KDBX 版本写回尚未接入。"
+            )
+        }
+    }
+
     func writeKeePassReadOnlySnapshotBackToSource() throws -> AppKeePassKdbxWritebackResult {
         recordUserActivity()
         entryOperationState = .running
 
         do {
-            let snapshot: KeePassReadOnlySnapshot
-            if let existingSnapshot = keePassReadOnlySnapshot {
-                snapshot = existingSnapshot
-            } else {
-                snapshot = try previewKeePassReadOnlyTree()
-            }
-            let result: AppKeePassKdbxWritebackResult
-            switch try currentKeePassKdbxEnvelope().headerSummary.formatVersion {
-            case .kdbx3:
-                result = AppKeePassKdbxWritebackResult(
-                    try keePassKdbx3WritebackCoordinator.writeDatabase(
-                        try makeKeePassKdbx3WritebackRequest(snapshot: snapshot)
-                    )
-                )
-            case .kdbx4:
-                result = AppKeePassKdbxWritebackResult(
-                    try keePassKdbx4WritebackCoordinator.writeDatabase(
-                        try makeKeePassKdbx4WritebackRequest(snapshot: snapshot)
-                    )
-                )
-            case .unknown:
-                throw KeePassOperationError(
-                    code: .formatUnsupported,
-                    message: "未知 KDBX 版本写回尚未接入。"
-                )
-            }
+            let result = try makeKeePassReadOnlySnapshotWritebackResult()
             try writeKeePassKdbxDatabase(result)
             return result
         } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func writeKeePassReadOnlySnapshotBackToCloudSource() async throws -> AppKeePassKdbxWritebackResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let source = keePassCloudFileSource else {
+                throw AppKeePassKdbxWritebackError.cloudSourceUnavailable
+            }
+            let result = try makeKeePassReadOnlySnapshotWritebackResult()
+            cloudFileState = .running(source.provider)
+            let provider = try cloudFileProvider(for: source.provider)
+            let receipt = try await provider.overwriteFile(
+                id: source.itemID,
+                data: result.database,
+                fileName: source.fileName
+            )
+            let fileName = sanitizedCloudFileName(receipt.name)
+            keePassPendingDatabaseData = result.database
+            keePassPendingDatabaseName = fileName
+            keePassSourceFileURL = nil
+            keePassCloudFileSource = AppKeePassCloudFileSource(
+                provider: source.provider,
+                itemID: source.itemID,
+                fileName: fileName
+            )
+            cloudFileState = .writeSucceeded(
+                provider: source.provider,
+                fileName: fileName,
+                byteCount: receipt.byteCount
+            )
+            entryOperationState = .succeeded(
+                "KeePass 云文件已写回：\(source.provider.displayName) \(fileName)，\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes"
+            )
+            return result
+        } catch {
+            if let source = keePassCloudFileSource {
+                cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: source.provider))
+            }
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
@@ -8492,6 +8566,7 @@ final class AppSessionModel {
         keePassPendingDatabaseData = nil
         keePassPendingDatabaseName = nil
         keePassSourceFileURL = nil
+        keePassCloudFileSource = nil
         keePassUnlockPassword = ""
         keePassKeyFileData = nil
         keePassKeyFileName = ""
@@ -9880,11 +9955,14 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
 
 enum AppKeePassKdbxWritebackError: Error, Sendable, Equatable, LocalizedError {
     case sourceFileUnavailable
+    case cloudSourceUnavailable
 
     var errorDescription: String? {
         switch self {
         case .sourceFileUnavailable:
             return "请先从本地文件选择 KeePass KDBX 数据库，再执行写回。"
+        case .cloudSourceUnavailable:
+            return "请先从云文件源选择 KeePass KDBX 数据库，再执行写回。"
         }
     }
 }

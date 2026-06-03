@@ -4254,6 +4254,123 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("KeePass 数据库已写回：1 个条目，0 个附件，30 bytes"))
     }
 
+    func testKeePassKdbxSnapshotSaveOverwritesCloudFileSourceWithoutLeakingSecrets() async throws {
+        let writer = RecordingAppKeePassKdbxFileWritebackService()
+        let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
+        let oneDrive = RecordingCloudFileProvider(kind: .oneDrive)
+        let snapshot = KeePassReadOnlySnapshot(
+            sourceName: "RemoteVault.kdbx",
+            headerSummary: KeePassHeaderSummary(majorVersion: 4, minorVersion: 0, formatVersion: .kdbx4),
+            groups: [
+                KeePassReadOnlyGroup(id: "root", title: "Root", path: "/", depth: 0)
+            ],
+            entries: [
+                KeePassReadOnlyEntry(
+                    id: "entry-cloud",
+                    title: "Cloud Login",
+                    username: "cloud@example.com",
+                    url: "https://cloud.example.com",
+                    groupPath: "/",
+                    groupID: "root",
+                    notes: "cloud note secret",
+                    hasPassword: true,
+                    decodedPassword: "cloud decoded password secret",
+                    hasTotp: false,
+                    attachmentCount: 0,
+                    isDeleted: false
+                )
+            ]
+        )
+        let reader = RecordingKeePassDatabaseReader(snapshot: snapshot)
+        let model = AppSessionModel(
+            cloudFileProviders: [.oneDrive: oneDrive],
+            keePassDatabaseReader: reader,
+            keePassKdbxFileWritebackService: writer,
+            keePassKdbx4WritebackCoordinator: coordinator
+        )
+        let cryptoInputs = KeePassKdbxPayloadCryptoInputs(
+            masterSeed: Data(repeating: 0xC1, count: 32),
+            encryptionIV: Data(repeating: 0xC2, count: 16),
+            innerRandomStreamKey: Data(repeating: 0xC3, count: 32),
+            innerRandomStreamID: 2
+        )
+        let kdfParameters = KeePassKdbxKdfParameters(
+            algorithm: .argon2id,
+            argon2: KeePassKdbxArgon2Parameters(
+                salt: Data(repeating: 0xC4, count: 32),
+                iterations: 2,
+                memoryBytes: 8 * 1024,
+                parallelism: 1,
+                version: 0x13
+            )
+        )
+        let sourceDatabase = try DefaultKeePassKdbx4HeaderWriter().writeHeader(
+            cipher: .aes256,
+            compression: .gzip,
+            cryptoInputs: cryptoInputs,
+            kdfParameters: kdfParameters
+        ) + Data("cloud-encrypted-payload-placeholder".utf8)
+        let cloudItem = CloudFileItem(
+            id: "remote-kdbx-secret-id",
+            name: "/Apps/Monica/RemoteVault.kdbx",
+            path: "/Apps/Monica/private-folder/RemoteVault.kdbx",
+            byteCount: sourceDatabase.count,
+            modifiedAt: nil,
+            sha256: "remote-kdbx-sha-secret"
+        )
+        let download = CloudFileDownload(
+            item: cloudItem,
+            data: sourceDatabase,
+            sha256: "remote-download-sha-secret"
+        )
+        let expectedResult = KeePassKdbx4WritebackResult(
+            database: Data("cloud-coordinated-kdbx-secret-bytes".utf8),
+            headerBytes: Data([0x05]),
+            payloadSection: Data([0x06]),
+            xmlPayloadByteCount: 99,
+            groupCount: 1,
+            entryCount: 1,
+            attachmentCount: 0
+        )
+        coordinator.result = expectedResult
+
+        _ = try model.previewKeePassImport(fromCloudFile: download, provider: .oneDrive)
+        _ = try model.prepareKeePassUnlockPreflight(password: "cloud-database-password")
+        _ = try model.previewKeePassReadOnlyTree()
+
+        let result = try await model.writeKeePassReadOnlySnapshotBackToCloudSource()
+
+        let request = try XCTUnwrap(coordinator.requests.first)
+        XCTAssertEqual(request.snapshot, snapshot)
+        XCTAssertEqual(request.credentials.password, "cloud-database-password")
+        XCTAssertEqual(request.cipher, .aes256)
+        XCTAssertEqual(request.compression, .gzip)
+        XCTAssertEqual(request.cryptoInputs, cryptoInputs)
+        XCTAssertEqual(request.kdfParameters, kdfParameters)
+        XCTAssertEqual(result.database, expectedResult.database)
+        XCTAssertTrue(writer.replacements.isEmpty)
+        XCTAssertEqual(oneDrive.overwrites.first?.itemID, "remote-kdbx-secret-id")
+        XCTAssertEqual(oneDrive.overwrites.first?.fileName, "RemoteVault.kdbx")
+        XCTAssertEqual(oneDrive.overwrites.first?.data, expectedResult.database)
+        XCTAssertEqual(model.keePassPendingDatabaseData, expectedResult.database)
+        XCTAssertEqual(model.keePassPendingDatabaseName, "RemoteVault.kdbx")
+        XCTAssertEqual(model.cloudFileState, .writeSucceeded(provider: .oneDrive, fileName: "RemoteVault.kdbx", byteCount: expectedResult.database.count))
+
+        let visibleText = [model.entryOperationState.label, model.cloudFileState.label]
+            .joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("remote-kdbx-secret-id"))
+        XCTAssertFalse(visibleText.contains("private-folder"))
+        XCTAssertFalse(visibleText.contains("remote-kdbx-sha-secret"))
+        XCTAssertFalse(visibleText.contains("remote-download-sha-secret"))
+        XCTAssertFalse(visibleText.contains("cloud-database-password"))
+        XCTAssertFalse(visibleText.contains("cloud decoded password secret"))
+        XCTAssertFalse(visibleText.contains("cloud-coordinated-kdbx-secret-bytes"))
+        XCTAssertEqual(
+            model.entryOperationState,
+            .succeeded("KeePass 云文件已写回：OneDrive RemoteVault.kdbx，1 个条目，0 个附件，35 bytes")
+        )
+    }
+
     func testKeePassSnapshotAttachmentContentEditWritesUpdatedAttachmentWithoutLeakingSecrets() throws {
         let writer = RecordingAppKeePassKdbxFileWritebackService()
         let coordinator = RecordingKeePassKdbx4WritebackCoordinator()
