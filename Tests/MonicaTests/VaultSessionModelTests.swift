@@ -204,6 +204,45 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingLoginFavorite, true)
     }
 
+    func testShortcutEntrySearchSummarizesEntriesAndOpensEditorWithoutLeakingSecrets() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+
+        XCTAssertEqual(model.shortcutEntrySummaries(matching: "github"), [])
+
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "github-password-secret"
+        model.loginURL = "https://github.com/login"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.noteTitle = "GitHub Recovery"
+        model.noteBody = "backup-code-secret"
+        try model.createNoteEntry(projectTitle: "Personal")
+        model.totpTitle = "GitHub TOTP"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        model.totpIssuer = "GitHub"
+        model.totpAccountName = "alice@example.com"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let summaries = model.shortcutEntrySummaries(matching: "github")
+
+        XCTAssertEqual(summaries.map(\.kind), [.login, .note, .totp])
+        XCTAssertEqual(summaries.map(\.title), ["GitHub", "GitHub Recovery", "GitHub TOTP"])
+        XCTAssertEqual(summaries.first?.subtitle, "alice@example.com / github.com")
+        let visibleShortcutText = summaries
+            .map { "\($0.title) \($0.subtitle) \($0.searchableText)" }
+            .joined(separator: " ")
+        XCTAssertFalse(visibleShortcutText.contains("github-password-secret"))
+        XCTAssertFalse(visibleShortcutText.contains("backup-code-secret"))
+        XCTAssertFalse(visibleShortcutText.contains("JBSWY3DPEHPK3PXP"))
+
+        try model.openShortcutEntry(summaries[0])
+
+        XCTAssertEqual(model.selectedTab, .passwords)
+        XCTAssertEqual(model.presentedEditorMode, .edit(VaultItemRoute(kind: .login, entryID: "entry-1")))
+        XCTAssertEqual(model.editingLoginTitle, "GitHub")
+    }
+
     func testSavingPresentedAddPasswordEditorUsesExistingCreateFlow() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

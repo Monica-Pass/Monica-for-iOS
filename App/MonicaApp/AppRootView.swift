@@ -484,6 +484,18 @@ struct AppAutoFillCredentialSaveRequest: Sendable, Equatable {
     }
 }
 
+struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable {
+    let id: String
+    let kind: UnifiedVaultItemKind
+    let title: String
+    let subtitle: String
+    let searchableText: String
+
+    var route: VaultItemRoute {
+        VaultItemRoute(kind: kind, entryID: id)
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1714,6 +1726,235 @@ final class AppSessionModel {
                 || entry.contentHash.localizedCaseInsensitiveContains(query)
                 || (entry.entryID?.localizedCaseInsensitiveContains(query) ?? false)
                 || (entry.localPath?.localizedCaseInsensitiveContains(query) ?? false)
+        }
+    }
+
+    func shortcutEntrySummaries(matching query: String) -> [AppShortcutEntrySummary] {
+        guard vaultState == .unlocked else {
+            return []
+        }
+
+        let normalizedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allShortcutEntrySummaries().filter { summary in
+            guard !normalizedQuery.isEmpty else {
+                return true
+            }
+            return summary.title.localizedCaseInsensitiveContains(normalizedQuery)
+                || summary.subtitle.localizedCaseInsensitiveContains(normalizedQuery)
+                || summary.searchableText.localizedCaseInsensitiveContains(normalizedQuery)
+        }
+    }
+
+    func openShortcutEntry(_ summary: AppShortcutEntrySummary) throws {
+        recordUserActivity()
+        selectedTab = tab(forShortcutEntryKind: summary.kind)
+        switch summary.kind {
+        case .login:
+            guard let entry = loginEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .note:
+            guard let entry = noteEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .totp:
+            guard let entry = totpEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .card:
+            guard let entry = cardEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .identity:
+            guard let entry = identityEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .passkey:
+            guard let entry = passkeyEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .sshKey:
+            guard let entry = sshKeyEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .apiToken:
+            guard let entry = apiTokenEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .wifi:
+            guard let entry = wifiEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .send:
+            guard let entry = sendEntries.first(where: { $0.id == summary.id }) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            presentEditEditor(for: entry)
+        case .attachmentRef:
+            throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef)
+        }
+    }
+
+    private func allShortcutEntrySummaries() -> [AppShortcutEntrySummary] {
+        var summaries: [AppShortcutEntrySummary] = []
+        summaries += loginEntries.map(shortcutSummary(for:))
+        summaries += noteEntries.map(shortcutSummary(for:))
+        summaries += totpEntries.map(shortcutSummary(for:))
+        summaries += cardEntries.map(shortcutSummary(for:))
+        summaries += identityEntries.map(shortcutSummary(for:))
+        summaries += passkeyEntries.map(shortcutSummary(for:))
+        summaries += sshKeyEntries.map(shortcutSummary(for:))
+        summaries += apiTokenEntries.map(shortcutSummary(for:))
+        summaries += wifiEntries.map(shortcutSummary(for:))
+        summaries += sendEntries.map(shortcutSummary(for:))
+        return summaries
+    }
+
+    private func shortcutSummary(for entry: LocalLoginEntry) -> AppShortcutEntrySummary {
+        let host = normalizedLoginHost(from: entry.url)
+        let subtitle = shortcutSubtitle([entry.username, host])
+        return AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .login,
+            title: shortcutTitle(entry.title),
+            subtitle: subtitle,
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.login.displayName, entry.title, entry.username, host])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalNoteEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .note,
+            title: shortcutTitle(entry.title),
+            subtitle: UnifiedVaultItemKind.note.displayName,
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.note.displayName, entry.title])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalTotpEntry) -> AppShortcutEntrySummary {
+        let subtitle = shortcutSubtitle([entry.accountName, entry.issuer])
+        return AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .totp,
+            title: shortcutTitle(entry.title),
+            subtitle: subtitle,
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.totp.displayName, entry.title, entry.issuer, entry.accountName])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalCardEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .card,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.cardholderName, entry.issuer, entry.network]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.card.displayName, entry.title, entry.cardholderName, entry.issuer, entry.network])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalIdentityEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .identity,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.fullName, entry.documentType, entry.issuer, entry.country]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.identity.displayName, entry.title, entry.fullName, entry.documentType, entry.issuer, entry.country])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalPasskeyEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .passkey,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.username, entry.relyingPartyID]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.passkey.displayName, entry.title, entry.username, entry.relyingPartyID])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalSshKeyEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .sshKey,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.username, entry.host]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.sshKey.displayName, entry.title, entry.username, entry.host])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalApiTokenEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .apiToken,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.accountName, entry.issuer, entry.expiresAt]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.apiToken.displayName, entry.title, entry.accountName, entry.issuer, entry.expiresAt])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalWifiEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .wifi,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.ssid, entry.securityType]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.wifi.displayName, entry.title, entry.ssid, entry.securityType])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalSendEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .send,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.expiresAt, "最多查看 \(entry.maxViews) 次"]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.send.displayName, entry.title, entry.expiresAt])
+        )
+    }
+
+    private func shortcutTitle(_ value: String) -> String {
+        let title = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return title.isEmpty ? "未命名" : title
+    }
+
+    private func shortcutSubtitle(_ values: [String?]) -> String {
+        let parts = values.compactMap { value -> String? in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        return parts.isEmpty ? "可打开" : parts.joined(separator: " / ")
+    }
+
+    private func shortcutSearchableText(_ values: [String?]) -> String {
+        values.compactMap { value -> String? in
+            let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        }
+        .joined(separator: " ")
+    }
+
+    private func tab(forShortcutEntryKind kind: UnifiedVaultItemKind) -> MonicaAppTab {
+        switch kind {
+        case .login, .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+            return .passwords
+        case .note:
+            return .notes
+        case .totp:
+            return .totp
+        case .card, .identity:
+            return .wallet
+        case .passkey:
+            return .passkeys
         }
     }
 
