@@ -49,6 +49,82 @@ import Foundation
     #expect(!visibleText.contains("upload-sha-secret"))
 }
 
+@Test func bitwardenSyncSnapshotAndMutationSummariesAvoidSecrets() throws {
+    let snapshot = BitwardenSyncSnapshot(
+        accountLabel: "alice@example.com",
+        revision: "bw-revision-secret",
+        items: [
+            BitwardenSyncItem(
+                remoteID: "remote-login-secret-id",
+                kind: .login,
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com/session?token=query-secret",
+                password: "login-password-secret",
+                totpSecret: "totp-secret",
+                notes: "login-note-secret",
+                folderName: "Engineering",
+                collectionNames: ["Private"],
+                attachmentByteCount: 19,
+                updatedAt: Date(timeIntervalSince1970: 1_804_020_000)
+            )
+        ],
+        sends: [
+            BitwardenSendSyncItem(
+                remoteID: "remote-send-secret-id",
+                title: "Deploy link",
+                body: "send-body-secret",
+                notes: "send-note-secret",
+                expiresAt: "2026-06-03",
+                maxViews: 2,
+                attachmentByteCount: 23,
+                updatedAt: Date(timeIntervalSince1970: 1_804_020_001)
+            )
+        ]
+    )
+    let mutation = BitwardenSyncMutation.upsertSend(
+        localID: "local-send-secret-id",
+        remoteID: "remote-send-secret-id",
+        title: "Deploy link",
+        body: "rotated-send-body-secret",
+        notes: "rotated-send-note-secret",
+        expiresAt: "2026-06-03",
+        maxViews: 3
+    )
+    let conflict = BitwardenSyncConflict(
+        localID: "local-send-secret-id",
+        remoteID: "remote-send-secret-id",
+        title: "Deploy link",
+        reason: .bothModified
+    )
+
+    #expect(snapshot.redactedSummary == "Bitwarden alice@example.com：1 个条目，1 个 Send")
+    #expect(snapshot.items[0].redactedSummary == "login GitHub alice 19 字节附件")
+    #expect(snapshot.sends[0].redactedSummary == "Send Deploy link 2 次 23 字节附件")
+    #expect(mutation.redactedSummary == "upsert Send Deploy link 3 次")
+    #expect(conflict.redactedSummary == "冲突 Deploy link：本地和远端都已修改")
+
+    let visibleText = [
+        snapshot.redactedSummary,
+        snapshot.items[0].redactedSummary,
+        snapshot.sends[0].redactedSummary,
+        mutation.redactedSummary,
+        conflict.redactedSummary
+    ].joined(separator: " ")
+    #expect(!visibleText.contains("bw-revision-secret"))
+    #expect(!visibleText.contains("remote-login-secret-id"))
+    #expect(!visibleText.contains("remote-send-secret-id"))
+    #expect(!visibleText.contains("local-send-secret-id"))
+    #expect(!visibleText.contains("query-secret"))
+    #expect(!visibleText.contains("login-password-secret"))
+    #expect(!visibleText.contains("totp-secret"))
+    #expect(!visibleText.contains("login-note-secret"))
+    #expect(!visibleText.contains("send-body-secret"))
+    #expect(!visibleText.contains("send-note-secret"))
+    #expect(!visibleText.contains("rotated-send-body-secret"))
+    #expect(!visibleText.contains("rotated-send-note-secret"))
+}
+
 @Test func webDAVClientUploadsBackupWithBasicAuthAndIntegrityHeader() async throws {
     let transport = RecordingWebDAVTransport(
         responses: [

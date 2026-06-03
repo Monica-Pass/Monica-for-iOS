@@ -5,6 +5,262 @@ public enum MonicaSyncBaseline {
     public static let firstBackupProvider = "WebDAV"
 }
 
+public enum BitwardenSyncItemKind: String, Sendable, Equatable, Hashable {
+    case login
+    case secureNote
+    case card
+    case identity
+
+    public var displayName: String {
+        switch self {
+        case .login:
+            "login"
+        case .secureNote:
+            "note"
+        case .card:
+            "card"
+        case .identity:
+            "identity"
+        }
+    }
+}
+
+public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
+    public var id: String { remoteID }
+
+    public let remoteID: String
+    public let kind: BitwardenSyncItemKind
+    public let title: String
+    public let username: String
+    public let url: String
+    public let password: String?
+    public let totpSecret: String?
+    public let notes: String?
+    public let folderName: String?
+    public let collectionNames: [String]
+    public let attachmentByteCount: Int
+    public let updatedAt: Date?
+
+    public init(
+        remoteID: String,
+        kind: BitwardenSyncItemKind,
+        title: String,
+        username: String = "",
+        url: String = "",
+        password: String? = nil,
+        totpSecret: String? = nil,
+        notes: String? = nil,
+        folderName: String? = nil,
+        collectionNames: [String] = [],
+        attachmentByteCount: Int = 0,
+        updatedAt: Date? = nil
+    ) {
+        self.remoteID = remoteID
+        self.kind = kind
+        self.title = title
+        self.username = username
+        self.url = url
+        self.password = password
+        self.totpSecret = totpSecret
+        self.notes = notes
+        self.folderName = folderName
+        self.collectionNames = collectionNames
+        self.attachmentByteCount = attachmentByteCount
+        self.updatedAt = updatedAt
+    }
+
+    public var redactedSummary: String {
+        [
+            kind.displayName,
+            sanitizedBitwardenTitle(title),
+            sanitizedBitwardenText(username),
+            attachmentByteCount > 0 ? "\(attachmentByteCount) 字节附件" : ""
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+    }
+}
+
+public struct BitwardenSendSyncItem: Sendable, Equatable, Identifiable {
+    public var id: String { remoteID }
+
+    public let remoteID: String
+    public let title: String
+    public let body: String
+    public let notes: String?
+    public let expiresAt: String
+    public let maxViews: Int
+    public let attachmentByteCount: Int
+    public let updatedAt: Date?
+
+    public init(
+        remoteID: String,
+        title: String,
+        body: String,
+        notes: String? = nil,
+        expiresAt: String = "",
+        maxViews: Int = 1,
+        attachmentByteCount: Int = 0,
+        updatedAt: Date? = nil
+    ) {
+        self.remoteID = remoteID
+        self.title = title
+        self.body = body
+        self.notes = notes
+        self.expiresAt = expiresAt
+        self.maxViews = maxViews
+        self.attachmentByteCount = attachmentByteCount
+        self.updatedAt = updatedAt
+    }
+
+    public var redactedSummary: String {
+        [
+            "Send",
+            sanitizedBitwardenTitle(title),
+            "\(maxViews) 次",
+            attachmentByteCount > 0 ? "\(attachmentByteCount) 字节附件" : ""
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+    }
+}
+
+public struct BitwardenSyncSnapshot: Sendable, Equatable {
+    public let accountLabel: String
+    public let revision: String
+    public let items: [BitwardenSyncItem]
+    public let sends: [BitwardenSendSyncItem]
+
+    public init(
+        accountLabel: String,
+        revision: String,
+        items: [BitwardenSyncItem] = [],
+        sends: [BitwardenSendSyncItem] = []
+    ) {
+        self.accountLabel = accountLabel
+        self.revision = revision
+        self.items = items
+        self.sends = sends
+    }
+
+    public var redactedSummary: String {
+        "Bitwarden \(sanitizedBitwardenText(accountLabel))：\(items.count) 个条目，\(sends.count) 个 Send"
+    }
+}
+
+public enum BitwardenSyncMutation: Sendable, Equatable {
+    case upsertSend(
+        localID: String,
+        remoteID: String?,
+        title: String,
+        body: String,
+        notes: String?,
+        expiresAt: String,
+        maxViews: Int
+    )
+    case deleteSend(localID: String, remoteID: String?, title: String)
+
+    public var redactedSummary: String {
+        switch self {
+        case .upsertSend(_, _, let title, _, _, _, let maxViews):
+            "upsert Send \(sanitizedBitwardenTitle(title)) \(maxViews) 次"
+        case .deleteSend(_, _, let title):
+            "delete Send \(sanitizedBitwardenTitle(title))"
+        }
+    }
+}
+
+public enum BitwardenSyncConflictReason: Sendable, Equatable {
+    case bothModified
+    case remoteDeleted
+    case localDeleted
+
+    public var displayName: String {
+        switch self {
+        case .bothModified:
+            "本地和远端都已修改"
+        case .remoteDeleted:
+            "远端已删除"
+        case .localDeleted:
+            "本地已删除"
+        }
+    }
+}
+
+public struct BitwardenSyncConflict: Sendable, Equatable {
+    public let localID: String?
+    public let remoteID: String?
+    public let title: String
+    public let reason: BitwardenSyncConflictReason
+
+    public init(
+        localID: String? = nil,
+        remoteID: String? = nil,
+        title: String,
+        reason: BitwardenSyncConflictReason
+    ) {
+        self.localID = localID
+        self.remoteID = remoteID
+        self.title = title
+        self.reason = reason
+    }
+
+    public var redactedSummary: String {
+        "冲突 \(sanitizedBitwardenTitle(title))：\(reason.displayName)"
+    }
+}
+
+public struct BitwardenSyncPushResult: Sendable, Equatable {
+    public let acceptedMutationCount: Int
+    public let conflicts: [BitwardenSyncConflict]
+    public let revision: String
+
+    public init(
+        acceptedMutationCount: Int,
+        conflicts: [BitwardenSyncConflict] = [],
+        revision: String = ""
+    ) {
+        self.acceptedMutationCount = acceptedMutationCount
+        self.conflicts = conflicts
+        self.revision = revision
+    }
+
+    public var redactedSummary: String {
+        "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflicts.count) 个冲突"
+    }
+}
+
+public protocol BitwardenSyncProvider: Sendable {
+    func pullSnapshot() async throws -> BitwardenSyncSnapshot
+    func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult
+}
+
+public struct DefaultBitwardenSyncProvider: BitwardenSyncProvider {
+    public init() {}
+
+    public func pullSnapshot() async throws -> BitwardenSyncSnapshot {
+        throw BitwardenSyncProviderError.authenticationRequired
+    }
+
+    public func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult {
+        throw BitwardenSyncProviderError.authenticationRequired
+    }
+}
+
+public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedError {
+    case authenticationRequired
+    case unsupportedOperation
+
+    public var errorDescription: String? {
+        switch self {
+        case .authenticationRequired:
+            "Bitwarden 需要先登录。"
+        case .unsupportedOperation:
+            "Bitwarden 同步当前操作尚未接入。"
+        }
+    }
+}
+
 public enum CloudFileProviderKind: String, Sendable, Equatable, Hashable, CaseIterable {
     case oneDrive
     case googleDrive
@@ -26,6 +282,15 @@ public enum CloudFileProviderKind: String, Sendable, Equatable, Hashable, CaseIt
             "monica-google-drive.mdbx"
         }
     }
+}
+
+private func sanitizedBitwardenTitle(_ value: String) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "未命名" : trimmed
+}
+
+private func sanitizedBitwardenText(_ value: String) -> String {
+    value.trimmingCharacters(in: .whitespacesAndNewlines)
 }
 
 public enum CloudFileConnectionState: Sendable, Equatable {

@@ -534,6 +534,17 @@ enum AppShareImportRequest: Sendable, Equatable {
     case file(url: URL, mediaType: String)
 }
 
+enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
+    case providerUnavailable
+
+    var errorDescription: String? {
+        switch self {
+        case .providerUnavailable:
+            "Bitwarden 同步尚未配置。"
+        }
+    }
+}
+
 struct AppShareImportResult: Sendable, Equatable {
     let importedCounts: [UnifiedVaultItemKind: Int]
     let importedTitles: [String]
@@ -635,6 +646,35 @@ struct AppCloudFileRestorePreview: Sendable, Equatable {
     }
 }
 
+struct AppBitwardenSyncPreview: Sendable, Equatable {
+    let accountLabel: String
+    let remoteItemCount: Int
+    let remoteSendCount: Int
+    let remoteSendTitles: [String]
+
+    init(snapshot: BitwardenSyncSnapshot) {
+        self.accountLabel = snapshot.accountLabel
+        self.remoteItemCount = snapshot.items.count
+        self.remoteSendCount = snapshot.sends.count
+        self.remoteSendTitles = snapshot.sends.map { Self.sanitizedTitle($0.title) }
+    }
+
+    var redactedSummary: String {
+        let sends = remoteSendTitles.prefix(3).joined(separator: " / ")
+        return [
+            "Bitwarden \(accountLabel)：\(remoteItemCount) 个条目，\(remoteSendCount) 个 Send",
+            sends
+        ]
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+    }
+
+    private static func sanitizedTitle(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "未命名" : trimmed
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -727,6 +767,13 @@ enum AppDeveloperDiagnostics {
                 value: syncDiagnosticValue(session.webDAVBackupState),
                 detail: "当前 WebDAV 备份/恢复状态摘要，不包含 URL、用户名或密码。",
                 systemImage: "arrow.triangle.2.circlepath"
+            ),
+            AppDeveloperDiagnosticRow(
+                id: "bitwarden-sync",
+                title: "Bitwarden",
+                value: session.bitwardenSyncState.label,
+                detail: "当前 Bitwarden 同步状态摘要，不包含 token、远端 ID、密码、TOTP 或 Send 内容。",
+                systemImage: "lock.icloud"
             )
         ]
     }
@@ -1534,6 +1581,8 @@ final class AppSessionModel {
     var cloudFileState: CloudFileState = .idle
     var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
+    var bitwardenSyncState: BitwardenSyncState = .idle
+    var bitwardenSyncPreview: AppBitwardenSyncPreview?
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
@@ -1584,6 +1633,7 @@ final class AppSessionModel {
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
     private let webDAVBackupService: any AppWebDAVBackupService
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
+    private let bitwardenSyncProvider: (any BitwardenSyncProvider)?
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -1621,6 +1671,7 @@ final class AppSessionModel {
         securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
+        bitwardenSyncProvider: (any BitwardenSyncProvider)? = nil,
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -1653,6 +1704,7 @@ final class AppSessionModel {
         self.securityQuestionStore = securityQuestionStore
         self.webDAVBackupService = webDAVBackupService
         self.cloudFileProviders = cloudFileProviders
+        self.bitwardenSyncProvider = bitwardenSyncProvider
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -7731,6 +7783,47 @@ final class AppSessionModel {
         }
     }
 
+    func previewBitwardenSync() async throws -> AppBitwardenSyncPreview {
+        recordUserActivity()
+        bitwardenSyncState = .running
+
+        do {
+            _ = try requireActiveVaultSession()
+            let provider = try requireBitwardenSyncProvider()
+            let snapshot = try await provider.pullSnapshot()
+            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            bitwardenSyncPreview = preview
+            bitwardenSyncState = .previewReady(
+                itemCount: preview.remoteItemCount,
+                sendCount: preview.remoteSendCount
+            )
+            return preview
+        } catch {
+            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    func pushLocalBitwardenChanges() async throws -> BitwardenSyncPushResult {
+        recordUserActivity()
+        bitwardenSyncState = .running
+
+        do {
+            _ = try requireActiveVaultSession()
+            let provider = try requireBitwardenSyncProvider()
+            let mutations = makeBitwardenSendMutations()
+            let result = try await provider.pushMutations(mutations)
+            bitwardenSyncState = .pushed(
+                acceptedMutationCount: result.acceptedMutationCount,
+                conflictCount: result.conflicts.count
+            )
+            return result
+        } catch {
+            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
     func downloadWebDAVRestorePreview() async throws {
         recordUserActivity()
         webDAVBackupState = .running
@@ -7849,6 +7942,27 @@ final class AppSessionModel {
         return provider
     }
 
+    private func requireBitwardenSyncProvider() throws -> any BitwardenSyncProvider {
+        guard let bitwardenSyncProvider else {
+            throw AppBitwardenSyncError.providerUnavailable
+        }
+        return bitwardenSyncProvider
+    }
+
+    private func makeBitwardenSendMutations() -> [BitwardenSyncMutation] {
+        sendEntries.map { entry in
+            BitwardenSyncMutation.upsertSend(
+                localID: entry.id,
+                remoteID: nil,
+                title: entry.title,
+                body: entry.body,
+                notes: entry.notes,
+                expiresAt: entry.expiresAt,
+                maxViews: entry.maxViews
+            )
+        }
+    }
+
     private func readableCloudFileErrorMessage(
         for error: Error,
         provider kind: CloudFileProviderKind
@@ -7870,6 +7984,26 @@ final class AppSessionModel {
             }
         }
         return "\(kind.displayName) 操作失败，请稍后重试。"
+    }
+
+    private func readableBitwardenSyncErrorMessage(for error: Error) -> String {
+        if let appError = error as? AppBitwardenSyncError {
+            return appError.localizedDescription
+        }
+        if let providerError = error as? BitwardenSyncProviderError {
+            return providerError.localizedDescription
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost:
+                return "网络不可用，请检查连接后重试。"
+            case .timedOut:
+                return "Bitwarden 请求超时，请稍后再试。"
+            default:
+                return "Bitwarden 连接失败，请检查网络后重试。"
+            }
+        }
+        return "Bitwarden 同步失败，请稍后重试。"
     }
 
     private func sanitizedCloudFileName(_ value: String) -> String {
@@ -7897,6 +8031,8 @@ final class AppSessionModel {
         cloudFileState = .idle
         cloudFileRestorePreview = nil
         downloadedCloudFileRestore = nil
+        bitwardenSyncState = .idle
+        bitwardenSyncPreview = nil
         clearPendingAndroidEncryptedBackup()
         dismissAttachmentQuickLookPreview()
     }
@@ -7964,6 +8100,8 @@ final class AppSessionModel {
         clearExtendedParityEntries()
         csvImportPreview = nil
         androidBackupImportPreview = nil
+        bitwardenSyncState = .idle
+        bitwardenSyncPreview = nil
         clearKeePassImportState()
         entryOperationState = .idle
         clearOperationTimelineEvents()
@@ -8016,6 +8154,8 @@ final class AppSessionModel {
         webDAVRestorePreview = nil
         webDAVRestoreVaultPassword = ""
         downloadedWebDAVRestoreBackup = nil
+        bitwardenSyncState = .idle
+        bitwardenSyncPreview = nil
         clearPendingAndroidEncryptedBackup()
         clearKeePassImportState()
     }
@@ -9222,6 +9362,36 @@ enum CloudFileState: Sendable, Equatable {
             return "\(provider.displayName) 已备份 \(fileName) (\(byteCount) 字节)"
         case .writeSucceeded(let provider, let fileName, let byteCount):
             return "\(provider.displayName) 已写回 \(fileName) (\(byteCount) 字节)"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var isRunning: Bool {
+        if case .running = self {
+            return true
+        }
+        return false
+    }
+}
+
+enum BitwardenSyncState: Sendable, Equatable {
+    case idle
+    case running
+    case previewReady(itemCount: Int, sendCount: Int)
+    case pushed(acceptedMutationCount: Int, conflictCount: Int)
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .idle:
+            return "就绪"
+        case .running:
+            return "正在处理 Bitwarden"
+        case .previewReady(let itemCount, let sendCount):
+            return "Bitwarden 已预览 \(itemCount) 个条目，\(sendCount) 个 Send"
+        case .pushed(let acceptedMutationCount, let conflictCount):
+            return "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflictCount) 个冲突"
         case .failed(let message):
             return message
         }

@@ -748,7 +748,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(
             rows.map(\.title),
-            ["主存储", "MDBX 桥接", "App Group", "本机标识", "AutoFill 索引", "同步日志"]
+            ["主存储", "MDBX 桥接", "App Group", "本机标识", "AutoFill 索引", "同步日志", "Bitwarden"]
         )
         XCTAssertEqual(rows[0].value, "MDBX")
         XCTAssertEqual(rows[1].value, "UniFFI")
@@ -756,6 +756,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(rows[3].value.contains("secret"))
         XCTAssertEqual(rows[4].value, "未生成")
         XCTAssertEqual(rows[5].value, "空闲")
+        XCTAssertEqual(rows[6].value, "就绪")
     }
 
     func testSecurityCenterSummarizesWeakAndReusedPasswordsWithoutLeakingSecrets() {
@@ -7281,6 +7282,107 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("keepass-writeback-secret-bytes"))
         XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
     }
+
+    func testBitwardenSyncPreviewAndPushLocalSendWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-login-secret-id",
+                    kind: .login,
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com/session?token=query-secret",
+                    password: "login-password-secret",
+                    totpSecret: "totp-secret",
+                    notes: "login-note-secret",
+                    folderName: "Engineering",
+                    collectionNames: ["Private"],
+                    attachmentByteCount: 19,
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_000)
+                )
+            ],
+            sends: [
+                BitwardenSendSyncItem(
+                    remoteID: "remote-send-secret-id",
+                    title: "Deploy link",
+                    body: "remote-send-body-secret",
+                    notes: "remote-send-note-secret",
+                    expiresAt: "2026-06-03",
+                    maxViews: 2,
+                    attachmentByteCount: 23,
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_001)
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(
+            acceptedMutationCount: 1,
+            conflicts: [
+                BitwardenSyncConflict(
+                    localID: "send-1",
+                    remoteID: "remote-send-secret-id",
+                    title: "Local secure link",
+                    reason: .bothModified
+                )
+            ],
+            revision: "bw-push-revision-secret"
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.sendTitle = "Local secure link"
+        model.sendBody = "local-send-body-secret"
+        model.sendNotes = "local-send-note-secret"
+        model.sendExpiresAt = "2026-06-03"
+        model.sendMaxViews = 3
+        try model.createSendEntry(projectTitle: "Personal")
+
+        let preview = try await model.previewBitwardenSync()
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(bitwarden.pullCallCount, 1)
+        XCTAssertEqual(bitwarden.pushedMutations.count, 1)
+        XCTAssertEqual(bitwarden.pushedMutations.first?.redactedSummary, "upsert Send Local secure link 3 次")
+        XCTAssertEqual(preview.accountLabel, "alice@example.com")
+        XCTAssertEqual(preview.remoteItemCount, 1)
+        XCTAssertEqual(preview.remoteSendCount, 1)
+        XCTAssertEqual(model.bitwardenSyncPreview?.remoteSendTitles, ["Deploy link"])
+        XCTAssertEqual(pushResult.acceptedMutationCount, 1)
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已推送 1 个变更，1 个冲突")
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            bitwarden.pushedMutations.first?.redactedSummary ?? ""
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("bw-revision-secret"))
+        XCTAssertFalse(visibleText.contains("bw-push-revision-secret"))
+        XCTAssertFalse(visibleText.contains("remote-login-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-send-secret-id"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+        XCTAssertFalse(visibleText.contains("login-password-secret"))
+        XCTAssertFalse(visibleText.contains("totp-secret"))
+        XCTAssertFalse(visibleText.contains("login-note-secret"))
+        XCTAssertFalse(visibleText.contains("remote-send-body-secret"))
+        XCTAssertFalse(visibleText.contains("remote-send-note-secret"))
+        XCTAssertFalse(visibleText.contains("local-send-body-secret"))
+        XCTAssertFalse(visibleText.contains("local-send-note-secret"))
+        XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
+    }
 }
 
 private final class RecordingAppAutoFillIndexKeyMaterialStore: AppAutoFillIndexKeyMaterialStore {
@@ -7526,6 +7628,34 @@ private final class RecordingCloudFileProvider: CloudFileProvider, @unchecked Se
             byteCount: data.count,
             sha256: "\(kind.rawValue)-overwrite-sha-secret"
         )
+    }
+}
+
+private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unchecked Sendable {
+    var snapshot = BitwardenSyncSnapshot(
+        accountLabel: "alice@example.com",
+        revision: "initial-revision"
+    )
+    var pushResult = BitwardenSyncPushResult(acceptedMutationCount: 0)
+    var pullError: Error?
+    var pushError: Error?
+    private(set) var pullCallCount = 0
+    private(set) var pushedMutations: [BitwardenSyncMutation] = []
+
+    func pullSnapshot() async throws -> BitwardenSyncSnapshot {
+        pullCallCount += 1
+        if let pullError {
+            throw pullError
+        }
+        return snapshot
+    }
+
+    func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult {
+        pushedMutations.append(contentsOf: mutations)
+        if let pushError {
+            throw pushError
+        }
+        return pushResult
     }
 }
 
