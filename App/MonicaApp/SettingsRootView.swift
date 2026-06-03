@@ -530,6 +530,23 @@ struct SettingsRootView: View {
                                     value: entry.username.isEmpty ? entry.groupPath : entry.username
                                 )
                                 HStack(spacing: 12) {
+                                    if entry.isDeleted {
+                                        Button {
+                                            do {
+                                                _ = try session.restoreKeePassReadOnlyRecycleBinEntryAndWriteBack(
+                                                    entryID: entry.id
+                                                )
+                                            } catch {
+                                                session.entryOperationState = .failed(error.localizedDescription)
+                                            }
+                                        } label: {
+                                            Label("恢复并写回", systemImage: "arrow.uturn.backward.circle")
+                                                .frame(maxWidth: .infinity)
+                                        }
+                                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                        .disabled(session.keePassSourceFileURL == nil)
+                                    }
+
                                     Button {
                                         pendingKeePassAttachmentAdditionEntryID = entry.id
                                         isKeePassAttachmentAdditionImporterPresented = true

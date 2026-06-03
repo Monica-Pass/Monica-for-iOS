@@ -6767,6 +6767,87 @@ final class AppSessionModel {
         }
     }
 
+    func restoreKeePassReadOnlyRecycleBinEntryAndWriteBack(
+        entryID: String,
+        targetGroupID: String? = nil
+    ) throws -> KeePassKdbx4WritebackResult {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let snapshot: KeePassReadOnlySnapshot
+            if let existingSnapshot = keePassReadOnlySnapshot {
+                snapshot = existingSnapshot
+            } else {
+                snapshot = try previewKeePassReadOnlyTree()
+            }
+            guard let entryIndex = snapshot.entries.firstIndex(where: { $0.id == entryID }) else {
+                throw AppKeePassSnapshotEditError.entryUnavailable
+            }
+            let entry = snapshot.entries[entryIndex]
+            guard entry.isDeleted else {
+                throw AppKeePassSnapshotEditError.entryNotInRecycleBin
+            }
+            let recycleBinGroupIDs = Set(snapshot.entries.compactMap { candidate in
+                candidate.isDeleted ? candidate.groupID : nil
+            })
+            let targetGroup: KeePassReadOnlyGroup
+            if let targetGroupID {
+                guard let explicitGroup = snapshot.groups.first(where: { $0.id == targetGroupID }),
+                      !recycleBinGroupIDs.contains(explicitGroup.id) else {
+                    throw AppKeePassSnapshotEditError.targetGroupUnavailable
+                }
+                targetGroup = explicitGroup
+            } else if let rootGroup = snapshot.groups.first(where: { group in
+                group.path == "/" && !recycleBinGroupIDs.contains(group.id)
+            }) {
+                targetGroup = rootGroup
+            } else if let fallbackGroup = snapshot.groups.first(where: { group in
+                !recycleBinGroupIDs.contains(group.id)
+            }) {
+                targetGroup = fallbackGroup
+            } else {
+                throw AppKeePassSnapshotEditError.targetGroupUnavailable
+            }
+            let restoredEntry = KeePassReadOnlyEntry(
+                id: entry.id,
+                title: entry.title,
+                username: entry.username,
+                url: entry.url,
+                groupPath: targetGroup.path,
+                groupID: targetGroup.id,
+                notes: entry.notes,
+                customFields: entry.customFields,
+                hasPassword: entry.hasPassword,
+                decodedPassword: entry.decodedPassword,
+                hasTotp: entry.hasTotp,
+                decodedTotp: entry.decodedTotp,
+                attachmentCount: entry.attachmentCount,
+                isDeleted: false,
+                attachments: entry.attachments
+            )
+            var updatedEntries = snapshot.entries
+            updatedEntries[entryIndex] = restoredEntry
+            let updatedSnapshot = KeePassReadOnlySnapshot(
+                sourceName: snapshot.sourceName,
+                headerSummary: snapshot.headerSummary,
+                groups: snapshot.groups,
+                entries: updatedEntries
+            )
+            keePassReadOnlySnapshot = updatedSnapshot
+            keePassReadOnlyImportPlan = nil
+            let result = try writeKeePassReadOnlySnapshotBackToSource()
+            let displayTitle = restoredEntry.title.isEmpty ? "未命名条目" : restoredEntry.title
+            entryOperationState = .succeeded(
+                "KeePass 回收站条目已还原并写回：\(displayTitle) -> \(targetGroup.path)"
+            )
+            return result
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
     func previewAndroidBackupImport(
         _ data: Data,
         fileName: String? = nil,
@@ -8785,6 +8866,8 @@ enum AppKeePassKdbxWritebackError: Error, Sendable, Equatable, LocalizedError {
 enum AppKeePassSnapshotEditError: Error, Sendable, Equatable, LocalizedError {
     case entryUnavailable
     case attachmentUnavailable
+    case entryNotInRecycleBin
+    case targetGroupUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -8792,6 +8875,10 @@ enum AppKeePassSnapshotEditError: Error, Sendable, Equatable, LocalizedError {
             return "未找到可编辑的 KeePass 条目。"
         case .attachmentUnavailable:
             return "未找到可编辑的 KeePass 附件。"
+        case .entryNotInRecycleBin:
+            return "该 KeePass 条目不在回收站中。"
+        case .targetGroupUnavailable:
+            return "未找到可还原到的 KeePass 分组。"
         }
     }
 }
