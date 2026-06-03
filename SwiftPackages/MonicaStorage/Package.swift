@@ -13,10 +13,18 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../MonicaMDBX"),
+        .package(url: "https://github.com/P-H-C/phc-winner-argon2.git", revision: "f57e61e19229e23c4445b85494dbf7c07de721cb"),
         .package(url: "https://github.com/weichsel/ZIPFoundation.git", from: "0.9.20")
     ],
     targets: [
-        .target(name: "MonicaStorage", dependencies: ["MonicaMDBX", "ZIPFoundation"]),
+        .target(
+            name: "MonicaStorage",
+            dependencies: [
+                "MonicaMDBX",
+                "ZIPFoundation",
+                .product(name: "argon2", package: "phc-winner-argon2")
+            ]
+        ),
         .testTarget(name: "MonicaStorageTests", dependencies: ["MonicaStorage"])
     ]
 )

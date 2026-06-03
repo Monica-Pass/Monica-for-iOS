@@ -320,6 +320,102 @@ import MonicaStorage
     #expect(!derived.displaySummary.contains("encrypted-payload-bytes"))
 }
 
+@Test func keepPassKdbxArgon2idDeriverExecutesKdfWithoutLeakingSecrets() throws {
+    let compositeKey = Data("password".utf8)
+    let salt = Data("somesalt".utf8)
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .argon2id,
+        argon2: KeePassKdbxArgon2Parameters(
+            salt: salt,
+            iterations: 2,
+            memoryBytes: 16 * 1024,
+            parallelism: 1,
+            version: 0x13
+        )
+    )
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "argon2id-kdf.kdbx",
+        candidateLabel: "password-only",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerByteRange: 0..<0,
+            encryptedPayload: Data("encrypted-payload-bytes".utf8)
+        ),
+        kdfParameters: kdfParameters,
+        cryptoInputs: .empty,
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: nil,
+            keyFileKey: nil,
+            compositeKey: compositeKey
+        )
+    )
+
+    let expectedMaterial = try decodeHexData("058202c0723cd88c24408ccac1cbf828dee63bcf3843a150ea364a1e0b4e1ff8")
+    let derived = try DefaultKeePassKdbxKeyDeriver().deriveKey(from: context)
+
+    #expect(derived.algorithm == .argon2id)
+    #expect(derived.material == expectedMaterial)
+    #expect(derived.displaySummary == "Argon2id，derived key 32 bytes")
+    #expect(!derived.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains(compositeKey.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains(derived.material.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains("encrypted-payload-bytes"))
+}
+
+@Test func keepPassKdbxArgon2dDeriverExecutesKdfWithoutLeakingSecrets() throws {
+    let compositeKey = Data("password".utf8)
+    let salt = Data("somesalt".utf8)
+    let kdfParameters = KeePassKdbxKdfParameters(
+        algorithm: .argon2d,
+        argon2: KeePassKdbxArgon2Parameters(
+            salt: salt,
+            iterations: 2,
+            memoryBytes: 16 * 1024,
+            parallelism: 1,
+            version: 0x13
+        )
+    )
+    let context = KeePassKdbxDecryptInputContext(
+        sourceName: "argon2d-kdf.kdbx",
+        candidateLabel: "password-only",
+        envelope: KeePassKdbxPayloadEnvelope(
+            headerSummary: KeePassHeaderSummary(
+                majorVersion: 4,
+                minorVersion: 0,
+                formatVersion: .kdbx4,
+                kdfParameters: kdfParameters
+            ),
+            headerFields: [:],
+            headerByteRange: 0..<0,
+            encryptedPayload: Data("encrypted-payload-bytes".utf8)
+        ),
+        kdfParameters: kdfParameters,
+        cryptoInputs: .empty,
+        credentialMaterial: KeePassKdbxCredentialMaterial(
+            passwordKey: nil,
+            keyFileKey: nil,
+            compositeKey: compositeKey
+        )
+    )
+
+    let expectedMaterial = try decodeHexData("e742c05880c44c4df5fe79937be77897a6e41ca758affc42301f1e4040e35bd2")
+    let derived = try DefaultKeePassKdbxKeyDeriver().deriveKey(from: context)
+
+    #expect(derived.algorithm == .argon2d)
+    #expect(derived.material == expectedMaterial)
+    #expect(derived.displaySummary == "Argon2d，derived key 32 bytes")
+    #expect(!derived.displaySummary.contains(salt.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains(compositeKey.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains(derived.material.map { String(format: "%02x", $0) }.joined()))
+    #expect(!derived.displaySummary.contains("encrypted-payload-bytes"))
+}
+
 @Test func keepPassKdbxMasterKeyComposerCombinesMasterSeedAndDerivedKeyWithoutLeakingSecrets() throws {
     let masterSeed = Data((32..<64).map(UInt8.init))
     let derivedMaterial = Data((64..<96).map(UInt8.init))

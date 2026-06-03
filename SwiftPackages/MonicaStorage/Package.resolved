@@ -1,6 +1,15 @@
 {
-  "originHash" : "416053ede8c6715af5473e54732e4d549982b18253076424db41cd5b630aaa74",
+  "originHash" : "81f66b91565ee467e1dc514e363ba1a346cd36de5c9b0048cbb3249f6f17cf78",
   "pins" : [
+    {
+      "identity" : "phc-winner-argon2",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/P-H-C/phc-winner-argon2.git",
+      "state" : {
+        "branch" : "master",
+        "revision" : "f57e61e19229e23c4445b85494dbf7c07de721cb"
+      }
+    },
     {
       "identity" : "zipfoundation",
       "kind" : "remoteSourceControl",

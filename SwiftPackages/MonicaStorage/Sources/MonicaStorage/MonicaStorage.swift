@@ -2,6 +2,7 @@ import Foundation
 import CryptoKit
 import MonicaMDBX
 import ZIPFoundation
+import argon2
 import zlib
 
 public enum MonicaStorageBaseline {
@@ -951,10 +952,7 @@ public struct DefaultKeePassKdbxKeyDeriver: KeePassKdbxKeyDeriver {
         case .aesKdf:
             return try deriveAESKdfKey(from: context, parameters: parameters)
         case .argon2d, .argon2id:
-            throw KeePassOperationError(
-                code: .formatUnsupported,
-                message: "\(parameters.algorithm.displayName) KDF 尚未接入"
-            )
+            return try deriveArgon2Key(from: context, parameters: parameters)
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
@@ -997,6 +995,107 @@ public struct DefaultKeePassKdbxKeyDeriver: KeePassKdbxKeyDeriver {
             algorithm: .aesKdf,
             material: Data(SHA256.hash(data: transformedKey)),
             rounds: rounds
+        )
+    }
+
+    private func deriveArgon2Key(
+        from context: KeePassKdbxDecryptInputContext,
+        parameters: KeePassKdbxKdfParameters
+    ) throws -> KeePassKdbxDerivedKey {
+        guard let argon2Parameters = parameters.argon2,
+              let salt = argon2Parameters.salt,
+              let iterations = argon2Parameters.iterations,
+              let memoryBytes = argon2Parameters.memoryBytes,
+              let parallelism = argon2Parameters.parallelism else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF 参数缺失；请确认文件未损坏。"
+            )
+        }
+        guard salt.count >= 8 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF salt 长度无效；请确认文件未损坏。"
+            )
+        }
+        guard iterations > 0 && iterations <= UInt64(UInt32.max) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF iterations 无效；请确认文件未损坏。"
+            )
+        }
+        guard memoryBytes >= 1024 && memoryBytes % 1024 == 0 && memoryBytes / 1024 <= UInt64(UInt32.max) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF memory 无效；请确认文件未损坏。"
+            )
+        }
+        guard parallelism > 0 else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF parallelism 无效；请确认文件未损坏。"
+            )
+        }
+        let version = argon2Parameters.version ?? UInt32(argon2.ARGON2_VERSION_13.rawValue)
+        guard version == UInt32(argon2.ARGON2_VERSION_10.rawValue) || version == UInt32(argon2.ARGON2_VERSION_13.rawValue) else {
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF version 不受支持；请确认文件未损坏。"
+            )
+        }
+
+        let memoryKiB = UInt32(memoryBytes / 1024)
+        let algorithmType: argon2_type
+        switch parameters.algorithm {
+        case .argon2d:
+            algorithmType = Argon2_d
+        case .argon2id:
+            algorithmType = Argon2_id
+        case .aesKdf, .unknown:
+            throw KeePassOperationError(
+                code: .formatUnsupported,
+                message: "\(parameters.algorithm.displayName) KDF 参数不匹配；请确认文件未损坏。"
+            )
+        }
+
+        var output = Data(repeating: 0, count: 32)
+        var password = context.credentialMaterial.compositeKey
+        var saltBytes = salt
+        let outputLength = output.count
+        let passwordLength = password.count
+        let saltLength = saltBytes.count
+        let status = output.withUnsafeMutableBytes { outputBuffer in
+            password.withUnsafeMutableBytes { passwordBuffer in
+                saltBytes.withUnsafeMutableBytes { saltBuffer in
+                    argon2_hash(
+                        UInt32(iterations),
+                        memoryKiB,
+                        parallelism,
+                        passwordBuffer.baseAddress,
+                        passwordLength,
+                        saltBuffer.baseAddress,
+                        saltLength,
+                        outputBuffer.baseAddress,
+                        outputLength,
+                        nil,
+                        0,
+                        algorithmType,
+                        version
+                    )
+                }
+            }
+        }
+        guard status == ARGON2_OK.rawValue else {
+            throw KeePassOperationError(
+                code: .invalidCredential,
+                message: "\(parameters.algorithm.displayName) KDF 执行失败；请确认数据库密码、密钥文件或 KDF 参数。"
+            )
+        }
+
+        return KeePassKdbxDerivedKey(
+            algorithm: parameters.algorithm,
+            material: output,
+            rounds: nil
         )
     }
 }
