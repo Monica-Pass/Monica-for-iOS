@@ -243,6 +243,72 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingLoginTitle, "GitHub")
     }
 
+    func testPlusEntitlementMappingUnifiesStoreKitAndLegacyCDKWithoutLeakingIdentifiers() {
+        let model = AppSessionModel()
+        let now = Date(timeIntervalSince1970: 1_803_000_000)
+
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
+
+        model.applyStoreKitPlusEntitlements(
+            [
+                AppStoreKitPlusEntitlement(
+                    productID: AppPlusStoreKitProduct.monthly.productID,
+                    transactionID: "storekit-secret-expired-transaction",
+                    originalTransactionID: "storekit-secret-original",
+                    purchasedAt: now.addingTimeInterval(-90 * 24 * 60 * 60),
+                    expiresAt: now.addingTimeInterval(-24 * 60 * 60),
+                    revokedAt: nil,
+                    environment: "Sandbox"
+                )
+            ],
+            now: now
+        )
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
+
+        model.applyStoreKitPlusEntitlements(
+            [
+                AppStoreKitPlusEntitlement(
+                    productID: AppPlusStoreKitProduct.lifetime.productID,
+                    transactionID: "storekit-secret-active-transaction",
+                    originalTransactionID: "storekit-secret-active-original",
+                    purchasedAt: now,
+                    expiresAt: nil,
+                    revokedAt: nil,
+                    environment: "Sandbox"
+                )
+            ],
+            now: now
+        )
+
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
+        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "StoreKit 2 已映射到 Monica Plus Lifetime。")
+        XCTAssertEqual(
+            model.plusFeatureRows.map(\.id),
+            ["premium_themes", "validator_vibration", "copy_next_code", "bitwarden_sync"]
+        )
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy(\.isUnlocked))
+
+        let storeKitVisibleText = ([model.plusEntitlementStatusRow.detail] + model.plusFeatureRows.map { $0.detail })
+            .joined(separator: " ")
+        XCTAssertFalse(storeKitVisibleText.contains("storekit-secret-active-transaction"))
+        XCTAssertFalse(storeKitVisibleText.contains("storekit-secret-active-original"))
+
+        model.applyLegacyPlusEntitlement(
+            AppLegacyPlusEntitlement(
+                licenseID: "legacy-secret-license-id",
+                verifiedAt: now,
+                expiresAt: nil
+            ),
+            now: now
+        )
+
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
+        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "Plus/CDK 已映射到 Monica Plus。")
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy(\.isUnlocked))
+        XCTAssertFalse(model.plusEntitlementStatusRow.detail.contains("legacy-secret-license-id"))
+    }
+
     func testSavingPresentedAddPasswordEditorUsesExistingCreateFlow() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(

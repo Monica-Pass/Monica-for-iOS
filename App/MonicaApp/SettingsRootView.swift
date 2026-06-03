@@ -194,6 +194,43 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "Monica Plus") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    AndroidParityInfoRow(
+                        title: session.plusEntitlementStatusRow.title,
+                        value: session.plusEntitlementStatusRow.value
+                    )
+                    Text(session.plusEntitlementStatusRow.detail)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    AndroidParityDivider()
+                    ForEach(session.plusFeatureRows) { row in
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: row.systemImage)
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(row.isUnlocked ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
+                                .frame(width: 24)
+                            VStack(alignment: .leading, spacing: 4) {
+                                HStack(spacing: 8) {
+                                    Text(row.title)
+                                        .font(.subheadline.weight(.heavy))
+                                    Spacer(minLength: 8)
+                                    Text(row.value)
+                                        .font(.caption.weight(.heavy))
+                                        .foregroundStyle(row.isUnlocked ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
+                                }
+                                Text(row.detail)
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                        }
+                        if row.id != session.plusFeatureRows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                }
+            }
+
             AndroidParitySection(title: "密保问题") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(

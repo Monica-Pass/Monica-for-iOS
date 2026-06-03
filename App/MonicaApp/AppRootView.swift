@@ -147,6 +147,90 @@ struct AppSecurityCenterRepairSuggestion: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+enum AppPlusStoreKitProduct: String, Sendable, Equatable, CaseIterable {
+    case monthly
+    case yearly
+    case lifetime
+
+    var productID: String {
+        switch self {
+        case .monthly:
+            return "ru.takagi.monica.plus.monthly"
+        case .yearly:
+            return "ru.takagi.monica.plus.yearly"
+        case .lifetime:
+            return "ru.takagi.monica.plus.lifetime"
+        }
+    }
+
+    var displayName: String {
+        switch self {
+        case .monthly:
+            return "Monthly"
+        case .yearly:
+            return "Yearly"
+        case .lifetime:
+            return "Lifetime"
+        }
+    }
+
+    static func product(for productID: String) -> AppPlusStoreKitProduct? {
+        let normalized = productID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return allCases.first { $0.productID == normalized }
+    }
+}
+
+struct AppStoreKitPlusEntitlement: Sendable, Equatable {
+    let productID: String
+    let transactionID: String
+    let originalTransactionID: String
+    let purchasedAt: Date
+    let expiresAt: Date?
+    let revokedAt: Date?
+    let environment: String
+}
+
+struct AppLegacyPlusEntitlement: Sendable, Equatable {
+    let licenseID: String
+    let verifiedAt: Date
+    let expiresAt: Date?
+}
+
+struct AppPlusEntitlementStatusRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
+}
+
+struct AppPlusFeatureRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let detail: String
+    let systemImage: String
+    let isUnlocked: Bool
+
+    var value: String {
+        isUnlocked ? "已解锁" : "需要 Plus"
+    }
+}
+
+private enum AppPlusEntitlementSource: Sendable, Equatable {
+    case none
+    case storeKit(product: AppPlusStoreKitProduct)
+    case legacyCDK
+}
+
+private struct AppPlusEntitlementSnapshot: Sendable, Equatable {
+    var source: AppPlusEntitlementSource = .none
+    var expiresAt: Date?
+
+    var isActive: Bool {
+        source != .none
+    }
+}
+
 struct AppVaultQuickFilterRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1341,6 +1425,7 @@ final class AppSessionModel {
     var autoFillIndexState: AutoFillIndexState = .idle
     var notificationPermissionState: AppPermissionStatusRow.State = .checkable
     var vaultKeychainState: VaultKeychainState = .idle
+    private var plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
     var webDAVBaseURL = ""
     var webDAVUsername = ""
     var webDAVPassword = ""
@@ -2598,6 +2683,94 @@ final class AppSessionModel {
         recordUserActivity()
     }
 
+    var plusEntitlementStatusRow: AppPlusEntitlementStatusRow {
+        let isActive = plusEntitlementSnapshot.isActive
+        return AppPlusEntitlementStatusRow(
+            id: "plus-entitlement",
+            title: "Monica Plus",
+            value: isActive ? "已激活" : "未激活",
+            detail: plusEntitlementDetail(for: plusEntitlementSnapshot),
+            systemImage: isActive ? "checkmark.seal.fill" : "seal"
+        )
+    }
+
+    var plusFeatureRows: [AppPlusFeatureRow] {
+        let isUnlocked = plusEntitlementSnapshot.isActive
+        return [
+            AppPlusFeatureRow(
+                id: "premium_themes",
+                title: "会员专属主题",
+                detail: "解锁 Monica Plus 专属主题配色。",
+                systemImage: "paintpalette",
+                isUnlocked: isUnlocked
+            ),
+            AppPlusFeatureRow(
+                id: "validator_vibration",
+                title: "验证器震动提醒",
+                detail: "验证码即将刷新时的本机提醒能力。",
+                systemImage: "waveform",
+                isUnlocked: isUnlocked
+            ),
+            AppPlusFeatureRow(
+                id: "copy_next_code",
+                title: "智能复制下一个验证码",
+                detail: "倒计时过短时可切换到下一枚 TOTP。",
+                systemImage: "arrow.triangle.2.circlepath",
+                isUnlocked: isUnlocked
+            ),
+            AppPlusFeatureRow(
+                id: "bitwarden_sync",
+                title: "Bitwarden 同步",
+                detail: "对齐 Android Plus 中的 Bitwarden 同步能力开关。",
+                systemImage: "cloud",
+                isUnlocked: isUnlocked
+            )
+        ]
+    }
+
+    func applyStoreKitPlusEntitlements(
+        _ entitlements: [AppStoreKitPlusEntitlement],
+        now: Date = Date()
+    ) {
+        let activeProducts = entitlements.compactMap { entitlement -> AppPlusStoreKitProduct? in
+            guard entitlement.revokedAt == nil,
+                  entitlement.expiresAt.map({ $0 > now }) ?? true
+            else {
+                return nil
+            }
+            return AppPlusStoreKitProduct.product(for: entitlement.productID)
+        }
+        guard let product = activeProducts.sorted(by: plusProductPriorityDescending).first else {
+            plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
+            recordUserActivity()
+            return
+        }
+        plusEntitlementSnapshot = AppPlusEntitlementSnapshot(
+            source: .storeKit(product: product),
+            expiresAt: entitlements
+                .filter { AppPlusStoreKitProduct.product(for: $0.productID) == product }
+                .compactMap(\.expiresAt)
+                .max()
+        )
+        recordUserActivity()
+    }
+
+    func applyLegacyPlusEntitlement(
+        _ entitlement: AppLegacyPlusEntitlement,
+        now: Date = Date()
+    ) {
+        guard entitlement.expiresAt.map({ $0 > now }) ?? true else {
+            plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
+            recordUserActivity()
+            return
+        }
+        plusEntitlementSnapshot = AppPlusEntitlementSnapshot(
+            source: .legacyCDK,
+            expiresAt: entitlement.expiresAt
+        )
+        recordUserActivity()
+    }
+
     var permissionStatusRows: [AppPermissionStatusRow] {
         [
             AppPermissionStatusRow(
@@ -2888,6 +3061,35 @@ final class AppSessionModel {
 
     private func itemCountLabel(_ count: Int) -> String {
         "\(count) 项"
+    }
+
+    private func plusProductPriorityDescending(
+        _ lhs: AppPlusStoreKitProduct,
+        _ rhs: AppPlusStoreKitProduct
+    ) -> Bool {
+        plusProductPriority(lhs) > plusProductPriority(rhs)
+    }
+
+    private func plusProductPriority(_ product: AppPlusStoreKitProduct) -> Int {
+        switch product {
+        case .lifetime:
+            return 3
+        case .yearly:
+            return 2
+        case .monthly:
+            return 1
+        }
+    }
+
+    private func plusEntitlementDetail(for snapshot: AppPlusEntitlementSnapshot) -> String {
+        switch snapshot.source {
+        case .none:
+            return "StoreKit 2 购买/恢复和 Plus/CDK 校验尚未激活。"
+        case .storeKit(let product):
+            return "StoreKit 2 已映射到 Monica Plus \(product.displayName)。"
+        case .legacyCDK:
+            return "Plus/CDK 已映射到 Monica Plus。"
+        }
     }
 
     private func loginStackedGroupKey(for entry: LocalLoginEntry) -> AppLoginStackedGroupKey {
