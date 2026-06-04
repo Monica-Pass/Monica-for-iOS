@@ -988,6 +988,43 @@ protocol AppBitwardenItemSyncStateStore: Sendable {
     func saveStates(_ states: [BitwardenItemSyncState], vaultID: String) throws
 }
 
+struct AppBitwardenPendingMutationBatch: Sendable, Equatable, Codable, Identifiable {
+    let id: String
+    let vaultID: String
+    let queuedAt: Date
+    let mutationCount: Int
+    let redactedSummaries: [String]
+    let retryCount: Int
+    let lastErrorSummary: String
+
+    init(
+        id: String = UUID().uuidString,
+        vaultID: String,
+        queuedAt: Date = Date(),
+        mutationCount: Int,
+        redactedSummaries: [String],
+        retryCount: Int,
+        lastErrorSummary: String
+    ) {
+        self.id = id
+        self.vaultID = vaultID
+        self.queuedAt = queuedAt
+        self.mutationCount = mutationCount
+        self.redactedSummaries = redactedSummaries
+        self.retryCount = retryCount
+        self.lastErrorSummary = lastErrorSummary
+    }
+
+    var redactedSummary: String {
+        "Bitwarden 待重试 \(mutationCount) 个变更（第 \(retryCount) 次）"
+    }
+}
+
+protocol AppBitwardenPendingMutationQueueStore: Sendable {
+    func loadBatches(vaultID: String) throws -> [AppBitwardenPendingMutationBatch]
+    func saveBatches(_ batches: [AppBitwardenPendingMutationBatch], vaultID: String) throws
+}
+
 final class MemoryAppBitwardenSendSyncStateStore: AppBitwardenSendSyncStateStore, @unchecked Sendable {
     private var statesByVaultID: [String: [BitwardenSendSyncState]] = [:]
 
@@ -1021,6 +1058,30 @@ final class MemoryAppBitwardenFolderSyncStateStore: AppBitwardenFolderSyncStateS
 
     func saveStates(_ states: [BitwardenFolderSyncState], vaultID: String) throws {
         statesByVaultID[vaultID] = states
+    }
+}
+
+final class MemoryAppBitwardenPendingMutationQueueStore: AppBitwardenPendingMutationQueueStore, @unchecked Sendable {
+    private var batchesByVaultID: [String: [AppBitwardenPendingMutationBatch]] = [:]
+
+    func loadBatches(vaultID: String) throws -> [AppBitwardenPendingMutationBatch] {
+        batchesByVaultID[vaultID, default: []]
+    }
+
+    func saveBatches(_ batches: [AppBitwardenPendingMutationBatch], vaultID: String) throws {
+        batchesByVaultID[vaultID] = batches
+    }
+
+    func loadAllBatches() -> [AppBitwardenPendingMutationBatch] {
+        batchesByVaultID
+            .values
+            .flatMap { $0 }
+            .sorted { lhs, rhs in
+                if lhs.queuedAt != rhs.queuedAt {
+                    return lhs.queuedAt < rhs.queuedAt
+                }
+                return lhs.id < rhs.id
+            }
     }
 }
 
@@ -1138,6 +1199,57 @@ struct FileAppBitwardenItemSyncStateStore: AppBitwardenItemSyncStateStore, @unch
     func saveStates(_ states: [BitwardenItemSyncState], vaultID: String) throws {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         try encoder.encode(states).write(to: fileURL(vaultID: vaultID), options: [.atomic])
+    }
+
+    private func fileURL(vaultID: String) -> URL {
+        let sanitized = vaultID
+            .unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return directoryURL.appendingPathComponent((sanitized.isEmpty ? "vault" : sanitized) + ".json")
+    }
+}
+
+struct FileAppBitwardenPendingMutationQueueStore: AppBitwardenPendingMutationQueueStore, @unchecked Sendable {
+    private let directoryURL: URL
+    private let fileManager: FileManager
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL, fileManager: FileManager = .default) {
+        directoryURL = containerURL.appendingPathComponent("bitwarden-pending-mutation-queue-v1", isDirectory: true)
+        self.fileManager = fileManager
+        encoder = JSONEncoder()
+        decoder = JSONDecoder()
+    }
+
+    func loadBatches(vaultID: String) throws -> [AppBitwardenPendingMutationBatch] {
+        let url = fileURL(vaultID: vaultID)
+        guard fileManager.fileExists(atPath: url.path) else {
+            return []
+        }
+        return try decoder.decode([AppBitwardenPendingMutationBatch].self, from: Data(contentsOf: url))
+    }
+
+    func saveBatches(_ batches: [AppBitwardenPendingMutationBatch], vaultID: String) throws {
+        let url = fileURL(vaultID: vaultID)
+        if batches.isEmpty {
+            guard fileManager.fileExists(atPath: url.path) else { return }
+            try fileManager.removeItem(at: url)
+            return
+        }
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try encoder.encode(batches).write(to: url, options: [.atomic])
     }
 
     private func fileURL(vaultID: String) -> URL {
@@ -2203,6 +2315,7 @@ final class AppSessionModel {
     private let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
     private let bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore
     private let bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore
+    private let bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -2251,6 +2364,7 @@ final class AppSessionModel {
         bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore = MemoryAppBitwardenSendSyncStateStore(),
         bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore = MemoryAppBitwardenFolderSyncStateStore(),
         bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore = MemoryAppBitwardenItemSyncStateStore(),
+        bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore = MemoryAppBitwardenPendingMutationQueueStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -2294,6 +2408,7 @@ final class AppSessionModel {
         self.bitwardenSendSyncStateStore = bitwardenSendSyncStateStore
         self.bitwardenFolderSyncStateStore = bitwardenFolderSyncStateStore
         self.bitwardenItemSyncStateStore = bitwardenItemSyncStateStore
+        self.bitwardenPendingMutationQueueStore = bitwardenPendingMutationQueueStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -8864,7 +8979,23 @@ final class AppSessionModel {
                 remoteSends: snapshot.sends,
                 previousStates: previousSendStates
             )
-            let result = try await provider.pushMutations(itemPlan.mutations + sendPlan.mutations)
+            let pendingBatches = try bitwardenPendingMutationQueueStore.loadBatches(vaultID: session.handle.vaultID)
+            let mutations = itemPlan.mutations + sendPlan.mutations
+            let result: BitwardenSyncPushResult
+            do {
+                result = try await provider.pushMutations(mutations)
+            } catch {
+                if isRetryableBitwardenPushError(error), !mutations.isEmpty {
+                    try queueBitwardenPendingMutations(
+                        mutations,
+                        vaultID: session.handle.vaultID,
+                        existingBatches: pendingBatches,
+                        error: error
+                    )
+                    bitwardenSyncState = .queuedForRetry(mutationCount: mutations.count)
+                }
+                throw error
+            }
             let itemStates = bitwardenItemStates(
                 itemPlan.updatedStates.values,
                 assigningRemoteIDs: result.assignedRemoteIDs,
@@ -8883,6 +9014,9 @@ final class AppSessionModel {
                 sendStates.sorted { $0.localID < $1.localID },
                 vaultID: session.handle.vaultID
             )
+            if !pendingBatches.isEmpty {
+                try bitwardenPendingMutationQueueStore.saveBatches([], vaultID: session.handle.vaultID)
+            }
             let conflicts = itemPlan.conflicts + sendPlan.conflicts + result.conflicts
             bitwardenSyncState = .pushed(
                 acceptedMutationCount: result.acceptedMutationCount,
@@ -8895,9 +9029,39 @@ final class AppSessionModel {
                 assignedRemoteIDs: result.assignedRemoteIDs
             )
         } catch {
+            if case .queuedForRetry = bitwardenSyncState {
+                throw error
+            }
             bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
             throw error
         }
+    }
+
+    private func queueBitwardenPendingMutations(
+        _ mutations: [BitwardenSyncMutation],
+        vaultID: String,
+        existingBatches: [AppBitwardenPendingMutationBatch],
+        error: Error
+    ) throws {
+        let retryCount = (existingBatches.map(\.retryCount).max() ?? 0) + 1
+        let batch = AppBitwardenPendingMutationBatch(
+            vaultID: vaultID,
+            mutationCount: mutations.count,
+            redactedSummaries: mutations.map(\.redactedSummary),
+            retryCount: retryCount,
+            lastErrorSummary: readableBitwardenSyncErrorMessage(for: error)
+        )
+        try bitwardenPendingMutationQueueStore.saveBatches([batch], vaultID: vaultID)
+    }
+
+    private func isRetryableBitwardenPushError(_ error: Error) -> Bool {
+        if error is URLError {
+            return true
+        }
+        if case .serverRejected(let statusCode) = error as? BitwardenSyncProviderError {
+            return (500...599).contains(statusCode)
+        }
+        return false
     }
 
     private func validateBitwardenRemoteSnapshotIsSafe(
@@ -11248,6 +11412,7 @@ enum BitwardenSyncState: Sendable, Equatable {
     case previewReady(itemCount: Int, sendCount: Int)
     case synced(itemCount: Int, sendCount: Int)
     case pushed(acceptedMutationCount: Int, conflictCount: Int)
+    case queuedForRetry(mutationCount: Int)
     case failed(String)
 
     var label: String {
@@ -11262,6 +11427,8 @@ enum BitwardenSyncState: Sendable, Equatable {
             return "Bitwarden 已同步 \(itemCount) 个条目，\(sendCount) 个 Send"
         case .pushed(let acceptedMutationCount, let conflictCount):
             return "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflictCount) 个冲突"
+        case .queuedForRetry(let mutationCount):
+            return "Bitwarden 已暂存 \(mutationCount) 个变更，等待网络恢复后重试"
         case .failed(let message):
             return message
         }
