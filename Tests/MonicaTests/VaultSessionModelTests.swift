@@ -9,6 +9,22 @@ import XCTest
 
 @MainActor
 final class VaultSessionModelTests: XCTestCase {
+    private func repositoryFileURL(_ relativePath: String) throws -> URL {
+        #if os(iOS) && !targetEnvironment(simulator)
+        throw XCTSkip("Repository files are not available inside the real-device test sandbox.")
+        #else
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent(relativePath)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw XCTSkip("Repository file is not available in this test environment: \(relativePath)")
+        }
+        return url
+        #endif
+    }
+
     private func unlockNewVault(_ model: AppSessionModel) throws {
         model.vaultName = "Mobile"
         model.vaultPassword = "中文 password 12345!"
@@ -1282,11 +1298,7 @@ final class VaultSessionModelTests: XCTestCase {
     }
 
     func testAppInfoPlistRegistersOneDriveMSALRedirectScheme() throws {
-        let plistURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("App/MonicaApp/Info.plist")
+        let plistURL = try repositoryFileURL("App/MonicaApp/Info.plist")
         let data = try Data(contentsOf: plistURL)
         guard let plist = try PropertyListSerialization.propertyList(
             from: data,
@@ -1311,11 +1323,7 @@ final class VaultSessionModelTests: XCTestCase {
     }
 
     func testAutoFillExtensionDeclaresPasskeyProviderCapability() throws {
-        let plistURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Extensions/MonicaAutoFillExtension/Info.plist")
+        let plistURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/Info.plist")
         let data = try Data(contentsOf: plistURL)
         guard let plist = try PropertyListSerialization.propertyList(
             from: data,
@@ -1336,11 +1344,7 @@ final class VaultSessionModelTests: XCTestCase {
     }
 
     func testAutoFillExtensionCompletesPasskeyRegistrationAndAssertionRequests() throws {
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
+        let sourceURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         XCTAssertTrue(source.contains("completeRegistrationRequest"))
@@ -1350,11 +1354,7 @@ final class VaultSessionModelTests: XCTestCase {
     }
 
     func testAutoFillExtensionPersistsSystemSavePasswordRequestsForAppImport() throws {
-        let sourceURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
+        let sourceURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
         let source = try String(contentsOf: sourceURL, encoding: .utf8)
 
         XCTAssertTrue(source.contains("prepareInterface(for savePasswordRequest"))
@@ -1480,11 +1480,7 @@ final class VaultSessionModelTests: XCTestCase {
             "com.monica-pass.monica"
         )
 
-        let entitlementsURL = URL(fileURLWithPath: #filePath)
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .deletingLastPathComponent()
-            .appendingPathComponent("App/MonicaApp/MonicaApp.entitlements")
+        let entitlementsURL = try repositoryFileURL("App/MonicaApp/MonicaApp.entitlements")
         let data = try Data(contentsOf: entitlementsURL)
         guard let entitlements = try PropertyListSerialization.propertyList(
             from: data,
