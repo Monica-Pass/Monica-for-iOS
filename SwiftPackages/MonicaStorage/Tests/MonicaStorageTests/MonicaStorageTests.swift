@@ -3830,6 +3830,66 @@ import MonicaStorage
     #expect(attachment.encryptedBlob == Data("ciphertext".utf8))
 }
 
+@Test func androidBackupCodecImportsTrashPasswordAndSecureItemsAsDeletedItems() throws {
+    let backup = try AndroidBackupCodec.exportZip(entries: [
+        "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"secret","website":"https://github.com"}"#,
+        "trash/trash_passwords.json": #"""
+        [
+          {
+            "id": 7,
+            "title": "Deleted Login",
+            "username": "bob",
+            "password": "deleted-password",
+            "website": "https://deleted.example",
+            "notes": "old note",
+            "createdAt": 1710000000000,
+            "updatedAt": 1710000001000,
+            "deletedAt": 1710000002000
+          }
+        ]
+        """#,
+        "trash/trash_secure_items.json": #"""
+        [
+          {
+            "id": 8,
+            "title": "Deleted 2FA",
+            "itemType": "TOTP",
+            "itemData": "{\"secret\":\"JBSWY3DPEHPK3PXP\",\"issuer\":\"GitHub\",\"accountName\":\"bob\",\"period\":30,\"digits\":6,\"algorithm\":\"SHA1\",\"otpType\":\"TOTP\",\"counter\":0}",
+            "notes": "totp note",
+            "createdAt": 1710000000000,
+            "updatedAt": 1710000001000,
+            "deletedAt": 1710000003000
+          }
+        ]
+        """#
+    ])
+
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(report.issues.isEmpty)
+    #expect(report.items.map(\.kind) == [.login])
+    #expect(report.deletedItems.map(\.draft.kind) == [.login, .totp])
+    #expect(report.deletedItems.map(\.sourceID) == [7, 8])
+    #expect(report.deletedItems.map(\.deletedAt) == [1710000002000, 1710000003000])
+
+    guard case .login(let deletedLogin) = report.deletedItems[0].draft else {
+        Issue.record("Expected deleted login")
+        return
+    }
+    #expect(deletedLogin.title == "Deleted Login")
+    #expect(deletedLogin.username == "bob")
+    #expect(deletedLogin.password == "deleted-password")
+    #expect(deletedLogin.url == "https://deleted.example")
+
+    guard case .totp(let deletedTotp) = report.deletedItems[1].draft else {
+        Issue.record("Expected deleted TOTP")
+        return
+    }
+    #expect(deletedTotp.secret == "JBSWY3DPEHPK3PXP")
+    #expect(deletedTotp.issuer == "GitHub")
+    #expect(deletedTotp.accountName == "bob")
+}
+
 @Test func androidBackupCodecReportsEncryptedBackupAsUnsupported() throws {
     let encryptedBackup = Data("MONICA_ENC_V1".utf8)
         + Data(repeating: 0, count: 32)

@@ -1163,6 +1163,7 @@ struct AndroidBackupImportPreview: Sendable, Equatable {
     let report: AndroidBackupImportReport
 
     var items: [VaultCSVItemDraft] { report.items }
+    var deletedItems: [AndroidBackupImportedItem] { report.deletedItems }
     var attachments: [AndroidBackupAttachmentMetadata] { report.attachments }
     var issues: [AndroidBackupImportIssue] { report.issues }
 }
@@ -7920,8 +7921,9 @@ final class AppSessionModel {
         csvImportPreview = nil
         clearKeePassImportState()
         clearPendingAndroidEncryptedBackup()
+        let trashText = report.deletedItems.isEmpty ? "" : "，\(report.deletedItems.count) 项回收站"
         let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
-        entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(attachmentText)，\(report.issues.count) 个问题")
+        entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(trashText)\(attachmentText)，\(report.issues.count) 个问题")
         return preview
     }
 
@@ -8020,6 +8022,23 @@ final class AppSessionModel {
                     importedLoginIDsByAndroidID[sourceID] = createdEntryID
                 }
             }
+            var deletedItemCount = 0
+            for importedItem in preview.deletedItems {
+                guard let createdEntryID = try createCSVImportedItem(
+                    importedItem.draft,
+                    projectID: project.id,
+                    entryRepository: entryRepository
+                ) else {
+                    continue
+                }
+                try deleteCSVImportedItem(
+                    importedItem.draft,
+                    entryID: createdEntryID,
+                    projectID: project.id,
+                    entryRepository: entryRepository
+                )
+                deletedItemCount += 1
+            }
             var savedAttachmentBlobCount = 0
             for attachment in preview.attachments {
                 let encryptedBlobLocalPath: String?
@@ -8061,7 +8080,8 @@ final class AppSessionModel {
             } else {
                 attachmentText = "；\(preview.attachments.count) 个附件元数据待恢复"
             }
-            entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项\(attachmentText)")
+            let trashText = deletedItemCount == 0 ? "" : "；\(deletedItemCount) 项进入回收站"
+            entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项\(attachmentText)\(trashText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -9630,6 +9650,36 @@ final class AppSessionModel {
             return try entryRepository.createWifiEntry(projectID: projectID, draft: draft).id
         case .send(let draft):
             return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
+        }
+    }
+
+    private func deleteCSVImportedItem(
+        _ item: VaultCSVItemDraft,
+        entryID: String,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws {
+        switch item {
+        case .login:
+            try entryRepository.deleteLoginEntry(projectID: projectID, entryID: entryID)
+        case .note:
+            try entryRepository.deleteNoteEntry(projectID: projectID, entryID: entryID)
+        case .totp:
+            try entryRepository.deleteTotpEntry(projectID: projectID, entryID: entryID)
+        case .card:
+            try entryRepository.deleteCardEntry(projectID: projectID, entryID: entryID)
+        case .identity:
+            try entryRepository.deleteIdentityEntry(projectID: projectID, entryID: entryID)
+        case .passkey:
+            try entryRepository.deletePasskeyEntry(projectID: projectID, entryID: entryID)
+        case .sshKey:
+            try entryRepository.deleteSshKeyEntry(projectID: projectID, entryID: entryID)
+        case .apiToken:
+            try entryRepository.deleteApiTokenEntry(projectID: projectID, entryID: entryID)
+        case .wifi:
+            try entryRepository.deleteWifiEntry(projectID: projectID, entryID: entryID)
+        case .send:
+            try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
         }
     }
 
