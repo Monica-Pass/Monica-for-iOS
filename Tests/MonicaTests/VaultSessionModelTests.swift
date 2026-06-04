@@ -9327,6 +9327,98 @@ final class VaultSessionModelTests: XCTestCase {
         }
     }
 
+    func testBitwardenSyncImportsAndPushesSshKeyCipherWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-ssh-secret-id",
+                    kind: .sshKey,
+                    title: "Production SSH",
+                    username: "deploy",
+                    url: "prod.example.com",
+                    notes: "ssh-note-secret",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_030),
+                    sshPublicKey: "ssh-ed25519 remote-public-key-secret",
+                    sshPrivateKey: "remote-private-key-secret",
+                    sshKeyFingerprint: "SHA256:remote-fingerprint-secret"
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(acceptedMutationCount: 1)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        _ = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+
+        XCTAssertEqual(engine.createdSshKeyEntries.count, 1)
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.title, "Production SSH")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.username, "deploy")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.host, "prod.example.com")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.publicKey, "ssh-ed25519 remote-public-key-secret")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.privateKeyReference, "remote-private-key-secret")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.passphraseHint, "SHA256:remote-fingerprint-secret")
+        XCTAssertEqual(engine.createdSshKeyEntries.first?.draft.notes, "ssh-note-secret")
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault").map(\.kind), [.sshKey])
+
+        model.sshKeyTitle = "Local SSH"
+        model.sshKeyUsername = "git"
+        model.sshKeyHost = "git.example.com"
+        model.sshKeyPublicKey = "ssh-ed25519 local-public-key-secret"
+        model.sshKeyPrivateKeyReference = "local-private-key-reference-secret"
+        model.sshKeyPassphraseHint = "SHA256:local-fingerprint-secret"
+        model.sshKeyNotes = "local-ssh-note-secret"
+        try model.createSshKeyEntry(projectTitle: "Personal")
+
+        _ = try await model.pushLocalBitwardenChanges()
+
+        guard case .upsertCipher(let item, _) = bitwarden.pushedMutations.first else {
+            XCTFail("Expected local SSH key to push as cipher")
+            return
+        }
+        XCTAssertEqual(item.kind, .sshKey)
+        XCTAssertEqual(item.title, "Local SSH")
+        XCTAssertEqual(item.username, "git")
+        XCTAssertEqual(item.url, "git.example.com")
+        XCTAssertEqual(item.sshPublicKey, "ssh-ed25519 local-public-key-secret")
+        XCTAssertEqual(item.sshPrivateKey, "local-private-key-reference-secret")
+        XCTAssertEqual(item.sshKeyFingerprint, "SHA256:local-fingerprint-secret")
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            bitwarden.pushedMutations.map(\.redactedSummary).joined(separator: " "),
+            try itemStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        [
+            "remote-ssh-secret-id",
+            "remote-public-key-secret",
+            "remote-private-key-secret",
+            "remote-fingerprint-secret",
+            "local-public-key-secret",
+            "local-private-key-reference-secret",
+            "local-fingerprint-secret",
+            "ssh-note-secret",
+            "local-ssh-note-secret"
+        ].forEach { secret in
+            XCTAssertFalse(visibleText.contains(secret))
+        }
+    }
+
     func testBitwardenPushUsesPersistedSendRemoteStateForUpdateAndDeletePlan() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()

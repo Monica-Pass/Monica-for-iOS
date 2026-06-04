@@ -1478,6 +1478,78 @@ import Foundation
     }
 }
 
+@Test func bitwardenVaultSyncProviderPushesEncryptedSshKeyCipherThroughRealRestEndpoints() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "fresh-access-token-secret",
+            refreshToken: "refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    try keyStore.saveVaultKey(
+        BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        ),
+        accountLabel: "alice@example.com"
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: #"{"Id":"created-ssh-key-secret-id","RevisionDate":"2026-06-04T13:30:00Z"}"#
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: keyStore,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let result = try await provider.pushMutations([
+        .upsertCipher(
+            item: BitwardenLocalItemSyncItem(
+                localID: "local-ssh-key-secret-id",
+                kind: .sshKey,
+                title: "Production SSH",
+                username: "deploy",
+                url: "prod.example.com",
+                notes: "ssh-note-secret",
+                sshPublicKey: "ssh-ed25519 public-key-secret",
+                sshPrivateKey: "private-key-reference-secret",
+                sshKeyFingerprint: "SHA256:fingerprint-secret"
+            ),
+            remoteID: nil
+        )
+    ])
+
+    #expect(result.acceptedMutationCount == 1)
+    #expect(result.assignedRemoteIDs == ["local-ssh-key-secret-id": "created-ssh-key-secret-id"])
+    #expect(vaultTransport.requests.map(\.method) == ["POST"])
+    let body = try decodedJSONDictionary(vaultTransport.requests[0].body)
+    #expect(body["type"] as? Int == 5)
+    #expect(BitwardenCipherStringProbe.isCipherString(body["name"] as? String))
+    #expect(BitwardenCipherStringProbe.isCipherString(body["notes"] as? String))
+    let sshKey = try #require(body["sshKey"] as? [String: Any])
+    #expect(BitwardenCipherStringProbe.isCipherString(sshKey["publicKey"] as? String))
+    #expect(BitwardenCipherStringProbe.isCipherString(sshKey["privateKey"] as? String))
+    #expect(BitwardenCipherStringProbe.isCipherString(sshKey["keyFingerprint"] as? String))
+    let requestText = String(data: try #require(vaultTransport.requests[0].body), encoding: .utf8) ?? ""
+    [
+        "public-key-secret",
+        "private-key-reference-secret",
+        "fingerprint-secret",
+        "ssh-note-secret"
+    ].forEach { secret in
+        #expect(!requestText.contains(secret))
+    }
+}
+
 @Test func bitwardenVaultSyncProviderPushesEncryptedSendMutationsThroughRealRestEndpoints() async throws {
     let sessionStore = MemoryBitwardenAuthenticationSessionStore(
         session: BitwardenAuthenticationSession(

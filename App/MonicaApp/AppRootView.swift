@@ -832,6 +832,7 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     let remoteSendCount: Int
     let remoteLoginCount: Int
     let remotePasskeyCount: Int
+    let remoteSshKeyCount: Int
     let remoteNoteCount: Int
     let remoteCardCount: Int
     let remoteIdentityCount: Int
@@ -845,6 +846,7 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
         self.remoteSendCount = snapshot.sends.count
         self.remoteLoginCount = snapshot.items.filter { $0.kind == .login }.count
         self.remotePasskeyCount = snapshot.items.filter { $0.kind == .passkey }.count
+        self.remoteSshKeyCount = snapshot.items.filter { $0.kind == .sshKey }.count
         self.remoteNoteCount = snapshot.items.filter { $0.kind == .secureNote }.count
         self.remoteCardCount = snapshot.items.filter { $0.kind == .card }.count
         self.remoteIdentityCount = snapshot.items.filter { $0.kind == .identity }.count
@@ -858,6 +860,9 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
         var parts = ["登录 \(remoteLoginCount)"]
         if remotePasskeyCount > 0 {
             parts.append("通行密钥 \(remotePasskeyCount)")
+        }
+        if remoteSshKeyCount > 0 {
+            parts.append("SSH Key \(remoteSshKeyCount)")
         }
         parts += [
             "笔记 \(remoteNoteCount)",
@@ -9221,6 +9226,7 @@ final class AppSessionModel {
         var existingCards = try entryRepository.listCardEntries(projectID: projectID)
         var existingIdentities = try entryRepository.listIdentityEntries(projectID: projectID)
         var existingPasskeys = try entryRepository.listPasskeyEntries(projectID: projectID)
+        var existingSshKeys = try entryRepository.listSshKeyEntries(projectID: projectID)
         var existingTotps = try entryRepository.listTotpEntries(projectID: projectID)
         var existingSends = try entryRepository.listSendEntries(projectID: projectID)
         var itemStates = Dictionary(
@@ -9336,6 +9342,39 @@ final class AppSessionModel {
                     )
                     if targetProjectID == projectID {
                         existingPasskeys.append(localEntry)
+                    }
+                }
+                let localItem = bitwardenLocalItem(from: localEntry, folderID: item.folderID, folderName: item.folderName)
+                itemStates[localEntry.id] = bitwardenItemSyncState(
+                    localItem: localItem,
+                    remoteItem: item
+                )
+                try reconcileBitwardenAttachments(
+                    item.attachments,
+                    localEntryID: localEntry.id,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+            case .sshKey:
+                let localEntry: LocalSshKeyEntry
+                if targetProjectID == projectID,
+                   let existing = existingSshKeys.first(where: { isSameBitwardenSshKey($0, item) }) {
+                    localEntry = existing
+                } else {
+                    localEntry = try entryRepository.createSshKeyEntry(
+                        projectID: targetProjectID,
+                        draft: LocalSshKeyEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            username: item.username,
+                            host: item.url,
+                            publicKey: item.sshPublicKey,
+                            privateKeyReference: item.sshPrivateKey,
+                            passphraseHint: item.sshKeyFingerprint,
+                            notes: item.notes ?? ""
+                        )
+                    )
+                    if targetProjectID == projectID {
+                        existingSshKeys.append(localEntry)
                     }
                 }
                 let localItem = bitwardenLocalItem(from: localEntry, folderID: item.folderID, folderName: item.folderName)
@@ -9514,6 +9553,13 @@ final class AppSessionModel {
             && entry.relyingPartyID == bitwardenPasskeyRelyingPartyID(for: item)
             && entry.username == item.username
             && entry.credentialID == item.passkeyCredentialID
+    }
+
+    private func isSameBitwardenSshKey(_ entry: LocalSshKeyEntry, _ item: BitwardenSyncItem) -> Bool {
+        entry.title == bitwardenImportTitle(item.title)
+            && entry.username == item.username
+            && entry.host == item.url
+            && entry.publicKey == item.sshPublicKey
     }
 
     private func isSameBitwardenSend(_ entry: LocalSendEntry, _ send: BitwardenSendSyncItem) -> Bool {
@@ -9756,6 +9802,22 @@ final class AppSessionModel {
         )
     }
 
+    private func bitwardenLocalItem(from entry: LocalSshKeyEntry, folderID: String? = nil, folderName: String? = nil) -> BitwardenLocalItemSyncItem {
+        BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .sshKey,
+            title: entry.title,
+            username: entry.username,
+            url: entry.host,
+            notes: entry.notes,
+            folderID: folderID,
+            folderName: folderName,
+            sshPublicKey: entry.publicKey,
+            sshPrivateKey: entry.privateKeyReference,
+            sshKeyFingerprint: entry.passphraseHint
+        )
+    }
+
     private func makeBitwardenItemSyncPlan(
         remoteItems: [BitwardenSyncItem],
         previousStates: [BitwardenItemSyncState],
@@ -9777,6 +9839,9 @@ final class AppSessionModel {
         let localPasskeyItems: [BitwardenLocalItemSyncItem] = passkeyEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
+        let localSshKeyItems: [BitwardenLocalItemSyncItem] = sshKeyEntries.map {
+            bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
+        }
         let deletedLoginItems: [BitwardenLocalItemSyncItem] = deletedLoginEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
@@ -9792,8 +9857,11 @@ final class AppSessionModel {
         let deletedPasskeyItems: [BitwardenLocalItemSyncItem] = deletedPasskeyEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
-        let localItems = localLoginItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems
-        let deletedLocalItems = deletedLoginItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems
+        let deletedSshKeyItems: [BitwardenLocalItemSyncItem] = deletedSshKeyEntries.map {
+            bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
+        }
+        let localItems = localLoginItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems + localSshKeyItems
+        let deletedLocalItems = deletedLoginItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems + deletedSshKeyItems
 
         return BitwardenItemSyncPlanner().plan(
             localItems: localItems,
