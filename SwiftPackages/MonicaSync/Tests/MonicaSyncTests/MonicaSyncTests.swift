@@ -461,6 +461,276 @@ import Foundation
     }
 }
 
+@Test func bitwardenVaultSyncProviderPullsFullSnapshotThroughRefreshedTokenWithoutLeakingSecrets() async throws {
+    let identityTransport = RecordingBitwardenIdentityTransport()
+    identityTransport.result = BitwardenTokenRefreshResult(
+        accessToken: "fresh-bitwarden-access-token-secret",
+        refreshToken: "fresh-bitwarden-refresh-token-secret",
+        expiresIn: 3600
+    )
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "expired-bitwarden-access-token-secret",
+            refreshToken: "old-bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_000_000)
+        )
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Id": "profile-secret-id",
+            "Name": "Alice",
+            "Email": "alice@example.com",
+            "Premium": true,
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Folders": [
+            {
+              "Id": "folder-work-secret-id",
+              "Name": "Work",
+              "RevisionDate": "2026-06-03T12:00:00Z"
+            }
+          ],
+          "Ciphers": [
+            {
+              "Id": "cipher-login-secret-id",
+              "FolderId": "folder-work-secret-id",
+              "Type": 1,
+              "Name": "GitHub",
+              "Notes": "login-note-secret",
+              "RevisionDate": "2026-06-03T12:30:00Z",
+              "Login": {
+                "Username": "alice",
+                "Password": "password-secret",
+                "Totp": "totp-secret",
+                "Uris": [{ "Uri": "https://github.com/session?token=query-secret" }]
+              },
+              "Attachments": [
+                { "Id": "attachment-secret-id", "FileName": "deploy.txt", "Size": "42" }
+              ]
+            },
+            {
+              "Id": "cipher-note-secret-id",
+              "Type": 2,
+              "Name": "Recovery",
+              "Notes": "recovery-note-secret",
+              "RevisionDate": "2026-06-03T13:00:00Z",
+              "SecureNote": { "Type": 0 }
+            },
+            {
+              "Id": "cipher-card-secret-id",
+              "Type": 3,
+              "Name": "Everyday Visa",
+              "Notes": "card-note-secret",
+              "RevisionDate": "2026-06-03T13:10:00Z",
+              "Card": {
+                "CardholderName": "Alice Example",
+                "Brand": "Visa",
+                "Number": "4111111111111111",
+                "ExpMonth": "12",
+                "ExpYear": "2031",
+                "Code": "123"
+              }
+            },
+            {
+              "Id": "cipher-identity-secret-id",
+              "Type": 4,
+              "Name": "Passport",
+              "Notes": "identity-note-secret",
+              "RevisionDate": "2026-06-03T13:20:00Z",
+              "Identity": {
+                "Title": "Dr.",
+                "FirstName": "Alice",
+                "MiddleName": "Q",
+                "LastName": "Example",
+                "PassportNumber": "P1234567",
+                "Company": "Monica Authority",
+                "Country": "US"
+              }
+            },
+            {
+              "Id": "cipher-deleted-secret-id",
+              "Type": 1,
+              "Name": "Deleted login",
+              "DeletedDate": "2026-06-03T13:30:00Z",
+              "Login": { "Username": "deleted-user-secret" }
+            }
+          ],
+          "Sends": [
+            {
+              "Id": "send-text-secret-id",
+              "Type": 0,
+              "Name": "Deploy link",
+              "Notes": "send-note-secret",
+              "Text": { "Text": "send-body-secret" },
+              "MaxAccessCount": 3,
+              "ExpirationDate": "2026-06-05T00:00:00Z",
+              "RevisionDate": "2026-06-03T14:00:00Z"
+            },
+            {
+              "Id": "send-file-secret-id",
+              "Type": 1,
+              "Name": "Build artifact",
+              "File": { "FileName": "artifact.zip", "Size": "1024" },
+              "RevisionDate": "2026-06-03T14:05:00Z"
+            }
+          ]
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: identityTransport,
+        vaultTransport: vaultTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+    let savedSession = try #require(try sessionStore.loadSession())
+
+    #expect(identityTransport.requests == [
+        BitwardenTokenRefreshRequest(
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            refreshToken: "old-bitwarden-refresh-token-secret"
+        )
+    ])
+    #expect(vaultTransport.requests.count == 1)
+    #expect(vaultTransport.requests[0].method == "GET")
+    #expect(vaultTransport.requests[0].url.absoluteString == "https://api.bitwarden.com/sync?excludeDomains=true")
+    #expect(vaultTransport.requests[0].headers["Authorization"] == "Bearer fresh-bitwarden-access-token-secret")
+    #expect(vaultTransport.requests[0].headers["Accept"] == "application/json")
+    #expect(savedSession.accessToken == "fresh-bitwarden-access-token-secret")
+    #expect(savedSession.refreshToken == "fresh-bitwarden-refresh-token-secret")
+
+    #expect(snapshot.accountLabel == "Alice")
+    #expect(snapshot.revision == "server-security-stamp-secret")
+    #expect(snapshot.items.map(\.remoteID) == [
+        "cipher-login-secret-id",
+        "cipher-note-secret-id",
+        "cipher-card-secret-id",
+        "cipher-identity-secret-id"
+    ])
+    #expect(snapshot.items.map(\.kind) == [.login, .secureNote, .card, .identity])
+    #expect(snapshot.items[0].title == "GitHub")
+    #expect(snapshot.items[0].username == "alice")
+    #expect(snapshot.items[0].url == "https://github.com/session?token=query-secret")
+    #expect(snapshot.items[0].password == "password-secret")
+    #expect(snapshot.items[0].totpSecret == "totp-secret")
+    #expect(snapshot.items[0].notes == "login-note-secret")
+    #expect(snapshot.items[0].folderName == "Work")
+    #expect(snapshot.items[0].attachmentByteCount == 42)
+    #expect(snapshot.items[1].title == "Recovery")
+    #expect(snapshot.items[1].notes == "recovery-note-secret")
+    #expect(snapshot.items[2].cardholderName == "Alice Example")
+    #expect(snapshot.items[2].cardNumber == "4111111111111111")
+    #expect(snapshot.items[2].cardExpiryMonth == "12")
+    #expect(snapshot.items[2].cardExpiryYear == "2031")
+    #expect(snapshot.items[2].cardCode == "123")
+    #expect(snapshot.items[2].cardBrand == "Visa")
+    #expect(snapshot.items[3].identityFullName == "Dr. Alice Q Example")
+    #expect(snapshot.items[3].identityDocumentNumber == "P1234567")
+    #expect(snapshot.items[3].identityIssuer == "Monica Authority")
+    #expect(snapshot.items[3].identityCountry == "US")
+    #expect(snapshot.sends.map(\.remoteID) == ["send-text-secret-id", "send-file-secret-id"])
+    #expect(snapshot.sends[0].title == "Deploy link")
+    #expect(snapshot.sends[0].body == "send-body-secret")
+    #expect(snapshot.sends[0].maxViews == 3)
+    #expect(snapshot.sends[0].expiresAt == "2026-06-05T00:00:00Z")
+    #expect(snapshot.sends[1].title == "Build artifact")
+    #expect(snapshot.sends[1].body == "artifact.zip")
+    #expect(snapshot.sends[1].attachmentByteCount == 1024)
+
+    let visibleText = (
+        [snapshot.redactedSummary]
+            + snapshot.items.map(\.redactedSummary)
+            + snapshot.sends.map(\.redactedSummary)
+            + [savedSession.redactedSummary]
+    ).joined(separator: " ")
+    [
+        "bitwarden-access-token-secret",
+        "bitwarden-refresh-token-secret",
+        "profile-secret-id",
+        "folder-work-secret-id",
+        "cipher-login-secret-id",
+        "cipher-note-secret-id",
+        "cipher-card-secret-id",
+        "cipher-identity-secret-id",
+        "cipher-deleted-secret-id",
+        "attachment-secret-id",
+        "query-secret",
+        "password-secret",
+        "totp-secret",
+        "login-note-secret",
+        "recovery-note-secret",
+        "card-note-secret",
+        "4111111111111111",
+        "P1234567",
+        "identity-note-secret",
+        "deleted-user-secret",
+        "send-text-secret-id",
+        "send-file-secret-id",
+        "send-body-secret",
+        "send-note-secret",
+        "server-security-stamp-secret"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
+@Test func bitwardenVaultSyncProviderMapsAuthenticationAndServerFailures() async throws {
+    let missingStore = MemoryBitwardenAuthenticationSessionStore()
+    let missingProvider = BitwardenVaultSyncProvider(
+        sessionStore: missingStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: RecordingBitwardenVaultSyncTransport()
+    )
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        _ = try await missingProvider.pullSnapshot()
+    }
+
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "access-token-secret",
+            refreshToken: "refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let unauthorizedTransport = RecordingBitwardenVaultSyncTransport()
+    unauthorizedTransport.enqueue(statusCode: 401, body: "{}")
+    let unauthorizedProvider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: unauthorizedTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        _ = try await unauthorizedProvider.pullSnapshot()
+    }
+
+    let failingTransport = RecordingBitwardenVaultSyncTransport()
+    failingTransport.enqueue(statusCode: 500, body: "{}")
+    let failingProvider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: failingTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    await #expect(throws: BitwardenSyncProviderError.serverRejected(statusCode: 500)) {
+        _ = try await failingProvider.pullSnapshot()
+    }
+}
+
 @Test func webDAVClientUploadsBackupWithBasicAuthAndIntegrityHeader() async throws {
     let transport = RecordingWebDAVTransport(
         responses: [
@@ -680,6 +950,26 @@ private final class RecordingBitwardenIdentityTransport: BitwardenIdentityTokenT
     func refreshAccessToken(_ request: BitwardenTokenRefreshRequest) async throws -> BitwardenTokenRefreshResult {
         requests.append(request)
         return result
+    }
+}
+
+private final class RecordingBitwardenVaultSyncTransport: BitwardenVaultSyncTransport, @unchecked Sendable {
+    private(set) var requests: [BitwardenVaultSyncRequest] = []
+    private var responses: [BitwardenVaultSyncResponse] = []
+
+    func enqueue(statusCode: Int, body: String, headers: [String: String] = [:]) {
+        responses.append(
+            BitwardenVaultSyncResponse(
+                statusCode: statusCode,
+                headers: headers,
+                body: Data(body.utf8)
+            )
+        )
+    }
+
+    func send(_ request: BitwardenVaultSyncRequest) async throws -> BitwardenVaultSyncResponse {
+        requests.append(request)
+        return responses.removeFirst()
     }
 }
 

@@ -846,6 +846,20 @@ struct SettingsRootView: View {
                     )
                     Button {
                         Task {
+                            try? await session.syncBitwardenVaultData(projectTitle: "Bitwarden")
+                        }
+                    } label: {
+                        Label("同步到本地", systemImage: "arrow.down.to.line.compact")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    .disabled(
+                        !session.bitwardenAuthenticationState.isConnected
+                            || session.vaultState != .unlocked
+                            || session.bitwardenSyncState.isRunning
+                    )
+                    Button {
+                        Task {
                             try? await session.pushLocalBitwardenChanges()
                         }
                     } label: {

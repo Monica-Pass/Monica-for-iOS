@@ -8690,6 +8690,132 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
     }
 
+    func testBitwardenSyncImportsRemoteVaultItemsIntoLocalEntriesWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-login-secret-id",
+                    kind: .login,
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com/session?token=query-secret",
+                    password: "login-password-secret",
+                    totpSecret: "totp-secret",
+                    notes: "login-note-secret",
+                    folderName: "Engineering",
+                    attachmentByteCount: 19
+                ),
+                BitwardenSyncItem(
+                    remoteID: "remote-note-secret-id",
+                    kind: .secureNote,
+                    title: "Recovery",
+                    notes: "recovery-note-secret",
+                    folderName: "Personal"
+                ),
+                BitwardenSyncItem(
+                    remoteID: "remote-card-secret-id",
+                    kind: .card,
+                    title: "Everyday Visa",
+                    notes: "card-note-secret",
+                    folderName: "Finance",
+                    cardholderName: "Alice Example",
+                    cardNumber: "4111111111111111",
+                    cardExpiryMonth: "12",
+                    cardExpiryYear: "2031",
+                    cardCode: "123",
+                    cardBrand: "Visa"
+                ),
+                BitwardenSyncItem(
+                    remoteID: "remote-identity-secret-id",
+                    kind: .identity,
+                    title: "Passport",
+                    username: "alice@example.com",
+                    notes: "identity-note-secret",
+                    folderName: "Travel",
+                    identityFullName: "Alice Example",
+                    identityDocumentNumber: "P1234567",
+                    identityIssuer: "Monica Authority",
+                    identityCountry: "US"
+                )
+            ],
+            sends: [
+                BitwardenSendSyncItem(
+                    remoteID: "remote-send-secret-id",
+                    title: "Deploy link",
+                    body: "send-body-secret",
+                    notes: "send-note-secret"
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        let preview = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+
+        XCTAssertEqual(bitwarden.pullCallCount, 1)
+        XCTAssertEqual(preview.accountLabel, "alice@example.com")
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.loginEntries.first?.username, "alice")
+        XCTAssertEqual(model.loginEntries.first?.password, "login-password-secret")
+        XCTAssertEqual(model.loginEntries.first?.url, "https://github.com/session?token=query-secret")
+        XCTAssertEqual(model.loginEntries.first?.notes, "login-note-secret")
+        XCTAssertEqual(model.totpEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.totpEntries.first?.secret, "totp-secret")
+        XCTAssertEqual(model.noteEntries.map(\.title), ["Recovery"])
+        XCTAssertEqual(model.noteEntries.first?.body, "recovery-note-secret")
+        XCTAssertEqual(model.cardEntries.map(\.title), ["Everyday Visa"])
+        XCTAssertEqual(model.cardEntries.first?.cardholderName, "Alice Example")
+        XCTAssertEqual(model.cardEntries.first?.number, "4111111111111111")
+        XCTAssertEqual(model.cardEntries.first?.expiryMonth, "12")
+        XCTAssertEqual(model.cardEntries.first?.expiryYear, "2031")
+        XCTAssertEqual(model.cardEntries.first?.cvv, "123")
+        XCTAssertEqual(model.cardEntries.first?.network, "Visa")
+        XCTAssertEqual(model.identityEntries.map(\.title), ["Passport"])
+        XCTAssertEqual(model.identityEntries.first?.fullName, "Alice Example")
+        XCTAssertEqual(model.identityEntries.first?.documentNumber, "P1234567")
+        XCTAssertEqual(model.identityEntries.first?.issuer, "Monica Authority")
+        XCTAssertEqual(model.identityEntries.first?.country, "US")
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已同步 4 个条目，1 个 Send")
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? ""
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("bw-revision-secret"))
+        XCTAssertFalse(visibleText.contains("remote-login-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-note-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-card-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-identity-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-send-secret-id"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+        XCTAssertFalse(visibleText.contains("login-password-secret"))
+        XCTAssertFalse(visibleText.contains("totp-secret"))
+        XCTAssertFalse(visibleText.contains("login-note-secret"))
+        XCTAssertFalse(visibleText.contains("recovery-note-secret"))
+        XCTAssertFalse(visibleText.contains("card-note-secret"))
+        XCTAssertFalse(visibleText.contains("4111111111111111"))
+        XCTAssertFalse(visibleText.contains("P1234567"))
+        XCTAssertFalse(visibleText.contains("identity-note-secret"))
+        XCTAssertFalse(visibleText.contains("send-body-secret"))
+        XCTAssertFalse(visibleText.contains("send-note-secret"))
+    }
+
     func testBitwardenPushUsesPersistedSendRemoteStateForUpdateAndDeletePlan() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()

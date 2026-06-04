@@ -362,6 +362,9 @@ extension AppSessionModel {
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
             cloudFileProviders: environment.productionCloudFileProviders,
             oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
+            bitwardenSyncProvider: BitwardenVaultSyncProvider(
+                sessionStore: bitwardenAuthenticationSessionStore
+            ),
             bitwardenAuthenticationSessionStore: bitwardenAuthenticationSessionStore,
             bitwardenSendSyncStateStore: bitwardenSendSyncStateStore,
             autoFillIndexStore: indexStore,

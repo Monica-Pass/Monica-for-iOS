@@ -8519,6 +8519,42 @@ final class AppSessionModel {
         }
     }
 
+    func syncBitwardenVaultData(projectTitle: String) async throws -> AppBitwardenSyncPreview {
+        recordUserActivity()
+        bitwardenSyncState = .running
+
+        do {
+            let session = try requireActiveVaultSession()
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let provider = try requireBitwardenSyncProvider()
+            let snapshot = try await provider.pullSnapshot()
+            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            let project = try ensureActiveProject(
+                projectTitle: projectTitle,
+                entryRepository: entryRepository
+            )
+            try importBitwardenSnapshot(
+                snapshot,
+                projectID: project.id,
+                vaultID: session.handle.vaultID,
+                entryRepository: entryRepository
+            )
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            bitwardenSyncPreview = preview
+            bitwardenSyncState = .synced(
+                itemCount: preview.remoteItemCount,
+                sendCount: preview.remoteSendCount
+            )
+            return preview
+        } catch {
+            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
     func pushLocalBitwardenChanges() async throws -> BitwardenSyncPushResult {
         recordUserActivity()
         bitwardenSyncState = .running
@@ -8678,6 +8714,173 @@ final class AppSessionModel {
             throw AppBitwardenSyncError.providerUnavailable
         }
         return bitwardenSyncProvider
+    }
+
+    private func importBitwardenSnapshot(
+        _ snapshot: BitwardenSyncSnapshot,
+        projectID: String,
+        vaultID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws {
+        var existingLogins = try entryRepository.listLoginEntries(projectID: projectID)
+        var existingNotes = try entryRepository.listNoteEntries(projectID: projectID)
+        var existingCards = try entryRepository.listCardEntries(projectID: projectID)
+        var existingIdentities = try entryRepository.listIdentityEntries(projectID: projectID)
+        var existingTotps = try entryRepository.listTotpEntries(projectID: projectID)
+        var existingSends = try entryRepository.listSendEntries(projectID: projectID)
+        var sendStates = Dictionary(
+            uniqueKeysWithValues: try bitwardenSendSyncStateStore
+                .loadStates(vaultID: vaultID)
+                .map { ($0.localID, $0) }
+        )
+
+        for item in snapshot.items {
+            switch item.kind {
+            case .login:
+                if !existingLogins.contains(where: { isSameBitwardenLogin($0, item) }) {
+                    let created = try entryRepository.createLoginEntry(
+                        projectID: projectID,
+                        draft: LocalLoginEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            username: item.username,
+                            password: item.password ?? "",
+                            url: item.url,
+                            notes: item.notes ?? ""
+                        )
+                    )
+                    existingLogins.append(created)
+                }
+                if let totpSecret = item.totpSecret?.trimmingCharacters(in: .whitespacesAndNewlines),
+                   !totpSecret.isEmpty,
+                   !existingTotps.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.secret == totpSecret }) {
+                    let created = try entryRepository.createTotpEntry(
+                        projectID: projectID,
+                        draft: LocalTotpEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            secret: totpSecret,
+                            issuer: item.folderName ?? snapshot.accountLabel,
+                            accountName: item.username,
+                            period: 30,
+                            digits: 6,
+                            algorithm: "SHA1",
+                            otpType: "TOTP",
+                            counter: 0
+                        )
+                    )
+                    existingTotps.append(created)
+                }
+            case .secureNote:
+                if !existingNotes.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.body == (item.notes ?? "") }) {
+                    let created = try entryRepository.createNoteEntry(
+                        projectID: projectID,
+                        draft: LocalNoteEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            body: item.notes ?? ""
+                        )
+                    )
+                    existingNotes.append(created)
+                }
+            case .card:
+                if !existingCards.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
+                    let created = try entryRepository.createCardEntry(
+                        projectID: projectID,
+                        draft: LocalCardEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            cardholderName: item.cardholderName,
+                            number: item.cardNumber,
+                            expiryMonth: item.cardExpiryMonth,
+                            expiryYear: item.cardExpiryYear,
+                            cvv: item.cardCode,
+                            issuer: item.folderName ?? "",
+                            network: item.cardBrand,
+                            notes: item.notes ?? ""
+                        )
+                    )
+                    existingCards.append(created)
+                }
+            case .identity:
+                if !existingIdentities.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
+                    let created = try entryRepository.createIdentityEntry(
+                        projectID: projectID,
+                        draft: LocalIdentityEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            documentType: "Bitwarden Identity",
+                            fullName: item.identityFullName.isEmpty ? item.username : item.identityFullName,
+                            documentNumber: item.identityDocumentNumber,
+                            issuer: item.identityIssuer.isEmpty ? (item.folderName ?? "") : item.identityIssuer,
+                            country: item.identityCountry,
+                            issueDate: "",
+                            expiryDate: "",
+                            notes: item.notes ?? ""
+                        )
+                    )
+                    existingIdentities.append(created)
+                }
+            }
+        }
+
+        for send in snapshot.sends {
+            let remoteFingerprint = BitwardenLocalSendSyncItem(
+                localID: send.remoteID,
+                title: send.title,
+                body: send.body,
+                notes: send.notes,
+                expiresAt: send.expiresAt,
+                maxViews: send.maxViews
+            ).syncFingerprint
+            if let existing = existingSends.first(where: { isSameBitwardenSend($0, send) }) {
+                sendStates[existing.id] = BitwardenSendSyncState(
+                    localID: existing.id,
+                    remoteID: send.remoteID,
+                    lastSyncedFingerprint: remoteFingerprint,
+                    lastRemoteRevision: send.updatedAt.map { String($0.timeIntervalSince1970) },
+                    isDeleted: false
+                )
+                continue
+            }
+            let created = try entryRepository.createSendEntry(
+                projectID: projectID,
+                draft: LocalSendEntryDraft(
+                    title: bitwardenImportTitle(send.title),
+                    body: send.body,
+                    expiresAt: send.expiresAt,
+                    maxViews: send.maxViews,
+                    notes: send.notes ?? ""
+                )
+            )
+            existingSends.append(created)
+            sendStates[created.id] = BitwardenSendSyncState(
+                localID: created.id,
+                remoteID: send.remoteID,
+                lastSyncedFingerprint: remoteFingerprint,
+                lastRemoteRevision: send.updatedAt.map { String($0.timeIntervalSince1970) },
+                isDeleted: false
+            )
+        }
+
+        try bitwardenSendSyncStateStore.saveStates(
+            sendStates.values.sorted { $0.localID < $1.localID },
+            vaultID: vaultID
+        )
+    }
+
+    private func isSameBitwardenLogin(_ entry: LocalLoginEntry, _ item: BitwardenSyncItem) -> Bool {
+        entry.title == bitwardenImportTitle(item.title)
+            && entry.username == item.username
+            && entry.url == item.url
+    }
+
+    private func isSameBitwardenSend(_ entry: LocalSendEntry, _ send: BitwardenSendSyncItem) -> Bool {
+        entry.title == bitwardenImportTitle(send.title)
+            && entry.body == send.body
+            && entry.expiresAt == send.expiresAt
+            && entry.maxViews == send.maxViews
+            && entry.notes == (send.notes ?? "")
+    }
+
+    private func bitwardenImportTitle(_ title: String) -> String {
+        let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? "Bitwarden 项目" : trimmed
     }
 
     private func makeBitwardenSendSyncPlan(
@@ -10275,6 +10478,7 @@ enum BitwardenSyncState: Sendable, Equatable {
     case idle
     case running
     case previewReady(itemCount: Int, sendCount: Int)
+    case synced(itemCount: Int, sendCount: Int)
     case pushed(acceptedMutationCount: Int, conflictCount: Int)
     case failed(String)
 
@@ -10286,6 +10490,8 @@ enum BitwardenSyncState: Sendable, Equatable {
             return "正在处理 Bitwarden"
         case .previewReady(let itemCount, let sendCount):
             return "Bitwarden 已预览 \(itemCount) 个条目，\(sendCount) 个 Send"
+        case .synced(let itemCount, let sendCount):
+            return "Bitwarden 已同步 \(itemCount) 个条目，\(sendCount) 个 Send"
         case .pushed(let acceptedMutationCount, let conflictCount):
             return "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflictCount) 个冲突"
         case .failed(let message):

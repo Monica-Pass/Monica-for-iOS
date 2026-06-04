@@ -40,6 +40,16 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public let collectionNames: [String]
     public let attachmentByteCount: Int
     public let updatedAt: Date?
+    public let cardholderName: String
+    public let cardNumber: String
+    public let cardExpiryMonth: String
+    public let cardExpiryYear: String
+    public let cardCode: String
+    public let cardBrand: String
+    public let identityFullName: String
+    public let identityDocumentNumber: String
+    public let identityIssuer: String
+    public let identityCountry: String
 
     public init(
         remoteID: String,
@@ -53,7 +63,17 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         folderName: String? = nil,
         collectionNames: [String] = [],
         attachmentByteCount: Int = 0,
-        updatedAt: Date? = nil
+        updatedAt: Date? = nil,
+        cardholderName: String = "",
+        cardNumber: String = "",
+        cardExpiryMonth: String = "",
+        cardExpiryYear: String = "",
+        cardCode: String = "",
+        cardBrand: String = "",
+        identityFullName: String = "",
+        identityDocumentNumber: String = "",
+        identityIssuer: String = "",
+        identityCountry: String = ""
     ) {
         self.remoteID = remoteID
         self.kind = kind
@@ -67,6 +87,16 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.collectionNames = collectionNames
         self.attachmentByteCount = attachmentByteCount
         self.updatedAt = updatedAt
+        self.cardholderName = cardholderName
+        self.cardNumber = cardNumber
+        self.cardExpiryMonth = cardExpiryMonth
+        self.cardExpiryYear = cardExpiryYear
+        self.cardCode = cardCode
+        self.cardBrand = cardBrand
+        self.identityFullName = identityFullName
+        self.identityDocumentNumber = identityDocumentNumber
+        self.identityIssuer = identityIssuer
+        self.identityCountry = identityCountry
     }
 
     public var redactedSummary: String {
@@ -619,6 +649,125 @@ public struct BitwardenSendSyncPlanner: Sendable {
     }
 }
 
+public struct BitwardenVaultSyncRequest: Sendable, Equatable {
+    public let method: String
+    public let url: URL
+    public let headers: [String: String]
+
+    public init(method: String, url: URL, headers: [String: String]) {
+        self.method = method
+        self.url = url
+        self.headers = headers
+    }
+}
+
+public struct BitwardenVaultSyncResponse: Sendable, Equatable {
+    public let statusCode: Int
+    public let headers: [String: String]
+    public let body: Data
+
+    public init(statusCode: Int, headers: [String: String] = [:], body: Data) {
+        self.statusCode = statusCode
+        self.headers = headers
+        self.body = body
+    }
+}
+
+public protocol BitwardenVaultSyncTransport: Sendable {
+    func send(_ request: BitwardenVaultSyncRequest) async throws -> BitwardenVaultSyncResponse
+}
+
+public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
+    private let sessionStore: any BitwardenAuthenticationSessionStore
+    private let accessTokenProvider: RefreshingBitwardenAccessTokenProvider
+    private let vaultTransport: any BitwardenVaultSyncTransport
+
+    public init(
+        sessionStore: any BitwardenAuthenticationSessionStore,
+        identityTransport: any BitwardenIdentityTokenTransport = URLSessionBitwardenIdentityTokenTransport(),
+        vaultTransport: any BitwardenVaultSyncTransport = URLSessionBitwardenVaultSyncTransport(),
+        now: @escaping @Sendable () -> Date = Date.init
+    ) {
+        self.sessionStore = sessionStore
+        self.accessTokenProvider = RefreshingBitwardenAccessTokenProvider(
+            sessionStore: sessionStore,
+            identityTransport: identityTransport,
+            now: now
+        )
+        self.vaultTransport = vaultTransport
+    }
+
+    public func pullSnapshot() async throws -> BitwardenSyncSnapshot {
+        guard let session = try sessionStore.loadSession() else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        let accessToken = try await accessTokenProvider.accessToken()
+        let request = BitwardenVaultSyncRequest(
+            method: "GET",
+            url: Self.syncURL(apiURL: session.apiURL),
+            headers: [
+                "Authorization": "Bearer \(accessToken)",
+                "Accept": "application/json"
+            ]
+        )
+        let response = try await vaultTransport.send(request)
+        if response.statusCode == 401 || response.statusCode == 403 {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        guard (200...299).contains(response.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: response.statusCode)
+        }
+        return try BitwardenVaultSyncSnapshotParser.parse(response.body, fallbackAccountLabel: session.accountLabel)
+    }
+
+    public func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult {
+        guard mutations.isEmpty else {
+            throw BitwardenSyncProviderError.unsupportedOperation
+        }
+        let revision = (try? sessionStore.loadSession()?.expiresAt.timeIntervalSince1970)
+            .map { String($0) } ?? ""
+        return BitwardenSyncPushResult(acceptedMutationCount: 0, conflicts: [], revision: revision)
+    }
+
+    private static func syncURL(apiURL: URL) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + ([basePath, "sync"].filter { !$0.isEmpty }).joined(separator: "/")
+        components?.queryItems = [URLQueryItem(name: "excludeDomains", value: "true")]
+        return components?.url ?? apiURL
+    }
+}
+
+public final class URLSessionBitwardenVaultSyncTransport: BitwardenVaultSyncTransport, @unchecked Sendable {
+    private let session: URLSession
+
+    public init(session: URLSession = .shared) {
+        self.session = session
+    }
+
+    public func send(_ request: BitwardenVaultSyncRequest) async throws -> BitwardenVaultSyncResponse {
+        var urlRequest = URLRequest(url: request.url)
+        urlRequest.httpMethod = request.method
+        request.headers.forEach { key, value in
+            urlRequest.setValue(value, forHTTPHeaderField: key)
+        }
+        let (data, response) = try await session.data(for: urlRequest)
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw BitwardenSyncProviderError.unsupportedOperation
+        }
+        var headers: [String: String] = [:]
+        httpResponse.allHeaderFields.forEach { key, value in
+            guard let key = key as? String else { return }
+            headers[key] = "\(value)"
+        }
+        return BitwardenVaultSyncResponse(
+            statusCode: httpResponse.statusCode,
+            headers: headers,
+            body: data
+        )
+    }
+}
+
 public protocol BitwardenSyncProvider: Sendable {
     func pullSnapshot() async throws -> BitwardenSyncSnapshot
     func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult
@@ -639,6 +788,8 @@ public struct DefaultBitwardenSyncProvider: BitwardenSyncProvider {
 public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedError {
     case authenticationRequired
     case unsupportedOperation
+    case serverRejected(statusCode: Int)
+    case invalidResponse
 
     public var errorDescription: String? {
         switch self {
@@ -646,7 +797,186 @@ public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedErr
             "Bitwarden 需要先登录。"
         case .unsupportedOperation:
             "Bitwarden 同步当前操作尚未接入。"
+        case .serverRejected(let statusCode):
+            "Bitwarden 同步失败：服务器返回 \(statusCode)。"
+        case .invalidResponse:
+            "Bitwarden 同步响应无法解析。"
         }
+    }
+}
+
+private enum BitwardenVaultSyncSnapshotParser {
+    static func parse(_ data: Data, fallbackAccountLabel: String) throws -> BitwardenSyncSnapshot {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        let profile = dictionary(root, "profile", "Profile")
+        let folders = array(root, "folders", "Folders")
+        let ciphers = array(root, "ciphers", "Ciphers")
+        let sends = array(root, "sends", "Sends")
+        let folderNamesByID = Dictionary(uniqueKeysWithValues: folders.compactMap { folder -> (String, String)? in
+            guard let id = string(folder, "id", "Id"), !id.isEmpty else { return nil }
+            return (id, string(folder, "name", "Name") ?? "")
+        })
+        let items = ciphers.compactMap { cipher -> BitwardenSyncItem? in
+            guard string(cipher, "deletedDate", "DeletedDate") == nil else { return nil }
+            guard let id = string(cipher, "id", "Id"), !id.isEmpty else { return nil }
+            let type = int(cipher, "type", "Type") ?? 1
+            let kind = itemKind(for: type)
+            let folderID = string(cipher, "folderId", "FolderId")
+            let login = dictionary(cipher, "login", "Login")
+            let card = dictionary(cipher, "card", "Card")
+            let identity = dictionary(cipher, "identity", "Identity")
+            let firstURI = array(login, "uris", "Uris").first
+            return BitwardenSyncItem(
+                remoteID: id,
+                kind: kind,
+                title: string(cipher, "name", "Name") ?? "",
+                username: string(login, "username", "Username") ?? identityUsername(cipher),
+                url: firstURI.flatMap { string($0, "uri", "Uri") } ?? "",
+                password: string(login, "password", "Password"),
+                totpSecret: string(login, "totp", "Totp"),
+                notes: string(cipher, "notes", "Notes"),
+                folderName: folderID.flatMap { folderNamesByID[$0] },
+                collectionNames: [],
+                attachmentByteCount: byteCount(array(cipher, "attachments", "Attachments")),
+                updatedAt: date(string(cipher, "revisionDate", "RevisionDate")),
+                cardholderName: string(card, "cardholderName", "CardholderName") ?? "",
+                cardNumber: string(card, "number", "Number") ?? "",
+                cardExpiryMonth: string(card, "expMonth", "ExpMonth") ?? "",
+                cardExpiryYear: string(card, "expYear", "ExpYear") ?? "",
+                cardCode: string(card, "code", "Code") ?? "",
+                cardBrand: string(card, "brand", "Brand") ?? "",
+                identityFullName: identityFullName(identity),
+                identityDocumentNumber: string(identity, "passportNumber", "PassportNumber")
+                    ?? string(identity, "licenseNumber", "LicenseNumber")
+                    ?? "",
+                identityIssuer: string(identity, "company", "Company") ?? "",
+                identityCountry: string(identity, "country", "Country") ?? ""
+            )
+        }
+        let sendItems = sends.compactMap { send -> BitwardenSendSyncItem? in
+            guard let id = string(send, "id", "Id"), !id.isEmpty else { return nil }
+            let text = dictionary(send, "text", "Text")
+            let file = dictionary(send, "file", "File")
+            let fileName = string(file, "fileName", "FileName")
+            return BitwardenSendSyncItem(
+                remoteID: id,
+                title: string(send, "name", "Name") ?? fileName ?? "",
+                body: string(text, "text", "Text") ?? fileName ?? "",
+                notes: string(send, "notes", "Notes"),
+                expiresAt: string(send, "expirationDate", "ExpirationDate") ?? "",
+                maxViews: int(send, "maxAccessCount", "MaxAccessCount") ?? 1,
+                attachmentByteCount: byteCount([file]),
+                updatedAt: date(string(send, "revisionDate", "RevisionDate"))
+            )
+        }
+        return BitwardenSyncSnapshot(
+            accountLabel: accountLabel(profile: profile, fallback: fallbackAccountLabel),
+            revision: string(profile, "securityStamp", "SecurityStamp") ?? "",
+            items: items,
+            sends: sendItems
+        )
+    }
+
+    private static func itemKind(for type: Int) -> BitwardenSyncItemKind {
+        switch type {
+        case 2:
+            .secureNote
+        case 3:
+            .card
+        case 4:
+            .identity
+        default:
+            .login
+        }
+    }
+
+    private static func identityUsername(_ cipher: [String: Any]) -> String {
+        let identity = dictionary(cipher, "identity", "Identity")
+        return string(identity, "username", "Username")
+            ?? string(identity, "email", "Email")
+            ?? ""
+    }
+
+    private static func identityFullName(_ identity: [String: Any]) -> String {
+        [
+            string(identity, "title", "Title") ?? "",
+            string(identity, "firstName", "FirstName") ?? "",
+            string(identity, "middleName", "MiddleName") ?? "",
+            string(identity, "lastName", "LastName") ?? ""
+        ]
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+        .joined(separator: " ")
+    }
+
+    private static func accountLabel(profile: [String: Any], fallback: String) -> String {
+        let name = string(profile, "name", "Name")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let name, !name.isEmpty {
+            return name
+        }
+        let email = string(profile, "email", "Email")?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let email, !email.isEmpty {
+            return email
+        }
+        return fallback
+    }
+
+    private static func byteCount(_ values: [[String: Any]]) -> Int {
+        values.reduce(0) { partial, value in
+            partial + (int(value, "size", "Size") ?? 0)
+        }
+    }
+
+    private static func dictionary(_ json: [String: Any], _ keys: String...) -> [String: Any] {
+        for key in keys {
+            if let value = json[key] as? [String: Any] {
+                return value
+            }
+        }
+        return [:]
+    }
+
+    private static func array(_ json: [String: Any], _ keys: String...) -> [[String: Any]] {
+        for key in keys {
+            if let value = json[key] as? [[String: Any]] {
+                return value
+            }
+        }
+        return []
+    }
+
+    private static func string(_ json: [String: Any], _ keys: String...) -> String? {
+        for key in keys {
+            if let value = json[key] as? String {
+                return value
+            }
+            if let number = json[key] as? NSNumber {
+                return number.stringValue
+            }
+        }
+        return nil
+    }
+
+    private static func int(_ json: [String: Any], _ keys: String...) -> Int? {
+        for key in keys {
+            if let value = json[key] as? Int {
+                return value
+            }
+            if let value = json[key] as? Double {
+                return Int(value)
+            }
+            if let value = json[key] as? String, let intValue = Int(value) {
+                return intValue
+            }
+        }
+        return nil
+    }
+
+    private static func date(_ value: String?) -> Date? {
+        guard let value else { return nil }
+        return ISO8601DateFormatter().date(from: value)
     }
 }
 
