@@ -287,6 +287,105 @@ import Foundation
     #expect(!visibleText.contains("rotated-send-note-secret"))
 }
 
+@Test func bitwardenSendSyncPlannerBuildsUpdateDeleteAndConflictPlanWithoutLeakingSecrets() throws {
+    let previousStates = [
+        BitwardenSendSyncState(
+            localID: "local-update-secret-id",
+            remoteID: "remote-update-secret-id",
+            lastSyncedFingerprint: "stale-fingerprint",
+            lastRemoteRevision: "remote-revision-secret"
+        ),
+        BitwardenSendSyncState(
+            localID: "local-delete-secret-id",
+            remoteID: "remote-delete-secret-id",
+            lastSyncedFingerprint: "delete-fingerprint",
+            lastRemoteRevision: "delete-revision-secret"
+        ),
+        BitwardenSendSyncState(
+            localID: "local-remote-deleted-secret-id",
+            remoteID: "remote-missing-secret-id",
+            lastSyncedFingerprint: "missing-fingerprint",
+            lastRemoteRevision: "missing-revision-secret"
+        )
+    ]
+    let localSends = [
+        BitwardenLocalSendSyncItem(
+            localID: "local-update-secret-id",
+            title: "Deploy link",
+            body: "rotated-body-secret",
+            notes: "rotated-note-secret",
+            expiresAt: "2026-06-03",
+            maxViews: 3
+        ),
+        BitwardenLocalSendSyncItem(
+            localID: "local-new-secret-id",
+            title: "Incident runbook",
+            body: "new-body-secret",
+            notes: "new-note-secret",
+            expiresAt: "2026-06-04",
+            maxViews: 1
+        ),
+        BitwardenLocalSendSyncItem(
+            localID: "local-remote-deleted-secret-id",
+            title: "Remote deleted",
+            body: "locally-edited-body-secret",
+            notes: "locally-edited-note-secret",
+            expiresAt: "2026-06-05",
+            maxViews: 2
+        )
+    ]
+    let deletedLocalSends = [
+        BitwardenLocalSendSyncItem(
+            localID: "local-delete-secret-id",
+            title: "Old link",
+            body: "deleted-body-secret",
+            notes: "deleted-note-secret",
+            expiresAt: "2026-06-01",
+            maxViews: 1
+        )
+    ]
+    let remoteSends = [
+        BitwardenSendSyncItem(
+            remoteID: "remote-update-secret-id",
+            title: "Deploy link",
+            body: "old-body-secret",
+            notes: "old-note-secret",
+            expiresAt: "2026-06-03",
+            maxViews: 2,
+            updatedAt: Date(timeIntervalSince1970: 1_804_020_001)
+        )
+    ]
+
+    let plan = BitwardenSendSyncPlanner().plan(
+        localSends: localSends,
+        deletedLocalSends: deletedLocalSends,
+        remoteSends: remoteSends,
+        previousStates: previousStates
+    )
+
+    #expect(plan.mutations.map(\.redactedSummary) == [
+        "upsert Send Deploy link 3 次",
+        "upsert Send Incident runbook 1 次",
+        "delete Send Old link"
+    ])
+    #expect(plan.conflicts.map(\.redactedSummary) == [
+        "冲突 Remote deleted：远端已删除"
+    ])
+    #expect(plan.updatedStates["local-update-secret-id"]?.remoteID == "remote-update-secret-id")
+    #expect(plan.updatedStates["local-delete-secret-id"]?.isDeleted == true)
+    #expect(plan.updatedStates["local-remote-deleted-secret-id"]?.remoteID == "remote-missing-secret-id")
+
+    let visibleText = (
+        plan.mutations.map(\.redactedSummary)
+            + plan.conflicts.map(\.redactedSummary)
+            + plan.updatedStates.values.map(\.redactedSummary)
+    ).joined(separator: " ")
+    #expect(!visibleText.contains("secret-id"))
+    #expect(!visibleText.contains("body-secret"))
+    #expect(!visibleText.contains("note-secret"))
+    #expect(!visibleText.contains("revision-secret"))
+}
+
 @Test func webDAVClientUploadsBackupWithBasicAuthAndIntegrityHeader() async throws {
     let transport = RecordingWebDAVTransport(
         responses: [

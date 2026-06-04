@@ -170,6 +170,71 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
     }
 }
 
+public struct BitwardenLocalSendSyncItem: Sendable, Equatable, Identifiable {
+    public var id: String { localID }
+
+    public let localID: String
+    public let title: String
+    public let body: String
+    public let notes: String?
+    public let expiresAt: String
+    public let maxViews: Int
+
+    public init(
+        localID: String,
+        title: String,
+        body: String,
+        notes: String?,
+        expiresAt: String,
+        maxViews: Int
+    ) {
+        self.localID = localID
+        self.title = title
+        self.body = body
+        self.notes = notes
+        self.expiresAt = expiresAt
+        self.maxViews = maxViews
+    }
+
+    public var syncFingerprint: String {
+        [
+            title,
+            body,
+            notes ?? "",
+            expiresAt,
+            String(maxViews)
+        ].joined(separator: "\u{1F}")
+    }
+}
+
+public struct BitwardenSendSyncState: Sendable, Equatable, Codable, Identifiable {
+    public var id: String { localID }
+
+    public let localID: String
+    public let remoteID: String?
+    public let lastSyncedFingerprint: String
+    public let lastRemoteRevision: String?
+    public let isDeleted: Bool
+
+    public init(
+        localID: String,
+        remoteID: String?,
+        lastSyncedFingerprint: String,
+        lastRemoteRevision: String?,
+        isDeleted: Bool = false
+    ) {
+        self.localID = localID
+        self.remoteID = remoteID
+        self.lastSyncedFingerprint = lastSyncedFingerprint
+        self.lastRemoteRevision = lastRemoteRevision
+        self.isDeleted = isDeleted
+    }
+
+    public var redactedSummary: String {
+        isDeleted ? "Send 同步状态 已删除" : "Send 同步状态 已关联"
+    }
+}
+
 public enum BitwardenSyncConflictReason: Sendable, Equatable {
     case bothModified
     case remoteDeleted
@@ -227,6 +292,121 @@ public struct BitwardenSyncPushResult: Sendable, Equatable {
 
     public var redactedSummary: String {
         "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflicts.count) 个冲突"
+    }
+}
+
+public struct BitwardenSendSyncPlan: Sendable, Equatable {
+    public let mutations: [BitwardenSyncMutation]
+    public let conflicts: [BitwardenSyncConflict]
+    public let updatedStates: [String: BitwardenSendSyncState]
+
+    public init(
+        mutations: [BitwardenSyncMutation],
+        conflicts: [BitwardenSyncConflict],
+        updatedStates: [String: BitwardenSendSyncState]
+    ) {
+        self.mutations = mutations
+        self.conflicts = conflicts
+        self.updatedStates = updatedStates
+    }
+}
+
+public struct BitwardenSendSyncPlanner: Sendable {
+    public init() {}
+
+    public func plan(
+        localSends: [BitwardenLocalSendSyncItem],
+        deletedLocalSends: [BitwardenLocalSendSyncItem],
+        remoteSends: [BitwardenSendSyncItem],
+        previousStates: [BitwardenSendSyncState]
+    ) -> BitwardenSendSyncPlan {
+        let statesByLocalID = Dictionary(uniqueKeysWithValues: previousStates.map { ($0.localID, $0) })
+        let remoteByID = Dictionary(uniqueKeysWithValues: remoteSends.map { ($0.remoteID, $0) })
+        var mutations: [BitwardenSyncMutation] = []
+        var conflicts: [BitwardenSyncConflict] = []
+        var updatedStates = statesByLocalID
+        let localIDs = Set(localSends.map(\.localID))
+
+        for item in localSends {
+            let state = statesByLocalID[item.localID]
+            let fingerprint = item.syncFingerprint
+            if let remoteID = state?.remoteID,
+               remoteByID[remoteID] == nil,
+               fingerprint != state?.lastSyncedFingerprint {
+                conflicts.append(
+                    BitwardenSyncConflict(
+                        localID: item.localID,
+                        remoteID: remoteID,
+                        title: item.title,
+                        reason: .remoteDeleted
+                    )
+                )
+                continue
+            }
+
+            if state?.isDeleted == true || fingerprint != state?.lastSyncedFingerprint {
+                mutations.append(
+                    .upsertSend(
+                        localID: item.localID,
+                        remoteID: state?.remoteID,
+                        title: item.title,
+                        body: item.body,
+                        notes: item.notes,
+                        expiresAt: item.expiresAt,
+                        maxViews: item.maxViews
+                    )
+                )
+                updatedStates[item.localID] = BitwardenSendSyncState(
+                    localID: item.localID,
+                    remoteID: state?.remoteID,
+                    lastSyncedFingerprint: fingerprint,
+                    lastRemoteRevision: remoteByID[state?.remoteID ?? ""]?.updatedAt.map { String($0.timeIntervalSince1970) } ?? state?.lastRemoteRevision,
+                    isDeleted: false
+                )
+            }
+        }
+
+        for item in deletedLocalSends {
+            guard let state = statesByLocalID[item.localID] else {
+                continue
+            }
+            mutations.append(
+                .deleteSend(
+                    localID: item.localID,
+                    remoteID: state.remoteID,
+                    title: item.title
+                )
+            )
+            updatedStates[item.localID] = BitwardenSendSyncState(
+                localID: item.localID,
+                remoteID: state.remoteID,
+                lastSyncedFingerprint: item.syncFingerprint,
+                lastRemoteRevision: state.lastRemoteRevision,
+                isDeleted: true
+            )
+        }
+
+        for state in previousStates where !localIDs.contains(state.localID) && !state.isDeleted {
+            guard let remoteID = state.remoteID,
+                  remoteByID[remoteID] == nil,
+                  !deletedLocalSends.contains(where: { $0.localID == state.localID })
+            else {
+                continue
+            }
+            updatedStates[state.localID] = BitwardenSendSyncState(
+                localID: state.localID,
+                remoteID: state.remoteID,
+                lastSyncedFingerprint: state.lastSyncedFingerprint,
+                lastRemoteRevision: state.lastRemoteRevision,
+                isDeleted: true
+            )
+        }
+
+        return BitwardenSendSyncPlan(
+            mutations: mutations,
+            conflicts: conflicts,
+            updatedStates: updatedStates
+        )
     }
 }
 

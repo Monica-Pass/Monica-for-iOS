@@ -339,6 +339,7 @@ extension AppSessionModel {
         let secretStore = FileAutoFillCredentialSecretStore(appGroupContainerURL: appGroupContainerURL)
         let widgetSnapshotStore = AppWidgetSnapshotFileStore(containerURL: appGroupContainerURL)
         let shortcutSnapshotStore = AppShortcutSnapshotFileStore(containerURL: appGroupContainerURL)
+        let bitwardenSendSyncStateStore = FileAppBitwardenSendSyncStateStore(containerURL: appGroupContainerURL)
         let keyMaterialStore = AppKeychainAutoFillIndexKeyMaterialStore()
         let keyMaterialProvider = AppAutoFillIndexKeyMaterialProvider(store: keyMaterialStore)
         let vaultKeychainService = KeychainAppVaultKeychainService(
@@ -360,6 +361,7 @@ extension AppSessionModel {
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
             cloudFileProviders: environment.productionCloudFileProviders,
             oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
+            bitwardenSendSyncStateStore: bitwardenSendSyncStateStore,
             autoFillIndexStore: indexStore,
             autoFillCredentialSecretStore: secretStore,
             autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(),

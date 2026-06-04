@@ -8565,7 +8565,7 @@ final class VaultSessionModelTests: XCTestCase {
         let preview = try await model.previewBitwardenSync()
         let pushResult = try await model.pushLocalBitwardenChanges()
 
-        XCTAssertEqual(bitwarden.pullCallCount, 1)
+        XCTAssertEqual(bitwarden.pullCallCount, 2)
         XCTAssertEqual(bitwarden.pushedMutations.count, 1)
         XCTAssertEqual(bitwarden.pushedMutations.first?.redactedSummary, "upsert Send Local secure link 3 次")
         XCTAssertEqual(preview.accountLabel, "alice@example.com")
@@ -8593,6 +8593,126 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("local-send-body-secret"))
         XCTAssertFalse(visibleText.contains("local-send-note-secret"))
         XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
+    }
+
+    func testBitwardenPushUsesPersistedSendRemoteStateForUpdateAndDeletePlan() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            sends: [
+                BitwardenSendSyncItem(
+                    remoteID: "remote-send-update-secret-id",
+                    title: "Deploy link",
+                    body: "old-body-secret",
+                    notes: "old-note-secret",
+                    expiresAt: "2026-06-03",
+                    maxViews: 2,
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_001)
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(acceptedMutationCount: 2)
+        let syncStateStore = MemoryAppBitwardenSendSyncStateStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenSendSyncStateStore: syncStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.sendTitle = "Deploy link"
+        model.sendBody = "old-body-secret"
+        model.sendNotes = "old-note-secret"
+        model.sendExpiresAt = "2026-06-03"
+        model.sendMaxViews = 2
+        try model.createSendEntry(projectTitle: "Personal")
+        model.sendTitle = "Old link"
+        model.sendBody = "deleted-body-secret"
+        model.sendNotes = "deleted-note-secret"
+        model.sendExpiresAt = "2026-06-01"
+        model.sendMaxViews = 1
+        try model.createSendEntry(projectTitle: "Personal")
+        try syncStateStore.saveStates(
+            [
+                BitwardenSendSyncState(
+                    localID: "send-1",
+                    remoteID: "remote-send-update-secret-id",
+                    lastSyncedFingerprint: BitwardenLocalSendSyncItem(
+                        localID: "send-1",
+                        title: "Deploy link",
+                        body: "old-body-secret",
+                        notes: "old-note-secret",
+                        expiresAt: "2026-06-03",
+                        maxViews: 2
+                    ).syncFingerprint,
+                    lastRemoteRevision: "old-revision-secret"
+                ),
+                BitwardenSendSyncState(
+                    localID: "send-2",
+                    remoteID: "remote-send-delete-secret-id",
+                    lastSyncedFingerprint: BitwardenLocalSendSyncItem(
+                        localID: "send-2",
+                        title: "Old link",
+                        body: "deleted-body-secret",
+                        notes: "deleted-note-secret",
+                        expiresAt: "2026-06-01",
+                        maxViews: 1
+                    ).syncFingerprint,
+                    lastRemoteRevision: "delete-revision-secret"
+                )
+            ],
+            vaultID: "created-vault"
+        )
+        let sendToUpdate = try XCTUnwrap(model.sendEntries.first { $0.id == "send-1" })
+        model.selectSendEntryForEditing(sendToUpdate)
+        model.editingSendBody = "rotated-body-secret"
+        model.editingSendNotes = "rotated-note-secret"
+        model.editingSendMaxViews = 3
+        try model.updateSelectedSendEntry()
+        let sendToDelete = try XCTUnwrap(model.sendEntries.first { $0.id == "send-2" })
+        model.selectSendEntryForEditing(sendToDelete)
+        try model.deleteSelectedSendEntry()
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 2)
+        XCTAssertEqual(bitwarden.pushedMutations, [
+            .upsertSend(
+                localID: "send-1",
+                remoteID: "remote-send-update-secret-id",
+                title: "Deploy link",
+                body: "rotated-body-secret",
+                notes: "rotated-note-secret",
+                expiresAt: "2026-06-03",
+                maxViews: 3
+            ),
+            .deleteSend(
+                localID: "send-2",
+                remoteID: "remote-send-delete-secret-id",
+                title: "Old link"
+            )
+        ])
+        XCTAssertEqual(try syncStateStore.loadStates(vaultID: "created-vault").first { $0.localID == "send-2" }?.isDeleted, true)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            bitwarden.pushedMutations.map(\.redactedSummary).joined(separator: " "),
+            try syncStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("secret-id"))
+        XCTAssertFalse(visibleText.contains("body-secret"))
+        XCTAssertFalse(visibleText.contains("note-secret"))
+        XCTAssertFalse(visibleText.contains("revision-secret"))
     }
 }
 

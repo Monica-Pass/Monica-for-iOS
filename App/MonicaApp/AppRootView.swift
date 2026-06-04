@@ -860,6 +860,68 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     }
 }
 
+protocol AppBitwardenSendSyncStateStore: Sendable {
+    func loadStates(vaultID: String) throws -> [BitwardenSendSyncState]
+    func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws
+}
+
+final class MemoryAppBitwardenSendSyncStateStore: AppBitwardenSendSyncStateStore, @unchecked Sendable {
+    private var statesByVaultID: [String: [BitwardenSendSyncState]] = [:]
+
+    func loadStates(vaultID: String) throws -> [BitwardenSendSyncState] {
+        statesByVaultID[vaultID, default: []]
+    }
+
+    func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws {
+        statesByVaultID[vaultID] = states
+    }
+}
+
+struct FileAppBitwardenSendSyncStateStore: AppBitwardenSendSyncStateStore, @unchecked Sendable {
+    private let directoryURL: URL
+    private let fileManager: FileManager
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL, fileManager: FileManager = .default) {
+        directoryURL = containerURL.appendingPathComponent("bitwarden-sync-state-v1", isDirectory: true)
+        self.fileManager = fileManager
+        encoder = JSONEncoder()
+        decoder = JSONDecoder()
+    }
+
+    func loadStates(vaultID: String) throws -> [BitwardenSendSyncState] {
+        let url = fileURL(vaultID: vaultID)
+        guard fileManager.fileExists(atPath: url.path) else {
+            return []
+        }
+        return try decoder.decode([BitwardenSendSyncState].self, from: Data(contentsOf: url))
+    }
+
+    func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws {
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try encoder.encode(states).write(to: fileURL(vaultID: vaultID), options: [.atomic])
+    }
+
+    private func fileURL(vaultID: String) -> URL {
+        let sanitized = vaultID
+            .unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return directoryURL.appendingPathComponent((sanitized.isEmpty ? "vault" : sanitized) + ".json")
+    }
+}
+
 struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1894,6 +1956,7 @@ final class AppSessionModel {
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
     private let oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)?
     private let bitwardenSyncProvider: (any BitwardenSyncProvider)?
+    private let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -1936,6 +1999,7 @@ final class AppSessionModel {
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         bitwardenSyncProvider: (any BitwardenSyncProvider)? = nil,
+        bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore = MemoryAppBitwardenSendSyncStateStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -1973,6 +2037,7 @@ final class AppSessionModel {
         self.cloudFileProviders = cloudFileProviders
         self.oneDriveAuthenticationService = oneDriveAuthenticationService
         self.bitwardenSyncProvider = bitwardenSyncProvider
+        self.bitwardenSendSyncStateStore = bitwardenSendSyncStateStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -8396,15 +8461,31 @@ final class AppSessionModel {
         bitwardenSyncState = .running
 
         do {
-            _ = try requireActiveVaultSession()
+            let session = try requireActiveVaultSession()
             let provider = try requireBitwardenSyncProvider()
-            let mutations = makeBitwardenSendMutations()
-            let result = try await provider.pushMutations(mutations)
+            let snapshot = try await provider.pullSnapshot()
+            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            bitwardenSyncPreview = preview
+            let previousStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            let plan = makeBitwardenSendSyncPlan(
+                remoteSends: snapshot.sends,
+                previousStates: previousStates
+            )
+            let result = try await provider.pushMutations(plan.mutations)
+            try bitwardenSendSyncStateStore.saveStates(
+                plan.updatedStates.values.sorted { $0.localID < $1.localID },
+                vaultID: session.handle.vaultID
+            )
+            let conflicts = plan.conflicts + result.conflicts
             bitwardenSyncState = .pushed(
                 acceptedMutationCount: result.acceptedMutationCount,
-                conflictCount: result.conflicts.count
+                conflictCount: conflicts.count
             )
-            return result
+            return BitwardenSyncPushResult(
+                acceptedMutationCount: result.acceptedMutationCount,
+                conflicts: conflicts,
+                revision: result.revision
+            )
         } catch {
             bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
             throw error
@@ -8536,18 +8617,34 @@ final class AppSessionModel {
         return bitwardenSyncProvider
     }
 
-    private func makeBitwardenSendMutations() -> [BitwardenSyncMutation] {
-        sendEntries.map { entry in
-            BitwardenSyncMutation.upsertSend(
-                localID: entry.id,
-                remoteID: nil,
-                title: entry.title,
-                body: entry.body,
-                notes: entry.notes,
-                expiresAt: entry.expiresAt,
-                maxViews: entry.maxViews
-            )
-        }
+    private func makeBitwardenSendSyncPlan(
+        remoteSends: [BitwardenSendSyncItem],
+        previousStates: [BitwardenSendSyncState]
+    ) -> BitwardenSendSyncPlan {
+        BitwardenSendSyncPlanner().plan(
+            localSends: sendEntries.map { entry in
+                BitwardenLocalSendSyncItem(
+                    localID: entry.id,
+                    title: entry.title,
+                    body: entry.body,
+                    notes: entry.notes,
+                    expiresAt: entry.expiresAt,
+                    maxViews: entry.maxViews
+                )
+            },
+            deletedLocalSends: deletedSendEntries.map { entry in
+                BitwardenLocalSendSyncItem(
+                    localID: entry.id,
+                    title: entry.title,
+                    body: entry.body,
+                    notes: entry.notes,
+                    expiresAt: entry.expiresAt,
+                    maxViews: entry.maxViews
+                )
+            },
+            remoteSends: remoteSends,
+            previousStates: previousStates
+        )
     }
 
     private func readableCloudFileErrorMessage(
