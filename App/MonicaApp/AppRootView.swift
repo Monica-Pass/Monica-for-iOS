@@ -10074,6 +10074,19 @@ final class AppSessionModel {
         )
     }
 
+    private func bitwardenLocalItem(from entry: LocalTotpEntry, folderID: String? = nil, folderName: String? = nil) -> BitwardenLocalItemSyncItem {
+        BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .login,
+            title: entry.title,
+            username: entry.accountName,
+            url: bitwardenTotpURLHint(from: entry),
+            totpSecret: bitwardenTotpPayload(from: entry),
+            folderID: folderID,
+            folderName: folderName
+        )
+    }
+
     private func bitwardenLocalItem(from entry: LocalCardEntry, folderID: String? = nil) -> BitwardenLocalItemSyncItem {
         BitwardenLocalItemSyncItem(
             localID: entry.id,
@@ -10146,6 +10159,44 @@ final class AppSessionModel {
         )
     }
 
+    private func bitwardenTotpURLHint(from entry: LocalTotpEntry) -> String {
+        let label = entry.issuer.nonBlankValue ?? entry.title
+        return "otpauth://\(bitwardenOtpAuthKind(from: entry))/\(bitwardenPercentEncode(label))"
+    }
+
+    private func bitwardenTotpPayload(from entry: LocalTotpEntry) -> String {
+        let issuer = entry.issuer.nonBlankValue ?? entry.title
+        let account = entry.accountName.nonBlankValue ?? ""
+        let encodedLabel = account.isEmpty
+            ? bitwardenPercentEncode(issuer)
+            : "\(bitwardenPercentEncode(issuer)):\(bitwardenPercentEncode(account))"
+        var query = [
+            ("secret", entry.secret)
+        ]
+        if let explicitIssuer = entry.issuer.nonBlankValue {
+            query.append(("issuer", explicitIssuer))
+        }
+        query.append(("period", "\(entry.period)"))
+        query.append(("digits", "\(entry.digits)"))
+        if let algorithm = entry.algorithm.nonBlankValue {
+            query.append(("algorithm", algorithm.uppercased()))
+        }
+        if bitwardenOtpAuthKind(from: entry) == "hotp" {
+            query.append(("counter", "\(entry.counter)"))
+        }
+        return "otpauth://\(bitwardenOtpAuthKind(from: entry))/\(encodedLabel)?"
+            + query.map { "\(bitwardenPercentEncode($0.0))=\(bitwardenPercentEncode($0.1))" }.joined(separator: "&")
+    }
+
+    private func bitwardenOtpAuthKind(from entry: LocalTotpEntry) -> String {
+        entry.otpType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "hotp" ? "hotp" : "totp"
+    }
+
+    private func bitwardenPercentEncode(_ value: String) -> String {
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+    }
+
     private func makeBitwardenItemSyncPlan(
         remoteItems: [BitwardenSyncItem],
         previousStates: [BitwardenItemSyncState],
@@ -10156,6 +10207,9 @@ final class AppSessionModel {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
         let localNoteItems: [BitwardenLocalItemSyncItem] = noteEntries.map {
+            bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
+        }
+        let localTotpItems: [BitwardenLocalItemSyncItem] = totpEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
         let localCardItems: [BitwardenLocalItemSyncItem] = cardEntries.map {
@@ -10176,6 +10230,9 @@ final class AppSessionModel {
         let deletedNoteItems: [BitwardenLocalItemSyncItem] = deletedNoteEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
+        let deletedTotpItems: [BitwardenLocalItemSyncItem] = deletedTotpEntries.map {
+            bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
+        }
         let deletedCardItems: [BitwardenLocalItemSyncItem] = deletedCardEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID)
         }
@@ -10188,8 +10245,8 @@ final class AppSessionModel {
         let deletedSshKeyItems: [BitwardenLocalItemSyncItem] = deletedSshKeyEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
-        let localItems = localLoginItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems + localSshKeyItems
-        let deletedLocalItems = deletedLoginItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems + deletedSshKeyItems
+        let localItems = localLoginItems + localTotpItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems + localSshKeyItems
+        let deletedLocalItems = deletedLoginItems + deletedTotpItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems + deletedSshKeyItems
 
         return BitwardenItemSyncPlanner().plan(
             localItems: localItems,

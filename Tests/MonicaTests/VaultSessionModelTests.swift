@@ -9248,6 +9248,132 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("revision-secret"))
     }
 
+    func testBitwardenPushIncludesStandaloneTotpCipherUpsertAndDeleteWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-totp-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-totp-delete-secret-id",
+                    kind: .login,
+                    title: "Old 2FA",
+                    username: "old@example.com",
+                    totpSecret: "otpauth://totp/Old:old%40example.com?secret=OLDTOTPSECRET&period=30&digits=6&algorithm=SHA1",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_040)
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(
+            acceptedMutationCount: 2,
+            revision: "totp-push-revision-secret",
+            assignedRemoteIDs: [
+                "totp-1": "remote-totp-upsert-secret-id"
+            ]
+        )
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.totpTitle = "GitHub 2FA"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        model.totpIssuer = "GitHub"
+        model.totpAccountName = "alice@example.com"
+        model.totpPeriod = 60
+        model.totpDigits = 8
+        model.totpAlgorithm = "SHA256"
+        try model.createTotpEntry(projectTitle: "Personal")
+        model.totpTitle = "Old 2FA"
+        model.totpSecret = "OLDTOTPSECRET"
+        model.totpIssuer = "Old"
+        model.totpAccountName = "old@example.com"
+        model.totpPeriod = 30
+        model.totpDigits = 6
+        model.totpAlgorithm = "SHA1"
+        try model.createTotpEntry(projectTitle: "Personal")
+        try itemStateStore.saveStates(
+            [
+                BitwardenItemSyncState(
+                    localID: "totp-2",
+                    remoteID: "remote-totp-delete-secret-id",
+                    kind: .login,
+                    lastSyncedFingerprint: BitwardenLocalItemSyncItem(
+                        localID: "totp-2",
+                        kind: .login,
+                        title: "Old 2FA",
+                        username: "old@example.com",
+                        url: "otpauth://totp/Old",
+                        totpSecret: "otpauth://totp/Old:old%40example.com?secret=OLDTOTPSECRET&issuer=Old&period=30&digits=6&algorithm=SHA1"
+                    ).syncFingerprint,
+                    lastRemoteRevision: "delete-revision-secret"
+                )
+            ],
+            vaultID: "created-vault"
+        )
+        let totpToDelete = try XCTUnwrap(model.totpEntries.first { $0.id == "totp-2" })
+        model.selectTotpEntryForEditing(totpToDelete)
+        try model.deleteSelectedTotpEntry()
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 2)
+        XCTAssertEqual(bitwarden.pushedMutations.map(\.redactedSummary), [
+            "upsert login GitHub 2FA alice@example.com",
+            "delete login Old 2FA"
+        ])
+        guard case .upsertCipher(let item, let remoteID) = bitwarden.pushedMutations.first else {
+            XCTFail("Expected standalone TOTP to push as a Bitwarden login cipher")
+            return
+        }
+        XCTAssertNil(remoteID)
+        XCTAssertEqual(item.kind, .login)
+        XCTAssertEqual(item.title, "GitHub 2FA")
+        XCTAssertEqual(item.username, "alice@example.com")
+        XCTAssertTrue(item.password?.isEmpty ?? true)
+        XCTAssertEqual(item.url, "otpauth://totp/GitHub")
+        XCTAssertEqual(
+            item.totpSecret,
+            "otpauth://totp/GitHub:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&period=60&digits=8&algorithm=SHA256"
+        )
+        guard case .deleteCipher(_, let deletedRemoteID, let deletedKind, let deletedTitle) = bitwarden.pushedMutations.dropFirst().first else {
+            XCTFail("Expected deleted standalone TOTP to delete its remote Bitwarden cipher")
+            return
+        }
+        XCTAssertEqual(deletedRemoteID, "remote-totp-delete-secret-id")
+        XCTAssertEqual(deletedKind, .login)
+        XCTAssertEqual(deletedTitle, "Old 2FA")
+        let states = try itemStateStore.loadStates(vaultID: "created-vault")
+        let upsertedState = try XCTUnwrap(states.first { $0.localID == "totp-1" })
+        XCTAssertEqual(upsertedState.remoteID, "remote-totp-upsert-secret-id")
+        XCTAssertEqual(upsertedState.kind, .login)
+        XCTAssertEqual(upsertedState.lastRemoteRevision, "totp-push-revision-secret")
+        XCTAssertFalse(upsertedState.isDeleted)
+        XCTAssertEqual(states.first { $0.localID == "totp-2" }?.isDeleted, true)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            bitwarden.pushedMutations.map(\.redactedSummary).joined(separator: " "),
+            states.map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("JBSWY3DPEHPK3PXP"))
+        XCTAssertFalse(visibleText.contains("OLDTOTPSECRET"))
+        XCTAssertFalse(visibleText.contains("remote-totp"))
+        XCTAssertFalse(visibleText.contains("revision-secret"))
+    }
+
     func testBitwardenSyncBlocksSuspiciousEmptyRemoteVaultWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
