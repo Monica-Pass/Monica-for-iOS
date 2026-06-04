@@ -8666,6 +8666,13 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(preview.accountLabel, "alice@example.com")
         XCTAssertEqual(preview.remoteItemCount, 1)
         XCTAssertEqual(preview.remoteSendCount, 1)
+        XCTAssertEqual(preview.remoteLoginCount, 1)
+        XCTAssertEqual(preview.remoteNoteCount, 0)
+        XCTAssertEqual(preview.remoteCardCount, 0)
+        XCTAssertEqual(preview.remoteIdentityCount, 0)
+        XCTAssertEqual(preview.remoteAttachmentByteCount, 42)
+        XCTAssertEqual(preview.kindSummary, "登录 1，笔记 0，卡片 0，身份 0")
+        XCTAssertEqual(preview.attachmentSummary, "附件 42 字节")
         XCTAssertEqual(model.bitwardenSyncPreview?.remoteSendTitles, ["Deploy link"])
         XCTAssertEqual(pushResult.acceptedMutationCount, 1)
         XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已推送 1 个变更，1 个冲突")
@@ -8693,6 +8700,7 @@ final class VaultSessionModelTests: XCTestCase {
     func testBitwardenSyncImportsRemoteVaultItemsIntoLocalEntriesWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
         bitwarden.snapshot = BitwardenSyncSnapshot(
             accountLabel: "alice@example.com",
             revision: "bw-revision-secret",
@@ -8753,7 +8761,8 @@ final class VaultSessionModelTests: XCTestCase {
         )
         let model = AppSessionModel(
             vaultRepository: LocalVaultRepository(engine: engine),
-            bitwardenSyncProvider: bitwarden
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
         )
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -8792,10 +8801,23 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.identityEntries.first?.issuer, "Monica Authority")
         XCTAssertEqual(model.identityEntries.first?.country, "US")
         XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已同步 4 个条目，1 个 Send")
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault").map(\.remoteID), [
+            "remote-card-secret-id",
+            "remote-identity-secret-id",
+            "remote-login-secret-id",
+            "remote-note-secret-id"
+        ])
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault").map(\.kind), [
+            .card,
+            .identity,
+            .login,
+            .secureNote
+        ])
 
         let visibleText = [
             model.bitwardenSyncState.label,
-            model.bitwardenSyncPreview?.redactedSummary ?? ""
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            try itemStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
         ].joined(separator: " ")
         XCTAssertFalse(visibleText.contains("bw-revision-secret"))
         XCTAssertFalse(visibleText.contains("remote-login-secret-id"))
@@ -8814,6 +8836,137 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("identity-note-secret"))
         XCTAssertFalse(visibleText.contains("send-body-secret"))
         XCTAssertFalse(visibleText.contains("send-note-secret"))
+    }
+
+    func testBitwardenPushUsesPersistedItemRemoteStateForCipherUpdateAndDeletePlan() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-login-update-secret-id",
+                    kind: .login,
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com",
+                    password: "old-password-secret",
+                    notes: "old-note-secret",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_001)
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(acceptedMutationCount: 2)
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "old-password-secret"
+        model.loginURL = "https://github.com"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.cardTitle = "Everyday Visa"
+        model.cardholderName = "Alice Example"
+        model.cardNumber = "4111111111111111"
+        model.cardExpiryMonth = "12"
+        model.cardExpiryYear = "2031"
+        model.cardCVV = "123"
+        model.cardNetwork = "Visa"
+        model.cardNotes = "card-note-secret"
+        try model.createCardEntry(projectTitle: "Personal")
+        try itemStateStore.saveStates(
+            [
+                BitwardenItemSyncState(
+                    localID: "entry-1",
+                    remoteID: "remote-login-update-secret-id",
+                    kind: .login,
+                    lastSyncedFingerprint: BitwardenLocalItemSyncItem(
+                        localID: "entry-1",
+                        kind: .login,
+                        title: "GitHub",
+                        username: "alice",
+                        url: "https://github.com",
+                        password: "old-password-secret"
+                    ).syncFingerprint,
+                    lastRemoteRevision: "old-revision-secret"
+                ),
+                BitwardenItemSyncState(
+                    localID: "card-1",
+                    remoteID: "remote-card-delete-secret-id",
+                    kind: .card,
+                    lastSyncedFingerprint: BitwardenLocalItemSyncItem(
+                        localID: "card-1",
+                        kind: .card,
+                        title: "Everyday Visa",
+                        notes: "card-note-secret",
+                        cardholderName: "Alice Example",
+                        cardNumber: "4111111111111111",
+                        cardExpiryMonth: "12",
+                        cardExpiryYear: "2031",
+                        cardCode: "123",
+                        cardBrand: "Visa"
+                    ).syncFingerprint,
+                    lastRemoteRevision: "delete-revision-secret"
+                )
+            ],
+            vaultID: "created-vault"
+        )
+        let loginToUpdate = try XCTUnwrap(model.loginEntries.first { $0.id == "entry-1" })
+        model.selectLoginEntryForEditing(loginToUpdate)
+        model.editingLoginPassword = "rotated-password-secret"
+        model.editingLoginURL = "https://github.com/session?token=query-secret"
+        try model.updateSelectedLoginEntry()
+        let cardToDelete = try XCTUnwrap(model.cardEntries.first { $0.id == "card-1" })
+        model.selectCardEntryForEditing(cardToDelete)
+        try model.deleteSelectedCardEntry()
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 2)
+        XCTAssertEqual(bitwarden.pushedMutations.map(\.redactedSummary), [
+            "upsert login GitHub alice",
+            "delete card Everyday Visa"
+        ])
+        guard case .upsertCipher(let item, let remoteID) = bitwarden.pushedMutations.first else {
+            XCTFail("Expected first mutation to update a cipher")
+            return
+        }
+        XCTAssertEqual(remoteID, "remote-login-update-secret-id")
+        XCTAssertEqual(item.password, "rotated-password-secret")
+        XCTAssertEqual(item.url, "https://github.com/session?token=query-secret")
+        guard case .deleteCipher(_, let deletedRemoteID, let deletedKind, let deletedTitle) = bitwarden.pushedMutations.dropFirst().first else {
+            XCTFail("Expected second mutation to delete a cipher")
+            return
+        }
+        XCTAssertEqual(deletedRemoteID, "remote-card-delete-secret-id")
+        XCTAssertEqual(deletedKind, .card)
+        XCTAssertEqual(deletedTitle, "Everyday Visa")
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault").first { $0.localID == "card-1" }?.isDeleted, true)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            bitwarden.pushedMutations.map(\.redactedSummary).joined(separator: " "),
+            try itemStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("secret-id"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+        XCTAssertFalse(visibleText.contains("password-secret"))
+        XCTAssertFalse(visibleText.contains("4111111111111111"))
+        XCTAssertFalse(visibleText.contains("revision-secret"))
     }
 
     func testBitwardenPushUsesPersistedSendRemoteStateForUpdateAndDeletePlan() async throws {
@@ -8933,6 +9086,171 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("secret-id"))
         XCTAssertFalse(visibleText.contains("body-secret"))
         XCTAssertFalse(visibleText.contains("note-secret"))
+        XCTAssertFalse(visibleText.contains("revision-secret"))
+    }
+
+    func testBitwardenPushUsesRealProviderEncryptedSendPayloadWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+            session: BitwardenAuthenticationSession(
+                accountLabel: "alice@example.com",
+                serverURL: URL(string: "https://vault.bitwarden.com")!,
+                identityURL: URL(string: "https://identity.bitwarden.com")!,
+                apiURL: URL(string: "https://api.bitwarden.com")!,
+                accessToken: "fresh-access-token-secret",
+                refreshToken: "refresh-token-secret",
+                expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+            )
+        )
+        let vaultKey = BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        )
+        let keyStore = MemoryBitwardenVaultKeyStore()
+        try keyStore.saveVaultKey(vaultKey, accountLabel: "alice@example.com")
+        let transport = RecordingAppBitwardenVaultSyncTransport()
+        transport.enqueue(statusCode: 200, body: #"{"Ciphers":[],"Sends":[],"RevisionDate":"bw-pull-revision-secret"}"#)
+        transport.enqueue(statusCode: 200, body: #"{"Id":"remote-send-created-secret-id","RevisionDate":"bw-push-revision-secret"}"#)
+        let provider = BitwardenVaultSyncProvider(
+            sessionStore: sessionStore,
+            vaultTransport: transport,
+            vaultKeyStore: keyStore
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: provider,
+            bitwardenAuthenticationSessionStore: sessionStore,
+            bitwardenVaultKeyStore: keyStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.sendTitle = "Deploy link"
+        model.sendBody = "local-send-body-secret"
+        model.sendNotes = "local-send-note-secret"
+        model.sendExpiresAt = "2026-06-05"
+        model.sendMaxViews = 2
+        try model.createSendEntry(projectTitle: "Personal")
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 1)
+        XCTAssertEqual(transport.requests.map(\.method), ["GET", "POST"])
+        XCTAssertEqual(transport.requests[1].url.absoluteString, "https://api.bitwarden.com/sends")
+        let body = try decodedJSONDictionary(transport.requests[1].body)
+        let encryptedKey = try XCTUnwrap(body["key"] as? String)
+        let encryptedName = try XCTUnwrap(body["name"] as? String)
+        let encryptedNotes = try XCTUnwrap(body["notes"] as? String)
+        let encryptedText = try XCTUnwrap((body["text"] as? [String: Any])?["text"] as? String)
+        let sendKeyMaterial = try BitwardenCrypto.decrypt(encryptedKey, key: vaultKey)
+        let sendKey = try BitwardenCrypto.deriveSendKey(sendKeyMaterial)
+        XCTAssertEqual(try BitwardenCrypto.decryptString(encryptedName, key: sendKey), "Deploy link")
+        XCTAssertEqual(try BitwardenCrypto.decryptString(encryptedNotes, key: sendKey), "local-send-note-secret")
+        XCTAssertEqual(try BitwardenCrypto.decryptString(encryptedText, key: sendKey), "local-send-body-secret")
+        XCTAssertEqual(body["deletionDate"] as? String, "2026-06-05T00:00:00Z")
+        XCTAssertEqual(body["expirationDate"] as? String, "2026-06-05T00:00:00Z")
+        XCTAssertEqual(body["maxAccessCount"] as? Int, 2)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            String(data: transport.requests[1].body ?? Data(), encoding: .utf8) ?? ""
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("fresh-access-token-secret"))
+        XCTAssertFalse(visibleText.contains("remote-send-created-secret-id"))
+        XCTAssertFalse(visibleText.contains("local-send-body-secret"))
+        XCTAssertFalse(visibleText.contains("local-send-note-secret"))
+        XCTAssertFalse(visibleText.contains("bw-pull-revision-secret"))
+        XCTAssertFalse(visibleText.contains("bw-push-revision-secret"))
+    }
+
+    func testBitwardenPushPersistsCreatedCipherAndSendRemoteIDsWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+            session: BitwardenAuthenticationSession(
+                accountLabel: "alice@example.com",
+                serverURL: URL(string: "https://vault.bitwarden.com")!,
+                identityURL: URL(string: "https://identity.bitwarden.com")!,
+                apiURL: URL(string: "https://api.bitwarden.com")!,
+                accessToken: "fresh-access-token-secret",
+                refreshToken: "refresh-token-secret",
+                expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+            )
+        )
+        let vaultKey = BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        )
+        let keyStore = MemoryBitwardenVaultKeyStore()
+        try keyStore.saveVaultKey(vaultKey, accountLabel: "alice@example.com")
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        let sendStateStore = MemoryAppBitwardenSendSyncStateStore()
+        let transport = RecordingAppBitwardenVaultSyncTransport()
+        transport.enqueue(statusCode: 200, body: #"{"Ciphers":[],"Sends":[],"RevisionDate":"bw-pull-revision-secret"}"#)
+        transport.enqueue(statusCode: 200, body: #"{"Id":"remote-login-created-secret-id","RevisionDate":"bw-cipher-push-revision-secret"}"#)
+        transport.enqueue(statusCode: 200, body: #"{"Id":"remote-send-created-secret-id","RevisionDate":"bw-send-push-revision-secret"}"#)
+        let provider = BitwardenVaultSyncProvider(
+            sessionStore: sessionStore,
+            vaultTransport: transport,
+            vaultKeyStore: keyStore
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: provider,
+            bitwardenAuthenticationSessionStore: sessionStore,
+            bitwardenVaultKeyStore: keyStore,
+            bitwardenSendSyncStateStore: sendStateStore,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "local-login-password-secret"
+        model.loginURL = "https://github.com/session?token=query-secret"
+        try model.createLoginEntry(projectTitle: "Personal")
+        model.sendTitle = "Deploy link"
+        model.sendBody = "local-send-body-secret"
+        model.sendNotes = "local-send-note-secret"
+        model.sendExpiresAt = "2026-06-05"
+        model.sendMaxViews = 2
+        try model.createSendEntry(projectTitle: "Personal")
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 2)
+        XCTAssertEqual(transport.requests.map(\.method), ["GET", "POST", "POST"])
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault").first { $0.localID == "entry-1" }?.remoteID, "remote-login-created-secret-id")
+        XCTAssertEqual(try sendStateStore.loadStates(vaultID: "created-vault").first { $0.localID == "send-1" }?.remoteID, "remote-send-created-secret-id")
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            try itemStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " "),
+            try sendStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("fresh-access-token-secret"))
+        XCTAssertFalse(visibleText.contains("remote-login-created-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-send-created-secret-id"))
+        XCTAssertFalse(visibleText.contains("local-login-password-secret"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+        XCTAssertFalse(visibleText.contains("local-send-body-secret"))
+        XCTAssertFalse(visibleText.contains("local-send-note-secret"))
         XCTAssertFalse(visibleText.contains("revision-secret"))
     }
 
@@ -9301,6 +9619,34 @@ private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unch
         }
         return pushResult
     }
+}
+
+private final class RecordingAppBitwardenVaultSyncTransport: BitwardenVaultSyncTransport, @unchecked Sendable {
+    private(set) var requests: [BitwardenVaultSyncRequest] = []
+    private var responses: [BitwardenVaultSyncResponse] = []
+
+    func enqueue(statusCode: Int, body: String, headers: [String: String] = [:]) {
+        responses.append(
+            BitwardenVaultSyncResponse(
+                statusCode: statusCode,
+                headers: headers,
+                body: Data(body.utf8)
+            )
+        )
+    }
+
+    func send(_ request: BitwardenVaultSyncRequest) async throws -> BitwardenVaultSyncResponse {
+        requests.append(request)
+        guard !responses.isEmpty else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        return responses.removeFirst()
+    }
+}
+
+private func decodedJSONDictionary(_ data: Data?) throws -> [String: Any] {
+    let data = try XCTUnwrap(data)
+    return try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 }
 
 private final class RecordingAppBitwardenPasswordAuthenticationService: AppBitwardenPasswordAuthenticationService, @unchecked Sendable {
