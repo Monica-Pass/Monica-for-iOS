@@ -8697,6 +8697,81 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
     }
 
+    func testBitwardenPushQueuesRetryableMutationsAndReplaysThemWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let queueStore = MemoryAppBitwardenPendingMutationQueueStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret"
+        )
+        bitwarden.pushError = URLError(.networkConnectionLost)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenPendingMutationQueueStore: queueStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.sendTitle = "Retry secure link"
+        model.sendBody = "queued-send-body-secret"
+        model.sendNotes = "queued-send-note-secret"
+        model.sendExpiresAt = "2026-06-03"
+        model.sendMaxViews = 7
+        try model.createSendEntry(projectTitle: "Personal")
+
+        do {
+            _ = try await model.pushLocalBitwardenChanges()
+            XCTFail("Expected retryable Bitwarden push failure")
+        } catch {
+            XCTAssertTrue(error is URLError)
+        }
+
+        let queuedBatches = queueStore.loadAllBatches()
+        XCTAssertEqual(queuedBatches.count, 1)
+        XCTAssertEqual(queuedBatches.first?.mutationCount, 1)
+        XCTAssertEqual(queuedBatches.first?.retryCount, 1)
+        XCTAssertEqual(queuedBatches.first?.redactedSummary, "Bitwarden 待重试 1 个变更（第 1 次）")
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已暂存 1 个变更，等待网络恢复后重试")
+
+        bitwarden.pushError = nil
+        bitwarden.pushResult = BitwardenSyncPushResult(
+            acceptedMutationCount: 1,
+            revision: "bw-retry-revision-secret",
+            assignedRemoteIDs: ["send-1": "remote-send-retry-secret-id"]
+        )
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 1)
+        XCTAssertEqual(bitwarden.pushedMutations.count, 2)
+        XCTAssertEqual(bitwarden.pushedMutations.map(\.redactedSummary), [
+            "upsert Send Retry secure link 7 次",
+            "upsert Send Retry secure link 7 次"
+        ])
+        XCTAssertEqual(queueStore.loadAllBatches(), [])
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已推送 1 个变更，0 个冲突")
+
+        let visibleText = ([
+            model.bitwardenSyncState.label,
+            queuedBatches.first?.redactedSummary ?? ""
+        ] + bitwarden.pushedMutations.map(\.redactedSummary))
+            .joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("bw-revision-secret"))
+        XCTAssertFalse(visibleText.contains("bw-retry-revision-secret"))
+        XCTAssertFalse(visibleText.contains("remote-send-retry-secret-id"))
+        XCTAssertFalse(visibleText.contains("queued-send-body-secret"))
+        XCTAssertFalse(visibleText.contains("queued-send-note-secret"))
+    }
+
     func testBitwardenSyncImportsRemoteVaultItemsIntoLocalEntriesWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
