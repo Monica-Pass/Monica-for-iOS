@@ -2463,9 +2463,33 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 "publicKey": try encryptedOptional(item.sshPublicKey, key: key),
                 "keyFingerprint": try encryptedOptional(item.sshKeyFingerprint, key: key)
             ]
+            payload["fields"] = try encryptedSshKeyCompatibilityFields(for: item, key: key)
         }
 
         return payload
+    }
+
+    private static func encryptedSshKeyCompatibilityFields(for item: BitwardenLocalItemSyncItem, key: BitwardenVaultKey) throws -> [[String: Any]] {
+        var fields: [(name: String, value: String, type: Int)] = [
+            ("monica_login_type", "SSH_KEY", 0)
+        ]
+        if let publicKey = nonBlank(item.sshPublicKey) {
+            fields.append(("monica_ssh_public_key", publicKey, 0))
+        }
+        if let privateKey = nonBlank(item.sshPrivateKey) {
+            fields.append(("monica_ssh_private_key", privateKey, 1))
+        }
+        if let fingerprint = nonBlank(item.sshKeyFingerprint) {
+            fields.append(("monica_ssh_fingerprint", fingerprint, 0))
+        }
+
+        return try fields.map { field in
+            [
+                "type": field.type,
+                "name": try BitwardenCrypto.encryptString(field.name, key: key),
+                "value": try BitwardenCrypto.encryptString(field.value, key: key)
+            ]
+        }
     }
 
     private static func encryptedPasskeyCredentialPayload(for item: BitwardenLocalItemSyncItem, key: BitwardenVaultKey) throws -> [String: Any] {
@@ -2492,6 +2516,11 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             return NSNull()
         }
         return try BitwardenCrypto.encryptString(value, key: key)
+    }
+
+    private static func nonBlank(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : value
     }
 
     private static func cipherType(for kind: BitwardenSyncItemKind) -> Int {
@@ -2694,9 +2723,14 @@ private enum BitwardenVaultSyncSnapshotParser {
             let card = dictionary(cipher, "card", "Card")
             let identity = dictionary(cipher, "identity", "Identity")
             let sshKey = dictionary(cipher, "sshKey", "SshKey", "SSHKey")
+            let customFields = customFields(cipher, key: effectiveKey)
             let fido2Credential = array(login, "fido2Credentials", "Fido2Credentials").first ?? [:]
             let type = int(cipher, "type", "Type") ?? 1
-            let kind = itemKind(for: type, hasFido2Credential: !fido2Credential.isEmpty)
+            let kind = itemKind(
+                for: type,
+                hasFido2Credential: !fido2Credential.isEmpty,
+                hasLegacySshKeyFields: hasLegacySshKeyFields(customFields)
+            )
             let firstURI = array(login, "uris", "Uris").first
             let attachments = array(cipher, "attachments", "Attachments").compactMap { attachment -> BitwardenSyncAttachment? in
                 guard let attachmentID = string(attachment, "id", "Id"), !attachmentID.isEmpty else { return nil }
@@ -2746,9 +2780,12 @@ private enum BitwardenVaultSyncSnapshotParser {
                 passkeyCounter: decryptedString(fido2Credential, "counter", "Counter", key: effectiveKey) ?? "",
                 passkeyDiscoverable: passkeyBoolean(decryptedString(fido2Credential, "discoverable", "Discoverable", key: effectiveKey)),
                 passkeyCreationDate: string(fido2Credential, "creationDate", "CreationDate") ?? "",
-                sshPublicKey: decryptedString(sshKey, "publicKey", "PublicKey", key: effectiveKey) ?? "",
-                sshPrivateKey: decryptedString(sshKey, "privateKey", "PrivateKey", key: effectiveKey) ?? "",
-                sshKeyFingerprint: decryptedString(sshKey, "keyFingerprint", "KeyFingerprint", "fingerprint", "Fingerprint", key: effectiveKey) ?? ""
+                sshPublicKey: decryptedString(sshKey, "publicKey", "PublicKey", key: effectiveKey)
+                    ?? sshPublicKey(from: customFields),
+                sshPrivateKey: decryptedString(sshKey, "privateKey", "PrivateKey", key: effectiveKey)
+                    ?? sshPrivateKey(from: customFields),
+                sshKeyFingerprint: decryptedString(sshKey, "keyFingerprint", "KeyFingerprint", "fingerprint", "Fingerprint", key: effectiveKey)
+                    ?? sshFingerprint(from: customFields)
             )
         }
         let sendItems = sends.compactMap { send -> BitwardenSendSyncItem? in
@@ -2785,7 +2822,11 @@ private enum BitwardenVaultSyncSnapshotParser {
         )
     }
 
-    private static func itemKind(for type: Int, hasFido2Credential: Bool = false) -> BitwardenSyncItemKind {
+    private static func itemKind(
+        for type: Int,
+        hasFido2Credential: Bool = false,
+        hasLegacySshKeyFields: Bool = false
+    ) -> BitwardenSyncItemKind {
         switch type {
         case 2:
             .secureNote
@@ -2796,8 +2837,114 @@ private enum BitwardenVaultSyncSnapshotParser {
         case 5:
             .sshKey
         default:
-            hasFido2Credential ? .passkey : .login
+            if hasLegacySshKeyFields {
+                .sshKey
+            } else {
+                hasFido2Credential ? .passkey : .login
+            }
         }
+    }
+
+    private static func customFields(_ cipher: [String: Any], key: BitwardenVaultKey?) -> [String: String] {
+        array(cipher, "fields", "Fields").reduce(into: [String: String]()) { result, field in
+            guard let name = decryptedString(field, "name", "Name", key: key)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else {
+                return
+            }
+            let value = decryptedString(field, "value", "Value", key: key) ?? ""
+            result[name] = value
+            result[name.lowercased()] = value
+        }
+    }
+
+    private static func hasLegacySshKeyFields(_ fields: [String: String]) -> Bool {
+        let loginType = customFieldValue(fields, "monica_login_type")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return loginType.compare("SSH_KEY", options: .caseInsensitive) == .orderedSame
+            || !sshPublicKey(from: fields).isEmpty
+            || !sshPrivateKey(from: fields).isEmpty
+            || !sshFingerprint(from: fields).isEmpty
+    }
+
+    private static func sshPublicKey(from fields: [String: String]) -> String {
+        let namedValue = customFieldValue(
+            fields,
+            "monica_ssh_public_key",
+            "publicKey",
+            "public_key",
+            "public key",
+            "public-key",
+            "ssh public key",
+            "ssh_public_key"
+        )
+        return nonBlank(namedValue) ?? fields.values.first(where: looksLikeSshPublicKey) ?? ""
+    }
+
+    private static func sshPrivateKey(from fields: [String: String]) -> String {
+        let namedValue = customFieldValue(
+            fields,
+            "monica_ssh_private_key",
+            "privateKey",
+            "private_key",
+            "private key",
+            "private-key",
+            "ssh private key",
+            "ssh_private_key"
+        )
+        return nonBlank(namedValue) ?? fields.values.first(where: looksLikeSshPrivateKey) ?? ""
+    }
+
+    private static func sshFingerprint(from fields: [String: String]) -> String {
+        let namedValue = customFieldValue(
+            fields,
+            "monica_ssh_fingerprint",
+            "keyFingerprint",
+            "key_fingerprint",
+            "key fingerprint",
+            "key-fingerprint",
+            "fingerprint",
+            "ssh fingerprint",
+            "ssh_fingerprint"
+        )
+        return nonBlank(namedValue) ?? fields.values.first(where: looksLikeSshFingerprint) ?? ""
+    }
+
+    private static func nonBlank(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : value
+    }
+
+    private static func customFieldValue(_ fields: [String: String], _ names: String...) -> String {
+        for name in names {
+            if let value = fields[name] ?? fields[name.lowercased()] {
+                return value
+            }
+        }
+        return ""
+    }
+
+    private static func looksLikeSshPublicKey(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("ssh-rsa ")
+            || trimmed.hasPrefix("ssh-ed25519 ")
+            || trimmed.hasPrefix("ecdsa-sha2-")
+            || trimmed.hasPrefix("ssh-dss ")
+    }
+
+    private static func looksLikeSshPrivateKey(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.contains("BEGIN OPENSSH PRIVATE KEY")
+            || trimmed.contains("BEGIN RSA PRIVATE KEY")
+            || trimmed.contains("BEGIN EC PRIVATE KEY")
+            || trimmed.contains("BEGIN DSA PRIVATE KEY")
+            || trimmed.contains("BEGIN PRIVATE KEY")
+    }
+
+    private static func looksLikeSshFingerprint(_ value: String) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.hasPrefix("SHA256:")
+            || trimmed.hasPrefix("MD5:")
     }
 
     private static func identityUsername(_ cipher: [String: Any], key: BitwardenVaultKey?) -> String {

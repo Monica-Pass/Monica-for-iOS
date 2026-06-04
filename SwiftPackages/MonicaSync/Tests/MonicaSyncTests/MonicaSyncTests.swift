@@ -707,11 +707,12 @@ import Foundation
         )
     )
     let keyStore = MemoryBitwardenVaultKeyStore()
+    let vaultKey = BitwardenVaultKey(
+        encryptionKey: Data((1...32).map(UInt8.init)),
+        macKey: Data((33...64).map(UInt8.init))
+    )
     try keyStore.saveVaultKey(
-        BitwardenVaultKey(
-            encryptionKey: Data((1...32).map(UInt8.init)),
-            macKey: Data((33...64).map(UInt8.init))
-        ),
+        vaultKey,
         accountLabel: "alice@example.com"
     )
     let vaultTransport = RecordingBitwardenVaultSyncTransport()
@@ -790,11 +791,12 @@ import Foundation
         )
     )
     let keyStore = MemoryBitwardenVaultKeyStore()
+    let vaultKey = BitwardenVaultKey(
+        encryptionKey: Data((1...32).map(UInt8.init)),
+        macKey: Data((33...64).map(UInt8.init))
+    )
     try keyStore.saveVaultKey(
-        BitwardenVaultKey(
-            encryptionKey: Data((1...32).map(UInt8.init)),
-            macKey: Data((33...64).map(UInt8.init))
-        ),
+        vaultKey,
         accountLabel: "alice@example.com"
     )
     let vaultTransport = RecordingBitwardenVaultSyncTransport()
@@ -1329,6 +1331,107 @@ import Foundation
     }
 }
 
+@Test func bitwardenVaultSyncProviderPullsLegacySshKeyCustomFieldsWithoutLeakingSecrets() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "fresh-access-token-secret",
+            refreshToken: "refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let vaultKey = BitwardenVaultKey(
+        encryptionKey: Data((1...32).map(UInt8.init)),
+        macKey: Data((33...64).map(UInt8.init))
+    )
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    try keyStore.saveVaultKey(vaultKey, accountLabel: "alice@example.com")
+    func encrypted(_ value: String) throws -> String {
+        try BitwardenCrypto.encryptString(value, key: vaultKey)
+    }
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "legacy-ssh-cipher-secret-id",
+              "Type": 1,
+              "Name": "\(try encrypted("Legacy SSH"))",
+              "Notes": "\(try encrypted("legacy-ssh-note-secret"))",
+              "RevisionDate": "2026-06-04T14:00:00Z",
+              "Login": {
+                "Username": "\(try encrypted("deploy"))",
+                "Uris": [{ "Uri": "\(try encrypted("legacy.example.com"))" }]
+              },
+              "Fields": [
+                {
+                  "Type": 0,
+                  "Name": "\(try encrypted("monica_login_type"))",
+                  "Value": "\(try encrypted("SSH_KEY"))"
+                },
+                {
+                  "Type": 0,
+                  "Name": "\(try encrypted("monica_ssh_public_key"))",
+                  "Value": "\(try encrypted("ssh-ed25519 legacy-public-key-secret"))"
+                },
+                {
+                  "Type": 1,
+                  "Name": "\(try encrypted("monica_ssh_private_key"))",
+                  "Value": "\(try encrypted("legacy-private-key-secret"))"
+                },
+                {
+                  "Type": 0,
+                  "Name": "\(try encrypted("monica_ssh_fingerprint"))",
+                  "Value": "\(try encrypted("SHA256:legacy-fingerprint-secret"))"
+                }
+              ]
+            }
+          ],
+          "Sends": []
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: keyStore,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let item = try #require(snapshot.items.first)
+    #expect(item.kind == .sshKey)
+    #expect(item.title == "Legacy SSH")
+    #expect(item.username == "deploy")
+    #expect(item.url == "legacy.example.com")
+    #expect(item.notes == "legacy-ssh-note-secret")
+    #expect(item.sshPublicKey == "ssh-ed25519 legacy-public-key-secret")
+    #expect(item.sshPrivateKey == "legacy-private-key-secret")
+    #expect(item.sshKeyFingerprint == "SHA256:legacy-fingerprint-secret")
+    let visibleText = [snapshot.redactedSummary, item.redactedSummary].joined(separator: " ")
+    [
+        "legacy-ssh-cipher-secret-id",
+        "legacy-public-key-secret",
+        "legacy-private-key-secret",
+        "legacy-fingerprint-secret",
+        "legacy-ssh-note-secret",
+        "server-security-stamp-secret"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
 @Test func bitwardenVaultSyncProviderPushesFolderMutationsThroughRealRestEndpoints() async throws {
     let sessionStore = MemoryBitwardenAuthenticationSessionStore(
         session: BitwardenAuthenticationSession(
@@ -1491,13 +1594,11 @@ import Foundation
         )
     )
     let keyStore = MemoryBitwardenVaultKeyStore()
-    try keyStore.saveVaultKey(
-        BitwardenVaultKey(
-            encryptionKey: Data((1...32).map(UInt8.init)),
-            macKey: Data((33...64).map(UInt8.init))
-        ),
-        accountLabel: "alice@example.com"
+    let vaultKey = BitwardenVaultKey(
+        encryptionKey: Data((1...32).map(UInt8.init)),
+        macKey: Data((33...64).map(UInt8.init))
     )
+    try keyStore.saveVaultKey(vaultKey, accountLabel: "alice@example.com")
     let vaultTransport = RecordingBitwardenVaultSyncTransport()
     vaultTransport.enqueue(
         statusCode: 200,
@@ -1539,6 +1640,18 @@ import Foundation
     #expect(BitwardenCipherStringProbe.isCipherString(sshKey["publicKey"] as? String))
     #expect(BitwardenCipherStringProbe.isCipherString(sshKey["privateKey"] as? String))
     #expect(BitwardenCipherStringProbe.isCipherString(sshKey["keyFingerprint"] as? String))
+    let fields = try #require(body["fields"] as? [[String: Any]])
+    let decryptedFields = try fields.reduce(into: [String: String]()) { result, field in
+        let encryptedName = try #require(field["name"] as? String)
+        let encryptedValue = try #require(field["value"] as? String)
+        let name = try BitwardenCrypto.decryptString(encryptedName, key: vaultKey)
+        let value = try BitwardenCrypto.decryptString(encryptedValue, key: vaultKey)
+        result[name] = value
+    }
+    #expect(decryptedFields["monica_login_type"] == "SSH_KEY")
+    #expect(decryptedFields["monica_ssh_public_key"] == "ssh-ed25519 public-key-secret")
+    #expect(decryptedFields["monica_ssh_private_key"] == "private-key-reference-secret")
+    #expect(decryptedFields["monica_ssh_fingerprint"] == "SHA256:fingerprint-secret")
     let requestText = String(data: try #require(vaultTransport.requests[0].body), encoding: .utf8) ?? ""
     [
         "public-key-secret",
