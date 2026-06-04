@@ -5951,7 +5951,7 @@ final class AppSessionModel {
                 projectID: project.id,
                 draft: LocalPasskeyEntryDraft(
                     title: passkeyTitle,
-                    relyingPartyID: passkeyRelyingPartyID,
+                    relyingPartyID: try normalizedPasskeyRelyingPartyID(passkeyRelyingPartyID),
                     username: passkeyUsername,
                     userHandle: passkeyUserHandle,
                     credentialID: passkeyCredentialID,
@@ -5998,7 +5998,7 @@ final class AppSessionModel {
 
             let entry = try entryRepository.createPasskeyEntry(
                 projectID: project.id,
-                draft: result.metadataDraft
+                draft: try normalizedPasskeyDraft(result.metadataDraft)
             )
             passkeyCredentialID = ""
             passkeyPublicKeyCOSE = ""
@@ -6072,7 +6072,7 @@ final class AppSessionModel {
                 entryID: entryID,
                 draft: LocalPasskeyEntryDraft(
                     title: editingPasskeyTitle,
-                    relyingPartyID: editingPasskeyRelyingPartyID,
+                    relyingPartyID: try normalizedPasskeyRelyingPartyID(editingPasskeyRelyingPartyID),
                     username: editingPasskeyUsername,
                     userHandle: editingPasskeyUserHandle,
                     credentialID: editingPasskeyCredentialID,
@@ -10180,10 +10180,11 @@ final class AppSessionModel {
     private func autoFillPasskeyCredentialIdentity(
         for entry: LocalPasskeyEntry
     ) -> AppAutoFillPasskeyCredentialIdentity? {
-        let relyingPartyIdentifier = entry.relyingPartyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let relyingPartyIdentifier = PasskeyRelyingPartyIDNormalizer.normalize(entry.relyingPartyID) else {
+            return nil
+        }
         let username = entry.username.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !relyingPartyIdentifier.isEmpty,
-              !username.isEmpty,
+        guard !username.isEmpty,
               let credentialID = Data(base64Encoded: entry.credentialID),
               !credentialID.isEmpty,
               let userHandle = Data(base64Encoded: entry.userHandle),
@@ -10198,6 +10199,26 @@ final class AppSessionModel {
             username: username,
             credentialID: credentialID,
             userHandle: userHandle
+        )
+    }
+
+    private func normalizedPasskeyRelyingPartyID(_ value: String) throws -> String {
+        guard let relyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(value) else {
+            throw PasskeyCredentialError.invalidRelyingPartyID
+        }
+        return relyingPartyID
+    }
+
+    private func normalizedPasskeyDraft(_ draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntryDraft {
+        LocalPasskeyEntryDraft(
+            title: draft.title,
+            relyingPartyID: try normalizedPasskeyRelyingPartyID(draft.relyingPartyID),
+            username: draft.username,
+            userHandle: draft.userHandle,
+            credentialID: draft.credentialID,
+            publicKeyCOSE: draft.publicKeyCOSE,
+            privateKeyReference: draft.privateKeyReference,
+            notes: draft.notes
         )
     }
 
