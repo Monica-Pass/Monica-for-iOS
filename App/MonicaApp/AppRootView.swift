@@ -512,6 +512,7 @@ struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
     case invalidServerURL
+    case emptyRemoteVault(localCount: Int)
 
     var errorDescription: String? {
         switch self {
@@ -519,6 +520,8 @@ enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
             "Bitwarden 同步尚未配置。"
         case .invalidServerURL:
             "Bitwarden 服务器 URL 无效，仅支持 http/https。"
+        case .emptyRemoteVault(let localCount):
+            "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 \(localCount) 个已同步条目。请确认账号或稍后重试。"
         }
     }
 }
@@ -8803,6 +8806,13 @@ final class AppSessionModel {
             let provider = try requireBitwardenSyncProvider()
             let snapshot = try await provider.pullSnapshot()
             let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            try validateBitwardenRemoteSnapshotIsSafe(
+                snapshot,
+                previousItemStates: previousItemStates,
+                previousSendStates: previousSendStates
+            )
             let project = try ensureActiveProject(
                 projectTitle: projectTitle,
                 entryRepository: entryRepository
@@ -8836,10 +8846,15 @@ final class AppSessionModel {
             let provider = try requireBitwardenSyncProvider()
             let snapshot = try await provider.pullSnapshot()
             let preview = AppBitwardenSyncPreview(snapshot: snapshot)
-            bitwardenSyncPreview = preview
             let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
             let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
             let previousFolderStates = try bitwardenFolderSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            try validateBitwardenRemoteSnapshotIsSafe(
+                snapshot,
+                previousItemStates: previousItemStates,
+                previousSendStates: previousSendStates
+            )
+            bitwardenSyncPreview = preview
             let itemPlan = makeBitwardenItemSyncPlan(
                 remoteItems: snapshot.items,
                 previousStates: previousItemStates,
@@ -8883,6 +8898,27 @@ final class AppSessionModel {
             bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
             throw error
         }
+    }
+
+    private func validateBitwardenRemoteSnapshotIsSafe(
+        _ snapshot: BitwardenSyncSnapshot,
+        previousItemStates: [BitwardenItemSyncState],
+        previousSendStates: [BitwardenSendSyncState]
+    ) throws {
+        guard snapshot.items.isEmpty, snapshot.sends.isEmpty else {
+            return
+        }
+        let activeSyncedItemCount = previousItemStates.filter { state in
+            state.remoteID?.nonBlankValue != nil && !state.isDeleted
+        }.count
+        let activeSyncedSendCount = previousSendStates.filter { state in
+            state.remoteID?.nonBlankValue != nil && !state.isDeleted
+        }.count
+        let localCount = activeSyncedItemCount + activeSyncedSendCount
+        guard localCount > 0 else {
+            return
+        }
+        throw AppBitwardenSyncError.emptyRemoteVault(localCount: localCount)
     }
 
     func downloadWebDAVRestorePreview() async throws {
