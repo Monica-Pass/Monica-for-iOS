@@ -2646,6 +2646,18 @@ public final class URLSessionBitwardenVaultSyncTransport: BitwardenVaultSyncTran
 public protocol BitwardenSyncProvider: Sendable {
     func pullSnapshot() async throws -> BitwardenSyncSnapshot
     func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult
+    func uploadAttachment(_ request: BitwardenAttachmentUploadRequest) async throws -> BitwardenAttachmentUploadResult
+    func downloadAttachment(_ request: BitwardenAttachmentDownloadRequest) async throws -> BitwardenAttachmentDownloadResult
+}
+
+public extension BitwardenSyncProvider {
+    func uploadAttachment(_ request: BitwardenAttachmentUploadRequest) async throws -> BitwardenAttachmentUploadResult {
+        throw BitwardenSyncProviderError.unsupportedOperation
+    }
+
+    func downloadAttachment(_ request: BitwardenAttachmentDownloadRequest) async throws -> BitwardenAttachmentDownloadResult {
+        throw BitwardenSyncProviderError.unsupportedOperation
+    }
 }
 
 public struct DefaultBitwardenSyncProvider: BitwardenSyncProvider {

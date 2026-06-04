@@ -512,6 +512,7 @@ struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
     case invalidServerURL
+    case attachmentUnavailable
     case emptyRemoteVault(localCount: Int)
 
     var errorDescription: String? {
@@ -520,6 +521,8 @@ enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
             "Bitwarden 同步尚未配置。"
         case .invalidServerURL:
             "Bitwarden 服务器 URL 无效，仅支持 http/https。"
+        case .attachmentUnavailable:
+            "Bitwarden 附件不可用，请重新同步后再试。"
         case .emptyRemoteVault(let localCount):
             "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 \(localCount) 个已同步条目。请确认账号或稍后重试。"
         }
@@ -3037,8 +3040,8 @@ final class AppSessionModel {
         return AppAttachmentContentStatus(
             state: .available,
             value: "\(entry.storedSize) 字节",
-            detail: entry.storageMode == "keepass-kdbx-decoded-content"
-                ? "KeePass 附件内容已保存在本机，可预览。"
+            detail: storedAttachmentContentCanPreviewDirectly(entry)
+                ? "附件内容已保存在本机，可预览。"
                 : "附件密文已保存在本机，可进入预览恢复流程。"
         )
     }
@@ -3211,7 +3214,7 @@ final class AppSessionModel {
         recordUserActivity()
         dismissAttachmentQuickLookPreview()
 
-        if entry.storageMode == "keepass-kdbx-decoded-content" {
+        if storedAttachmentContentCanPreviewDirectly(entry) {
             do {
                 let preview = try materializeStoredAttachmentContentPreview(entry)
                 attachmentQuickLookPreviewURL = preview.fileURL
@@ -4083,6 +4086,17 @@ final class AppSessionModel {
 
     private func sharedAttachmentLocalPath(fileName: String) -> String {
         sanitizedAttachmentPreviewFileName("share-extension-\(UUID().uuidString)-\(fileName)")
+    }
+
+    private func storedAttachmentContentCanPreviewDirectly(_ entry: LocalAttachmentMetadata) -> Bool {
+        switch entry.storageMode {
+        case "keepass-kdbx-decoded-content",
+            "bitwarden-downloaded-content",
+            "share-extension-imported-blob":
+            return true
+        default:
+            return false
+        }
     }
 
     private func sharedContentHash(_ data: Data) -> String {
@@ -9092,6 +9106,87 @@ final class AppSessionModel {
         }
     }
 
+    @discardableResult
+    func downloadBitwardenAttachmentContent(
+        _ entry: LocalAttachmentMetadata
+    ) async throws -> LocalAttachmentMetadata {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            let session = try requireActiveVaultSession()
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            guard entry.source == "bitwarden",
+                  entry.downloadState == "pending-bitwarden-download",
+                  let localEntryID = entry.entryID,
+                  !localEntryID.isEmpty
+            else {
+                throw AppBitwardenSyncError.attachmentUnavailable
+            }
+            let provider = try requireBitwardenSyncProvider()
+            let itemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            guard let remoteCipherID = itemStates
+                .first(where: { $0.localID == localEntryID })?
+                .remoteID?
+                .nonBlankValue
+            else {
+                throw AppBitwardenSyncError.attachmentUnavailable
+            }
+            let snapshot = try await provider.pullSnapshot()
+            guard let remoteItem = snapshot.items.first(where: { $0.remoteID == remoteCipherID }),
+                  let remoteAttachment = remoteItem.attachments.first(where: {
+                      bitwardenAttachmentContentHash($0) == entry.contentHash
+                  })
+            else {
+                throw AppBitwardenSyncError.attachmentUnavailable
+            }
+
+            let download = try await provider.downloadAttachment(
+                BitwardenAttachmentDownloadRequest(
+                    cipherRemoteID: remoteAttachment.cipherRemoteID,
+                    attachmentRemoteID: remoteAttachment.remoteID
+                )
+            )
+            let fileName = sanitizedAttachmentPreviewFileName(entry.fileName)
+            let localPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
+                download.encryptedContent,
+                vaultID: session.handle.vaultID,
+                localPath: bitwardenDownloadedAttachmentLocalPath(entry, fileName: fileName)
+            )
+            let updated = try entryRepository.updateAttachmentMetadata(
+                projectID: projectID,
+                attachmentID: entry.id,
+                entryID: entry.entryID,
+                fileName: fileName,
+                mediaType: entry.mediaType.isEmpty ? "application/octet-stream" : entry.mediaType,
+                originalSize: Int64(remoteAttachment.byteCount),
+                storedSize: Int64(download.encryptedContent.count),
+                contentHash: entry.contentHash,
+                storageMode: "bitwarden-downloaded-content",
+                source: "bitwarden",
+                downloadState: "downloaded",
+                wrappedContentEncryptionKey: remoteAttachment.encryptedKey ?? entry.wrappedContentEncryptionKey,
+                localPath: localPath
+            )
+            attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .attachmentRef,
+                itemID: updated.id,
+                itemTitle: updated.fileName
+            )
+            entryOperationState = .succeeded("Bitwarden 附件已下载：\(updated.fileName) \(download.encryptedContent.count) 字节")
+            return updated
+        } catch {
+            entryOperationState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
     private func queueBitwardenPendingMutations(
         _ mutations: [BitwardenSyncMutation],
         vaultID: String,
@@ -9653,14 +9748,14 @@ final class AppSessionModel {
         for attachment in remoteAttachments {
             let contentHash = bitwardenAttachmentContentHash(attachment)
             if let existing = localAttachments.first(where: { $0.contentHash == contentHash }) {
-                if existing.fileName != bitwardenImportTitle(attachment.fileName)
+                if existing.fileName != bitwardenAttachmentFileName(attachment)
                     || existing.originalSize != Int64(attachment.byteCount)
                     || existing.wrappedContentEncryptionKey != attachment.encryptedKey {
                     _ = try entryRepository.updateAttachmentMetadata(
                         projectID: projectID,
                         attachmentID: existing.id,
                         entryID: localEntryID,
-                        fileName: bitwardenImportTitle(attachment.fileName),
+                        fileName: bitwardenAttachmentFileName(attachment),
                         mediaType: "application/octet-stream",
                         originalSize: Int64(attachment.byteCount),
                         storedSize: 0,
@@ -9677,7 +9772,7 @@ final class AppSessionModel {
             _ = try entryRepository.createAttachmentMetadata(
                 projectID: projectID,
                 entryID: localEntryID,
-                fileName: bitwardenImportTitle(attachment.fileName),
+                fileName: bitwardenAttachmentFileName(attachment),
                 mediaType: "application/octet-stream",
                 originalSize: Int64(attachment.byteCount),
                 storedSize: 0,
@@ -9694,6 +9789,10 @@ final class AppSessionModel {
     private func bitwardenAttachmentContentHash(_ attachment: BitwardenSyncAttachment) -> String {
         let digest = SHA256.hash(data: Data(attachment.syncFingerprint.utf8))
         return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private func bitwardenAttachmentFileName(_ attachment: BitwardenSyncAttachment) -> String {
+        sanitizedAttachmentPreviewFileName(bitwardenImportTitle(attachment.fileName))
     }
 
     private func bitwardenItemSyncState(
@@ -10536,6 +10635,17 @@ final class AppSessionModel {
         let identifier = rawIdentifier.isEmpty ? UUID().uuidString : rawIdentifier
         return sanitizedAttachmentPreviewFileName(
             "keepass-kdbx-attachment-\(identifier)-\(fileName)"
+        )
+    }
+
+    private func bitwardenDownloadedAttachmentLocalPath(
+        _ attachment: LocalAttachmentMetadata,
+        fileName: String
+    ) -> String {
+        let rawIdentifier = attachment.id.trimmingCharacters(in: .whitespacesAndNewlines)
+        let identifier = rawIdentifier.isEmpty ? UUID().uuidString : rawIdentifier
+        return sanitizedAttachmentPreviewFileName(
+            "bitwarden-attachment-\(identifier)-\(fileName)"
         )
     }
 

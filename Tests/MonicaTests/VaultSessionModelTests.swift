@@ -9319,6 +9319,111 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("encrypted-attachment-key-secret"))
     }
 
+    func testBitwardenAttachmentDownloadStoresContentForPreviewWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let blobStore = RecordingAndroidBackupAttachmentBlobStore()
+        let downloadedContent = Data("bitwarden downloaded attachment secret body".utf8)
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-login-secret-id",
+                    kind: .login,
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com/session?token=query-secret",
+                    password: "login-password-secret",
+                    attachments: [
+                        BitwardenSyncAttachment(
+                            remoteID: "remote-attachment-secret-id",
+                            cipherRemoteID: "remote-login-secret-id",
+                            fileName: "../deploy secret.txt",
+                            encryptedKey: "encrypted-attachment-key-secret",
+                            byteCount: 42
+                        )
+                    ]
+                )
+            ]
+        )
+        bitwarden.downloadAttachmentResult = BitwardenAttachmentDownloadResult(
+            encryptedContent: downloadedContent
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            androidBackupAttachmentBlobStore: blobStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        _ = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+        let placeholder = try XCTUnwrap(model.attachmentEntries.first)
+        XCTAssertEqual(placeholder.downloadState, "pending-bitwarden-download")
+        XCTAssertEqual(placeholder.storageMode, "remote-bitwarden")
+
+        let downloaded = try await model.downloadBitwardenAttachmentContent(placeholder)
+
+        XCTAssertEqual(
+            bitwarden.downloadAttachmentRequests,
+            [
+                BitwardenAttachmentDownloadRequest(
+                    cipherRemoteID: "remote-login-secret-id",
+                    attachmentRemoteID: "remote-attachment-secret-id"
+                )
+            ]
+        )
+        XCTAssertEqual(blobStore.savedBlobs.count, 1)
+        XCTAssertEqual(blobStore.savedBlobs.first?.vaultID, "created-vault")
+        XCTAssertEqual(blobStore.savedBlobs.first?.data, downloadedContent)
+        XCTAssertEqual(blobStore.savedBlobs.first?.localPath, "bitwarden-attachment-attachment-1-deploy_secret.txt")
+        XCTAssertEqual(downloaded.id, placeholder.id)
+        XCTAssertEqual(downloaded.fileName, "deploy_secret.txt")
+        XCTAssertEqual(downloaded.source, "bitwarden")
+        XCTAssertEqual(downloaded.downloadState, "downloaded")
+        XCTAssertEqual(downloaded.storageMode, "bitwarden-downloaded-content")
+        XCTAssertEqual(downloaded.storedSize, Int64(downloadedContent.count))
+        XCTAssertEqual(downloaded.originalSize, 42)
+        XCTAssertEqual(downloaded.localPath, "bitwarden-attachment-attachment-1-deploy_secret.txt")
+        XCTAssertEqual(downloaded.wrappedContentEncryptionKey, "encrypted-attachment-key-secret")
+        XCTAssertEqual(model.attachmentEntries.first, downloaded)
+
+        try model.presentAttachmentQuickLookPreview(downloaded)
+        defer {
+            model.dismissAttachmentQuickLookPreview()
+        }
+        let previewURL = try XCTUnwrap(model.attachmentQuickLookPreviewURL)
+        XCTAssertEqual(try Data(contentsOf: previewURL), downloadedContent)
+        XCTAssertEqual(previewURL.lastPathComponent, "deploy_secret.txt")
+
+        let visibleText = [
+            model.entryOperationState.label,
+            model.bitwardenSyncState.label,
+            model.operationTimelineEvents.map { "\($0.title) \($0.detail)" }.joined(separator: " "),
+            downloaded.fileName,
+            downloaded.source,
+            downloaded.downloadState,
+            downloaded.storageMode
+        ].joined(separator: " ")
+        [
+            "remote-login-secret-id",
+            "remote-attachment-secret-id",
+            "query-secret",
+            "login-password-secret",
+            "encrypted-attachment-key-secret",
+            "bitwarden downloaded attachment secret body",
+            downloaded.contentHash,
+            downloaded.localPath ?? ""
+        ].forEach { secret in
+            XCTAssertFalse(visibleText.contains(secret))
+        }
+    }
+
     func testBitwardenSyncImportsAndPushesPasskeyFido2CipherWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
@@ -10143,10 +10248,13 @@ private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unch
         revision: "initial-revision"
     )
     var pushResult = BitwardenSyncPushResult(acceptedMutationCount: 0)
+    var downloadAttachmentResult = BitwardenAttachmentDownloadResult(encryptedContent: Data())
     var pullError: Error?
     var pushError: Error?
+    var downloadAttachmentError: Error?
     private(set) var pullCallCount = 0
     private(set) var pushedMutations: [BitwardenSyncMutation] = []
+    private(set) var downloadAttachmentRequests: [BitwardenAttachmentDownloadRequest] = []
 
     func pullSnapshot() async throws -> BitwardenSyncSnapshot {
         pullCallCount += 1
@@ -10162,6 +10270,14 @@ private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unch
             throw pushError
         }
         return pushResult
+    }
+
+    func downloadAttachment(_ request: BitwardenAttachmentDownloadRequest) async throws -> BitwardenAttachmentDownloadResult {
+        downloadAttachmentRequests.append(request)
+        if let downloadAttachmentError {
+            throw downloadAttachmentError
+        }
+        return downloadAttachmentResult
     }
 }
 
