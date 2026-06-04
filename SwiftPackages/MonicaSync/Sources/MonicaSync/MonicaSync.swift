@@ -13,6 +13,7 @@ public enum BitwardenSyncItemKind: String, Sendable, Equatable, Hashable, Codabl
     case secureNote
     case card
     case identity
+    case sshKey
 
     public var displayName: String {
         switch self {
@@ -26,6 +27,8 @@ public enum BitwardenSyncItemKind: String, Sendable, Equatable, Hashable, Codabl
             "card"
         case .identity:
             "identity"
+        case .sshKey:
+            "ssh key"
         }
     }
 }
@@ -123,6 +126,9 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public let passkeyCounter: String
     public let passkeyDiscoverable: Bool
     public let passkeyCreationDate: String
+    public let sshPublicKey: String
+    public let sshPrivateKey: String
+    public let sshKeyFingerprint: String
 
     public init(
         remoteID: String,
@@ -158,7 +164,10 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         passkeyPublicKeyAlgorithm: String = "",
         passkeyCounter: String = "",
         passkeyDiscoverable: Bool = true,
-        passkeyCreationDate: String = ""
+        passkeyCreationDate: String = "",
+        sshPublicKey: String = "",
+        sshPrivateKey: String = "",
+        sshKeyFingerprint: String = ""
     ) {
         self.remoteID = remoteID
         self.kind = kind
@@ -194,6 +203,9 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.passkeyCounter = passkeyCounter
         self.passkeyDiscoverable = passkeyDiscoverable
         self.passkeyCreationDate = passkeyCreationDate
+        self.sshPublicKey = sshPublicKey
+        self.sshPrivateKey = sshPrivateKey
+        self.sshKeyFingerprint = sshKeyFingerprint
     }
 
     public var redactedSummary: String {
@@ -410,6 +422,9 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
     public let passkeyCounter: String
     public let passkeyDiscoverable: Bool
     public let passkeyCreationDate: String
+    public let sshPublicKey: String
+    public let sshPrivateKey: String
+    public let sshKeyFingerprint: String
 
     public init(
         localID: String,
@@ -441,7 +456,10 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         passkeyPublicKeyAlgorithm: String = "",
         passkeyCounter: String = "",
         passkeyDiscoverable: Bool = true,
-        passkeyCreationDate: String = ""
+        passkeyCreationDate: String = "",
+        sshPublicKey: String = "",
+        sshPrivateKey: String = "",
+        sshKeyFingerprint: String = ""
     ) {
         self.localID = localID
         self.kind = kind
@@ -473,6 +491,9 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         self.passkeyCounter = passkeyCounter
         self.passkeyDiscoverable = passkeyDiscoverable
         self.passkeyCreationDate = passkeyCreationDate
+        self.sshPublicKey = sshPublicKey
+        self.sshPrivateKey = sshPrivateKey
+        self.sshKeyFingerprint = sshKeyFingerprint
     }
 
     public var syncFingerprint: String {
@@ -505,7 +526,10 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
             passkeyPublicKeyAlgorithm,
             passkeyCounter,
             passkeyDiscoverable ? "true" : "false",
-            passkeyCreationDate
+            passkeyCreationDate,
+            sshPublicKey,
+            sshPrivateKey,
+            sshKeyFingerprint
         ].joined(separator: "\u{1F}")
     }
 
@@ -2433,6 +2457,12 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 "country": try encryptedOptional(item.identityCountry, key: key),
                 "email": try encryptedOptional(item.username, key: key)
             ]
+        case .sshKey:
+            payload["sshKey"] = [
+                "privateKey": try encryptedOptional(item.sshPrivateKey, key: key),
+                "publicKey": try encryptedOptional(item.sshPublicKey, key: key),
+                "keyFingerprint": try encryptedOptional(item.sshKeyFingerprint, key: key)
+            ]
         }
 
         return payload
@@ -2474,6 +2504,8 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             3
         case .identity:
             4
+        case .sshKey:
+            5
         }
     }
 
@@ -2661,6 +2693,7 @@ private enum BitwardenVaultSyncSnapshotParser {
             let login = dictionary(cipher, "login", "Login")
             let card = dictionary(cipher, "card", "Card")
             let identity = dictionary(cipher, "identity", "Identity")
+            let sshKey = dictionary(cipher, "sshKey", "SshKey", "SSHKey")
             let fido2Credential = array(login, "fido2Credentials", "Fido2Credentials").first ?? [:]
             let type = int(cipher, "type", "Type") ?? 1
             let kind = itemKind(for: type, hasFido2Credential: !fido2Credential.isEmpty)
@@ -2712,7 +2745,10 @@ private enum BitwardenVaultSyncSnapshotParser {
                 passkeyPublicKeyAlgorithm: decryptedString(fido2Credential, "keyAlgorithm", "KeyAlgorithm", key: effectiveKey) ?? "",
                 passkeyCounter: decryptedString(fido2Credential, "counter", "Counter", key: effectiveKey) ?? "",
                 passkeyDiscoverable: passkeyBoolean(decryptedString(fido2Credential, "discoverable", "Discoverable", key: effectiveKey)),
-                passkeyCreationDate: string(fido2Credential, "creationDate", "CreationDate") ?? ""
+                passkeyCreationDate: string(fido2Credential, "creationDate", "CreationDate") ?? "",
+                sshPublicKey: decryptedString(sshKey, "publicKey", "PublicKey", key: effectiveKey) ?? "",
+                sshPrivateKey: decryptedString(sshKey, "privateKey", "PrivateKey", key: effectiveKey) ?? "",
+                sshKeyFingerprint: decryptedString(sshKey, "keyFingerprint", "KeyFingerprint", "fingerprint", "Fingerprint", key: effectiveKey) ?? ""
             )
         }
         let sendItems = sends.compactMap { send -> BitwardenSendSyncItem? in
@@ -2757,6 +2793,8 @@ private enum BitwardenVaultSyncSnapshotParser {
             .card
         case 4:
             .identity
+        case 5:
+            .sshKey
         default:
             hasFido2Credential ? .passkey : .login
         }
