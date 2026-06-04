@@ -1332,6 +1332,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(capabilities["ProvidesPasswords"] as? Bool, true)
         XCTAssertEqual(capabilities["ProvidesPasskeys"] as? Bool, true)
+        XCTAssertEqual(capabilities["SupportsSavePasswordCredentials"] as? Bool, true)
     }
 
     func testAutoFillExtensionCompletesPasskeyRegistrationAndAssertionRequests() throws {
@@ -1346,6 +1347,92 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(source.contains("completeAssertionRequest"))
         XCTAssertTrue(source.contains("saveCredentialIdentities"))
         XCTAssertFalse(source.contains("Passkey 认证需要 Monica 完成签名能力后提供"))
+    }
+
+    func testAutoFillExtensionPersistsSystemSavePasswordRequestsForAppImport() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("prepareInterface(for savePasswordRequest"))
+        XCTAssertTrue(source.contains("performWithoutUserInteractionIfPossible(savePasswordRequest"))
+        XCTAssertTrue(source.contains("AppAutoFillCredentialSaveInboxStore"))
+        XCTAssertTrue(source.contains("saveIncomingRequest"))
+        XCTAssertFalse(source.contains("AutoFill 保存需要主 App 手动录入"))
+    }
+
+    func testAutoFillSaveInboxPersistsPendingRequestWithoutManifestSecrets() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-autofill-save-\(UUID().uuidString)", isDirectory: true)
+        let store = AppAutoFillCredentialSaveInboxStore(containerURL: directory)
+        let request = AppAutoFillCredentialSaveRequest(
+            serviceIdentifier: "https://accounts.example.com/login?token=secret-query",
+            username: "saved-user@example.com",
+            password: "autofill-generated-secret",
+            title: "Example Accounts"
+        )
+
+        try store.saveIncomingRequest(request, now: Date(timeIntervalSince1970: 1_800_730_000))
+
+        XCTAssertEqual(try store.loadPendingSaveRequests(), [request])
+        let manifest = try String(contentsOf: store.manifestURL, encoding: .utf8)
+        XCTAssertFalse(manifest.contains("saved-user@example.com"))
+        XCTAssertFalse(manifest.contains("autofill-generated-secret"))
+        XCTAssertFalse(manifest.contains("secret-query"))
+        try store.clearPendingSaveRequests()
+        XCTAssertEqual(try store.loadPendingSaveRequests(), [])
+    }
+
+    func testImportPendingAutoFillSaveRequestsCreatesLoginAndClearsInbox() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-autofill-save-import-\(UUID().uuidString)", isDirectory: true)
+        let store = AppAutoFillCredentialSaveInboxStore(containerURL: directory)
+        try store.saveIncomingRequest(
+            AppAutoFillCredentialSaveRequest(
+                serviceIdentifier: "https://example.com/login?token=secret-query",
+                username: "saved-user@example.com",
+                password: "autofill-generated-secret",
+                title: "Example Login"
+            )
+        )
+        let indexStore = RecordingAutoFillEncryptedIndexStore()
+        let secretStore = RecordingAutoFillCredentialSecretStore()
+        let keyMaterial = AutoFillIndexKeyMaterial(
+            vaultID: "created-vault",
+            keyIdentifier: "autofill-key-1",
+            keyMaterial: Data(repeating: 43, count: 32),
+            createdAt: Date(timeIntervalSince1970: 1_800_740_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            autoFillIndexStore: indexStore,
+            autoFillCredentialSecretStore: secretStore,
+            autoFillIndexKeyMaterialProvider: { _ in keyMaterial }
+        )
+        try unlockNewVault(model)
+
+        let importedCount = try model.importPendingAutoFillSaveRequests(
+            inboxStore: store,
+            projectTitle: "Personal"
+        )
+
+        XCTAssertEqual(importedCount, 1)
+        XCTAssertEqual(model.loginEntries.first?.title, "Example Login")
+        XCTAssertEqual(model.loginEntries.first?.username, "saved-user@example.com")
+        XCTAssertEqual(model.loginEntries.first?.password, "autofill-generated-secret")
+        XCTAssertEqual(model.autoFillIndexState, .succeeded(1))
+        XCTAssertEqual(indexStore.savedIndexes.last?.records.count, 1)
+        XCTAssertEqual(secretStore.savedSnapshots.last?.records.count, 1)
+        XCTAssertEqual(try store.loadPendingSaveRequests(), [])
+
+        let userVisibleText = ([model.entryOperationState.label] + model.operationTimelineEvents.map(\.detail))
+            .joined(separator: " ")
+        XCTAssertFalse(userVisibleText.contains("saved-user@example.com"))
+        XCTAssertFalse(userVisibleText.contains("autofill-generated-secret"))
+        XCTAssertFalse(userVisibleText.contains("secret-query"))
     }
 
     func testSystemPasskeyRegistrationCreatesVaultMetadataWithoutTransientSecrets() throws {

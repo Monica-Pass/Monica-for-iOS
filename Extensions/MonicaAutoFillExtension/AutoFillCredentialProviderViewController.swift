@@ -83,6 +83,16 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         configureStatusView(title: "Monica Passkey", status: "Passkey 注册请求已收到")
     }
 
+    @available(iOS 26.2, *)
+    override func performWithoutUserInteractionIfPossible(savePasswordRequest: ASSavePasswordRequest) {
+        persistAutoFillSaveRequest(savePasswordRequest, allowsCompletion: true)
+    }
+
+    @available(iOS 26.2, *)
+    override func prepareInterface(for savePasswordRequest: ASSavePasswordRequest) {
+        persistAutoFillSaveRequest(savePasswordRequest, allowsCompletion: true)
+    }
+
     deinit {
         loadTask?.cancel()
     }
@@ -346,6 +356,40 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         )
         ASCredentialIdentityStore.shared.saveCredentialIdentities([identity]) { _, _ in
             // Best-effort system discovery; the private key is already persisted in Keychain.
+        }
+    }
+
+    @available(iOS 26.2, *)
+    private func persistAutoFillSaveRequest(
+        _ savePasswordRequest: ASSavePasswordRequest,
+        allowsCompletion: Bool
+    ) {
+        do {
+            guard let inboxStore = AppAutoFillCredentialSaveInboxStore(
+                appGroupIdentifier: appGroupIdentifier
+            ) else {
+                throw AutoFillExtensionError.appGroupUnavailable
+            }
+            let request = AppAutoFillCredentialSaveRequest(
+                serviceIdentifier: savePasswordRequest.serviceIdentifier.identifier,
+                username: savePasswordRequest.credential.user,
+                password: savePasswordRequest.credential.password,
+                title: savePasswordRequest.title ?? ""
+            )
+            try inboxStore.saveIncomingRequest(request)
+            configureStatusView(
+                title: "Monica",
+                status: "AutoFill 保存请求已交给 Monica"
+            )
+            if allowsCompletion {
+                extensionContext.completeSavePasswordRequest(completionHandler: nil)
+            }
+        } catch {
+            configureStatusView(
+                title: "Monica",
+                status: "AutoFill 保存失败，请稍后在 Monica 中重试"
+            )
+            cancelRequest(code: ASExtensionError.Code.failed)
         }
     }
 

@@ -536,25 +536,6 @@ struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
     }
 }
 
-struct AppAutoFillCredentialSaveRequest: Sendable, Equatable {
-    let serviceIdentifier: String
-    let username: String
-    let password: String
-    let title: String
-
-    init(
-        serviceIdentifier: String,
-        username: String,
-        password: String,
-        title: String = ""
-    ) {
-        self.serviceIdentifier = serviceIdentifier
-        self.username = username
-        self.password = password
-        self.title = title
-    }
-}
-
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
 
@@ -4807,6 +4788,24 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    @discardableResult
+    func importPendingAutoFillSaveRequests(
+        inboxStore: AppAutoFillCredentialSaveInboxStore,
+        projectTitle: String
+    ) throws -> Int {
+        let requests = try inboxStore.loadPendingSaveRequests()
+        guard !requests.isEmpty else {
+            return 0
+        }
+
+        for request in requests {
+            try saveAutoFillCredential(request, projectTitle: projectTitle)
+        }
+        try inboxStore.clearPendingSaveRequests()
+        entryOperationState = .succeeded("AutoFill 已导入 \(requests.count) 个保存请求")
+        return requests.count
     }
 
     func generateSelectedLoginPassword() throws {
@@ -10496,6 +10495,7 @@ struct AppRootView: View {
                                 deviceID: environment.localDeviceIdentifier,
                                 fallbackDirectory: vaultDirectory
                             )
+                            importPendingAutoFillSaveRequests()
                         }
                     },
                     createVault: createLocalVault,
@@ -10529,6 +10529,7 @@ struct AppRootView: View {
             session.handleScenePhaseChange(phase)
             if phase == .active {
                 restoreOneDriveAuthenticationSessionIfAvailable()
+                importPendingAutoFillSaveRequests()
             }
         }
         .onOpenURL { url in
@@ -10538,6 +10539,7 @@ struct AppRootView: View {
         }
         .task {
             restoreOneDriveAuthenticationSessionIfAvailable()
+            importPendingAutoFillSaveRequests()
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(
@@ -10564,6 +10566,22 @@ struct AppRootView: View {
         }
         Task {
             try? await session.restoreOneDriveAuthenticationSession()
+        }
+    }
+
+    private func importPendingAutoFillSaveRequests() {
+        guard session.vaultState == .unlocked,
+              let inboxStore = AppAutoFillCredentialSaveInboxStore()
+        else {
+            return
+        }
+        do {
+            try session.importPendingAutoFillSaveRequests(
+                inboxStore: inboxStore,
+                projectTitle: session.activeVaultName ?? "个人"
+            )
+        } catch {
+            // AppSessionModel owns user-visible failure state.
         }
     }
 
@@ -10654,6 +10672,7 @@ struct AppRootView: View {
                 in: vaultDirectory,
                 deviceID: environment.localDeviceIdentifier
             )
+            importPendingAutoFillSaveRequests()
         } catch {
             // AppSessionModel owns user-visible failure state.
         }
@@ -10676,6 +10695,7 @@ struct AppRootView: View {
                     deviceID: environment.localDeviceIdentifier,
                     fallbackDirectory: vaultDirectory
                 )
+                importPendingAutoFillSaveRequests()
             }
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -10695,6 +10715,7 @@ struct AppRootView: View {
                 at: fileURL,
                 deviceID: environment.localDeviceIdentifier
             )
+            importPendingAutoFillSaveRequests()
         } catch {
             // AppSessionModel owns user-visible failure state.
         }
