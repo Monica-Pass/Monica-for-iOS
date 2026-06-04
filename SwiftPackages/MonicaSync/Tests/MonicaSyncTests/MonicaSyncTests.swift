@@ -684,6 +684,207 @@ import Foundation
     }
 }
 
+@Test func bitwardenVaultSyncProviderPushesEncryptedSendMutationsThroughRealRestEndpoints() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "fresh-access-token-secret",
+            refreshToken: "refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: #"{"Id":"created-send-secret-id","RevisionDate":"2026-06-04T09:00:00Z"}"#
+    )
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: #"{"Id":"updated-send-secret-id","RevisionDate":"2026-06-04T09:05:00Z"}"#
+    )
+    vaultTransport.enqueue(statusCode: 204, body: "")
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let result = try await provider.pushMutations([
+        .upsertEncryptedSend(
+            localID: "local-create-secret-id",
+            remoteID: nil,
+            key: "2.encrypted-key-secret",
+            name: "2.encrypted-name-secret",
+            notes: "2.encrypted-notes-secret",
+            text: "2.encrypted-text-secret",
+            deletionDate: "2026-06-11T00:00:00Z",
+            expirationDate: "2026-06-05T00:00:00Z",
+            maxAccessCount: 3
+        ),
+        .upsertEncryptedSend(
+            localID: "local-update-secret-id",
+            remoteID: "remote-update-secret-id",
+            key: "2.encrypted-update-key-secret",
+            name: "2.encrypted-update-name-secret",
+            notes: nil,
+            text: "2.encrypted-update-text-secret",
+            deletionDate: "2026-06-12T00:00:00Z",
+            expirationDate: nil,
+            maxAccessCount: nil
+        ),
+        .deleteSend(
+            localID: "local-delete-secret-id",
+            remoteID: "remote-delete-secret-id",
+            title: "Deleted Send Secret"
+        )
+    ])
+
+    #expect(result.acceptedMutationCount == 3)
+    #expect(result.conflicts.isEmpty)
+    #expect(result.revision == "2026-06-04T09:05:00Z")
+    #expect(vaultTransport.requests.map(\.method) == ["POST", "PUT", "DELETE"])
+    #expect(vaultTransport.requests.map { $0.url.absoluteString } == [
+        "https://api.bitwarden.com/sends",
+        "https://api.bitwarden.com/sends/remote-update-secret-id",
+        "https://api.bitwarden.com/sends/remote-delete-secret-id"
+    ])
+    vaultTransport.requests.forEach { request in
+        #expect(request.headers["Authorization"] == "Bearer fresh-access-token-secret")
+        #expect(request.headers["Accept"] == "application/json")
+    }
+    #expect(vaultTransport.requests[0].headers["Content-Type"] == "application/json")
+    #expect(vaultTransport.requests[1].headers["Content-Type"] == "application/json")
+    #expect(vaultTransport.requests[2].body == nil)
+
+    let createBody = try decodedJSONDictionary(vaultTransport.requests[0].body)
+    #expect(createBody["key"] as? String == "2.encrypted-key-secret")
+    #expect(createBody["name"] as? String == "2.encrypted-name-secret")
+    #expect(createBody["notes"] as? String == "2.encrypted-notes-secret")
+    #expect(createBody["type"] as? Int == 0)
+    #expect(createBody["deletionDate"] as? String == "2026-06-11T00:00:00Z")
+    #expect(createBody["expirationDate"] as? String == "2026-06-05T00:00:00Z")
+    #expect(createBody["maxAccessCount"] as? Int == 3)
+    let createText = try #require(createBody["text"] as? [String: Any])
+    #expect(createText["text"] as? String == "2.encrypted-text-secret")
+    #expect(createText["hidden"] as? Bool == false)
+
+    let updateBody = try decodedJSONDictionary(vaultTransport.requests[1].body)
+    #expect(updateBody["key"] as? String == "2.encrypted-update-key-secret")
+    #expect(updateBody["name"] as? String == "2.encrypted-update-name-secret")
+    #expect(updateBody["notes"] is NSNull)
+    #expect(updateBody["expirationDate"] is NSNull)
+    #expect(updateBody["maxAccessCount"] is NSNull)
+    let updateText = try #require(updateBody["text"] as? [String: Any])
+    #expect(updateText["text"] as? String == "2.encrypted-update-text-secret")
+
+    let visibleText = (
+        [result.redactedSummary]
+            + [
+                BitwardenSyncMutation.upsertEncryptedSend(
+                    localID: "local-create-secret-id",
+                    remoteID: nil,
+                    key: "2.encrypted-key-secret",
+                    name: "2.encrypted-name-secret",
+                    notes: "2.encrypted-notes-secret",
+                    text: "2.encrypted-text-secret",
+                    deletionDate: "2026-06-11T00:00:00Z",
+                    expirationDate: "2026-06-05T00:00:00Z",
+                    maxAccessCount: 3
+                ).redactedSummary
+            ]
+    ).joined(separator: " ")
+    [
+        "fresh-access-token-secret",
+        "local-create-secret-id",
+        "encrypted-key-secret",
+        "encrypted-name-secret",
+        "encrypted-text-secret",
+        "remote-update-secret-id"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
+@Test func bitwardenVaultSyncProviderProtectsPlaintextSendMutationsAndMapsPushFailures() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "fresh-access-token-secret",
+            refreshToken: "refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let plaintextTransport = RecordingBitwardenVaultSyncTransport()
+    let plaintextProvider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: plaintextTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    await #expect(throws: BitwardenSyncProviderError.unsupportedOperation) {
+        _ = try await plaintextProvider.pushMutations([
+            .upsertSend(
+                localID: "local-send-secret-id",
+                remoteID: nil,
+                title: "Plaintext Title",
+                body: "plaintext-body-secret",
+                notes: nil,
+                expiresAt: "",
+                maxViews: 1
+            )
+        ])
+    }
+    #expect(plaintextTransport.requests.isEmpty)
+
+    let unauthorizedTransport = RecordingBitwardenVaultSyncTransport()
+    unauthorizedTransport.enqueue(statusCode: 403, body: "{}")
+    let unauthorizedProvider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: unauthorizedTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        _ = try await unauthorizedProvider.pushMutations([
+            .deleteSend(localID: "local-delete-secret-id", remoteID: "remote-delete-secret-id", title: "Delete")
+        ])
+    }
+
+    let failingTransport = RecordingBitwardenVaultSyncTransport()
+    failingTransport.enqueue(statusCode: 500, body: "{}")
+    let failingProvider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: failingTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    await #expect(throws: BitwardenSyncProviderError.serverRejected(statusCode: 500)) {
+        _ = try await failingProvider.pushMutations([
+            .deleteSend(localID: "local-delete-secret-id", remoteID: "remote-delete-secret-id", title: "Delete")
+        ])
+    }
+
+    let alreadyDeletedTransport = RecordingBitwardenVaultSyncTransport()
+    alreadyDeletedTransport.enqueue(statusCode: 404, body: "{}")
+    let alreadyDeletedProvider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: alreadyDeletedTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    let result = try await alreadyDeletedProvider.pushMutations([
+        .deleteSend(localID: "local-delete-secret-id", remoteID: "remote-delete-secret-id", title: "Delete")
+    ])
+    #expect(result.acceptedMutationCount == 1)
+}
+
 @Test func bitwardenVaultSyncProviderMapsAuthenticationAndServerFailures() async throws {
     let missingStore = MemoryBitwardenAuthenticationSessionStore()
     let missingProvider = BitwardenVaultSyncProvider(
@@ -971,6 +1172,11 @@ private final class RecordingBitwardenVaultSyncTransport: BitwardenVaultSyncTran
         requests.append(request)
         return responses.removeFirst()
     }
+}
+
+private func decodedJSONDictionary(_ data: Data?) throws -> [String: Any] {
+    let data = try #require(data)
+    return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
 }
 
 private final class RecordingOneDriveAccessTokenProvider: OneDriveAccessTokenProvider {

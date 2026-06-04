@@ -188,12 +188,25 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
         expiresAt: String,
         maxViews: Int
     )
+    case upsertEncryptedSend(
+        localID: String,
+        remoteID: String?,
+        key: String,
+        name: String,
+        notes: String?,
+        text: String,
+        deletionDate: String,
+        expirationDate: String?,
+        maxAccessCount: Int?
+    )
     case deleteSend(localID: String, remoteID: String?, title: String)
 
     public var redactedSummary: String {
         switch self {
         case .upsertSend(_, _, let title, _, _, _, let maxViews):
             "upsert Send \(sanitizedBitwardenTitle(title)) \(maxViews) 次"
+        case .upsertEncryptedSend:
+            "upsert encrypted Send"
         case .deleteSend(_, _, let title):
             "delete Send \(sanitizedBitwardenTitle(title))"
         }
@@ -653,11 +666,13 @@ public struct BitwardenVaultSyncRequest: Sendable, Equatable {
     public let method: String
     public let url: URL
     public let headers: [String: String]
+    public let body: Data?
 
-    public init(method: String, url: URL, headers: [String: String]) {
+    public init(method: String, url: URL, headers: [String: String], body: Data? = nil) {
         self.method = method
         self.url = url
         self.headers = headers
+        self.body = body
     }
 }
 
@@ -721,12 +736,42 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
     }
 
     public func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult {
-        guard mutations.isEmpty else {
-            throw BitwardenSyncProviderError.unsupportedOperation
+        guard let session = try sessionStore.loadSession() else {
+            throw BitwardenSyncProviderError.authenticationRequired
         }
-        let revision = (try? sessionStore.loadSession()?.expiresAt.timeIntervalSince1970)
-            .map { String($0) } ?? ""
-        return BitwardenSyncPushResult(acceptedMutationCount: 0, conflicts: [], revision: revision)
+        guard !mutations.isEmpty else {
+            let revision = String(session.expiresAt.timeIntervalSince1970)
+            return BitwardenSyncPushResult(acceptedMutationCount: 0, conflicts: [], revision: revision)
+        }
+        let accessToken = try await accessTokenProvider.accessToken()
+        var acceptedMutationCount = 0
+        var latestRevision = ""
+        for mutation in mutations {
+            let response = try await vaultTransport.send(
+                try Self.request(
+                    for: mutation,
+                    apiURL: session.apiURL,
+                    accessToken: accessToken
+                )
+            )
+            if response.statusCode == 401 || response.statusCode == 403 {
+                throw BitwardenSyncProviderError.authenticationRequired
+            }
+            if case .deleteSend = mutation, response.statusCode == 404 {
+                acceptedMutationCount += 1
+                continue
+            }
+            guard (200...299).contains(response.statusCode) else {
+                throw BitwardenSyncProviderError.serverRejected(statusCode: response.statusCode)
+            }
+            acceptedMutationCount += 1
+            latestRevision = Self.revision(from: response) ?? latestRevision
+        }
+        return BitwardenSyncPushResult(
+            acceptedMutationCount: acceptedMutationCount,
+            conflicts: [],
+            revision: latestRevision
+        )
     }
 
     private static func syncURL(apiURL: URL) -> URL {
@@ -735,6 +780,96 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         components?.path = "/" + ([basePath, "sync"].filter { !$0.isEmpty }).joined(separator: "/")
         components?.queryItems = [URLQueryItem(name: "excludeDomains", value: "true")]
         return components?.url ?? apiURL
+    }
+
+    private static func request(
+        for mutation: BitwardenSyncMutation,
+        apiURL: URL,
+        accessToken: String
+    ) throws -> BitwardenVaultSyncRequest {
+        switch mutation {
+        case .upsertSend:
+            throw BitwardenSyncProviderError.unsupportedOperation
+        case .upsertEncryptedSend(_, let remoteID, let key, let name, let notes, let text, let deletionDate, let expirationDate, let maxAccessCount):
+            let payload: [String: Any] = [
+                "key": key,
+                "type": 0,
+                "name": name,
+                "notes": notes.map { $0 as Any } ?? NSNull(),
+                "password": NSNull(),
+                "disabled": false,
+                "hideEmail": false,
+                "deletionDate": deletionDate,
+                "expirationDate": expirationDate.map { $0 as Any } ?? NSNull(),
+                "maxAccessCount": maxAccessCount.map { $0 as Any } ?? NSNull(),
+                "text": [
+                    "text": text,
+                    "hidden": false
+                ]
+            ]
+            let body = try JSONSerialization.data(
+                withJSONObject: payload,
+                options: [.sortedKeys]
+            )
+            return BitwardenVaultSyncRequest(
+                method: remoteID == nil ? "POST" : "PUT",
+                url: sendURL(apiURL: apiURL, remoteID: remoteID),
+                headers: jsonHeaders(accessToken: accessToken),
+                body: body
+            )
+        case .deleteSend(_, let remoteID, _):
+            guard let remoteID, !remoteID.isEmpty else {
+                throw BitwardenSyncProviderError.unsupportedOperation
+            }
+            return BitwardenVaultSyncRequest(
+                method: "DELETE",
+                url: sendURL(apiURL: apiURL, remoteID: remoteID),
+                headers: [
+                    "Authorization": "Bearer \(accessToken)",
+                    "Accept": "application/json"
+                ]
+            )
+        }
+    }
+
+    private static func sendURL(apiURL: URL, remoteID: String?) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + ([basePath, "sends", remoteID].compactMap { value -> String? in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }).joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
+    private static func jsonHeaders(accessToken: String) -> [String: String] {
+        [
+            "Authorization": "Bearer \(accessToken)",
+            "Accept": "application/json",
+            "Content-Type": "application/json"
+        ]
+    }
+
+    private static func revision(from response: BitwardenVaultSyncResponse) -> String? {
+        guard !response.body.isEmpty,
+              let root = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any]
+        else {
+            return response.headers["ETag"]
+        }
+        return jsonString(root, "revisionDate", "RevisionDate") ?? response.headers["ETag"]
+    }
+
+    private static func jsonString(_ json: [String: Any], _ keys: String...) -> String? {
+        for key in keys {
+            if let value = json[key] as? String {
+                return value
+            }
+            if let number = json[key] as? NSNumber {
+                return number.stringValue
+            }
+        }
+        return nil
     }
 }
 
@@ -751,6 +886,7 @@ public final class URLSessionBitwardenVaultSyncTransport: BitwardenVaultSyncTran
         request.headers.forEach { key, value in
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
+        urlRequest.httpBody = request.body
         let (data, response) = try await session.data(for: urlRequest)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw BitwardenSyncProviderError.unsupportedOperation
