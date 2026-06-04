@@ -828,6 +828,7 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     let remoteItemCount: Int
     let remoteSendCount: Int
     let remoteLoginCount: Int
+    let remotePasskeyCount: Int
     let remoteNoteCount: Int
     let remoteCardCount: Int
     let remoteIdentityCount: Int
@@ -840,6 +841,7 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
         self.remoteItemCount = snapshot.items.count
         self.remoteSendCount = snapshot.sends.count
         self.remoteLoginCount = snapshot.items.filter { $0.kind == .login }.count
+        self.remotePasskeyCount = snapshot.items.filter { $0.kind == .passkey }.count
         self.remoteNoteCount = snapshot.items.filter { $0.kind == .secureNote }.count
         self.remoteCardCount = snapshot.items.filter { $0.kind == .card }.count
         self.remoteIdentityCount = snapshot.items.filter { $0.kind == .identity }.count
@@ -850,7 +852,16 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     }
 
     var kindSummary: String {
-        "登录 \(remoteLoginCount)，笔记 \(remoteNoteCount)，卡片 \(remoteCardCount)，身份 \(remoteIdentityCount)"
+        var parts = ["登录 \(remoteLoginCount)"]
+        if remotePasskeyCount > 0 {
+            parts.append("通行密钥 \(remotePasskeyCount)")
+        }
+        parts += [
+            "笔记 \(remoteNoteCount)",
+            "卡片 \(remoteCardCount)",
+            "身份 \(remoteIdentityCount)"
+        ]
+        return parts.joined(separator: "，")
     }
 
     var attachmentSummary: String {
@@ -9009,6 +9020,7 @@ final class AppSessionModel {
         var existingNotes = try entryRepository.listNoteEntries(projectID: projectID)
         var existingCards = try entryRepository.listCardEntries(projectID: projectID)
         var existingIdentities = try entryRepository.listIdentityEntries(projectID: projectID)
+        var existingPasskeys = try entryRepository.listPasskeyEntries(projectID: projectID)
         var existingTotps = try entryRepository.listTotpEntries(projectID: projectID)
         var existingSends = try entryRepository.listSendEntries(projectID: projectID)
         var itemStates = Dictionary(
@@ -9103,6 +9115,40 @@ final class AppSessionModel {
                     )
                     existingTotps.append(created)
                 }
+            case .passkey:
+                let localEntry: LocalPasskeyEntry
+                if targetProjectID == projectID,
+                   let existing = existingPasskeys.first(where: { isSameBitwardenPasskey($0, item) }) {
+                    localEntry = existing
+                } else {
+                    localEntry = try entryRepository.createPasskeyEntry(
+                        projectID: targetProjectID,
+                        draft: LocalPasskeyEntryDraft(
+                            title: bitwardenImportTitle(item.title),
+                            relyingPartyID: bitwardenPasskeyRelyingPartyID(for: item),
+                            username: item.username,
+                            userHandle: item.passkeyUserHandle,
+                            credentialID: item.passkeyCredentialID,
+                            publicKeyCOSE: item.passkeyPublicKeyCOSE,
+                            privateKeyReference: item.passkeyPrivateKeyReference,
+                            notes: item.notes ?? ""
+                        )
+                    )
+                    if targetProjectID == projectID {
+                        existingPasskeys.append(localEntry)
+                    }
+                }
+                let localItem = bitwardenLocalItem(from: localEntry, folderID: item.folderID, folderName: item.folderName)
+                itemStates[localEntry.id] = bitwardenItemSyncState(
+                    localItem: localItem,
+                    remoteItem: item
+                )
+                try reconcileBitwardenAttachments(
+                    item.attachments,
+                    localEntryID: localEntry.id,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
             case .secureNote:
                 let localEntry: LocalNoteEntry
                 if targetProjectID == projectID,
@@ -9263,6 +9309,13 @@ final class AppSessionModel {
             && entry.url == item.url
     }
 
+    private func isSameBitwardenPasskey(_ entry: LocalPasskeyEntry, _ item: BitwardenSyncItem) -> Bool {
+        entry.title == bitwardenImportTitle(item.title)
+            && entry.relyingPartyID == bitwardenPasskeyRelyingPartyID(for: item)
+            && entry.username == item.username
+            && entry.credentialID == item.passkeyCredentialID
+    }
+
     private func isSameBitwardenSend(_ entry: LocalSendEntry, _ send: BitwardenSendSyncItem) -> Bool {
         entry.title == bitwardenImportTitle(send.title)
             && entry.body == send.body
@@ -9274,6 +9327,16 @@ final class AppSessionModel {
     private func bitwardenImportTitle(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Bitwarden 项目" : trimmed
+    }
+
+    private func bitwardenPasskeyRelyingPartyID(for item: BitwardenSyncItem) -> String {
+        if let relyingPartyID = item.passkeyRelyingPartyID.nonBlankValue {
+            return relyingPartyID
+        }
+        guard let host = URLComponents(string: item.url)?.host?.nonBlankValue else {
+            return ""
+        }
+        return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
     private func reconcileBitwardenAttachments(
@@ -9470,6 +9533,29 @@ final class AppSessionModel {
         )
     }
 
+    private func bitwardenLocalItem(from entry: LocalPasskeyEntry, folderID: String? = nil, folderName: String? = nil) -> BitwardenLocalItemSyncItem {
+        let relyingPartyID = entry.relyingPartyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .passkey,
+            title: entry.title,
+            username: entry.username,
+            url: relyingPartyID.isEmpty ? "" : "https://\(relyingPartyID)",
+            notes: entry.notes,
+            folderID: folderID,
+            folderName: folderName,
+            passkeyRelyingPartyID: relyingPartyID,
+            passkeyRelyingPartyName: entry.title,
+            passkeyCredentialID: entry.credentialID,
+            passkeyUserHandle: entry.userHandle,
+            passkeyPublicKeyCOSE: entry.publicKeyCOSE,
+            passkeyPrivateKeyReference: entry.privateKeyReference,
+            passkeyPublicKeyAlgorithm: "ECDSA",
+            passkeyCounter: "0",
+            passkeyDiscoverable: true
+        )
+    }
+
     private func makeBitwardenItemSyncPlan(
         remoteItems: [BitwardenSyncItem],
         previousStates: [BitwardenItemSyncState],
@@ -9488,6 +9574,9 @@ final class AppSessionModel {
         let localIdentityItems: [BitwardenLocalItemSyncItem] = identityEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID)
         }
+        let localPasskeyItems: [BitwardenLocalItemSyncItem] = passkeyEntries.map {
+            bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
+        }
         let deletedLoginItems: [BitwardenLocalItemSyncItem] = deletedLoginEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
         }
@@ -9500,8 +9589,11 @@ final class AppSessionModel {
         let deletedIdentityItems: [BitwardenLocalItemSyncItem] = deletedIdentityEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID)
         }
-        let localItems = localLoginItems + localNoteItems + localCardItems + localIdentityItems
-        let deletedLocalItems = deletedLoginItems + deletedNoteItems + deletedCardItems + deletedIdentityItems
+        let deletedPasskeyItems: [BitwardenLocalItemSyncItem] = deletedPasskeyEntries.map {
+            bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
+        }
+        let localItems = localLoginItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems
+        let deletedLocalItems = deletedLoginItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems
 
         return BitwardenItemSyncPlanner().plan(
             localItems: localItems,

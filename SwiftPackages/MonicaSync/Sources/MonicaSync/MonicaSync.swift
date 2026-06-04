@@ -9,6 +9,7 @@ public enum MonicaSyncBaseline {
 
 public enum BitwardenSyncItemKind: String, Sendable, Equatable, Hashable, Codable {
     case login
+    case passkey
     case secureNote
     case card
     case identity
@@ -17,6 +18,8 @@ public enum BitwardenSyncItemKind: String, Sendable, Equatable, Hashable, Codabl
         switch self {
         case .login:
             "login"
+        case .passkey:
+            "passkey"
         case .secureNote:
             "note"
         case .card:
@@ -110,6 +113,16 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public let identityDocumentNumber: String
     public let identityIssuer: String
     public let identityCountry: String
+    public let passkeyRelyingPartyID: String
+    public let passkeyRelyingPartyName: String
+    public let passkeyCredentialID: String
+    public let passkeyUserHandle: String
+    public let passkeyPublicKeyCOSE: String
+    public let passkeyPrivateKeyReference: String
+    public let passkeyPublicKeyAlgorithm: String
+    public let passkeyCounter: String
+    public let passkeyDiscoverable: Bool
+    public let passkeyCreationDate: String
 
     public init(
         remoteID: String,
@@ -135,7 +148,17 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         identityFullName: String = "",
         identityDocumentNumber: String = "",
         identityIssuer: String = "",
-        identityCountry: String = ""
+        identityCountry: String = "",
+        passkeyRelyingPartyID: String = "",
+        passkeyRelyingPartyName: String = "",
+        passkeyCredentialID: String = "",
+        passkeyUserHandle: String = "",
+        passkeyPublicKeyCOSE: String = "",
+        passkeyPrivateKeyReference: String = "",
+        passkeyPublicKeyAlgorithm: String = "",
+        passkeyCounter: String = "",
+        passkeyDiscoverable: Bool = true,
+        passkeyCreationDate: String = ""
     ) {
         self.remoteID = remoteID
         self.kind = kind
@@ -161,6 +184,16 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.identityDocumentNumber = identityDocumentNumber
         self.identityIssuer = identityIssuer
         self.identityCountry = identityCountry
+        self.passkeyRelyingPartyID = passkeyRelyingPartyID
+        self.passkeyRelyingPartyName = passkeyRelyingPartyName
+        self.passkeyCredentialID = passkeyCredentialID
+        self.passkeyUserHandle = passkeyUserHandle
+        self.passkeyPublicKeyCOSE = passkeyPublicKeyCOSE
+        self.passkeyPrivateKeyReference = passkeyPrivateKeyReference
+        self.passkeyPublicKeyAlgorithm = passkeyPublicKeyAlgorithm
+        self.passkeyCounter = passkeyCounter
+        self.passkeyDiscoverable = passkeyDiscoverable
+        self.passkeyCreationDate = passkeyCreationDate
     }
 
     public var redactedSummary: String {
@@ -367,6 +400,16 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
     public let identityDocumentNumber: String
     public let identityIssuer: String
     public let identityCountry: String
+    public let passkeyRelyingPartyID: String
+    public let passkeyRelyingPartyName: String
+    public let passkeyCredentialID: String
+    public let passkeyUserHandle: String
+    public let passkeyPublicKeyCOSE: String
+    public let passkeyPrivateKeyReference: String
+    public let passkeyPublicKeyAlgorithm: String
+    public let passkeyCounter: String
+    public let passkeyDiscoverable: Bool
+    public let passkeyCreationDate: String
 
     public init(
         localID: String,
@@ -388,7 +431,17 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         identityFullName: String = "",
         identityDocumentNumber: String = "",
         identityIssuer: String = "",
-        identityCountry: String = ""
+        identityCountry: String = "",
+        passkeyRelyingPartyID: String = "",
+        passkeyRelyingPartyName: String = "",
+        passkeyCredentialID: String = "",
+        passkeyUserHandle: String = "",
+        passkeyPublicKeyCOSE: String = "",
+        passkeyPrivateKeyReference: String = "",
+        passkeyPublicKeyAlgorithm: String = "",
+        passkeyCounter: String = "",
+        passkeyDiscoverable: Bool = true,
+        passkeyCreationDate: String = ""
     ) {
         self.localID = localID
         self.kind = kind
@@ -410,6 +463,16 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         self.identityDocumentNumber = identityDocumentNumber
         self.identityIssuer = identityIssuer
         self.identityCountry = identityCountry
+        self.passkeyRelyingPartyID = passkeyRelyingPartyID
+        self.passkeyRelyingPartyName = passkeyRelyingPartyName
+        self.passkeyCredentialID = passkeyCredentialID
+        self.passkeyUserHandle = passkeyUserHandle
+        self.passkeyPublicKeyCOSE = passkeyPublicKeyCOSE
+        self.passkeyPrivateKeyReference = passkeyPrivateKeyReference
+        self.passkeyPublicKeyAlgorithm = passkeyPublicKeyAlgorithm
+        self.passkeyCounter = passkeyCounter
+        self.passkeyDiscoverable = passkeyDiscoverable
+        self.passkeyCreationDate = passkeyCreationDate
     }
 
     public var syncFingerprint: String {
@@ -432,7 +495,17 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
             identityFullName,
             identityDocumentNumber,
             identityIssuer,
-            identityCountry
+            identityCountry,
+            passkeyRelyingPartyID,
+            passkeyRelyingPartyName,
+            passkeyCredentialID,
+            passkeyUserHandle,
+            passkeyPublicKeyCOSE,
+            passkeyPrivateKeyReference,
+            passkeyPublicKeyAlgorithm,
+            passkeyCounter,
+            passkeyDiscoverable ? "true" : "false",
+            passkeyCreationDate
         ].joined(separator: "\u{1F}")
     }
 
@@ -2319,7 +2392,7 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         ]
 
         switch item.kind {
-        case .login:
+        case .login, .passkey:
             var login: [String: Any] = [
                 "username": try encryptedOptional(item.username, key: key),
                 "password": try encryptedOptional(item.password, key: key),
@@ -2334,6 +2407,11 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 ]
             } else {
                 login["uris"] = []
+            }
+            if item.kind == .passkey {
+                login["fido2Credentials"] = [
+                    try encryptedPasskeyCredentialPayload(for: item, key: key)
+                ]
             }
             payload["login"] = login
         case .secureNote:
@@ -2360,6 +2438,24 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         return payload
     }
 
+    private static func encryptedPasskeyCredentialPayload(for item: BitwardenLocalItemSyncItem, key: BitwardenVaultKey) throws -> [String: Any] {
+        [
+            "credentialId": try encryptedOptional(item.passkeyCredentialID, key: key),
+            "keyType": try encryptedOptional("public-key", key: key),
+            "keyAlgorithm": try encryptedOptional(item.passkeyPublicKeyAlgorithm.isEmpty ? "ECDSA" : item.passkeyPublicKeyAlgorithm, key: key),
+            "keyCurve": try encryptedOptional("P-256", key: key),
+            "keyValue": try encryptedOptional(item.passkeyPrivateKeyReference, key: key),
+            "rpId": try encryptedOptional(item.passkeyRelyingPartyID, key: key),
+            "rpName": try encryptedOptional(item.passkeyRelyingPartyName.isEmpty ? item.title : item.passkeyRelyingPartyName, key: key),
+            "counter": try encryptedOptional(item.passkeyCounter.isEmpty ? "0" : item.passkeyCounter, key: key),
+            "userHandle": try encryptedOptional(item.passkeyUserHandle, key: key),
+            "userName": try encryptedOptional(item.username, key: key),
+            "userDisplayName": try encryptedOptional(item.username, key: key),
+            "discoverable": try encryptedOptional(item.passkeyDiscoverable ? "true" : "false", key: key),
+            "creationDate": item.passkeyCreationDate.isEmpty ? ISO8601DateFormatter().string(from: Date()) : item.passkeyCreationDate
+        ]
+    }
+
     private static func encryptedOptional(_ value: String?, key: BitwardenVaultKey) throws -> Any {
         guard let value,
               !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
@@ -2370,7 +2466,7 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
 
     private static func cipherType(for kind: BitwardenSyncItemKind) -> Int {
         switch kind {
-        case .login:
+        case .login, .passkey:
             1
         case .secureNote:
             2
@@ -2553,8 +2649,6 @@ private enum BitwardenVaultSyncSnapshotParser {
         let items = ciphers.compactMap { cipher -> BitwardenSyncItem? in
             guard string(cipher, "deletedDate", "DeletedDate") == nil else { return nil }
             guard let id = string(cipher, "id", "Id"), !id.isEmpty else { return nil }
-            let type = int(cipher, "type", "Type") ?? 1
-            let kind = itemKind(for: type)
             let effectiveKey: BitwardenVaultKey?
             if let vaultKey,
                let itemKey = string(cipher, "key", "Key"),
@@ -2567,6 +2661,9 @@ private enum BitwardenVaultSyncSnapshotParser {
             let login = dictionary(cipher, "login", "Login")
             let card = dictionary(cipher, "card", "Card")
             let identity = dictionary(cipher, "identity", "Identity")
+            let fido2Credential = array(login, "fido2Credentials", "Fido2Credentials").first ?? [:]
+            let type = int(cipher, "type", "Type") ?? 1
+            let kind = itemKind(for: type, hasFido2Credential: !fido2Credential.isEmpty)
             let firstURI = array(login, "uris", "Uris").first
             let attachments = array(cipher, "attachments", "Attachments").compactMap { attachment -> BitwardenSyncAttachment? in
                 guard let attachmentID = string(attachment, "id", "Id"), !attachmentID.isEmpty else { return nil }
@@ -2578,6 +2675,7 @@ private enum BitwardenVaultSyncSnapshotParser {
                     byteCount: int(attachment, "size", "Size") ?? 0
                 )
             }
+            let notes = decryptedString(cipher, "notes", "Notes", key: effectiveKey)
             return BitwardenSyncItem(
                 remoteID: id,
                 kind: kind,
@@ -2586,7 +2684,7 @@ private enum BitwardenVaultSyncSnapshotParser {
                 url: firstURI.flatMap { decryptedString($0, "uri", "Uri", key: effectiveKey) } ?? "",
                 password: decryptedString(login, "password", "Password", key: effectiveKey),
                 totpSecret: decryptedString(login, "totp", "Totp", key: effectiveKey),
-                notes: decryptedString(cipher, "notes", "Notes", key: effectiveKey),
+                notes: notes,
                 folderID: folderID,
                 folderName: folderID.flatMap { folderNamesByID[$0] },
                 collectionNames: [],
@@ -2604,7 +2702,17 @@ private enum BitwardenVaultSyncSnapshotParser {
                     ?? decryptedString(identity, "licenseNumber", "LicenseNumber", key: effectiveKey)
                     ?? "",
                 identityIssuer: decryptedString(identity, "company", "Company", key: effectiveKey) ?? "",
-                identityCountry: decryptedString(identity, "country", "Country", key: effectiveKey) ?? ""
+                identityCountry: decryptedString(identity, "country", "Country", key: effectiveKey) ?? "",
+                passkeyRelyingPartyID: decryptedString(fido2Credential, "rpId", "RpId", key: effectiveKey) ?? "",
+                passkeyRelyingPartyName: decryptedString(fido2Credential, "rpName", "RpName", key: effectiveKey) ?? "",
+                passkeyCredentialID: decryptedString(fido2Credential, "credentialId", "CredentialId", key: effectiveKey) ?? "",
+                passkeyUserHandle: decryptedString(fido2Credential, "userHandle", "UserHandle", key: effectiveKey) ?? "",
+                passkeyPublicKeyCOSE: passkeyMetadataValue("publicKeyCOSE", notes: notes),
+                passkeyPrivateKeyReference: decryptedString(fido2Credential, "keyValue", "KeyValue", key: effectiveKey) ?? "",
+                passkeyPublicKeyAlgorithm: decryptedString(fido2Credential, "keyAlgorithm", "KeyAlgorithm", key: effectiveKey) ?? "",
+                passkeyCounter: decryptedString(fido2Credential, "counter", "Counter", key: effectiveKey) ?? "",
+                passkeyDiscoverable: passkeyBoolean(decryptedString(fido2Credential, "discoverable", "Discoverable", key: effectiveKey)),
+                passkeyCreationDate: string(fido2Credential, "creationDate", "CreationDate") ?? ""
             )
         }
         let sendItems = sends.compactMap { send -> BitwardenSendSyncItem? in
@@ -2641,7 +2749,7 @@ private enum BitwardenVaultSyncSnapshotParser {
         )
     }
 
-    private static func itemKind(for type: Int) -> BitwardenSyncItemKind {
+    private static func itemKind(for type: Int, hasFido2Credential: Bool = false) -> BitwardenSyncItemKind {
         switch type {
         case 2:
             .secureNote
@@ -2650,7 +2758,7 @@ private enum BitwardenVaultSyncSnapshotParser {
         case 4:
             .identity
         default:
-            .login
+            hasFido2Credential ? .passkey : .login
         }
     }
 
@@ -2681,6 +2789,33 @@ private enum BitwardenVaultSyncSnapshotParser {
         }
         guard let key else { return nil }
         return try? BitwardenCrypto.decryptString(rawValue, key: key)
+    }
+
+    private static func passkeyBoolean(_ value: String?) -> Bool {
+        switch value?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "false", "0", "no":
+            false
+        default:
+            true
+        }
+    }
+
+    private static func passkeyMetadataValue(_ key: String, notes: String?) -> String {
+        guard let notes,
+              notes.contains("[Monica Passkey Metadata]") else {
+            return ""
+        }
+        let lines = notes.components(separatedBy: .newlines)
+        guard let markerIndex = lines.firstIndex(of: "[Monica Passkey Metadata]") else {
+            return ""
+        }
+        let prefix = "\(key):"
+        return lines.dropFirst(markerIndex + 1)
+            .first { $0.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix(prefix) }
+            .map { line in
+                let value = line.dropFirst(prefix.count)
+                return value.trimmingCharacters(in: .whitespacesAndNewlines)
+            } ?? ""
     }
 
     private static func accountLabel(profile: [String: Any], fallback: String) -> String {

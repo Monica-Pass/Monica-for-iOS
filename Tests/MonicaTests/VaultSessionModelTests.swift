@@ -9079,6 +9079,108 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("encrypted-attachment-key-secret"))
     }
 
+    func testBitwardenSyncImportsAndPushesPasskeyFido2CipherWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-passkey-secret-id",
+                    kind: .passkey,
+                    title: "GitHub Passkey",
+                    username: "alice",
+                    url: "https://github.com",
+                    notes: "passkey-note-secret",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_020),
+                    passkeyRelyingPartyID: "github.com",
+                    passkeyRelyingPartyName: "GitHub",
+                    passkeyCredentialID: "credential-id-secret",
+                    passkeyUserHandle: "user-handle-secret",
+                    passkeyPublicKeyCOSE: "cose-public-key-secret",
+                    passkeyPrivateKeyReference: "pkcs8-private-key-secret",
+                    passkeyPublicKeyAlgorithm: "ECDSA",
+                    passkeyCounter: "7",
+                    passkeyDiscoverable: true,
+                    passkeyCreationDate: "2026-06-04T12:00:00Z"
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(acceptedMutationCount: 1)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        _ = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+
+        XCTAssertEqual(engine.createdPasskeyEntries.count, 1)
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.title, "GitHub Passkey")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.relyingPartyID, "github.com")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.username, "alice")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.userHandle, "user-handle-secret")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.credentialID, "credential-id-secret")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.publicKeyCOSE, "cose-public-key-secret")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.privateKeyReference, "pkcs8-private-key-secret")
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault").map(\.kind), [.passkey])
+
+        model.passkeyTitle = "Local Passkey"
+        model.passkeyRelyingPartyID = "example.com"
+        model.passkeyUsername = "bob"
+        model.passkeyUserHandle = "local-user-handle-secret"
+        model.passkeyCredentialID = "local-credential-id-secret"
+        model.passkeyPublicKeyCOSE = "local-cose-public-key-secret"
+        model.passkeyPrivateKeyReference = "local-pkcs8-private-key-secret"
+        model.passkeyNotes = "local-passkey-note-secret"
+        try model.createPasskeyEntry(projectTitle: "Personal")
+
+        _ = try await model.pushLocalBitwardenChanges()
+
+        guard case .upsertCipher(let item, _) = bitwarden.pushedMutations.first else {
+            XCTFail("Expected local passkey to push as cipher")
+            return
+        }
+        XCTAssertEqual(item.kind, .passkey)
+        XCTAssertEqual(item.title, "Local Passkey")
+        XCTAssertEqual(item.passkeyRelyingPartyID, "example.com")
+        XCTAssertEqual(item.passkeyCredentialID, "local-credential-id-secret")
+        XCTAssertEqual(item.passkeyUserHandle, "local-user-handle-secret")
+        XCTAssertEqual(item.passkeyPublicKeyCOSE, "local-cose-public-key-secret")
+        XCTAssertEqual(item.passkeyPrivateKeyReference, "local-pkcs8-private-key-secret")
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            bitwarden.pushedMutations.map(\.redactedSummary).joined(separator: " "),
+            try itemStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        [
+            "remote-passkey-secret-id",
+            "credential-id-secret",
+            "user-handle-secret",
+            "pkcs8-private-key-secret",
+            "cose-public-key-secret",
+            "local-credential-id-secret",
+            "local-user-handle-secret",
+            "local-pkcs8-private-key-secret",
+            "local-cose-public-key-secret",
+            "passkey-note-secret",
+            "local-passkey-note-secret"
+        ].forEach { secret in
+            XCTAssertFalse(visibleText.contains(secret))
+        }
+    }
+
     func testBitwardenPushUsesPersistedSendRemoteStateForUpdateAndDeletePlan() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
