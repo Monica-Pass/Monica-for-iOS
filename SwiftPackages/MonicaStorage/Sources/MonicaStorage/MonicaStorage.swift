@@ -5952,10 +5952,12 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
 
 public struct AndroidBackupImportedItem: Sendable, Equatable {
     public let sourceID: Int64?
+    public let deletedAt: Int64?
     public let draft: VaultCSVItemDraft
 
-    public init(sourceID: Int64?, draft: VaultCSVItemDraft) {
+    public init(sourceID: Int64?, deletedAt: Int64? = nil, draft: VaultCSVItemDraft) {
         self.sourceID = sourceID
+        self.deletedAt = deletedAt
         self.draft = draft
     }
 }
@@ -6061,17 +6063,20 @@ public struct AndroidBackupAttachmentMetadata: Sendable, Equatable, Identifiable
 public struct AndroidBackupImportReport: Sendable, Equatable {
     public let items: [VaultCSVItemDraft]
     public let importedItems: [AndroidBackupImportedItem]
+    public let deletedItems: [AndroidBackupImportedItem]
     public let attachments: [AndroidBackupAttachmentMetadata]
     public let issues: [AndroidBackupImportIssue]
 
     public init(
         items: [VaultCSVItemDraft],
         importedItems: [AndroidBackupImportedItem]? = nil,
+        deletedItems: [AndroidBackupImportedItem] = [],
         attachments: [AndroidBackupAttachmentMetadata] = [],
         issues: [AndroidBackupImportIssue]
     ) {
         self.items = items
         self.importedItems = importedItems ?? items.map { AndroidBackupImportedItem(sourceID: nil, draft: $0) }
+        self.deletedItems = deletedItems
         self.attachments = attachments
         self.issues = issues
     }
@@ -6134,6 +6139,7 @@ public enum AndroidBackupCodec {
         var jsonBackedKinds = Set<BackupKind>()
         var attachmentManifest: (path: String, data: Data)?
         var attachmentBlobDataByPath: [String: Data] = [:]
+        var deletedItems: [AndroidBackupImportedItem] = []
         var index = 0
 
         for entry in archive where entry.type == .file {
@@ -6162,6 +6168,18 @@ public enum AndroidBackupCodec {
 
             if isAttachmentManifest(path) {
                 attachmentManifest = (path: path, data: data)
+                index += 1
+                continue
+            }
+
+            if path.lowercased() == "trash/trash_passwords.json" {
+                deletedItems.append(contentsOf: parseTrashPasswords(data: data, path: path, issues: &issues))
+                index += 1
+                continue
+            }
+
+            if path.lowercased() == "trash/trash_secure_items.json" {
+                deletedItems.append(contentsOf: parseTrashSecureItems(data: data, path: path, issues: &issues))
                 index += 1
                 continue
             }
@@ -6220,6 +6238,7 @@ public enum AndroidBackupCodec {
         return AndroidBackupImportReport(
             items: items,
             importedItems: importedItems,
+            deletedItems: deletedItems,
             attachments: attachments,
             issues: issues
         )
@@ -6495,6 +6514,77 @@ public enum AndroidBackupCodec {
             return nil
         }
         return (matchedPath, blobDataByPath[matchedPath] ?? Data())
+    }
+
+    private static func parseTrashPasswords(
+        data: Data,
+        path: String,
+        issues: inout [AndroidBackupImportIssue]
+    ) -> [AndroidBackupImportedItem] {
+        do {
+            return try JSONObject.array(data: data).map { object in
+                AndroidBackupImportedItem(
+                    sourceID: object.contains("id") ? Int64(object.int("id", defaultValue: 0)) : nil,
+                    deletedAt: object.contains("deletedAt") ? Int64(object.int("deletedAt", defaultValue: 0)) : nil,
+                    draft: .login(LocalLoginEntryDraft(
+                        title: object.string("title"),
+                        username: object.string("username"),
+                        password: object.string("password"),
+                        url: object.string("website"),
+                        notes: object.string("notes")
+                    ))
+                )
+            }
+        } catch {
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 回收站密码 JSON 无法解析"))
+            return []
+        }
+    }
+
+    private static func parseTrashSecureItems(
+        data: Data,
+        path: String,
+        issues: inout [AndroidBackupImportIssue]
+    ) -> [AndroidBackupImportedItem] {
+        do {
+            return try JSONObject.array(data: data).compactMap { object in
+                let itemData = object.string("itemData")
+                let kind = trashSecureKind(from: object.string("itemType"), itemData: itemData)
+                guard let kind,
+                      let draft = parseLegacySecureItem(
+                        kind: kind,
+                        title: object.string("title"),
+                        itemData: itemData,
+                        notes: object.string("notes")
+                      )
+                else {
+                    return nil
+                }
+                return AndroidBackupImportedItem(
+                    sourceID: object.contains("id") ? Int64(object.int("id", defaultValue: 0)) : nil,
+                    deletedAt: object.contains("deletedAt") ? Int64(object.int("deletedAt", defaultValue: 0)) : nil,
+                    draft: draft
+                )
+            }
+        } catch {
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 回收站安全条目 JSON 无法解析"))
+            return []
+        }
+    }
+
+    private static func trashSecureKind(from itemType: String, itemData: String) -> BackupKind? {
+        switch itemType.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+        case "totp", "authenticator", "two_factor", "2fa":
+            return .totp
+        case "note", "secure_note", "secure-note":
+            return .note
+        case "bank_card", "bank-card", "card", "credit_card", "credit-card":
+            return .card
+        case "document", "identity", "id_card", "id-card":
+            return .identity
+        default:
+            return inferSecureKind(from: itemData) ?? .note
+        }
     }
 
     private static func parseLegacyCSVItems(
@@ -7108,6 +7198,14 @@ private struct JSONObject {
 
     init(jsonString: String) throws {
         try self.init(data: Data(jsonString.utf8))
+    }
+
+    static func array(data: Data) throws -> [JSONObject] {
+        let decoded = try JSONSerialization.jsonObject(with: data)
+        guard let values = decoded as? [[String: Any]] else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        return values.map { JSONObject(values: $0) }
     }
 
     func string(_ key: String, defaultValue: String = "") -> String {

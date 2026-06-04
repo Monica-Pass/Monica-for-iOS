@@ -6711,6 +6711,72 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，1 个附件，0 个问题"))
     }
 
+    func testAndroidBackupImportRestoresTrashItemsIntoDeletedListsWithoutLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        let backup = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Work/passwords/password_42_1710000000000.json": #"{"id":42,"title":"GitHub","username":"alice","password":"active-secret","website":"https://github.com","categoryName":"Work"}"#,
+            "trash/trash_passwords.json": #"""
+            [
+              {
+                "id": 7,
+                "title": "Deleted Login",
+                "username": "bob",
+                "password": "deleted-password",
+                "website": "https://deleted.example",
+                "notes": "old note",
+                "createdAt": 1710000000000,
+                "updatedAt": 1710000001000,
+                "deletedAt": 1710000002000
+              }
+            ]
+            """#,
+            "trash/trash_secure_items.json": #"""
+            [
+              {
+                "id": 8,
+                "title": "Deleted 2FA",
+                "itemType": "TOTP",
+                "itemData": "{\"secret\":\"JBSWY3DPEHPK3PXP\",\"issuer\":\"GitHub\",\"accountName\":\"bob\",\"period\":30,\"digits\":6,\"algorithm\":\"SHA1\",\"otpType\":\"TOTP\",\"counter\":0}",
+                "notes": "totp note",
+                "createdAt": 1710000000000,
+                "updatedAt": 1710000001000,
+                "deletedAt": 1710000003000
+              }
+            ]
+            """#
+        ])
+
+        try unlockNewVault(model)
+        let preview = try model.previewAndroidBackupImport(backup)
+
+        XCTAssertEqual(preview.items.map(\.kind), [.login])
+        XCTAssertEqual(preview.deletedItems.map(\.draft.kind), [.login, .totp])
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，2 项回收站，0 个问题"))
+
+        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["Deleted Login"])
+        XCTAssertEqual(model.totpEntries.map(\.title), [])
+        XCTAssertEqual(model.deletedTotpEntries.map(\.title), ["Deleted 2FA"])
+        XCTAssertEqual(engine.createdLoginEntries.map(\.draft.password), ["active-secret", "deleted-password"])
+        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-2"])
+        XCTAssertEqual(engine.deletedTotpEntries.map(\.entryID), ["totp-1"])
+        XCTAssertNil(model.androidBackupImportPreview)
+        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；2 项进入回收站"))
+
+        let statusText = model.entryOperationState.label
+        [
+            "active-secret",
+            "deleted-password",
+            "JBSWY3DPEHPK3PXP",
+            "https://deleted.example"
+        ].forEach { secret in
+            XCTAssertFalse(statusText.contains(secret))
+        }
+    }
+
     func testAndroidBackupEncryptedImportPreviewRequiresUnsupportedDecryptFlow() throws {
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
         let encryptedBackup = Data("MONICA_ENC_V1".utf8)
