@@ -423,20 +423,28 @@ struct AndroidParityVaultHomeView: View {
                 if session.isVaultBatchSelectionActive {
                     Button { session.toggleVaultBatchItemSelection(entry.id, for: .attachmentRef) } label: {
                         batchSelectableCard(id: entry.id) {
-                            AndroidAttachmentListCard(entry: entry, showsActions: false, preview: {}) {}
+                            AndroidAttachmentListCard(entry: entry, showsActions: false, download: nil, preview: {}) {}
                         }
                     }
                     .buttonStyle(.plain)
                 } else {
-                    AndroidAttachmentListCard(entry: entry) {
+                    AndroidAttachmentListCard(entry: entry, download: {
+                        Task {
+                            do {
+                                _ = try await session.downloadBitwardenAttachmentContent(entry)
+                            } catch {
+                                // AppSessionModel owns user-visible failure state.
+                            }
+                        }
+                    }, preview: {
                         do {
                             try session.presentAttachmentQuickLookPreview(entry)
                         } catch {
                             // AppSessionModel owns user-visible failure state.
                         }
-                    } delete: {
+                    }, delete: {
                         deleteAttachmentEntry(entry)
-                    }
+                    })
                 }
             }
             if session.filteredAttachmentEntries.isEmpty {
@@ -1482,6 +1490,7 @@ private struct AndroidSendListCard: View {
 private struct AndroidAttachmentListCard: View {
     let entry: LocalAttachmentMetadata
     var showsActions = true
+    let download: (() -> Void)?
     let preview: () -> Void
     let delete: () -> Void
 
@@ -1503,6 +1512,15 @@ private struct AndroidAttachmentListCard: View {
                 Spacer()
                 if showsActions {
                     HStack(spacing: 12) {
+                        if canDownloadBitwardenAttachment, let download {
+                            Button(action: download) {
+                                Image(systemName: "arrow.down.circle")
+                                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(AndroidParityPalette.primary)
+                        }
+
                         Button(action: preview) {
                             Image(systemName: "eye")
                                 .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
@@ -1522,6 +1540,10 @@ private struct AndroidAttachmentListCard: View {
         }
     }
 
+    private var canDownloadBitwardenAttachment: Bool {
+        entry.source == "bitwarden" && entry.downloadState == "pending-bitwarden-download"
+    }
+
     private var primaryText: String {
         [
             entry.mediaType.isEmpty ? "未知类型" : entry.mediaType,
@@ -1534,8 +1556,7 @@ private struct AndroidAttachmentListCard: View {
         let sizeText = "\(entry.storedSize)/\(entry.originalSize) 字节"
         return [
             entry.storageMode,
-            sizeText,
-            entry.localPath ?? ""
+            sizeText
         ]
             .filter { !$0.isEmpty }
             .joined(separator: " / ")
