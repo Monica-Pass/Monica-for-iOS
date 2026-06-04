@@ -106,6 +106,8 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public let attachments: [BitwardenSyncAttachment]
     public let attachmentByteCount: Int
     public let updatedAt: Date?
+    public let favorite: Bool
+    public let deletedAt: Date?
     public let cardholderName: String
     public let cardNumber: String
     public let cardExpiryMonth: String
@@ -145,6 +147,8 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         attachments: [BitwardenSyncAttachment] = [],
         attachmentByteCount: Int = 0,
         updatedAt: Date? = nil,
+        favorite: Bool = false,
+        deletedAt: Date? = nil,
         cardholderName: String = "",
         cardNumber: String = "",
         cardExpiryMonth: String = "",
@@ -183,6 +187,8 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.attachments = attachments
         self.attachmentByteCount = attachments.isEmpty ? attachmentByteCount : attachments.reduce(0) { $0 + $1.byteCount }
         self.updatedAt = updatedAt
+        self.favorite = favorite
+        self.deletedAt = deletedAt
         self.cardholderName = cardholderName
         self.cardNumber = cardNumber
         self.cardExpiryMonth = cardExpiryMonth
@@ -209,7 +215,17 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     }
 
     public var redactedSummary: String {
-        [
+        if deletedAt != nil {
+            return [
+                kind.displayName,
+                sanitizedBitwardenTitle(title),
+                "已删除",
+                attachmentByteCount > 0 ? "\(attachmentByteCount) 字节附件" : ""
+            ]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        }
+        return [
             kind.displayName,
             sanitizedBitwardenTitle(title),
             sanitizedBitwardenText(username),
@@ -402,6 +418,7 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
     public let notes: String?
     public let folderID: String?
     public let folderName: String?
+    public let favorite: Bool
     public let cardholderName: String
     public let cardNumber: String
     public let cardExpiryMonth: String
@@ -437,6 +454,7 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         notes: String? = nil,
         folderID: String? = nil,
         folderName: String? = nil,
+        favorite: Bool = false,
         cardholderName: String = "",
         cardNumber: String = "",
         cardExpiryMonth: String = "",
@@ -471,6 +489,7 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         self.notes = notes
         self.folderID = folderID
         self.folderName = folderName
+        self.favorite = favorite
         self.cardholderName = cardholderName
         self.cardNumber = cardNumber
         self.cardExpiryMonth = cardExpiryMonth
@@ -507,6 +526,7 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
             notes ?? "",
             folderID ?? "",
             folderName ?? "",
+            favorite ? "true" : "false",
             cardholderName,
             cardNumber,
             cardExpiryMonth,
@@ -2410,7 +2430,7 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             "name": try BitwardenCrypto.encryptString(item.title, key: key),
             "notes": try encryptedOptional(item.notes, key: key),
             "folderId": item.folderID.map { $0 as Any } ?? NSNull(),
-            "favorite": false,
+            "favorite": item.favorite,
             "organizationId": NSNull(),
             "collectionIds": []
         ]
@@ -2720,7 +2740,6 @@ private enum BitwardenVaultSyncSnapshotParser {
         }
         let folderNamesByID = Dictionary(uniqueKeysWithValues: folderItems.map { ($0.remoteID, $0.name) })
         let items = ciphers.compactMap { cipher -> BitwardenSyncItem? in
-            guard string(cipher, "deletedDate", "DeletedDate") == nil else { return nil }
             guard let id = string(cipher, "id", "Id"), !id.isEmpty else { return nil }
             let effectiveKey: BitwardenVaultKey?
             if let vaultKey,
@@ -2770,6 +2789,8 @@ private enum BitwardenVaultSyncSnapshotParser {
                 attachments: attachments,
                 attachmentByteCount: byteCount(array(cipher, "attachments", "Attachments")),
                 updatedAt: date(string(cipher, "revisionDate", "RevisionDate")),
+                favorite: bool(cipher, "favorite", "Favorite") ?? false,
+                deletedAt: date(string(cipher, "deletedDate", "DeletedDate")),
                 cardholderName: decryptedString(card, "cardholderName", "CardholderName", key: effectiveKey) ?? "",
                 cardNumber: decryptedString(card, "number", "Number", key: effectiveKey) ?? "",
                 cardExpiryMonth: decryptedString(card, "expMonth", "ExpMonth", key: effectiveKey) ?? "",
@@ -3073,6 +3094,28 @@ private enum BitwardenVaultSyncSnapshotParser {
             }
             if let value = json[key] as? String, let intValue = Int(value) {
                 return intValue
+            }
+        }
+        return nil
+    }
+
+    private static func bool(_ json: [String: Any], _ keys: String...) -> Bool? {
+        for key in keys {
+            if let value = json[key] as? Bool {
+                return value
+            }
+            if let value = json[key] as? NSNumber {
+                return value.boolValue
+            }
+            if let value = json[key] as? String {
+                switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+                case "true", "1", "yes":
+                    return true
+                case "false", "0", "no":
+                    return false
+                default:
+                    break
+                }
             }
         }
         return nil

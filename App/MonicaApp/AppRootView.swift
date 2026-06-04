@@ -9575,7 +9575,7 @@ final class AppSessionModel {
             let targetProjectID = item.folderID.flatMap { projectIDByFolderRemoteID[$0] } ?? projectID
             switch item.kind {
             case .login:
-                let localEntry: LocalLoginEntry
+                var localEntry: LocalLoginEntry
                 if targetProjectID == projectID,
                    let existing = existingLogins.first(where: { isSameBitwardenLogin($0, item) }) {
                     localEntry = existing
@@ -9590,7 +9590,16 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    if targetProjectID == projectID {
+                }
+                localEntry = try applyBitwardenRemoteState(
+                    item,
+                    to: localEntry,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+                if targetProjectID == projectID {
+                    existingLogins.removeAll { $0.id == localEntry.id }
+                    if item.deletedAt == nil {
                         existingLogins.append(localEntry)
                     }
                 }
@@ -9625,7 +9634,7 @@ final class AppSessionModel {
                     existingTotps.append(created)
                 }
             case .passkey:
-                let localEntry: LocalPasskeyEntry
+                var localEntry: LocalPasskeyEntry
                 if targetProjectID == projectID,
                    let existing = existingPasskeys.first(where: { isSameBitwardenPasskey($0, item) }) {
                     localEntry = existing
@@ -9643,7 +9652,16 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    if targetProjectID == projectID {
+                }
+                localEntry = try applyBitwardenRemoteState(
+                    item,
+                    to: localEntry,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+                if targetProjectID == projectID {
+                    existingPasskeys.removeAll { $0.id == localEntry.id }
+                    if item.deletedAt == nil {
                         existingPasskeys.append(localEntry)
                     }
                 }
@@ -9659,7 +9677,7 @@ final class AppSessionModel {
                     entryRepository: entryRepository
                 )
             case .sshKey:
-                let localEntry: LocalSshKeyEntry
+                var localEntry: LocalSshKeyEntry
                 if targetProjectID == projectID,
                    let existing = existingSshKeys.first(where: { isSameBitwardenSshKey($0, item) }) {
                     localEntry = existing
@@ -9676,7 +9694,16 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    if targetProjectID == projectID {
+                }
+                localEntry = try applyBitwardenRemoteState(
+                    item,
+                    to: localEntry,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+                if targetProjectID == projectID {
+                    existingSshKeys.removeAll { $0.id == localEntry.id }
+                    if item.deletedAt == nil {
                         existingSshKeys.append(localEntry)
                     }
                 }
@@ -9692,7 +9719,7 @@ final class AppSessionModel {
                     entryRepository: entryRepository
                 )
             case .secureNote:
-                let localEntry: LocalNoteEntry
+                var localEntry: LocalNoteEntry
                 if targetProjectID == projectID,
                    let existing = existingNotes.first(where: { $0.title == bitwardenImportTitle(item.title) && $0.body == (item.notes ?? "") }) {
                     localEntry = existing
@@ -9704,7 +9731,16 @@ final class AppSessionModel {
                             body: item.notes ?? ""
                         )
                     )
-                    if targetProjectID == projectID {
+                }
+                localEntry = try applyBitwardenRemoteState(
+                    item,
+                    to: localEntry,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+                if targetProjectID == projectID {
+                    existingNotes.removeAll { $0.id == localEntry.id }
+                    if item.deletedAt == nil {
                         existingNotes.append(localEntry)
                     }
                 }
@@ -9720,7 +9756,7 @@ final class AppSessionModel {
                     entryRepository: entryRepository
                 )
             case .card:
-                let localEntry: LocalCardEntry
+                var localEntry: LocalCardEntry
                 if targetProjectID == projectID,
                    let existing = existingCards.first(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
                     localEntry = existing
@@ -9739,7 +9775,16 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    if targetProjectID == projectID {
+                }
+                localEntry = try applyBitwardenRemoteState(
+                    item,
+                    to: localEntry,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+                if targetProjectID == projectID {
+                    existingCards.removeAll { $0.id == localEntry.id }
+                    if item.deletedAt == nil {
                         existingCards.append(localEntry)
                     }
                 }
@@ -9755,7 +9800,7 @@ final class AppSessionModel {
                     entryRepository: entryRepository
                 )
             case .identity:
-                let localEntry: LocalIdentityEntry
+                var localEntry: LocalIdentityEntry
                 if targetProjectID == projectID,
                    let existing = existingIdentities.first(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
                     localEntry = existing
@@ -9774,7 +9819,16 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    if targetProjectID == projectID {
+                }
+                localEntry = try applyBitwardenRemoteState(
+                    item,
+                    to: localEntry,
+                    projectID: targetProjectID,
+                    entryRepository: entryRepository
+                )
+                if targetProjectID == projectID {
+                    existingIdentities.removeAll { $0.id == localEntry.id }
+                    if item.deletedAt == nil {
                         existingIdentities.append(localEntry)
                     }
                 }
@@ -9888,6 +9942,126 @@ final class AppSessionModel {
         return host.hasPrefix("www.") ? String(host.dropFirst(4)) : host
     }
 
+    private func applyBitwardenRemoteState(
+        _ item: BitwardenSyncItem,
+        to entry: LocalLoginEntry,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalLoginEntry {
+        var current = entry
+        if current.favorite != item.favorite {
+            current = try entryRepository.setLoginEntryFavorite(
+                projectID: projectID,
+                entryID: current.id,
+                favorite: item.favorite
+            )
+        }
+        if item.deletedAt != nil {
+            try entryRepository.deleteLoginEntry(projectID: projectID, entryID: current.id)
+        }
+        return current
+    }
+
+    private func applyBitwardenRemoteState(
+        _ item: BitwardenSyncItem,
+        to entry: LocalNoteEntry,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalNoteEntry {
+        var current = entry
+        if current.favorite != item.favorite {
+            current = try entryRepository.setNoteEntryFavorite(
+                projectID: projectID,
+                entryID: current.id,
+                favorite: item.favorite
+            )
+        }
+        if item.deletedAt != nil {
+            try entryRepository.deleteNoteEntry(projectID: projectID, entryID: current.id)
+        }
+        return current
+    }
+
+    private func applyBitwardenRemoteState(
+        _ item: BitwardenSyncItem,
+        to entry: LocalCardEntry,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalCardEntry {
+        var current = entry
+        if current.favorite != item.favorite {
+            current = try entryRepository.setCardEntryFavorite(
+                projectID: projectID,
+                entryID: current.id,
+                favorite: item.favorite
+            )
+        }
+        if item.deletedAt != nil {
+            try entryRepository.deleteCardEntry(projectID: projectID, entryID: current.id)
+        }
+        return current
+    }
+
+    private func applyBitwardenRemoteState(
+        _ item: BitwardenSyncItem,
+        to entry: LocalIdentityEntry,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalIdentityEntry {
+        var current = entry
+        if current.favorite != item.favorite {
+            current = try entryRepository.setIdentityEntryFavorite(
+                projectID: projectID,
+                entryID: current.id,
+                favorite: item.favorite
+            )
+        }
+        if item.deletedAt != nil {
+            try entryRepository.deleteIdentityEntry(projectID: projectID, entryID: current.id)
+        }
+        return current
+    }
+
+    private func applyBitwardenRemoteState(
+        _ item: BitwardenSyncItem,
+        to entry: LocalPasskeyEntry,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalPasskeyEntry {
+        var current = entry
+        if current.favorite != item.favorite {
+            current = try entryRepository.setPasskeyEntryFavorite(
+                projectID: projectID,
+                entryID: current.id,
+                favorite: item.favorite
+            )
+        }
+        if item.deletedAt != nil {
+            try entryRepository.deletePasskeyEntry(projectID: projectID, entryID: current.id)
+        }
+        return current
+    }
+
+    private func applyBitwardenRemoteState(
+        _ item: BitwardenSyncItem,
+        to entry: LocalSshKeyEntry,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalSshKeyEntry {
+        var current = entry
+        if current.favorite != item.favorite {
+            current = try entryRepository.setSshKeyEntryFavorite(
+                projectID: projectID,
+                entryID: current.id,
+                favorite: item.favorite
+            )
+        }
+        if item.deletedAt != nil {
+            try entryRepository.deleteSshKeyEntry(projectID: projectID, entryID: current.id)
+        }
+        return current
+    }
+
     private func reconcileBitwardenAttachments(
         _ remoteAttachments: [BitwardenSyncAttachment],
         localEntryID: String,
@@ -9962,7 +10136,7 @@ final class AppSessionModel {
             kind: localItem.kind,
             lastSyncedFingerprint: localItem.syncFingerprint,
             lastRemoteRevision: remoteItem.updatedAt.map { String($0.timeIntervalSince1970) },
-            isDeleted: false
+            isDeleted: remoteItem.deletedAt != nil
         )
     }
 
@@ -10059,7 +10233,8 @@ final class AppSessionModel {
             password: entry.password,
             notes: entry.notes,
             folderID: folderID,
-            folderName: folderName
+            folderName: folderName,
+            favorite: entry.favorite
         )
     }
 
@@ -10070,7 +10245,8 @@ final class AppSessionModel {
             title: entry.title,
             notes: entry.body,
             folderID: folderID,
-            folderName: folderName
+            folderName: folderName,
+            favorite: entry.favorite
         )
     }
 
@@ -10083,7 +10259,8 @@ final class AppSessionModel {
             url: bitwardenTotpURLHint(from: entry),
             totpSecret: bitwardenTotpPayload(from: entry),
             folderID: folderID,
-            folderName: folderName
+            folderName: folderName,
+            favorite: entry.favorite
         )
     }
 
@@ -10095,6 +10272,7 @@ final class AppSessionModel {
             notes: entry.notes,
             folderID: folderID,
             folderName: entry.issuer.nonBlankValue,
+            favorite: entry.favorite,
             cardholderName: entry.cardholderName,
             cardNumber: entry.number,
             cardExpiryMonth: entry.expiryMonth,
@@ -10113,6 +10291,7 @@ final class AppSessionModel {
             notes: entry.notes,
             folderID: folderID,
             folderName: entry.issuer.nonBlankValue,
+            favorite: entry.favorite,
             identityFullName: entry.fullName,
             identityDocumentNumber: entry.documentNumber,
             identityIssuer: entry.issuer,
@@ -10131,6 +10310,7 @@ final class AppSessionModel {
             notes: entry.notes,
             folderID: folderID,
             folderName: folderName,
+            favorite: entry.favorite,
             passkeyRelyingPartyID: relyingPartyID,
             passkeyRelyingPartyName: entry.title,
             passkeyCredentialID: entry.credentialID,
@@ -10153,6 +10333,7 @@ final class AppSessionModel {
             notes: entry.notes,
             folderID: folderID,
             folderName: folderName,
+            favorite: entry.favorite,
             sshPublicKey: entry.publicKey,
             sshPrivateKey: entry.privateKeyReference,
             sshKeyFingerprint: entry.passphraseHint

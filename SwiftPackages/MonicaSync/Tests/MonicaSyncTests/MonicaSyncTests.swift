@@ -1049,9 +1049,10 @@ import Foundation
         "cipher-login-secret-id",
         "cipher-note-secret-id",
         "cipher-card-secret-id",
-        "cipher-identity-secret-id"
+        "cipher-identity-secret-id",
+        "cipher-deleted-secret-id"
     ])
-    #expect(snapshot.items.map(\.kind) == [.login, .secureNote, .card, .identity])
+    #expect(snapshot.items.map(\.kind) == [.login, .secureNote, .card, .identity, .login])
     #expect(snapshot.items[0].title == "GitHub")
     #expect(snapshot.items[0].username == "alice")
     #expect(snapshot.items[0].url == "https://github.com/session?token=query-secret")
@@ -1072,6 +1073,7 @@ import Foundation
     #expect(snapshot.items[3].identityDocumentNumber == "P1234567")
     #expect(snapshot.items[3].identityIssuer == "Monica Authority")
     #expect(snapshot.items[3].identityCountry == "US")
+    #expect(snapshot.items[4].deletedAt == ISO8601DateFormatter().date(from: "2026-06-03T13:30:00Z"))
     #expect(snapshot.sends.map(\.remoteID) == ["send-text-secret-id", "send-file-secret-id"])
     #expect(snapshot.sends[0].title == "Deploy link")
     #expect(snapshot.sends[0].body == "send-body-secret")
@@ -1222,6 +1224,80 @@ import Foundation
     ].forEach { secret in
         #expect(!visibleText.contains(secret))
     }
+}
+
+@Test func bitwardenVaultSyncProviderPullsFavoriteAndDeletedCipherStateWithoutLeakingSecrets() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "fresh-access-token-secret",
+            refreshToken: "refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "cipher-favorite-secret-id",
+              "Type": 1,
+              "Favorite": true,
+              "Name": "GitHub",
+              "RevisionDate": "2026-06-03T12:30:00Z",
+              "Login": {
+                "Username": "alice",
+                "Password": "favorite-password-secret"
+              }
+            },
+            {
+              "Id": "cipher-deleted-secret-id",
+              "Type": 2,
+              "Favorite": true,
+              "Name": "Deleted recovery",
+              "Notes": "deleted-note-secret",
+              "DeletedDate": "2026-06-03T13:30:00Z",
+              "RevisionDate": "2026-06-03T13:00:00Z",
+              "SecureNote": { "Type": 0 }
+            }
+          ],
+          "Sends": []
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let favorite = try #require(snapshot.items.first { $0.remoteID == "cipher-favorite-secret-id" })
+    #expect(favorite.favorite == true)
+    #expect(favorite.deletedAt == nil)
+    let deleted = try #require(snapshot.items.first { $0.remoteID == "cipher-deleted-secret-id" })
+    #expect(deleted.favorite == true)
+    #expect(deleted.deletedAt == ISO8601DateFormatter().date(from: "2026-06-03T13:30:00Z"))
+    let visibleText = [
+        snapshot.redactedSummary,
+        favorite.redactedSummary,
+        deleted.redactedSummary
+    ].joined(separator: " ")
+    #expect(!visibleText.contains("cipher-favorite-secret-id"))
+    #expect(!visibleText.contains("cipher-deleted-secret-id"))
+    #expect(!visibleText.contains("favorite-password-secret"))
+    #expect(!visibleText.contains("deleted-note-secret"))
+    #expect(!visibleText.contains("server-security-stamp-secret"))
 }
 
 @Test func bitwardenVaultSyncProviderPullsPasskeyFido2CredentialsWithoutLeakingSecrets() async throws {
@@ -1925,7 +2001,8 @@ import Foundation
                 password: "login-password-secret",
                 totpSecret: "totp-secret",
                 notes: "login-note-secret",
-                folderID: "folder-work-secret-id"
+                folderID: "folder-work-secret-id",
+                favorite: true
             ),
             remoteID: nil
         ),
@@ -1969,6 +2046,7 @@ import Foundation
 
     let createBody = try decodedJSONDictionary(vaultTransport.requests[0].body)
     #expect(createBody["type"] as? Int == 1)
+    #expect(createBody["favorite"] as? Bool == true)
     #expect(createBody["folderId"] as? String == "folder-work-secret-id")
     #expect(BitwardenCipherStringProbe.isCipherString(createBody["name"] as? String))
     let login = try #require(createBody["login"] as? [String: Any])
