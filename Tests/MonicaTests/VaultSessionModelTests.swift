@@ -8809,6 +8809,37 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("note-secret"))
         XCTAssertFalse(visibleText.contains("revision-secret"))
     }
+
+    func testBitwardenAuthenticationSessionRestoreAndSignOutWithoutLeakingSecrets() throws {
+        let store = MemoryBitwardenAuthenticationSessionStore(
+            session: BitwardenAuthenticationSession(
+                accountLabel: "alice@example.com",
+                serverURL: URL(string: "https://vault.bitwarden.com")!,
+                identityURL: URL(string: "https://identity.bitwarden.com")!,
+                apiURL: URL(string: "https://api.bitwarden.com")!,
+                accessToken: "bitwarden-access-token-secret",
+                refreshToken: "bitwarden-refresh-token-secret",
+                expiresAt: Date(timeIntervalSince1970: 1_804_000_000)
+            )
+        )
+        let model = AppSessionModel(bitwardenAuthenticationSessionStore: store)
+
+        let restored = try model.restoreBitwardenAuthenticationSession()
+
+        XCTAssertEqual(restored?.redactedSummary, "Bitwarden alice@example.com 已登录")
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 已登录 alice@example.com")
+        try model.signOutFromBitwarden()
+        XCTAssertNil(try store.loadSession())
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 未登录")
+
+        let visibleText = [
+            restored?.redactedSummary ?? "",
+            model.bitwardenAuthenticationState.label
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("access-token-secret"))
+        XCTAssertFalse(visibleText.contains("refresh-token-secret"))
+        XCTAssertFalse(visibleText.contains("api.bitwarden.com"))
+    }
 }
 
 private final class RecordingAppAutoFillIndexKeyMaterialStore: AppAutoFillIndexKeyMaterialStore {

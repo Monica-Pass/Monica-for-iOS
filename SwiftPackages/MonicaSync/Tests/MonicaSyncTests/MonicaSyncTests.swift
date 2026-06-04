@@ -386,6 +386,81 @@ import Foundation
     #expect(!visibleText.contains("revision-secret"))
 }
 
+@Test func bitwardenRefreshTokenProviderRefreshesSessionWithoutLeakingSecrets() async throws {
+    let transport = RecordingBitwardenIdentityTransport()
+    transport.result = BitwardenTokenRefreshResult(
+        accessToken: "new-access-token-secret",
+        refreshToken: "new-refresh-token-secret",
+        expiresIn: 3600
+    )
+    let store = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "old-access-token-secret",
+            refreshToken: "old-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_000_000)
+        )
+    )
+    let provider = RefreshingBitwardenAccessTokenProvider(
+        sessionStore: store,
+        identityTransport: transport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let token = try await provider.accessToken()
+    let saved = try #require(try store.loadSession())
+
+    #expect(token == "new-access-token-secret")
+    #expect(transport.requests == [
+        BitwardenTokenRefreshRequest(
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            refreshToken: "old-refresh-token-secret"
+        )
+    ])
+    #expect(saved.accessToken == "new-access-token-secret")
+    #expect(saved.refreshToken == "new-refresh-token-secret")
+    #expect(saved.expiresAt == Date(timeIntervalSince1970: 1_804_003_700))
+    #expect(saved.redactedSummary == "Bitwarden alice@example.com 已登录")
+    let visibleText = [saved.redactedSummary].joined(separator: " ")
+    #expect(!visibleText.contains("access-token-secret"))
+    #expect(!visibleText.contains("refresh-token-secret"))
+    #expect(!visibleText.contains("api.bitwarden.com"))
+}
+
+@Test func bitwardenRefreshTokenProviderRequiresSessionAndRefreshToken() async throws {
+    let missingStore = MemoryBitwardenAuthenticationSessionStore()
+    let provider = RefreshingBitwardenAccessTokenProvider(
+        sessionStore: missingStore,
+        identityTransport: RecordingBitwardenIdentityTransport()
+    )
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        _ = try await provider.accessToken()
+    }
+
+    let noRefreshStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "access-token-secret",
+            refreshToken: nil,
+            expiresAt: Date(timeIntervalSince1970: 1_804_000_000)
+        )
+    )
+    let noRefreshProvider = RefreshingBitwardenAccessTokenProvider(
+        sessionStore: noRefreshStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        _ = try await noRefreshProvider.accessToken()
+    }
+}
+
 @Test func webDAVClientUploadsBackupWithBasicAuthAndIntegrityHeader() async throws {
     let transport = RecordingWebDAVTransport(
         responses: [
@@ -591,6 +666,20 @@ private final class RecordingWebDAVTransport: WebDAVTransport {
     func send(_ request: WebDAVTransportRequest) async throws -> WebDAVTransportResponse {
         requests.append(request)
         return responses.removeFirst()
+    }
+}
+
+private final class RecordingBitwardenIdentityTransport: BitwardenIdentityTokenTransport, @unchecked Sendable {
+    var result = BitwardenTokenRefreshResult(
+        accessToken: "access-token-secret",
+        refreshToken: "refresh-token-secret",
+        expiresIn: 3600
+    )
+    private(set) var requests: [BitwardenTokenRefreshRequest] = []
+
+    func refreshAccessToken(_ request: BitwardenTokenRefreshRequest) async throws -> BitwardenTokenRefreshResult {
+        requests.append(request)
+        return result
     }
 }
 

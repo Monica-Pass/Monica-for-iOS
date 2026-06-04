@@ -808,6 +808,59 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "Bitwarden") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    AndroidParityInfoRow(title: "账号", value: session.bitwardenAuthenticationState.label)
+                    AndroidParityInfoRow(title: "同步", value: session.bitwardenSyncState.label)
+                    if session.bitwardenAuthenticationState.isConnected {
+                        Button(role: .destructive) {
+                            try? session.signOutFromBitwarden()
+                        } label: {
+                            Label("退出 Bitwarden", systemImage: "rectangle.portrait.and.arrow.right")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+                        .disabled(session.bitwardenSyncState.isRunning)
+                    } else {
+                        Button {
+                            _ = try? session.restoreBitwardenAuthenticationSession()
+                        } label: {
+                            Label("恢复 Bitwarden 登录", systemImage: "person.crop.circle.badge.checkmark")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    }
+                    Button {
+                        Task {
+                            try? await session.previewBitwardenSync()
+                        }
+                    } label: {
+                        Label("预览同步", systemImage: "arrow.down.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(
+                        !session.bitwardenAuthenticationState.isConnected
+                            || session.vaultState != .unlocked
+                            || session.bitwardenSyncState.isRunning
+                    )
+                    Button {
+                        Task {
+                            try? await session.pushLocalBitwardenChanges()
+                        }
+                    } label: {
+                        Label("推送 Send", systemImage: "arrow.up.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(
+                        !session.bitwardenAuthenticationState.isConnected
+                            || session.vaultState != .unlocked
+                            || session.bitwardenSyncState.isRunning
+                    )
+                }
+            }
+
             AndroidParitySection(title: "WebDAV") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     TextField("服务器 URL", text: $session.webDAVBaseURL)

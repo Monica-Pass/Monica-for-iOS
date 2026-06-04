@@ -833,6 +833,42 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     }
 }
 
+struct FileAppBitwardenAuthenticationSessionStore: BitwardenAuthenticationSessionStore, @unchecked Sendable {
+    private let fileURL: URL
+    private let fileManager: FileManager
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL, fileManager: FileManager = .default) {
+        fileURL = containerURL
+            .appendingPathComponent("bitwarden-auth-v1", isDirectory: true)
+            .appendingPathComponent("session.json")
+        self.fileManager = fileManager
+        encoder = JSONEncoder()
+        decoder = JSONDecoder()
+    }
+
+    func loadSession() throws -> BitwardenAuthenticationSession? {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return nil
+        }
+        return try decoder.decode(BitwardenAuthenticationSession.self, from: Data(contentsOf: fileURL))
+    }
+
+    func saveSession(_ session: BitwardenAuthenticationSession) throws {
+        try fileManager.createDirectory(at: fileURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let data = try encoder.encode(session)
+        try data.write(to: fileURL, options: [.atomic, .completeFileProtection])
+    }
+
+    func clearSession() throws {
+        guard fileManager.fileExists(atPath: fileURL.path) else {
+            return
+        }
+        try fileManager.removeItem(at: fileURL)
+    }
+}
+
 protocol AppBitwardenSendSyncStateStore: Sendable {
     func loadStates(vaultID: String) throws -> [BitwardenSendSyncState]
     func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws
@@ -1874,6 +1910,7 @@ final class AppSessionModel {
     var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
     var oneDriveAuthenticationState: OneDriveAuthenticationState = .disconnected
+    var bitwardenAuthenticationState: BitwardenAuthenticationState = .disconnected
     var bitwardenSyncState: BitwardenSyncState = .idle
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
     var csvImportPreview: CSVImportPreview?
@@ -1929,6 +1966,7 @@ final class AppSessionModel {
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
     private let oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)?
     private let bitwardenSyncProvider: (any BitwardenSyncProvider)?
+    private let bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore
     private let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
@@ -1972,6 +2010,7 @@ final class AppSessionModel {
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         bitwardenSyncProvider: (any BitwardenSyncProvider)? = nil,
+        bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore = MemoryBitwardenAuthenticationSessionStore(),
         bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore = MemoryAppBitwardenSendSyncStateStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
@@ -2010,6 +2049,7 @@ final class AppSessionModel {
         self.cloudFileProviders = cloudFileProviders
         self.oneDriveAuthenticationService = oneDriveAuthenticationService
         self.bitwardenSyncProvider = bitwardenSyncProvider
+        self.bitwardenAuthenticationSessionStore = bitwardenAuthenticationSessionStore
         self.bitwardenSendSyncStateStore = bitwardenSendSyncStateStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
@@ -8351,6 +8391,34 @@ final class AppSessionModel {
         return true
     }
 
+    @discardableResult
+    func restoreBitwardenAuthenticationSession() throws -> BitwardenAuthenticationSession? {
+        do {
+            guard let session = try bitwardenAuthenticationSessionStore.loadSession() else {
+                bitwardenAuthenticationState = .disconnected
+                return nil
+            }
+            bitwardenAuthenticationState = .connected(accountLabel: session.accountLabel)
+            return session
+        } catch {
+            bitwardenAuthenticationState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    func signOutFromBitwarden() throws {
+        recordUserActivity()
+        do {
+            try bitwardenAuthenticationSessionStore.clearSession()
+            bitwardenAuthenticationState = .disconnected
+            bitwardenSyncState = .idle
+            bitwardenSyncPreview = nil
+        } catch {
+            bitwardenAuthenticationState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
     func downloadCloudFileRestorePreview(
         itemID: String,
         provider kind: CloudFileProviderKind
@@ -10178,6 +10246,31 @@ enum OneDriveAuthenticationState: Sendable, Equatable {
     }
 }
 
+enum BitwardenAuthenticationState: Sendable, Equatable {
+    case disconnected
+    case connected(accountLabel: String)
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .disconnected:
+            return "Bitwarden 未登录"
+        case .connected(let accountLabel):
+            let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            return normalized.isEmpty ? "Bitwarden 已登录" : "Bitwarden 已登录 \(normalized)"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var isConnected: Bool {
+        if case .connected = self {
+            return true
+        }
+        return false
+    }
+}
+
 enum BitwardenSyncState: Sendable, Equatable {
     case idle
     case running
@@ -10621,6 +10714,7 @@ struct AppRootView: View {
             session.handleScenePhaseChange(phase)
             if phase == .active {
                 restoreOneDriveAuthenticationSessionIfAvailable()
+                restoreBitwardenAuthenticationSessionIfAvailable()
                 importPendingAutoFillSaveRequests()
                 importPendingSystemPasskeyRegistrations()
             }
@@ -10632,6 +10726,7 @@ struct AppRootView: View {
         }
         .task {
             restoreOneDriveAuthenticationSessionIfAvailable()
+            restoreBitwardenAuthenticationSessionIfAvailable()
             importPendingAutoFillSaveRequests()
             importPendingSystemPasskeyRegistrations()
         }
@@ -10661,6 +10756,10 @@ struct AppRootView: View {
         Task {
             try? await session.restoreOneDriveAuthenticationSession()
         }
+    }
+
+    private func restoreBitwardenAuthenticationSessionIfAvailable() {
+        _ = try? session.restoreBitwardenAuthenticationSession()
     }
 
     private func importPendingAutoFillSaveRequests() {
