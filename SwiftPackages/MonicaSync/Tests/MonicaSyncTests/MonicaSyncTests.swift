@@ -461,6 +461,335 @@ import Foundation
     }
 }
 
+@Test func bitwardenPasswordAuthenticatorLogsInWithPBKDF2AndStoresDecryptionSession() async throws {
+    let transport = RecordingBitwardenPasswordAuthenticationTransport()
+    transport.enqueuePrelogin(
+        statusCode: 200,
+        body: #"{"Kdf":0,"KdfIterations":1000}"#
+    )
+    transport.enqueueToken(
+        statusCode: 200,
+        body: """
+        {
+          "access_token": "bitwarden-access-token-secret",
+          "refresh_token": "bitwarden-refresh-token-secret",
+          "expires_in": 3600,
+          "Key": "2.AAECAwQFBgcICQoLDA0ODw==|bNW5Cs/xXNANXQtJ2ANJ+ZGT+Am0HFQ2QCSW1ojvZ+8peMsiFJJsM3HNXENFKcKmnyRIDVS8KbGBcIfyeRfzNm1TjUcSXZGrkB+R3famzG4=|5l1Q9FFGqTJViCO4tcJkphzXxhR31DWD143x2EUeRyo="
+        }
+        """
+    )
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore()
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    let authenticator = BitwardenPasswordAuthenticator(
+        sessionStore: sessionStore,
+        vaultKeyStore: keyStore,
+        transport: transport,
+        deviceIdentifier: { "ios-device-id" },
+        now: { Date(timeIntervalSince1970: 1_804_000_000) }
+    )
+
+    let session = try await authenticator.signIn(
+        email: "Alice@Example.com",
+        masterPassword: "correct horse battery staple",
+        serverURL: URL(string: "https://vault.bitwarden.com")!
+    )
+
+    #expect(session.accountLabel == "Alice@Example.com")
+    #expect(session.accessToken == "bitwarden-access-token-secret")
+    #expect(session.refreshToken == "bitwarden-refresh-token-secret")
+    #expect(session.expiresAt == Date(timeIntervalSince1970: 1_804_003_600))
+    #expect(try sessionStore.loadSession() == session)
+    let vaultKey = try #require(try keyStore.loadVaultKey(accountLabel: "Alice@Example.com"))
+    #expect(vaultKey.encryptionKey == Data((1...32).map(UInt8.init)))
+    #expect(vaultKey.macKey == Data((33...64).map(UInt8.init)))
+
+    let prelogin = try #require(transport.preloginRequests.first)
+    #expect(prelogin.url.absoluteString == "https://identity.bitwarden.com/accounts/prelogin")
+    #expect(prelogin.email == "Alice@Example.com")
+    let token = try #require(transport.tokenRequests.first)
+    #expect(token.url.absoluteString == "https://identity.bitwarden.com/connect/token")
+    #expect(token.headers["Auth-Email"] == "QWxpY2VARXhhbXBsZS5jb20")
+    #expect(token.headers["device-type"] == "8")
+    #expect(token.form["grant_type"] == "password")
+    #expect(token.form["username"] == "Alice@Example.com")
+    #expect(token.form["password"] == "nidpx1SblZnybnMO5LIGKfdtOqx3HxJra2/cdFR2lNc=")
+    #expect(token.form["scope"] == "api offline_access")
+    #expect(token.form["client_id"] == "desktop")
+    #expect(token.form["deviceIdentifier"] == "ios-device-id")
+    #expect(token.form["deviceType"] == "8")
+    #expect(token.form["deviceName"] == "linux")
+
+    let visibleText = [session.redactedSummary, vaultKey.redactedSummary].joined(separator: " ")
+    [
+        "bitwarden-access-token-secret",
+        "bitwarden-refresh-token-secret",
+        "correct horse battery staple",
+        "nidpx1SblZnybnMO5LIGKfdtOqx3HxJra2/cdFR2lNc",
+        "bNW5Cs"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
+@Test func bitwardenPasswordAuthenticatorMapsObjectShapedTwoFactorChallenge() async throws {
+    let transport = RecordingBitwardenPasswordAuthenticationTransport()
+    transport.enqueuePrelogin(
+        statusCode: 200,
+        body: #"{"Kdf":0,"KdfIterations":1000}"#
+    )
+    transport.enqueueToken(
+        statusCode: 400,
+        body: #"{"TwoFactorProviders":{"0":{"Name":"Authenticator app"}}}"#
+    )
+    let authenticator = BitwardenPasswordAuthenticator(
+        sessionStore: MemoryBitwardenAuthenticationSessionStore(),
+        vaultKeyStore: MemoryBitwardenVaultKeyStore(),
+        transport: transport,
+        deviceIdentifier: { "ios-device-id" }
+    )
+
+    await #expect(throws: BitwardenSyncProviderError.twoFactorRequired) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "master-password-secret",
+            serverURL: URL(string: "https://vault.bitwarden.com")!
+        )
+    }
+}
+
+@Test func bitwardenPasswordAuthenticatorRejectsInvalidInputsBeforeTransport() async throws {
+    let transport = RecordingBitwardenPasswordAuthenticationTransport()
+    let authenticator = BitwardenPasswordAuthenticator(
+        sessionStore: MemoryBitwardenAuthenticationSessionStore(),
+        vaultKeyStore: MemoryBitwardenVaultKeyStore(),
+        transport: transport
+    )
+
+    await #expect(throws: BitwardenSyncProviderError.invalidServerURL) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "master-password-secret",
+            serverURL: URL(string: "file:///tmp/not-a-bitwarden-server")!
+        )
+    }
+    await #expect(throws: BitwardenSyncProviderError.invalidServerURL) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "master-password-secret",
+            serverURL: URL(string: "https:///missing-host")!
+        )
+    }
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "   ",
+            serverURL: URL(string: "https://vault.bitwarden.com")!
+        )
+    }
+
+    #expect(transport.preloginRequests.isEmpty)
+    #expect(transport.tokenRequests.isEmpty)
+}
+
+@Test func bitwardenVaultSyncProviderDecryptsEncryptedCipherAndSendPayloadsWithStoredVaultKey() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "bitwarden-access-token-secret",
+            refreshToken: "bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    try keyStore.saveVaultKey(
+        BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        ),
+        accountLabel: "alice@example.com"
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "cipher-login-secret-id",
+              "Type": 1,
+              "Name": "2.EBESExQVFhcYGRobHB0eHw==|tErnruiS0V91kFY96RcwiA==|FrzpnxOsjE5S1wEN6mko4Ko+jqufmBWrSkrVWZE5A8M=",
+              "Notes": "2.UFFSU1RVVldYWVpbXF1eXw==|QQ5DX0KF9Pc3O9/VS8tSIg==|ZI3LDlknuqYxK6OzC+oXihDqked7fuhC6rGBwrQq76w=",
+              "Login": {
+                "Username": "2.ICEiIyQlJicoKSorLC0uLw==|7K7Q6bqqbfpfPX1EsLbFhw==|nRj2A6im5QwgywbZKDQ3uj+FCaMNkmKlcFqcyUZR8JQ=",
+                "Password": "2.MDEyMzQ1Njc4OTo7PD0+Pw==|4WF696+21sCfxpKGHKVzcQ==|02+1QzcwdUveiuQmueel7W+0ioEEqVgUe/JfJbakNQo=",
+                "Uris": [
+                  { "Uri": "2.QEFCQ0RFRkdISUpLTE1OTw==|ivAIgHIp7FnPAb2W4tiMNUhvSqKCnM06Th+Z5SxNhiE=|8vALtNjALLR3t8EvALaiS38Eesu+W9rHHQpOyYSLMSE=" }
+                ]
+              }
+            }
+          ],
+          "Sends": [
+            {
+              "Id": "send-text-secret-id",
+              "Type": 0,
+              "Key": "2.YGFiY2RlZmdoaWprbG1ubw==|zq7JJ4hjkg0cvWU50DKxDmCwuT4Y0WkNtDBgGN3j8a8=|PgLoRXs3hxeF6nybc/xWXGw7xbQtCBaKwO3tuFRsQM0=",
+              "Name": "2.cHFyc3R1dnd4eXp7fH1+fw==|X0Ed5P+CcI4lsQLbWykoqA==|BOu5b1zccScdKnMfmmeCD9h3WPLH0cEV9T2ybc/+m2Y=",
+              "Notes": "2.kJGSk5SVlpeYmZqbnJ2enw==|q805U9xwKY4A+FawL/QEqQ==|NegYGLj7SbS9jT+IHcuXsZTG8VYa7io8BkRuyArDG9I=",
+              "Text": {
+                "Text": "2.gIGCg4SFhoeIiYqLjI2Ojw==|g8HzlYI9yDNeJeNKIDtYOEz+sv9cN+MBf51xAcRmoMc=|6qZuQ04w5y3zufyNIrj0l5Ul5EZ8xLwSHpZiekQLt3I="
+              },
+              "MaxAccessCount": 2
+            }
+          ]
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: keyStore,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let login = try #require(snapshot.items.first)
+    #expect(login.title == "GitHub")
+    #expect(login.username == "alice")
+    #expect(login.password == "p@ssw0rd!")
+    #expect(login.url == "https://github.com/login")
+    #expect(login.notes == "recovery note")
+    let send = try #require(snapshot.sends.first)
+    #expect(send.title == "Deploy link")
+    #expect(send.body == "https://deploy.example/secret")
+    #expect(send.notes == "send note")
+    #expect(send.maxViews == 2)
+}
+
+@Test func bitwardenVaultSyncProviderKeepsPlaintextURLsWhenVaultKeyIsAvailable() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "bitwarden-access-token-secret",
+            refreshToken: "bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    try keyStore.saveVaultKey(
+        BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        ),
+        accountLabel: "alice@example.com"
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "cipher-login-secret-id",
+              "Type": 1,
+              "Name": "Example login",
+              "Login": {
+                "Username": "alice",
+                "Uris": [{ "Uri": "https://example.com/login" }]
+              }
+            }
+          ],
+          "Sends": []
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: keyStore,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let login = try #require(snapshot.items.first)
+    #expect(login.url == "https://example.com/login")
+}
+
+@Test func bitwardenVaultSyncProviderDoesNotSurfaceCiphertextWhenVaultKeyIsMissing() async throws {
+    let encryptedName = "2.EBESExQVFhcYGRobHB0eHw==|tErnruiS0V91kFY96RcwiA==|FrzpnxOsjE5S1wEN6mko4Ko+jqufmBWrSkrVWZE5A8M="
+    let encryptedPassword = "2.MDEyMzQ1Njc4OTo7PD0+Pw==|4WF696+21sCfxpKGHKVzcQ==|02+1QzcwdUveiuQmueel7W+0ioEEqVgUe/JfJbakNQo="
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "bitwarden-access-token-secret",
+            refreshToken: "bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "cipher-login-secret-id",
+              "Type": 1,
+              "Name": "\(encryptedName)",
+              "Login": {
+                "Username": "alice",
+                "Password": "\(encryptedPassword)",
+                "Uris": [{ "Uri": "https://example.com/login" }]
+              }
+            }
+          ],
+          "Sends": []
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let login = try #require(snapshot.items.first)
+    #expect(login.title == "")
+    #expect(login.username == "alice")
+    #expect(login.url == "https://example.com/login")
+    #expect(login.password == nil)
+    let visibleText = [login.title, login.password ?? "", login.redactedSummary].joined(separator: " ")
+    #expect(!visibleText.contains(encryptedName))
+    #expect(!visibleText.contains(encryptedPassword))
+}
+
 @Test func bitwardenVaultSyncProviderPullsFullSnapshotThroughRefreshedTokenWithoutLeakingSecrets() async throws {
     let identityTransport = RecordingBitwardenIdentityTransport()
     identityTransport.result = BitwardenTokenRefreshResult(
@@ -1151,6 +1480,35 @@ private final class RecordingBitwardenIdentityTransport: BitwardenIdentityTokenT
     func refreshAccessToken(_ request: BitwardenTokenRefreshRequest) async throws -> BitwardenTokenRefreshResult {
         requests.append(request)
         return result
+    }
+}
+
+private final class RecordingBitwardenPasswordAuthenticationTransport: BitwardenPasswordAuthenticationTransport, @unchecked Sendable {
+    private(set) var preloginRequests: [BitwardenPreloginHTTPRequest] = []
+    private(set) var tokenRequests: [BitwardenTokenHTTPRequest] = []
+    private var preloginResponses: [BitwardenPasswordAuthenticationHTTPResponse] = []
+    private var tokenResponses: [BitwardenPasswordAuthenticationHTTPResponse] = []
+
+    func enqueuePrelogin(statusCode: Int, body: String) {
+        preloginResponses.append(
+            BitwardenPasswordAuthenticationHTTPResponse(statusCode: statusCode, body: Data(body.utf8))
+        )
+    }
+
+    func enqueueToken(statusCode: Int, body: String) {
+        tokenResponses.append(
+            BitwardenPasswordAuthenticationHTTPResponse(statusCode: statusCode, body: Data(body.utf8))
+        )
+    }
+
+    func prelogin(_ request: BitwardenPreloginHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
+        preloginRequests.append(request)
+        return preloginResponses.removeFirst()
+    }
+
+    func token(_ request: BitwardenTokenHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
+        tokenRequests.append(request)
+        return tokenResponses.removeFirst()
     }
 }
 
