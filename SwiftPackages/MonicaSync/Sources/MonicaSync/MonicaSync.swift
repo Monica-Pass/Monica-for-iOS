@@ -27,6 +27,62 @@ public enum BitwardenSyncItemKind: String, Sendable, Equatable, Hashable, Codabl
     }
 }
 
+public struct BitwardenSyncFolder: Sendable, Equatable, Identifiable {
+    public var id: String { remoteID }
+
+    public let remoteID: String
+    public let name: String
+    public let updatedAt: Date?
+
+    public init(remoteID: String, name: String, updatedAt: Date? = nil) {
+        self.remoteID = remoteID
+        self.name = name
+        self.updatedAt = updatedAt
+    }
+
+    public var redactedSummary: String {
+        "Folder \(sanitizedBitwardenTitle(name))"
+    }
+}
+
+public struct BitwardenSyncAttachment: Sendable, Equatable, Identifiable {
+    public var id: String { remoteID }
+
+    public let remoteID: String
+    public let cipherRemoteID: String
+    public let fileName: String
+    public let encryptedKey: String?
+    public let byteCount: Int
+
+    public init(
+        remoteID: String,
+        cipherRemoteID: String,
+        fileName: String,
+        encryptedKey: String? = nil,
+        byteCount: Int = 0
+    ) {
+        self.remoteID = remoteID
+        self.cipherRemoteID = cipherRemoteID
+        self.fileName = fileName
+        self.encryptedKey = encryptedKey
+        self.byteCount = byteCount
+    }
+
+    public var syncFingerprint: String {
+        [
+            remoteID,
+            cipherRemoteID,
+            fileName,
+            encryptedKey ?? "",
+            String(byteCount)
+        ].joined(separator: "\u{1F}")
+    }
+
+    public var redactedSummary: String {
+        "附件 \(sanitizedBitwardenTitle(fileName)) \(byteCount) 字节"
+    }
+}
+
 public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public var id: String { remoteID }
 
@@ -38,8 +94,10 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public let password: String?
     public let totpSecret: String?
     public let notes: String?
+    public let folderID: String?
     public let folderName: String?
     public let collectionNames: [String]
+    public let attachments: [BitwardenSyncAttachment]
     public let attachmentByteCount: Int
     public let updatedAt: Date?
     public let cardholderName: String
@@ -62,8 +120,10 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         password: String? = nil,
         totpSecret: String? = nil,
         notes: String? = nil,
+        folderID: String? = nil,
         folderName: String? = nil,
         collectionNames: [String] = [],
+        attachments: [BitwardenSyncAttachment] = [],
         attachmentByteCount: Int = 0,
         updatedAt: Date? = nil,
         cardholderName: String = "",
@@ -85,9 +145,11 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.password = password
         self.totpSecret = totpSecret
         self.notes = notes
+        self.folderID = folderID
         self.folderName = folderName
         self.collectionNames = collectionNames
-        self.attachmentByteCount = attachmentByteCount
+        self.attachments = attachments
+        self.attachmentByteCount = attachments.isEmpty ? attachmentByteCount : attachments.reduce(0) { $0 + $1.byteCount }
         self.updatedAt = updatedAt
         self.cardholderName = cardholderName
         self.cardNumber = cardNumber
@@ -160,17 +222,20 @@ public struct BitwardenSendSyncItem: Sendable, Equatable, Identifiable {
 public struct BitwardenSyncSnapshot: Sendable, Equatable {
     public let accountLabel: String
     public let revision: String
+    public let folders: [BitwardenSyncFolder]
     public let items: [BitwardenSyncItem]
     public let sends: [BitwardenSendSyncItem]
 
     public init(
         accountLabel: String,
         revision: String,
+        folders: [BitwardenSyncFolder] = [],
         items: [BitwardenSyncItem] = [],
         sends: [BitwardenSendSyncItem] = []
     ) {
         self.accountLabel = accountLabel
         self.revision = revision
+        self.folders = folders
         self.items = items
         self.sends = sends
     }
@@ -181,6 +246,8 @@ public struct BitwardenSyncSnapshot: Sendable, Equatable {
 }
 
 public enum BitwardenSyncMutation: Sendable, Equatable {
+    case upsertFolder(localID: String, remoteID: String?, name: String)
+    case deleteFolder(localID: String, remoteID: String?, name: String)
     case upsertCipher(item: BitwardenLocalItemSyncItem, remoteID: String?)
     case deleteCipher(localID: String, remoteID: String?, kind: BitwardenSyncItemKind, title: String)
     case upsertSend(
@@ -203,10 +270,27 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
         expirationDate: String?,
         maxAccessCount: Int?
     )
+    case upsertFileSend(
+        localID: String,
+        remoteID: String?,
+        title: String,
+        fileName: String,
+        fileContent: Data,
+        mediaType: String,
+        notes: String?,
+        expiresAt: String,
+        maxViews: Int,
+        password: String?,
+        hideEmail: Bool
+    )
     case deleteSend(localID: String, remoteID: String?, title: String)
 
     public var redactedSummary: String {
         switch self {
+        case .upsertFolder(_, _, let name):
+            "upsert Folder \(sanitizedBitwardenTitle(name))"
+        case .deleteFolder(_, _, let name):
+            "delete Folder \(sanitizedBitwardenTitle(name))"
         case .upsertCipher(let item, _):
             "upsert \(item.redactedSummary)"
         case .deleteCipher(_, _, let kind, let title):
@@ -215,6 +299,8 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
             "upsert Send \(sanitizedBitwardenTitle(title)) \(maxViews) 次"
         case .upsertEncryptedSend:
             "upsert encrypted Send"
+        case .upsertFileSend(_, _, let title, let fileName, let fileContent, _, _, _, let maxViews, _, _):
+            "upsert File Send \(sanitizedBitwardenTitle(title)) \(sanitizedBitwardenTitle(fileName)) \(maxViews) 次 \(fileContent.count) 字节"
         case .deleteSend(_, _, let title):
             "delete Send \(sanitizedBitwardenTitle(title))"
         }
@@ -386,6 +472,37 @@ public struct BitwardenSendSyncState: Sendable, Equatable, Codable, Identifiable
 
     public var redactedSummary: String {
         isDeleted ? "Send 同步状态 已删除" : "Send 同步状态 已关联"
+    }
+}
+
+public struct BitwardenFolderSyncState: Sendable, Equatable, Codable, Identifiable {
+    public var id: String { localID }
+
+    public let localID: String
+    public let remoteID: String?
+    public let name: String
+    public let lastSyncedFingerprint: String
+    public let lastRemoteRevision: String?
+    public let isDeleted: Bool
+
+    public init(
+        localID: String,
+        remoteID: String?,
+        name: String,
+        lastSyncedFingerprint: String,
+        lastRemoteRevision: String?,
+        isDeleted: Bool = false
+    ) {
+        self.localID = localID
+        self.remoteID = remoteID
+        self.name = name
+        self.lastSyncedFingerprint = lastSyncedFingerprint
+        self.lastRemoteRevision = lastRemoteRevision
+        self.isDeleted = isDeleted
+    }
+
+    public var redactedSummary: String {
+        isDeleted ? "Folder 同步状态 已删除" : "Folder \(sanitizedBitwardenTitle(name)) 同步状态 已关联"
     }
 }
 
@@ -916,6 +1033,25 @@ public enum BitwardenCrypto {
 
     public static func makeSendKeyMaterial() throws -> Data {
         try secureRandomData(count: 16)
+    }
+
+    public static func hashSendPassword(_ password: String, keyMaterial: Data) throws -> String {
+        try pbkdf2(seed: Data(password.utf8), salt: keyMaterial, iterations: 100_000, length: 32)
+            .base64EncodedString()
+    }
+
+    public static func encryptSendFileContent(_ data: Data, key: BitwardenVaultKey) throws -> Data {
+        let iv = try secureRandomData(count: kCCBlockSizeAES128)
+        let ciphertext = try aes256CBCEncrypt(data, key: key.encryptionKey, iv: iv)
+        let mac = Data(HMAC<SHA256>.authenticationCode(
+            for: iv + ciphertext,
+            using: SymmetricKey(data: key.macKey)
+        ))
+        var output = Data([2])
+        output.append(iv)
+        output.append(mac)
+        output.append(ciphertext)
+        return output
     }
 
     private static func pbkdf2(seed: Data, salt: Data, iterations: Int, length: Int) throws -> Data {
@@ -1672,6 +1808,18 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         var latestRevision = ""
         var assignedRemoteIDs: [String: String] = [:]
         for mutation in mutations {
+            if case .upsertFileSend = mutation {
+                let fileSendResult = try await pushFileSendMutation(
+                    mutation,
+                    session: session,
+                    accessToken: accessToken,
+                    vaultKey: vaultKey
+                )
+                acceptedMutationCount += fileSendResult.acceptedMutationCount
+                latestRevision = fileSendResult.revision.isEmpty ? latestRevision : fileSendResult.revision
+                assignedRemoteIDs.merge(fileSendResult.assignedRemoteIDs) { _, new in new }
+                continue
+            }
             let response = try await vaultTransport.send(
                 try Self.request(
                     for: mutation,
@@ -1688,6 +1836,10 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 continue
             }
             if case .deleteCipher = mutation, response.statusCode == 404 {
+                acceptedMutationCount += 1
+                continue
+            }
+            if case .deleteFolder = mutation, response.statusCode == 404 {
                 acceptedMutationCount += 1
                 continue
             }
@@ -1709,6 +1861,112 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         )
     }
 
+    private func pushFileSendMutation(
+        _ mutation: BitwardenSyncMutation,
+        session: BitwardenAuthenticationSession,
+        accessToken: String,
+        vaultKey: BitwardenVaultKey?
+    ) async throws -> BitwardenSyncPushResult {
+        guard case .upsertFileSend(
+            let localID,
+            let remoteID,
+            let title,
+            let fileName,
+            let fileContent,
+            let mediaType,
+            let notes,
+            let expiresAt,
+            let maxViews,
+            let password,
+            let hideEmail
+        ) = mutation else {
+            throw BitwardenSyncProviderError.unsupportedOperation
+        }
+        guard remoteID == nil else {
+            throw BitwardenSyncProviderError.unsupportedOperation
+        }
+        guard let vaultKey else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+
+        let keyMaterial = try BitwardenCrypto.makeSendKeyMaterial()
+        let sendKey = try BitwardenCrypto.deriveSendKey(keyMaterial)
+        let encryptedContent = try BitwardenCrypto.encryptSendFileContent(fileContent, key: sendKey)
+        let normalizedExpirationDate = Self.normalizedBitwardenSendDate(expiresAt)
+        let deletionDate = normalizedExpirationDate ?? "9999-12-31T00:00:00Z"
+        let payload: [String: Any] = [
+            "key": try BitwardenCrypto.encrypt(keyMaterial, key: vaultKey),
+            "type": 1,
+            "fileLength": encryptedContent.count,
+            "name": try BitwardenCrypto.encryptString(title, key: sendKey),
+            "notes": try notes.flatMap { value -> String? in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : try BitwardenCrypto.encryptString(value, key: sendKey)
+            } ?? NSNull(),
+            "password": try password.flatMap { value -> String? in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                return trimmed.isEmpty ? nil : try BitwardenCrypto.hashSendPassword(value, keyMaterial: keyMaterial)
+            } ?? NSNull(),
+            "disabled": false,
+            "hideEmail": hideEmail,
+            "deletionDate": deletionDate,
+            "expirationDate": normalizedExpirationDate.map { $0 as Any } ?? NSNull(),
+            "maxAccessCount": maxViews > 0 ? maxViews as Any : NSNull(),
+            "file": [
+                "fileName": try BitwardenCrypto.encryptString(fileName, key: sendKey)
+            ]
+        ]
+        let createResponse = try await vaultTransport.send(
+            BitwardenVaultSyncRequest(
+                method: "POST",
+                url: Self.sendFileURL(apiURL: session.apiURL),
+                headers: Self.jsonHeaders(accessToken: accessToken),
+                body: try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            )
+        )
+        if createResponse.statusCode == 401 || createResponse.statusCode == 403 {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        guard (200...299).contains(createResponse.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: createResponse.statusCode)
+        }
+        guard let root = try JSONSerialization.jsonObject(with: createResponse.body) as? [String: Any],
+              let sendRemoteID = Self.jsonString(root, "id", "Id"),
+              let file = (root["file"] as? [String: Any]) ?? (root["File"] as? [String: Any])
+        else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        let uploadType = Self.jsonInt(file, "fileUploadType", "FileUploadType") ?? 0
+        let fileID = Self.jsonString(file, "id", "Id")
+        let uploadURL = try Self.fileSendUploadURL(
+            apiURL: session.apiURL,
+            file: file,
+            sendRemoteID: sendRemoteID,
+            fileID: fileID,
+            uploadType: uploadType
+        )
+        let uploadResponse = try await vaultTransport.send(
+            BitwardenVaultSyncRequest(
+                method: uploadType == 1 ? "POST" : "PUT",
+                url: uploadURL,
+                headers: Self.fileUploadHeaders(
+                    accessToken: accessToken,
+                    mediaType: mediaType,
+                    uploadType: uploadType
+                ),
+                body: encryptedContent
+            )
+        )
+        guard (200...299).contains(uploadResponse.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: uploadResponse.statusCode)
+        }
+        return BitwardenSyncPushResult(
+            acceptedMutationCount: 1,
+            revision: Self.revision(from: createResponse) ?? "",
+            assignedRemoteIDs: [localID: sendRemoteID]
+        )
+    }
+
     private static func syncURL(apiURL: URL) -> URL {
         var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
         let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
@@ -1724,6 +1982,34 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         vaultKey: BitwardenVaultKey?
     ) throws -> BitwardenVaultSyncRequest {
         switch mutation {
+        case .upsertFolder(_, let remoteID, let name):
+            guard let vaultKey else {
+                throw BitwardenSyncProviderError.authenticationRequired
+            }
+            let body = try JSONSerialization.data(
+                withJSONObject: [
+                    "name": try BitwardenCrypto.encryptString(name, key: vaultKey)
+                ],
+                options: [.sortedKeys]
+            )
+            return BitwardenVaultSyncRequest(
+                method: remoteID == nil ? "POST" : "PUT",
+                url: folderURL(apiURL: apiURL, remoteID: remoteID),
+                headers: jsonHeaders(accessToken: accessToken),
+                body: body
+            )
+        case .deleteFolder(_, let remoteID, _):
+            guard let remoteID, !remoteID.isEmpty else {
+                throw BitwardenSyncProviderError.unsupportedOperation
+            }
+            return BitwardenVaultSyncRequest(
+                method: "DELETE",
+                url: folderURL(apiURL: apiURL, remoteID: remoteID),
+                headers: [
+                    "Authorization": "Bearer \(accessToken)",
+                    "Accept": "application/json"
+                ]
+            )
         case .upsertCipher(let item, let remoteID):
             guard let vaultKey else {
                 throw BitwardenSyncProviderError.authenticationRequired
@@ -1811,6 +2097,8 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 headers: jsonHeaders(accessToken: accessToken),
                 body: body
             )
+        case .upsertFileSend:
+            throw BitwardenSyncProviderError.unsupportedOperation
         case .deleteSend(_, let remoteID, _):
             guard let remoteID, !remoteID.isEmpty else {
                 throw BitwardenSyncProviderError.unsupportedOperation
@@ -1913,6 +2201,68 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         }).joined(separator: "/")
         components?.queryItems = nil
         return components?.url ?? apiURL
+    }
+
+    private static func sendFileURL(apiURL: URL) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + [basePath, "sends", "file", "v2"]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
+    private static func folderURL(apiURL: URL, remoteID: String?) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + ([basePath, "folders", remoteID].compactMap { value -> String? in
+            guard let value, !value.isEmpty else { return nil }
+            return value
+        }).joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
+    private static func fileSendUploadURL(
+        apiURL: URL,
+        file: [String: Any],
+        sendRemoteID: String,
+        fileID: String?,
+        uploadType: Int
+    ) throws -> URL {
+        if uploadType == 0,
+           let uploadURLString = jsonString(file, "url", "Url"),
+           let uploadURL = URL(string: uploadURLString) {
+            return uploadURL
+        }
+        guard uploadType == 1,
+              let fileID,
+              !fileID.isEmpty else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + [basePath, "sends", sendRemoteID, "file", fileID]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
+    private static func fileUploadHeaders(
+        accessToken: String,
+        mediaType: String,
+        uploadType: Int
+    ) -> [String: String] {
+        if uploadType == 1 {
+            return [
+                "Authorization": "Bearer \(accessToken)",
+                "Accept": "application/json",
+                "Content-Type": mediaType.isEmpty ? "application/octet-stream" : mediaType
+            ]
+        }
+        return ["Content-Type": "application/octet-stream"]
     }
 
     private static func normalizedBitwardenSendDate(_ value: String) -> String? {
@@ -2059,13 +2409,17 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
 
     private static func createdLocalID(for mutation: BitwardenSyncMutation) -> String? {
         switch mutation {
+        case .upsertFolder(let localID, let remoteID, _):
+            remoteID == nil ? localID : nil
         case .upsertCipher(let item, let remoteID):
             remoteID == nil ? item.localID : nil
         case .upsertSend(let localID, let remoteID, _, _, _, _, _):
             remoteID == nil ? localID : nil
         case .upsertEncryptedSend(let localID, let remoteID, _, _, _, _, _, _, _):
             remoteID == nil ? localID : nil
-        case .deleteCipher, .deleteSend:
+        case .upsertFileSend(let localID, let remoteID, _, _, _, _, _, _, _, _, _):
+            remoteID == nil ? localID : nil
+        case .deleteFolder, .deleteCipher, .deleteSend:
             nil
         }
     }
@@ -2077,6 +2431,24 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             }
             if let number = json[key] as? NSNumber {
                 return number.stringValue
+            }
+        }
+        return nil
+    }
+
+    private static func jsonInt(_ json: [String: Any], _ keys: String...) -> Int? {
+        for key in keys {
+            if let value = json[key] as? Int {
+                return value
+            }
+            if let value = json[key] as? Double {
+                return Int(value)
+            }
+            if let number = json[key] as? NSNumber {
+                return number.intValue
+            }
+            if let value = json[key] as? String, let intValue = Int(value) {
+                return intValue
             }
         }
         return nil
@@ -2169,10 +2541,15 @@ private enum BitwardenVaultSyncSnapshotParser {
         let folders = array(root, "folders", "Folders")
         let ciphers = array(root, "ciphers", "Ciphers")
         let sends = array(root, "sends", "Sends")
-        let folderNamesByID = Dictionary(uniqueKeysWithValues: folders.compactMap { folder -> (String, String)? in
+        let folderItems = folders.compactMap { folder -> BitwardenSyncFolder? in
             guard let id = string(folder, "id", "Id"), !id.isEmpty else { return nil }
-            return (id, string(folder, "name", "Name") ?? "")
-        })
+            return BitwardenSyncFolder(
+                remoteID: id,
+                name: decryptedString(folder, "name", "Name", key: vaultKey) ?? "",
+                updatedAt: date(string(folder, "revisionDate", "RevisionDate"))
+            )
+        }
+        let folderNamesByID = Dictionary(uniqueKeysWithValues: folderItems.map { ($0.remoteID, $0.name) })
         let items = ciphers.compactMap { cipher -> BitwardenSyncItem? in
             guard string(cipher, "deletedDate", "DeletedDate") == nil else { return nil }
             guard let id = string(cipher, "id", "Id"), !id.isEmpty else { return nil }
@@ -2191,6 +2568,16 @@ private enum BitwardenVaultSyncSnapshotParser {
             let card = dictionary(cipher, "card", "Card")
             let identity = dictionary(cipher, "identity", "Identity")
             let firstURI = array(login, "uris", "Uris").first
+            let attachments = array(cipher, "attachments", "Attachments").compactMap { attachment -> BitwardenSyncAttachment? in
+                guard let attachmentID = string(attachment, "id", "Id"), !attachmentID.isEmpty else { return nil }
+                return BitwardenSyncAttachment(
+                    remoteID: attachmentID,
+                    cipherRemoteID: id,
+                    fileName: decryptedString(attachment, "fileName", "FileName", key: effectiveKey) ?? "",
+                    encryptedKey: string(attachment, "key", "Key"),
+                    byteCount: int(attachment, "size", "Size") ?? 0
+                )
+            }
             return BitwardenSyncItem(
                 remoteID: id,
                 kind: kind,
@@ -2200,8 +2587,10 @@ private enum BitwardenVaultSyncSnapshotParser {
                 password: decryptedString(login, "password", "Password", key: effectiveKey),
                 totpSecret: decryptedString(login, "totp", "Totp", key: effectiveKey),
                 notes: decryptedString(cipher, "notes", "Notes", key: effectiveKey),
+                folderID: folderID,
                 folderName: folderID.flatMap { folderNamesByID[$0] },
                 collectionNames: [],
+                attachments: attachments,
                 attachmentByteCount: byteCount(array(cipher, "attachments", "Attachments")),
                 updatedAt: date(string(cipher, "revisionDate", "RevisionDate")),
                 cardholderName: decryptedString(card, "cardholderName", "CardholderName", key: effectiveKey) ?? "",
@@ -2246,6 +2635,7 @@ private enum BitwardenVaultSyncSnapshotParser {
         return BitwardenSyncSnapshot(
             accountLabel: accountLabel(profile: profile, fallback: fallbackAccountLabel),
             revision: string(profile, "securityStamp", "SecurityStamp") ?? "",
+            folders: folderItems,
             items: items,
             sends: sendItems
         )

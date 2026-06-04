@@ -8969,6 +8969,116 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("revision-secret"))
     }
 
+    func testBitwardenSyncImportsFoldersReconcilesAttachmentsAndPushesFolderLinkedCiphers() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let folderStateStore = MemoryAppBitwardenFolderSyncStateStore()
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-revision-secret",
+            folders: [
+                BitwardenSyncFolder(
+                    remoteID: "remote-folder-work-secret-id",
+                    name: "Work",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_010)
+                )
+            ],
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-login-secret-id",
+                    kind: .login,
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com",
+                    password: "login-password-secret",
+                    folderID: "remote-folder-work-secret-id",
+                    folderName: "Work",
+                    attachments: [
+                        BitwardenSyncAttachment(
+                            remoteID: "remote-attachment-secret-id",
+                            cipherRemoteID: "remote-login-secret-id",
+                            fileName: "deploy.txt",
+                            encryptedKey: "encrypted-attachment-key-secret",
+                            byteCount: 42
+                        )
+                    ]
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(acceptedMutationCount: 1)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenFolderSyncStateStore: folderStateStore,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        let preview = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+
+        XCTAssertEqual(preview.remoteFolderCount, 1)
+        XCTAssertTrue(engine.createdProjects.map(\.title).contains("Work"))
+        XCTAssertEqual(try folderStateStore.loadStates(vaultID: "created-vault").map(\.remoteID), [
+            "remote-folder-work-secret-id"
+        ])
+        XCTAssertEqual(try folderStateStore.loadStates(vaultID: "created-vault").map(\.name), ["Work"])
+        XCTAssertEqual(engine.createdLoginEntries.first?.projectID, "project-2")
+        XCTAssertEqual(engine.createdAttachmentMetadata.count, 1)
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.entryID, "entry-1")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.fileName, "deploy.txt")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.source, "bitwarden")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.downloadState, "pending-bitwarden-download")
+        XCTAssertEqual(engine.createdAttachmentMetadata.first?.wrappedContentEncryptionKey, "encrypted-attachment-key-secret")
+        XCTAssertFalse(engine.createdAttachmentMetadata.first?.contentHash.contains("remote-attachment-secret-id") ?? true)
+
+        model.loginTitle = "Personal app"
+        model.loginUsername = "bob"
+        model.loginPassword = "local-password-secret"
+        model.loginURL = "https://personal.example"
+        try model.createLoginEntry(projectTitle: "Personal")
+        let personalProjectID = try XCTUnwrap(engine.createdLoginEntries.last?.projectID)
+        try folderStateStore.saveStates(
+            [
+                BitwardenFolderSyncState(
+                    localID: personalProjectID,
+                    remoteID: "remote-folder-personal-secret-id",
+                    name: "Personal",
+                    lastSyncedFingerprint: "Personal",
+                    lastRemoteRevision: nil
+                )
+            ],
+            vaultID: "created-vault"
+        )
+
+        _ = try await model.pushLocalBitwardenChanges()
+
+        guard case .upsertCipher(let item, _) = bitwarden.pushedMutations.first else {
+            XCTFail("Expected local login to push as cipher")
+            return
+        }
+        XCTAssertEqual(item.folderID, "remote-folder-personal-secret-id")
+        let visibleText = [
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            try folderStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " "),
+            engine.createdAttachmentMetadata.first?.source ?? "",
+            engine.createdAttachmentMetadata.first?.downloadState ?? ""
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("remote-folder-work-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-folder-personal-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-login-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-attachment-secret-id"))
+        XCTAssertFalse(visibleText.contains("login-password-secret"))
+        XCTAssertFalse(visibleText.contains("local-password-secret"))
+        XCTAssertFalse(visibleText.contains("encrypted-attachment-key-secret"))
+    }
+
     func testBitwardenPushUsesPersistedSendRemoteStateForUpdateAndDeletePlan() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
