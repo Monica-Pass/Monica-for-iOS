@@ -557,6 +557,40 @@ import Foundation
     }
 }
 
+@Test func bitwardenPasswordAuthenticatorRejectsInvalidInputsBeforeTransport() async throws {
+    let transport = RecordingBitwardenPasswordAuthenticationTransport()
+    let authenticator = BitwardenPasswordAuthenticator(
+        sessionStore: MemoryBitwardenAuthenticationSessionStore(),
+        vaultKeyStore: MemoryBitwardenVaultKeyStore(),
+        transport: transport
+    )
+
+    await #expect(throws: BitwardenSyncProviderError.invalidServerURL) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "master-password-secret",
+            serverURL: URL(string: "file:///tmp/not-a-bitwarden-server")!
+        )
+    }
+    await #expect(throws: BitwardenSyncProviderError.invalidServerURL) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "master-password-secret",
+            serverURL: URL(string: "https:///missing-host")!
+        )
+    }
+    await #expect(throws: BitwardenSyncProviderError.authenticationRequired) {
+        try await authenticator.signIn(
+            email: "alice@example.com",
+            masterPassword: "   ",
+            serverURL: URL(string: "https://vault.bitwarden.com")!
+        )
+    }
+
+    #expect(transport.preloginRequests.isEmpty)
+    #expect(transport.tokenRequests.isEmpty)
+}
+
 @Test func bitwardenVaultSyncProviderDecryptsEncryptedCipherAndSendPayloadsWithStoredVaultKey() async throws {
     let sessionStore = MemoryBitwardenAuthenticationSessionStore(
         session: BitwardenAuthenticationSession(
@@ -638,6 +672,122 @@ import Foundation
     #expect(send.body == "https://deploy.example/secret")
     #expect(send.notes == "send note")
     #expect(send.maxViews == 2)
+}
+
+@Test func bitwardenVaultSyncProviderKeepsPlaintextURLsWhenVaultKeyIsAvailable() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "bitwarden-access-token-secret",
+            refreshToken: "bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    try keyStore.saveVaultKey(
+        BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        ),
+        accountLabel: "alice@example.com"
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "cipher-login-secret-id",
+              "Type": 1,
+              "Name": "Example login",
+              "Login": {
+                "Username": "alice",
+                "Uris": [{ "Uri": "https://example.com/login" }]
+              }
+            }
+          ],
+          "Sends": []
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: keyStore,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let login = try #require(snapshot.items.first)
+    #expect(login.url == "https://example.com/login")
+}
+
+@Test func bitwardenVaultSyncProviderDoesNotSurfaceCiphertextWhenVaultKeyIsMissing() async throws {
+    let encryptedName = "2.EBESExQVFhcYGRobHB0eHw==|tErnruiS0V91kFY96RcwiA==|FrzpnxOsjE5S1wEN6mko4Ko+jqufmBWrSkrVWZE5A8M="
+    let encryptedPassword = "2.MDEyMzQ1Njc4OTo7PD0+Pw==|4WF696+21sCfxpKGHKVzcQ==|02+1QzcwdUveiuQmueel7W+0ioEEqVgUe/JfJbakNQo="
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "bitwarden-access-token-secret",
+            refreshToken: "bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "Profile": {
+            "Email": "alice@example.com",
+            "SecurityStamp": "server-security-stamp-secret"
+          },
+          "Ciphers": [
+            {
+              "Id": "cipher-login-secret-id",
+              "Type": 1,
+              "Name": "\(encryptedName)",
+              "Login": {
+                "Username": "alice",
+                "Password": "\(encryptedPassword)",
+                "Uris": [{ "Uri": "https://example.com/login" }]
+              }
+            }
+          ],
+          "Sends": []
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        now: { Date(timeIntervalSince1970: 1_804_000_100) }
+    )
+
+    let snapshot = try await provider.pullSnapshot()
+
+    let login = try #require(snapshot.items.first)
+    #expect(login.title == "")
+    #expect(login.username == "alice")
+    #expect(login.url == "https://example.com/login")
+    #expect(login.password == nil)
+    let visibleText = [login.title, login.password ?? "", login.redactedSummary].joined(separator: " ")
+    #expect(!visibleText.contains(encryptedName))
+    #expect(!visibleText.contains(encryptedPassword))
 }
 
 @Test func bitwardenVaultSyncProviderPullsFullSnapshotThroughRefreshedTokenWithoutLeakingSecrets() async throws {

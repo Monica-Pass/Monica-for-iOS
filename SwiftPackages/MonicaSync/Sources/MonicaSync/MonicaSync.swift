@@ -532,11 +532,17 @@ public struct BitwardenPasswordAuthenticator: Sendable {
         masterPassword: String,
         serverURL: URL = URL(string: "https://vault.bitwarden.com")!
     ) async throws -> BitwardenAuthenticationSession {
-        let urls = BitwardenServerURLs(serverURL: serverURL)
+        guard Self.isValidServerURL(serverURL) else {
+            throw BitwardenSyncProviderError.invalidServerURL
+        }
         let normalizedEmail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedEmail.isEmpty else {
             throw BitwardenSyncProviderError.authenticationRequired
         }
+        guard !masterPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        let urls = BitwardenServerURLs(serverURL: serverURL)
         let preloginResponse = try await transport.prelogin(
             BitwardenPreloginHTTPRequest(
                 url: Self.preloginURL(identityURL: urls.identityURL),
@@ -615,6 +621,17 @@ public struct BitwardenPasswordAuthenticator: Sendable {
 
     private static func tokenURL(identityURL: URL) -> URL {
         identityURL.appendingBitwardenPath("connect/token")
+    }
+
+    private static func isValidServerURL(_ url: URL) -> Bool {
+        guard let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = url.host,
+              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return false
+        }
+        return true
     }
 }
 
@@ -816,6 +833,10 @@ private struct BitwardenCipherString {
     let iv: Data
     let ciphertext: Data
     let mac: Data
+
+    static func isCipherString(_ value: String) -> Bool {
+        (try? parse(value)) != nil
+    }
 
     static func parse(_ value: String) throws -> BitwardenCipherString {
         let parts = value.split(separator: ".", maxSplits: 1).map(String.init)
@@ -1430,6 +1451,7 @@ public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedErr
     case unsupportedKDF(Int)
     case twoFactorRequired
     case serverRejected(statusCode: Int)
+    case invalidServerURL
     case invalidResponse
 
     public var errorDescription: String? {
@@ -1444,6 +1466,8 @@ public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedErr
             "Bitwarden 需要两步验证，当前 iOS 登录入口尚未接入验证码。"
         case .serverRejected(let statusCode):
             "Bitwarden 同步失败：服务器返回 \(statusCode)。"
+        case .invalidServerURL:
+            "Bitwarden 服务器 URL 无效，仅支持 http/https。"
         case .invalidResponse:
             "Bitwarden 同步响应无法解析。"
         }
@@ -1576,9 +1600,10 @@ private enum BitwardenVaultSyncSnapshotParser {
     private static func decryptedString(_ json: [String: Any], _ keys: String..., key: BitwardenVaultKey?) -> String? {
         let rawValue = keys.lazy.compactMap { string(json, $0) }.first
         guard let rawValue else { return nil }
-        guard let key, rawValue.contains(".") else {
+        guard BitwardenCipherString.isCipherString(rawValue) else {
             return rawValue
         }
+        guard let key else { return nil }
         return try? BitwardenCrypto.decryptString(rawValue, key: key)
     }
 

@@ -9008,12 +9008,12 @@ final class VaultSessionModelTests: XCTestCase {
             _ = try await model.signInToBitwarden()
             XCTFail("Expected Bitwarden sign-in to reject unsupported server URL")
         } catch {
-            XCTAssertTrue(error is BitwardenSyncProviderError)
+            XCTAssertEqual(error as? AppBitwardenSyncError, .invalidServerURL)
         }
 
         XCTAssertTrue(service.requests.isEmpty)
         XCTAssertEqual(model.bitwardenMasterPassword, "")
-        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 同步响应无法解析。")
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 服务器 URL 无效，仅支持 http/https。")
         XCTAssertFalse(model.bitwardenAuthenticationState.label.contains("master-password-secret"))
     }
 }

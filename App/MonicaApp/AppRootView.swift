@@ -511,11 +511,14 @@ struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
 
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
+    case invalidServerURL
 
     var errorDescription: String? {
         switch self {
         case .providerUnavailable:
             "Bitwarden 同步尚未配置。"
+        case .invalidServerURL:
+            "Bitwarden 服务器 URL 无效，仅支持 http/https。"
         }
     }
 }
@@ -8473,7 +8476,7 @@ final class AppSessionModel {
                 throw AppBitwardenSyncError.providerUnavailable
             }
             guard let serverURL = validBitwardenServerURL(bitwardenServerURL) else {
-                throw BitwardenSyncProviderError.invalidResponse
+                throw AppBitwardenSyncError.invalidServerURL
             }
             let session = try await bitwardenPasswordAuthenticationService.signIn(
                 email: bitwardenEmail,
