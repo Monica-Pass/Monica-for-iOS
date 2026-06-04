@@ -342,6 +342,7 @@ extension AppSessionModel {
         let bitwardenAuthenticationSessionStore = FileAppBitwardenAuthenticationSessionStore(containerURL: appGroupContainerURL)
         let bitwardenVaultKeyStore = FileAppBitwardenVaultKeyStore(containerURL: appGroupContainerURL)
         let bitwardenSendSyncStateStore = FileAppBitwardenSendSyncStateStore(containerURL: appGroupContainerURL)
+        let bitwardenFolderSyncStateStore = FileAppBitwardenFolderSyncStateStore(containerURL: appGroupContainerURL)
         let bitwardenItemSyncStateStore = FileAppBitwardenItemSyncStateStore(containerURL: appGroupContainerURL)
         let keyMaterialStore = AppKeychainAutoFillIndexKeyMaterialStore()
         let keyMaterialProvider = AppAutoFillIndexKeyMaterialProvider(store: keyMaterialStore)
@@ -377,6 +378,7 @@ extension AppSessionModel {
             bitwardenAuthenticationSessionStore: bitwardenAuthenticationSessionStore,
             bitwardenVaultKeyStore: bitwardenVaultKeyStore,
             bitwardenSendSyncStateStore: bitwardenSendSyncStateStore,
+            bitwardenFolderSyncStateStore: bitwardenFolderSyncStateStore,
             bitwardenItemSyncStateStore: bitwardenItemSyncStateStore,
             autoFillIndexStore: indexStore,
             autoFillCredentialSecretStore: secretStore,
