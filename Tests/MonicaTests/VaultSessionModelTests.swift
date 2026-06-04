@@ -25,6 +25,18 @@ final class VaultSessionModelTests: XCTestCase {
         #endif
     }
 
+    private func propertyListDictionary(at url: URL) throws -> [String: Any] {
+        guard let dictionary = try PropertyListSerialization.propertyList(
+            from: try Data(contentsOf: url),
+            options: [],
+            format: nil
+        ) as? [String: Any] else {
+            XCTFail("Property list should be a dictionary: \(url.lastPathComponent)")
+            return [:]
+        }
+        return dictionary
+    }
+
     private func unlockNewVault(_ model: AppSessionModel) throws {
         model.vaultName = "Mobile"
         model.vaultPassword = "中文 password 12345!"
@@ -1472,6 +1484,89 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.passkeyCredentialID, "")
         XCTAssertEqual(model.passkeyPrivateKeyReference, "")
         XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.credentialID, "Y3JlZGVudGlhbC1pZC1zZWNyZXQ=")
+    }
+
+    func testPendingSystemPasskeyRegistrationsImportIntoVaultAndCredentialIdentities() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let inboxStore = AppSystemPasskeyRegistrationInboxStore(containerURL: directory)
+        try inboxStore.saveIncomingRegistration(
+            AppSystemPasskeyRegistrationInboxItem(
+                relyingPartyID: "github.com",
+                username: "joyin@example.com",
+                userHandle: Data("github-user-handle".utf8),
+                credentialID: Data("credential-id-secret".utf8),
+                publicKeyCOSE: Data([0xA5, 0x01, 0x02, 0x03]),
+                privateKeyReference: "monica-passkey://credential-id-secret",
+                title: "GitHub Passkey"
+            ),
+            now: Date(timeIntervalSince1970: 1_804_500_000)
+        )
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            autoFillCredentialIdentityStore: identityStore
+        )
+        try unlockNewVault(model)
+
+        let importedCount = try model.importPendingSystemPasskeyRegistrations(
+            inboxStore: inboxStore,
+            projectTitle: "Personal"
+        )
+
+        XCTAssertEqual(importedCount, 1)
+        let created = try XCTUnwrap(model.passkeyEntries.first)
+        XCTAssertEqual(created.title, "GitHub Passkey")
+        XCTAssertEqual(created.relyingPartyID, "github.com")
+        XCTAssertEqual(created.username, "joyin@example.com")
+        XCTAssertEqual(created.privateKeyReference, "monica-passkey://credential-id-secret")
+        XCTAssertEqual(
+            identityStore.savedPasskeyIdentities.last,
+            [
+                AppAutoFillPasskeyCredentialIdentity(
+                    recordIdentifier: created.id,
+                    relyingPartyIdentifier: "github.com",
+                    username: "joyin@example.com",
+                    credentialID: Data("credential-id-secret".utf8),
+                    userHandle: Data("github-user-handle".utf8)
+                )
+            ]
+        )
+        XCTAssertEqual(try inboxStore.loadPendingRegistrations(), [])
+
+        let visibleText = ([model.entryOperationState.label] + model.operationTimelineEvents.map(\.detail))
+            .joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("credential-id-secret"))
+        XCTAssertFalse(visibleText.contains("client-data"))
+        XCTAssertFalse(visibleText.contains("attestation"))
+    }
+
+    func testPasskeyEntitlementsShareKeychainAndExtensionDeclaresProvider() throws {
+        let appEntitlementsURL = try repositoryFileURL("App/MonicaApp/MonicaApp.entitlements")
+        let extensionEntitlementsURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/MonicaAutoFillExtension.entitlements")
+        let extensionInfoURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/Info.plist")
+
+        let appEntitlements = try propertyListDictionary(at: appEntitlementsURL)
+        let extensionEntitlements = try propertyListDictionary(at: extensionEntitlementsURL)
+        let extensionInfo = try propertyListDictionary(at: extensionInfoURL)
+        let sharedKeychainGroup = "$(AppIdentifierPrefix)com.monica-pass.monica"
+
+        XCTAssertTrue((appEntitlements["keychain-access-groups"] as? [String] ?? []).contains(sharedKeychainGroup))
+        XCTAssertTrue((extensionEntitlements["keychain-access-groups"] as? [String] ?? []).contains(sharedKeychainGroup))
+        XCTAssertEqual(
+            appEntitlements["com.apple.developer.authentication-services.autofill-credential-provider"] as? Bool,
+            true
+        )
+        XCTAssertEqual(
+            extensionEntitlements["com.apple.developer.authentication-services.autofill-credential-provider"] as? Bool,
+            true
+        )
+        let extensionAttributes = ((extensionInfo["NSExtension"] as? [String: Any])?["NSExtensionAttributes"] as? [String: Any])
+        let extensionCapabilities = extensionAttributes?["ASCredentialProviderExtensionCapabilities"] as? [String: Any]
+        XCTAssertEqual(
+            extensionCapabilities?["ProvidesPasskeys"] as? Bool,
+            true
+        )
     }
 
     func testOneDriveMSALUsesRegisteredAppPrivateKeychainGroup() throws {

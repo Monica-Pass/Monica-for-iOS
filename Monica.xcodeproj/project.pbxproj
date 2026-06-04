@@ -43,6 +43,8 @@
 		A50000000000000000000002 /* MSAL in Frameworks */ = {isa = PBXBuildFile; productRef = A500000000000000000000D1 /* MSAL */; };
 		A60000000000000000000001 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */; };
 		A60000000000000000000002 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */; };
+		A70000000000000000000001 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */; };
+		A70000000000000000000002 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -125,6 +127,7 @@
 		A30000000000000000000015 /* MonicaShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = MonicaShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneDriveMSALAuthenticationService.swift; sourceTree = "<group>"; };
 		A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillCredentialSaveInboxStore.swift; sourceTree = "<group>"; };
+		A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSystemPasskeyRegistrationInboxStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -211,6 +214,7 @@
 				A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */,
 				A30000000000000000000011 /* AppShareExtensionInboxStore.swift */,
 				A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */,
+				A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */,
 				A10000000000000000000013 /* MonicaAppEnvironment.swift */,
 				A10000000000000000000014 /* Info.plist */,
 				A10000000000000000000015 /* MonicaApp.entitlements */,
@@ -480,6 +484,7 @@
 				A50000000000000000000001 /* OneDriveMSALAuthenticationService.swift in Sources */,
 				A30000000000000000000001 /* AppShareExtensionInboxStore.swift in Sources */,
 				A60000000000000000000001 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */,
+				A70000000000000000000001 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */,
 				A1000000000000000000001B /* AndroidParityDesign.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
@@ -497,6 +502,7 @@
 			files = (
 				A10000000000000000000004 /* AutoFillCredentialProviderViewController.swift in Sources */,
 				A60000000000000000000002 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */,
+				A70000000000000000000002 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

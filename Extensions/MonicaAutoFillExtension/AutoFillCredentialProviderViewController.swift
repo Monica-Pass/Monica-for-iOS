@@ -302,6 +302,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 credentialID: registration.credentialID,
                 attestationObject: registration.attestationObject
             )
+            try persistPasskeyRegistration(registration)
             savePasskeyIdentity(for: registration)
             extensionContext.completeRegistrationRequest(
                 using: credential,
@@ -357,6 +358,26 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         ASCredentialIdentityStore.shared.saveCredentialIdentities([identity]) { _, _ in
             // Best-effort system discovery; the private key is already persisted in Keychain.
         }
+    }
+
+    private func persistPasskeyRegistration(_ registration: MonicaPasskeyRegistrationResult) throws {
+        guard let inboxStore = AppSystemPasskeyRegistrationInboxStore(
+            appGroupIdentifier: appGroupIdentifier
+        ) else {
+            throw AutoFillExtensionError.appGroupUnavailable
+        }
+        let title = registration.relyingPartyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        try inboxStore.saveIncomingRegistration(
+            AppSystemPasskeyRegistrationInboxItem(
+                relyingPartyID: registration.relyingPartyID,
+                username: registration.username,
+                userHandle: registration.userHandle,
+                credentialID: registration.credentialID,
+                publicKeyCOSE: registration.publicKeyCOSE,
+                privateKeyReference: registration.privateKeyReference,
+                title: title.isEmpty ? registration.username : title
+            )
+        )
     }
 
     @available(iOS 26.2, *)

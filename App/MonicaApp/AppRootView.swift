@@ -16,33 +16,6 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
-struct AppSystemPasskeyRegistrationResult: Sendable, Equatable {
-    let relyingPartyID: String
-    let username: String
-    let userHandle: Data
-    let credentialID: Data
-    let publicKeyCOSE: Data
-    let privateKeyReference: String
-    let title: String
-    let attestationObject: Data
-    let clientDataHash: Data
-
-    var metadataDraft: LocalPasskeyEntryDraft {
-        let displayTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let relyingParty = relyingPartyID.trimmingCharacters(in: .whitespacesAndNewlines)
-        return LocalPasskeyEntryDraft(
-            title: displayTitle.isEmpty ? relyingParty : displayTitle,
-            relyingPartyID: relyingParty,
-            username: username.trimmingCharacters(in: .whitespacesAndNewlines),
-            userHandle: userHandle.base64EncodedString(),
-            credentialID: credentialID.base64EncodedString(),
-            publicKeyCOSE: publicKeyCOSE.base64EncodedString(),
-            privateKeyReference: privateKeyReference,
-            notes: "iOS system passkey registration. Transient WebAuthn attestation and client data hash are not stored."
-        )
-    }
-}
-
 struct SecurityQuestionOption: Identifiable, Sendable, Equatable {
     let id: Int
     let text: String
@@ -5931,6 +5904,28 @@ final class AppSessionModel {
         }
     }
 
+    func importPendingSystemPasskeyRegistrations(
+        inboxStore: AppSystemPasskeyRegistrationInboxStore,
+        projectTitle: String
+    ) throws -> Int {
+        guard vaultState == .unlocked else {
+            throw AppAutoFillIndexError.vaultLocked
+        }
+        let registrations = try inboxStore.loadPendingRegistrations()
+        guard !registrations.isEmpty else {
+            return 0
+        }
+
+        for registration in registrations {
+            try recordSystemPasskeyRegistration(
+                registration.registrationResult,
+                projectTitle: projectTitle
+            )
+        }
+        try inboxStore.clearPendingRegistrations()
+        return registrations.count
+    }
+
     func selectPasskeyEntryForEditing(_ entry: LocalPasskeyEntry) {
         recordUserActivity()
         editingPasskeyEntryID = entry.id
@@ -10627,6 +10622,7 @@ struct AppRootView: View {
             if phase == .active {
                 restoreOneDriveAuthenticationSessionIfAvailable()
                 importPendingAutoFillSaveRequests()
+                importPendingSystemPasskeyRegistrations()
             }
         }
         .onOpenURL { url in
@@ -10637,6 +10633,7 @@ struct AppRootView: View {
         .task {
             restoreOneDriveAuthenticationSessionIfAvailable()
             importPendingAutoFillSaveRequests()
+            importPendingSystemPasskeyRegistrations()
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(
@@ -10680,6 +10677,18 @@ struct AppRootView: View {
         } catch {
             // AppSessionModel owns user-visible failure state.
         }
+    }
+
+    private func importPendingSystemPasskeyRegistrations() {
+        guard session.vaultState == .unlocked,
+              let inboxStore = AppSystemPasskeyRegistrationInboxStore()
+        else {
+            return
+        }
+        _ = try? session.importPendingSystemPasskeyRegistrations(
+            inboxStore: inboxStore,
+            projectTitle: "Personal"
+        )
     }
 
     @ViewBuilder
