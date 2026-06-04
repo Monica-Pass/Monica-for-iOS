@@ -9117,6 +9117,83 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("send-note-secret"))
     }
 
+    func testBitwardenSyncImportsRemoteFavoriteAndDeletedCipherStateWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-state-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-favorite-login-secret-id",
+                    kind: .login,
+                    title: "GitHub",
+                    username: "alice",
+                    url: "https://github.com/session?token=query-secret",
+                    password: "favorite-password-secret",
+                    notes: "favorite-note-secret",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_050),
+                    favorite: true
+                ),
+                BitwardenSyncItem(
+                    remoteID: "remote-deleted-note-secret-id",
+                    kind: .secureNote,
+                    title: "Deleted Recovery",
+                    notes: "deleted-note-secret",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_060),
+                    favorite: true,
+                    deletedAt: Date(timeIntervalSince1970: 1_804_020_070)
+                )
+            ]
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        _ = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+
+        XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
+        XCTAssertEqual(model.loginEntries.first?.favorite, true)
+        XCTAssertEqual(model.noteEntries, [])
+        XCTAssertEqual(model.deletedNoteEntries.map(\.title), ["Deleted Recovery"])
+        XCTAssertEqual(model.deletedNoteEntries.first?.favorite, true)
+        XCTAssertEqual(engine.favoritedLoginEntries.first?.entryID, "entry-1")
+        XCTAssertEqual(engine.favoritedLoginEntries.first?.favorite, true)
+        XCTAssertEqual(engine.favoritedNoteEntries.first?.entryID, "note-1")
+        XCTAssertEqual(engine.favoritedNoteEntries.first?.favorite, true)
+        XCTAssertEqual(engine.deletedNoteEntries.first?.entryID, "note-1")
+        let states = try itemStateStore.loadStates(vaultID: "created-vault")
+        XCTAssertEqual(states.first { $0.localID == "entry-1" }?.remoteID, "remote-favorite-login-secret-id")
+        XCTAssertEqual(states.first { $0.localID == "note-1" }?.remoteID, "remote-deleted-note-secret-id")
+        XCTAssertEqual(states.first { $0.localID == "note-1" }?.isDeleted, true)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            states.map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("remote-favorite-login-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-deleted-note-secret-id"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+        XCTAssertFalse(visibleText.contains("favorite-password-secret"))
+        XCTAssertFalse(visibleText.contains("favorite-note-secret"))
+        XCTAssertFalse(visibleText.contains("deleted-note-secret"))
+        XCTAssertFalse(visibleText.contains("bw-state-revision-secret"))
+    }
+
     func testBitwardenPushUsesPersistedItemRemoteStateForCipherUpdateAndDeletePlan() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
