@@ -903,7 +903,11 @@ struct AndroidParityVaultHomeView: View {
     }
 
     private func savePresentedEditor() {
-        do { try session.savePresentedEditor(projectTitle: session.activeVaultName ?? "个人") } catch {}
+        Task {
+            do {
+                try await session.savePresentedEditorWithBitwardenFileSend(projectTitle: session.activeVaultName ?? "个人")
+            } catch {}
+        }
     }
 
     private func setFavorite(_ favorite: Bool) {
@@ -1608,6 +1612,7 @@ struct AddEditVaultItemView: View {
     let dismiss: () -> Void
 
     @State private var isTotpScannerPresented = false
+    @State private var isSendFileImporterPresented = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -1644,6 +1649,20 @@ struct AddEditVaultItemView: View {
                 },
                 onCancel: { isTotpScannerPresented = false }
             )
+        }
+        .fileImporter(
+            isPresented: $isSendFileImporterPresented,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            do {
+                guard case .success(let urls) = result, let url = urls.first else {
+                    return
+                }
+                try session.selectBitwardenSendFile(url: url)
+            } catch {
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
         }
     }
 
@@ -1888,7 +1907,30 @@ struct AddEditVaultItemView: View {
     private var sendFields: some View {
         VStack(spacing: 18) {
             field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.sendTitle : $session.editingSendTitle)
-            secureField(icon: "text.alignleft", title: "内容", text: mode.isAdding ? $session.sendBody : $session.editingSendBody)
+            if mode.isAdding {
+                Picker("Send 类型", selection: $session.sendCreateType) {
+                    ForEach(SendCreateType.allCases) { type in
+                        Text(type.title).tag(type)
+                    }
+                }
+                .pickerStyle(.segmented)
+            }
+            if mode.isAdding, session.sendCreateType == .file {
+                Button {
+                    isSendFileImporterPresented = true
+                } label: {
+                    Label(session.sendFileName.isEmpty ? "选择文件" : session.sendFileName, systemImage: "paperclip")
+                        .lineLimit(1)
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                secureField(icon: "key.fill", title: "访问密码", text: $session.sendPassword)
+                Toggle("隐藏邮箱", isOn: $session.sendHideEmail)
+                    .font(.subheadline.weight(.semibold))
+                    .tint(AndroidParityPalette.primary)
+            } else {
+                secureField(icon: "text.alignleft", title: "内容", text: mode.isAdding ? $session.sendBody : $session.editingSendBody)
+            }
             field(icon: "calendar", title: "过期时间", text: mode.isAdding ? $session.sendExpiresAt : $session.editingSendExpiresAt)
             Stepper(value: mode.isAdding ? $session.sendMaxViews : $session.editingSendMaxViews, in: 1...999) {
                 Text("最多查看 \(mode.isAdding ? session.sendMaxViews : session.editingSendMaxViews) 次")
