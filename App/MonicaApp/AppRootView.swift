@@ -827,19 +827,40 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     let accountLabel: String
     let remoteItemCount: Int
     let remoteSendCount: Int
+    let remoteLoginCount: Int
+    let remoteNoteCount: Int
+    let remoteCardCount: Int
+    let remoteIdentityCount: Int
+    let remoteAttachmentByteCount: Int
     let remoteSendTitles: [String]
 
     init(snapshot: BitwardenSyncSnapshot) {
         self.accountLabel = snapshot.accountLabel
         self.remoteItemCount = snapshot.items.count
         self.remoteSendCount = snapshot.sends.count
+        self.remoteLoginCount = snapshot.items.filter { $0.kind == .login }.count
+        self.remoteNoteCount = snapshot.items.filter { $0.kind == .secureNote }.count
+        self.remoteCardCount = snapshot.items.filter { $0.kind == .card }.count
+        self.remoteIdentityCount = snapshot.items.filter { $0.kind == .identity }.count
+        self.remoteAttachmentByteCount = snapshot.items.map(\.attachmentByteCount).reduce(0, +)
+            + snapshot.sends.map(\.attachmentByteCount).reduce(0, +)
         self.remoteSendTitles = snapshot.sends.map { Self.sanitizedTitle($0.title) }
+    }
+
+    var kindSummary: String {
+        "登录 \(remoteLoginCount)，笔记 \(remoteNoteCount)，卡片 \(remoteCardCount)，身份 \(remoteIdentityCount)"
+    }
+
+    var attachmentSummary: String {
+        remoteAttachmentByteCount > 0 ? "附件 \(remoteAttachmentByteCount) 字节" : "无附件"
     }
 
     var redactedSummary: String {
         let sends = remoteSendTitles.prefix(3).joined(separator: " / ")
         return [
             "Bitwarden \(accountLabel)：\(remoteItemCount) 个条目，\(remoteSendCount) 个 Send",
+            kindSummary,
+            attachmentSummary,
             sends
         ]
         .filter { !$0.isEmpty }
@@ -940,6 +961,11 @@ protocol AppBitwardenSendSyncStateStore: Sendable {
     func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws
 }
 
+protocol AppBitwardenItemSyncStateStore: Sendable {
+    func loadStates(vaultID: String) throws -> [BitwardenItemSyncState]
+    func saveStates(_ states: [BitwardenItemSyncState], vaultID: String) throws
+}
+
 final class MemoryAppBitwardenSendSyncStateStore: AppBitwardenSendSyncStateStore, @unchecked Sendable {
     private var statesByVaultID: [String: [BitwardenSendSyncState]] = [:]
 
@@ -948,6 +974,18 @@ final class MemoryAppBitwardenSendSyncStateStore: AppBitwardenSendSyncStateStore
     }
 
     func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws {
+        statesByVaultID[vaultID] = states
+    }
+}
+
+final class MemoryAppBitwardenItemSyncStateStore: AppBitwardenItemSyncStateStore, @unchecked Sendable {
+    private var statesByVaultID: [String: [BitwardenItemSyncState]] = [:]
+
+    func loadStates(vaultID: String) throws -> [BitwardenItemSyncState] {
+        statesByVaultID[vaultID, default: []]
+    }
+
+    func saveStates(_ states: [BitwardenItemSyncState], vaultID: String) throws {
         statesByVaultID[vaultID] = states
     }
 }
@@ -974,6 +1012,51 @@ struct FileAppBitwardenSendSyncStateStore: AppBitwardenSendSyncStateStore, @unch
     }
 
     func saveStates(_ states: [BitwardenSendSyncState], vaultID: String) throws {
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try encoder.encode(states).write(to: fileURL(vaultID: vaultID), options: [.atomic])
+    }
+
+    private func fileURL(vaultID: String) -> URL {
+        let sanitized = vaultID
+            .unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return directoryURL.appendingPathComponent((sanitized.isEmpty ? "vault" : sanitized) + ".json")
+    }
+}
+
+struct FileAppBitwardenItemSyncStateStore: AppBitwardenItemSyncStateStore, @unchecked Sendable {
+    private let directoryURL: URL
+    private let fileManager: FileManager
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL, fileManager: FileManager = .default) {
+        directoryURL = containerURL.appendingPathComponent("bitwarden-item-sync-state-v1", isDirectory: true)
+        self.fileManager = fileManager
+        encoder = JSONEncoder()
+        decoder = JSONDecoder()
+    }
+
+    func loadStates(vaultID: String) throws -> [BitwardenItemSyncState] {
+        let url = fileURL(vaultID: vaultID)
+        guard fileManager.fileExists(atPath: url.path) else {
+            return []
+        }
+        return try decoder.decode([BitwardenItemSyncState].self, from: Data(contentsOf: url))
+    }
+
+    func saveStates(_ states: [BitwardenItemSyncState], vaultID: String) throws {
         try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         try encoder.encode(states).write(to: fileURL(vaultID: vaultID), options: [.atomic])
     }
@@ -2039,6 +2122,7 @@ final class AppSessionModel {
     private let bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore
     private let bitwardenVaultKeyStore: (any BitwardenVaultKeyStore)?
     private let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
+    private let bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -2085,6 +2169,7 @@ final class AppSessionModel {
         bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore = MemoryBitwardenAuthenticationSessionStore(),
         bitwardenVaultKeyStore: (any BitwardenVaultKeyStore)? = nil,
         bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore = MemoryAppBitwardenSendSyncStateStore(),
+        bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore = MemoryAppBitwardenItemSyncStateStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -2126,6 +2211,7 @@ final class AppSessionModel {
         self.bitwardenAuthenticationSessionStore = bitwardenAuthenticationSessionStore
         self.bitwardenVaultKeyStore = bitwardenVaultKeyStore
         self.bitwardenSendSyncStateStore = bitwardenSendSyncStateStore
+        self.bitwardenItemSyncStateStore = bitwardenItemSyncStateStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -8672,17 +8758,36 @@ final class AppSessionModel {
             let snapshot = try await provider.pullSnapshot()
             let preview = AppBitwardenSyncPreview(snapshot: snapshot)
             bitwardenSyncPreview = preview
-            let previousStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
-            let plan = makeBitwardenSendSyncPlan(
-                remoteSends: snapshot.sends,
-                previousStates: previousStates
+            let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            let itemPlan = makeBitwardenItemSyncPlan(
+                remoteItems: snapshot.items,
+                previousStates: previousItemStates
             )
-            let result = try await provider.pushMutations(plan.mutations)
-            try bitwardenSendSyncStateStore.saveStates(
-                plan.updatedStates.values.sorted { $0.localID < $1.localID },
+            let sendPlan = makeBitwardenSendSyncPlan(
+                remoteSends: snapshot.sends,
+                previousStates: previousSendStates
+            )
+            let result = try await provider.pushMutations(itemPlan.mutations + sendPlan.mutations)
+            let itemStates = bitwardenItemStates(
+                itemPlan.updatedStates.values,
+                assigningRemoteIDs: result.assignedRemoteIDs,
+                revision: result.revision
+            )
+            let sendStates = bitwardenSendStates(
+                sendPlan.updatedStates.values,
+                assigningRemoteIDs: result.assignedRemoteIDs,
+                revision: result.revision
+            )
+            try bitwardenItemSyncStateStore.saveStates(
+                sortedBitwardenItemStates(itemStates),
                 vaultID: session.handle.vaultID
             )
-            let conflicts = plan.conflicts + result.conflicts
+            try bitwardenSendSyncStateStore.saveStates(
+                sendStates.sorted { $0.localID < $1.localID },
+                vaultID: session.handle.vaultID
+            )
+            let conflicts = itemPlan.conflicts + sendPlan.conflicts + result.conflicts
             bitwardenSyncState = .pushed(
                 acceptedMutationCount: result.acceptedMutationCount,
                 conflictCount: conflicts.count
@@ -8690,7 +8795,8 @@ final class AppSessionModel {
             return BitwardenSyncPushResult(
                 acceptedMutationCount: result.acceptedMutationCount,
                 conflicts: conflicts,
-                revision: result.revision
+                revision: result.revision,
+                assignedRemoteIDs: result.assignedRemoteIDs
             )
         } catch {
             bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
@@ -8835,6 +8941,11 @@ final class AppSessionModel {
         var existingIdentities = try entryRepository.listIdentityEntries(projectID: projectID)
         var existingTotps = try entryRepository.listTotpEntries(projectID: projectID)
         var existingSends = try entryRepository.listSendEntries(projectID: projectID)
+        var itemStates = Dictionary(
+            uniqueKeysWithValues: try bitwardenItemSyncStateStore
+                .loadStates(vaultID: vaultID)
+                .map { ($0.localID, $0) }
+        )
         var sendStates = Dictionary(
             uniqueKeysWithValues: try bitwardenSendSyncStateStore
                 .loadStates(vaultID: vaultID)
@@ -8844,8 +8955,11 @@ final class AppSessionModel {
         for item in snapshot.items {
             switch item.kind {
             case .login:
-                if !existingLogins.contains(where: { isSameBitwardenLogin($0, item) }) {
-                    let created = try entryRepository.createLoginEntry(
+                let localEntry: LocalLoginEntry
+                if let existing = existingLogins.first(where: { isSameBitwardenLogin($0, item) }) {
+                    localEntry = existing
+                } else {
+                    localEntry = try entryRepository.createLoginEntry(
                         projectID: projectID,
                         draft: LocalLoginEntryDraft(
                             title: bitwardenImportTitle(item.title),
@@ -8855,8 +8969,13 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    existingLogins.append(created)
+                    existingLogins.append(localEntry)
                 }
+                let localItem = bitwardenLocalItem(from: localEntry, folderName: item.folderName)
+                itemStates[localEntry.id] = bitwardenItemSyncState(
+                    localItem: localItem,
+                    remoteItem: item
+                )
                 if let totpSecret = item.totpSecret?.trimmingCharacters(in: .whitespacesAndNewlines),
                    !totpSecret.isEmpty,
                    !existingTotps.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.secret == totpSecret }) {
@@ -8877,19 +8996,30 @@ final class AppSessionModel {
                     existingTotps.append(created)
                 }
             case .secureNote:
-                if !existingNotes.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.body == (item.notes ?? "") }) {
-                    let created = try entryRepository.createNoteEntry(
+                let localEntry: LocalNoteEntry
+                if let existing = existingNotes.first(where: { $0.title == bitwardenImportTitle(item.title) && $0.body == (item.notes ?? "") }) {
+                    localEntry = existing
+                } else {
+                    localEntry = try entryRepository.createNoteEntry(
                         projectID: projectID,
                         draft: LocalNoteEntryDraft(
                             title: bitwardenImportTitle(item.title),
                             body: item.notes ?? ""
                         )
                     )
-                    existingNotes.append(created)
+                    existingNotes.append(localEntry)
                 }
+                let localItem = bitwardenLocalItem(from: localEntry, folderName: item.folderName)
+                itemStates[localEntry.id] = bitwardenItemSyncState(
+                    localItem: localItem,
+                    remoteItem: item
+                )
             case .card:
-                if !existingCards.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
-                    let created = try entryRepository.createCardEntry(
+                let localEntry: LocalCardEntry
+                if let existing = existingCards.first(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
+                    localEntry = existing
+                } else {
+                    localEntry = try entryRepository.createCardEntry(
                         projectID: projectID,
                         draft: LocalCardEntryDraft(
                             title: bitwardenImportTitle(item.title),
@@ -8903,11 +9033,19 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    existingCards.append(created)
+                    existingCards.append(localEntry)
                 }
+                let localItem = bitwardenLocalItem(from: localEntry)
+                itemStates[localEntry.id] = bitwardenItemSyncState(
+                    localItem: localItem,
+                    remoteItem: item
+                )
             case .identity:
-                if !existingIdentities.contains(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
-                    let created = try entryRepository.createIdentityEntry(
+                let localEntry: LocalIdentityEntry
+                if let existing = existingIdentities.first(where: { $0.title == bitwardenImportTitle(item.title) && $0.notes == (item.notes ?? "") }) {
+                    localEntry = existing
+                } else {
+                    localEntry = try entryRepository.createIdentityEntry(
                         projectID: projectID,
                         draft: LocalIdentityEntryDraft(
                             title: bitwardenImportTitle(item.title),
@@ -8921,8 +9059,13 @@ final class AppSessionModel {
                             notes: item.notes ?? ""
                         )
                     )
-                    existingIdentities.append(created)
+                    existingIdentities.append(localEntry)
                 }
+                let localItem = bitwardenLocalItem(from: localEntry)
+                itemStates[localEntry.id] = bitwardenItemSyncState(
+                    localItem: localItem,
+                    remoteItem: item
+                )
             }
         }
 
@@ -8965,6 +9108,10 @@ final class AppSessionModel {
             )
         }
 
+        try bitwardenItemSyncStateStore.saveStates(
+            sortedBitwardenItemStates(itemStates.values),
+            vaultID: vaultID
+        )
         try bitwardenSendSyncStateStore.saveStates(
             sendStates.values.sorted { $0.localID < $1.localID },
             vaultID: vaultID
@@ -8988,6 +9135,159 @@ final class AppSessionModel {
     private func bitwardenImportTitle(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? "Bitwarden 项目" : trimmed
+    }
+
+    private func bitwardenItemSyncState(
+        localItem: BitwardenLocalItemSyncItem,
+        remoteItem: BitwardenSyncItem
+    ) -> BitwardenItemSyncState {
+        BitwardenItemSyncState(
+            localID: localItem.localID,
+            remoteID: remoteItem.remoteID,
+            kind: localItem.kind,
+            lastSyncedFingerprint: localItem.syncFingerprint,
+            lastRemoteRevision: remoteItem.updatedAt.map { String($0.timeIntervalSince1970) },
+            isDeleted: false
+        )
+    }
+
+    private func sortedBitwardenItemStates(
+        _ states: Dictionary<String, BitwardenItemSyncState>.Values
+    ) -> [BitwardenItemSyncState] {
+        sortedBitwardenItemStates(Array(states))
+    }
+
+    private func sortedBitwardenItemStates(
+        _ states: [BitwardenItemSyncState]
+    ) -> [BitwardenItemSyncState] {
+        states.sorted { lhs, rhs in
+            let lhsRemoteID = lhs.remoteID ?? ""
+            let rhsRemoteID = rhs.remoteID ?? ""
+            if lhsRemoteID != rhsRemoteID {
+                return lhsRemoteID < rhsRemoteID
+            }
+            return lhs.localID < rhs.localID
+        }
+    }
+
+    private func bitwardenItemStates(
+        _ states: Dictionary<String, BitwardenItemSyncState>.Values,
+        assigningRemoteIDs assignedRemoteIDs: [String: String],
+        revision: String
+    ) -> [BitwardenItemSyncState] {
+        states.map { state in
+            guard let assignedRemoteID = assignedRemoteIDs[state.localID],
+                  state.remoteID == nil,
+                  !state.isDeleted else {
+                return state
+            }
+            return BitwardenItemSyncState(
+                localID: state.localID,
+                remoteID: assignedRemoteID,
+                kind: state.kind,
+                lastSyncedFingerprint: state.lastSyncedFingerprint,
+                lastRemoteRevision: revision.isEmpty ? state.lastRemoteRevision : revision,
+                isDeleted: false
+            )
+        }
+    }
+
+    private func bitwardenSendStates(
+        _ states: Dictionary<String, BitwardenSendSyncState>.Values,
+        assigningRemoteIDs assignedRemoteIDs: [String: String],
+        revision: String
+    ) -> [BitwardenSendSyncState] {
+        states.map { state in
+            guard let assignedRemoteID = assignedRemoteIDs[state.localID],
+                  state.remoteID == nil,
+                  !state.isDeleted else {
+                return state
+            }
+            return BitwardenSendSyncState(
+                localID: state.localID,
+                remoteID: assignedRemoteID,
+                lastSyncedFingerprint: state.lastSyncedFingerprint,
+                lastRemoteRevision: revision.isEmpty ? state.lastRemoteRevision : revision,
+                isDeleted: false
+            )
+        }
+    }
+
+    private func bitwardenLocalItem(from entry: LocalLoginEntry, folderName: String? = nil) -> BitwardenLocalItemSyncItem {
+        BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .login,
+            title: entry.title,
+            username: entry.username,
+            url: entry.url,
+            password: entry.password,
+            notes: entry.notes,
+            folderName: folderName
+        )
+    }
+
+    private func bitwardenLocalItem(from entry: LocalNoteEntry, folderName: String? = nil) -> BitwardenLocalItemSyncItem {
+        BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .secureNote,
+            title: entry.title,
+            notes: entry.body,
+            folderName: folderName
+        )
+    }
+
+    private func bitwardenLocalItem(from entry: LocalCardEntry) -> BitwardenLocalItemSyncItem {
+        BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .card,
+            title: entry.title,
+            notes: entry.notes,
+            folderName: entry.issuer.nonBlankValue,
+            cardholderName: entry.cardholderName,
+            cardNumber: entry.number,
+            cardExpiryMonth: entry.expiryMonth,
+            cardExpiryYear: entry.expiryYear,
+            cardCode: entry.cvv,
+            cardBrand: entry.network
+        )
+    }
+
+    private func bitwardenLocalItem(from entry: LocalIdentityEntry) -> BitwardenLocalItemSyncItem {
+        BitwardenLocalItemSyncItem(
+            localID: entry.id,
+            kind: .identity,
+            title: entry.title,
+            username: entry.fullName,
+            notes: entry.notes,
+            folderName: entry.issuer.nonBlankValue,
+            identityFullName: entry.fullName,
+            identityDocumentNumber: entry.documentNumber,
+            identityIssuer: entry.issuer,
+            identityCountry: entry.country
+        )
+    }
+
+    private func makeBitwardenItemSyncPlan(
+        remoteItems: [BitwardenSyncItem],
+        previousStates: [BitwardenItemSyncState]
+    ) -> BitwardenItemSyncPlan {
+        let localLoginItems: [BitwardenLocalItemSyncItem] = loginEntries.map { bitwardenLocalItem(from: $0) }
+        let localNoteItems: [BitwardenLocalItemSyncItem] = noteEntries.map { bitwardenLocalItem(from: $0) }
+        let localCardItems: [BitwardenLocalItemSyncItem] = cardEntries.map { bitwardenLocalItem(from: $0) }
+        let localIdentityItems: [BitwardenLocalItemSyncItem] = identityEntries.map { bitwardenLocalItem(from: $0) }
+        let deletedLoginItems: [BitwardenLocalItemSyncItem] = deletedLoginEntries.map { bitwardenLocalItem(from: $0) }
+        let deletedNoteItems: [BitwardenLocalItemSyncItem] = deletedNoteEntries.map { bitwardenLocalItem(from: $0) }
+        let deletedCardItems: [BitwardenLocalItemSyncItem] = deletedCardEntries.map { bitwardenLocalItem(from: $0) }
+        let deletedIdentityItems: [BitwardenLocalItemSyncItem] = deletedIdentityEntries.map { bitwardenLocalItem(from: $0) }
+        let localItems = localLoginItems + localNoteItems + localCardItems + localIdentityItems
+        let deletedLocalItems = deletedLoginItems + deletedNoteItems + deletedCardItems + deletedIdentityItems
+
+        return BitwardenItemSyncPlanner().plan(
+            localItems: localItems,
+            deletedLocalItems: deletedLocalItems,
+            remoteItems: remoteItems,
+            previousStates: previousStates
+        )
     }
 
     private func makeBitwardenSendSyncPlan(

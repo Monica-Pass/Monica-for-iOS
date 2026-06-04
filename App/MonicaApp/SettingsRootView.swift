@@ -812,6 +812,11 @@ struct SettingsRootView: View {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "账号", value: session.bitwardenAuthenticationState.label)
                     AndroidParityInfoRow(title: "同步", value: session.bitwardenSyncState.label)
+                    if let preview = session.bitwardenSyncPreview {
+                        AndroidParityInfoRow(title: "远端", value: "\(preview.remoteItemCount) 个条目，\(preview.remoteSendCount) 个 Send")
+                        AndroidParityInfoRow(title: "类型", value: preview.kindSummary)
+                        AndroidParityInfoRow(title: "附件", value: preview.attachmentSummary)
+                    }
                     if session.bitwardenAuthenticationState.isConnected {
                         Button(role: .destructive) {
                             try? session.signOutFromBitwarden()
@@ -889,7 +894,7 @@ struct SettingsRootView: View {
                             try? await session.pushLocalBitwardenChanges()
                         }
                     } label: {
-                        Label("推送 Send", systemImage: "arrow.up.circle")
+                        Label("推送本地变更", systemImage: "arrow.up.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
