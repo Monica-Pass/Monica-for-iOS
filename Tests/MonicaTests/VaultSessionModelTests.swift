@@ -8966,6 +8966,56 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("refresh-token-secret"))
         XCTAssertFalse(visibleText.contains("api.bitwarden.com"))
     }
+
+    func testBitwardenPasswordSignInConnectsSessionWithoutLeakingSecrets() async throws {
+        let service = RecordingAppBitwardenPasswordAuthenticationService()
+        let model = AppSessionModel(bitwardenPasswordAuthenticationService: service)
+        model.bitwardenServerURL = "https://vault.bitwarden.com"
+        model.bitwardenEmail = "alice@example.com"
+        model.bitwardenMasterPassword = "master-password-secret"
+
+        let session = try await model.signInToBitwarden()
+
+        XCTAssertEqual(service.requests, [
+            RecordingAppBitwardenPasswordAuthenticationService.Request(
+                email: "alice@example.com",
+                masterPassword: "master-password-secret",
+                serverURL: URL(string: "https://vault.bitwarden.com")!
+            )
+        ])
+        XCTAssertEqual(session.accountLabel, "alice@example.com")
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 已登录 alice@example.com")
+        XCTAssertEqual(model.bitwardenSyncState.label, "就绪")
+        XCTAssertEqual(model.bitwardenMasterPassword, "")
+        let visibleText = [
+            session.redactedSummary,
+            model.bitwardenAuthenticationState.label,
+            model.bitwardenSyncState.label
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("master-password-secret"))
+        XCTAssertFalse(visibleText.contains("access-token-secret"))
+        XCTAssertFalse(visibleText.contains("refresh-token-secret"))
+    }
+
+    func testBitwardenPasswordSignInRejectsUnsupportedServerURLWithoutCallingService() async throws {
+        let service = RecordingAppBitwardenPasswordAuthenticationService()
+        let model = AppSessionModel(bitwardenPasswordAuthenticationService: service)
+        model.bitwardenServerURL = "file:///tmp/not-a-bitwarden-server"
+        model.bitwardenEmail = "alice@example.com"
+        model.bitwardenMasterPassword = "master-password-secret"
+
+        do {
+            _ = try await model.signInToBitwarden()
+            XCTFail("Expected Bitwarden sign-in to reject unsupported server URL")
+        } catch {
+            XCTAssertTrue(error is BitwardenSyncProviderError)
+        }
+
+        XCTAssertTrue(service.requests.isEmpty)
+        XCTAssertEqual(model.bitwardenMasterPassword, "")
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 同步响应无法解析。")
+        XCTAssertFalse(model.bitwardenAuthenticationState.label.contains("master-password-secret"))
+    }
 }
 
 private final class RecordingAppAutoFillIndexKeyMaterialStore: AppAutoFillIndexKeyMaterialStore {
@@ -9250,6 +9300,34 @@ private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unch
             throw pushError
         }
         return pushResult
+    }
+}
+
+private final class RecordingAppBitwardenPasswordAuthenticationService: AppBitwardenPasswordAuthenticationService, @unchecked Sendable {
+    struct Request: Equatable {
+        let email: String
+        let masterPassword: String
+        let serverURL: URL
+    }
+
+    var session = BitwardenAuthenticationSession(
+        accountLabel: "alice@example.com",
+        serverURL: URL(string: "https://vault.bitwarden.com")!,
+        identityURL: URL(string: "https://identity.bitwarden.com")!,
+        apiURL: URL(string: "https://api.bitwarden.com")!,
+        accessToken: "access-token-secret",
+        refreshToken: "refresh-token-secret",
+        expiresAt: Date(timeIntervalSince1970: 1_804_000_000)
+    )
+    var error: Error?
+    private(set) var requests: [Request] = []
+
+    func signIn(email: String, masterPassword: String, serverURL: URL) async throws -> BitwardenAuthenticationSession {
+        requests.append(Request(email: email, masterPassword: masterPassword, serverURL: serverURL))
+        if let error {
+            throw error
+        }
+        return session
     }
 }
 

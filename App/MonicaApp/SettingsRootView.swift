@@ -822,6 +822,32 @@ struct SettingsRootView: View {
                         .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
                         .disabled(session.bitwardenSyncState.isRunning)
                     } else {
+                        TextField("服务器 URL", text: $session.bitwardenServerURL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.URL)
+                            .textFieldStyle(AndroidParityTextFieldStyle())
+                        TextField("邮箱", text: $session.bitwardenEmail)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.emailAddress)
+                            .textFieldStyle(AndroidParityTextFieldStyle())
+                        SecureField("主密码", text: $session.bitwardenMasterPassword)
+                            .textFieldStyle(AndroidParityTextFieldStyle())
+                        Button {
+                            Task {
+                                try? await session.signInToBitwarden()
+                            }
+                        } label: {
+                            Label("登录 Bitwarden", systemImage: "key")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(
+                            session.bitwardenSyncState.isRunning
+                                || session.bitwardenEmail.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                                || session.bitwardenMasterPassword.isEmpty
+                        )
                         Button {
                             _ = try? session.restoreBitwardenAuthenticationSession()
                         } label: {

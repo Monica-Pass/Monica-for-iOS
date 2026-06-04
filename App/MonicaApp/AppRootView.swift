@@ -804,6 +804,22 @@ protocol AppOneDriveAuthenticationService: OneDriveAccessTokenProvider {
     func handleRedirectURL(_ url: URL) -> Bool
 }
 
+protocol AppBitwardenPasswordAuthenticationService: Sendable {
+    func signIn(email: String, masterPassword: String, serverURL: URL) async throws -> BitwardenAuthenticationSession
+}
+
+struct MonicaSyncBitwardenPasswordAuthenticationService: AppBitwardenPasswordAuthenticationService {
+    private let authenticator: BitwardenPasswordAuthenticator
+
+    init(authenticator: BitwardenPasswordAuthenticator) {
+        self.authenticator = authenticator
+    }
+
+    func signIn(email: String, masterPassword: String, serverURL: URL) async throws -> BitwardenAuthenticationSession {
+        try await authenticator.signIn(email: email, masterPassword: masterPassword, serverURL: serverURL)
+    }
+}
+
 struct AppBitwardenSyncPreview: Sendable, Equatable {
     let accountLabel: String
     let remoteItemCount: Int
@@ -866,6 +882,53 @@ struct FileAppBitwardenAuthenticationSessionStore: BitwardenAuthenticationSessio
             return
         }
         try fileManager.removeItem(at: fileURL)
+    }
+}
+
+struct FileAppBitwardenVaultKeyStore: BitwardenVaultKeyStore, @unchecked Sendable {
+    private let directoryURL: URL
+    private let fileManager: FileManager
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(containerURL: URL, fileManager: FileManager = .default) {
+        directoryURL = containerURL.appendingPathComponent("bitwarden-vault-key-v1", isDirectory: true)
+        self.fileManager = fileManager
+    }
+
+    func loadVaultKey(accountLabel: String) throws -> BitwardenVaultKey? {
+        let url = fileURL(accountLabel: accountLabel)
+        guard fileManager.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return try decoder.decode(BitwardenVaultKey.self, from: Data(contentsOf: url))
+    }
+
+    func saveVaultKey(_ key: BitwardenVaultKey, accountLabel: String) throws {
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let data = try encoder.encode(key)
+        try data.write(to: fileURL(accountLabel: accountLabel), options: [.atomic, .completeFileProtection])
+    }
+
+    func clearVaultKey(accountLabel: String?) throws {
+        guard let accountLabel else {
+            guard fileManager.fileExists(atPath: directoryURL.path) else { return }
+            try fileManager.removeItem(at: directoryURL)
+            return
+        }
+        let url = fileURL(accountLabel: accountLabel)
+        guard fileManager.fileExists(atPath: url.path) else { return }
+        try fileManager.removeItem(at: url)
+    }
+
+    private func fileURL(accountLabel: String) -> URL {
+        let normalized = accountLabel
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let digest = SHA256.hash(data: Data(normalized.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return directoryURL.appendingPathComponent("\(digest).json")
     }
 }
 
@@ -1910,6 +1973,9 @@ final class AppSessionModel {
     var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
     var oneDriveAuthenticationState: OneDriveAuthenticationState = .disconnected
+    var bitwardenServerURL = "https://vault.bitwarden.com"
+    var bitwardenEmail = ""
+    var bitwardenMasterPassword = ""
     var bitwardenAuthenticationState: BitwardenAuthenticationState = .disconnected
     var bitwardenSyncState: BitwardenSyncState = .idle
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
@@ -1965,8 +2031,10 @@ final class AppSessionModel {
     private let webDAVBackupService: any AppWebDAVBackupService
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
     private let oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)?
+    private let bitwardenPasswordAuthenticationService: (any AppBitwardenPasswordAuthenticationService)?
     private let bitwardenSyncProvider: (any BitwardenSyncProvider)?
     private let bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore
+    private let bitwardenVaultKeyStore: (any BitwardenVaultKeyStore)?
     private let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
@@ -2009,8 +2077,10 @@ final class AppSessionModel {
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
+        bitwardenPasswordAuthenticationService: (any AppBitwardenPasswordAuthenticationService)? = nil,
         bitwardenSyncProvider: (any BitwardenSyncProvider)? = nil,
         bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore = MemoryBitwardenAuthenticationSessionStore(),
+        bitwardenVaultKeyStore: (any BitwardenVaultKeyStore)? = nil,
         bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore = MemoryAppBitwardenSendSyncStateStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
@@ -2048,8 +2118,10 @@ final class AppSessionModel {
         self.webDAVBackupService = webDAVBackupService
         self.cloudFileProviders = cloudFileProviders
         self.oneDriveAuthenticationService = oneDriveAuthenticationService
+        self.bitwardenPasswordAuthenticationService = bitwardenPasswordAuthenticationService
         self.bitwardenSyncProvider = bitwardenSyncProvider
         self.bitwardenAuthenticationSessionStore = bitwardenAuthenticationSessionStore
+        self.bitwardenVaultKeyStore = bitwardenVaultKeyStore
         self.bitwardenSendSyncStateStore = bitwardenSendSyncStateStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
@@ -8392,6 +8464,36 @@ final class AppSessionModel {
     }
 
     @discardableResult
+    func signInToBitwarden() async throws -> BitwardenAuthenticationSession {
+        recordUserActivity()
+        bitwardenSyncState = .running
+
+        do {
+            guard let bitwardenPasswordAuthenticationService else {
+                throw AppBitwardenSyncError.providerUnavailable
+            }
+            guard let serverURL = validBitwardenServerURL(bitwardenServerURL) else {
+                throw BitwardenSyncProviderError.invalidResponse
+            }
+            let session = try await bitwardenPasswordAuthenticationService.signIn(
+                email: bitwardenEmail,
+                masterPassword: bitwardenMasterPassword,
+                serverURL: serverURL
+            )
+            bitwardenMasterPassword = ""
+            bitwardenAuthenticationState = .connected(accountLabel: session.accountLabel)
+            bitwardenSyncState = .idle
+            return session
+        } catch {
+            let message = readableBitwardenSyncErrorMessage(for: error)
+            bitwardenMasterPassword = ""
+            bitwardenAuthenticationState = .failed(message)
+            bitwardenSyncState = .failed(message)
+            throw error
+        }
+    }
+
+    @discardableResult
     func restoreBitwardenAuthenticationSession() throws -> BitwardenAuthenticationSession? {
         do {
             guard let session = try bitwardenAuthenticationSessionStore.loadSession() else {
@@ -8409,7 +8511,9 @@ final class AppSessionModel {
     func signOutFromBitwarden() throws {
         recordUserActivity()
         do {
+            let accountLabel = try bitwardenAuthenticationSessionStore.loadSession()?.accountLabel
             try bitwardenAuthenticationSessionStore.clearSession()
+            try bitwardenVaultKeyStore?.clearVaultKey(accountLabel: accountLabel)
             bitwardenAuthenticationState = .disconnected
             bitwardenSyncState = .idle
             bitwardenSyncPreview = nil
@@ -8957,6 +9061,18 @@ final class AppSessionModel {
             }
         }
         return "Bitwarden 同步失败，请稍后重试。"
+    }
+
+    private func validBitwardenServerURL(_ value: String) -> URL? {
+        guard let url = URL(string: value.trimmingCharacters(in: .whitespacesAndNewlines)),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              let host = url.host,
+              !host.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            return nil
+        }
+        return url
     }
 
     private func sanitizedCloudFileName(_ value: String) -> String {
