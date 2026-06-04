@@ -5811,6 +5811,7 @@ final class AppSessionModel {
             passkeyPrivateKeyReference = ""
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: project.id)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: project.id)
+            try refreshAutoFillEncryptedIndexIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .passkey,
@@ -5852,6 +5853,7 @@ final class AppSessionModel {
             passkeyPrivateKeyReference = ""
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: project.id)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: project.id)
+            try refreshAutoFillEncryptedIndexIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .passkey,
@@ -5908,6 +5910,7 @@ final class AppSessionModel {
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
             selectPasskeyEntryForEditing(entry)
+            try refreshAutoFillEncryptedIndexIfConfigured()
             appendOperationTimelineEvent(
                 action: .updated,
                 itemKind: .passkey,
@@ -5940,6 +5943,7 @@ final class AppSessionModel {
             )
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             selectPasskeyEntryForEditing(updated)
+            try refreshAutoFillEncryptedIndexIfConfigured()
             entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -5964,6 +5968,7 @@ final class AppSessionModel {
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
             clearEditingPasskeyEntry()
+            try refreshAutoFillEncryptedIndexIfConfigured()
             appendOperationTimelineEvent(
                 action: .deleted,
                 itemKind: .passkey,
@@ -5994,6 +5999,7 @@ final class AppSessionModel {
             )
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
+            try refreshAutoFillEncryptedIndexIfConfigured()
             appendOperationTimelineEvent(
                 action: .restored,
                 itemKind: .passkey,
@@ -8147,7 +8153,13 @@ final class AppSessionModel {
                 let identities = loginEntries.flatMap { entry in
                     autoFillCredentialIdentities(for: entry)
                 }
-                autoFillCredentialIdentityStore.replaceCredentialIdentities(identities)
+                let passkeyIdentities = passkeyEntries.compactMap { entry in
+                    autoFillPasskeyCredentialIdentity(for: entry)
+                }
+                autoFillCredentialIdentityStore.replaceCredentialIdentities(
+                    identities,
+                    passkeyIdentities: passkeyIdentities
+                )
             }
             autoFillIndexState = .succeeded(loginEntries.count)
         } catch {
@@ -9682,6 +9694,30 @@ final class AppSessionModel {
                 username: username
             )
         }
+    }
+
+    private func autoFillPasskeyCredentialIdentity(
+        for entry: LocalPasskeyEntry
+    ) -> AppAutoFillPasskeyCredentialIdentity? {
+        let relyingPartyIdentifier = entry.relyingPartyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        let username = entry.username.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !relyingPartyIdentifier.isEmpty,
+              !username.isEmpty,
+              let credentialID = Data(base64Encoded: entry.credentialID),
+              !credentialID.isEmpty,
+              let userHandle = Data(base64Encoded: entry.userHandle),
+              !userHandle.isEmpty
+        else {
+            return nil
+        }
+
+        return AppAutoFillPasskeyCredentialIdentity(
+            recordIdentifier: entry.id,
+            relyingPartyIdentifier: relyingPartyIdentifier,
+            username: username,
+            credentialID: credentialID,
+            userHandle: userHandle
+        )
     }
 
     private func totpAlgorithm(from value: String) -> TotpAlgorithm {

@@ -192,8 +192,33 @@ struct AppAutoFillCredentialIdentity: Sendable, Equatable {
     }
 }
 
+struct AppAutoFillPasskeyCredentialIdentity: Sendable, Equatable {
+    let recordIdentifier: String
+    let relyingPartyIdentifier: String
+    let username: String
+    let credentialID: Data
+    let userHandle: Data
+
+    init(
+        recordIdentifier: String,
+        relyingPartyIdentifier: String,
+        username: String,
+        credentialID: Data,
+        userHandle: Data
+    ) {
+        self.recordIdentifier = recordIdentifier
+        self.relyingPartyIdentifier = relyingPartyIdentifier
+        self.username = username
+        self.credentialID = credentialID
+        self.userHandle = userHandle
+    }
+}
+
 protocol AppAutoFillCredentialIdentityStore: Sendable {
-    func replaceCredentialIdentities(_ identities: [AppAutoFillCredentialIdentity])
+    func replaceCredentialIdentities(
+        _ identities: [AppAutoFillCredentialIdentity],
+        passkeyIdentities: [AppAutoFillPasskeyCredentialIdentity]
+    )
 }
 
 final class SystemAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentityStore, @unchecked Sendable {
@@ -203,7 +228,10 @@ final class SystemAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentity
         self.store = store
     }
 
-    func replaceCredentialIdentities(_ identities: [AppAutoFillCredentialIdentity]) {
+    func replaceCredentialIdentities(
+        _ identities: [AppAutoFillCredentialIdentity],
+        passkeyIdentities: [AppAutoFillPasskeyCredentialIdentity]
+    ) {
         let passwordIdentities = identities.map { identity in
             ASPasswordCredentialIdentity(
                 serviceIdentifier: ASCredentialServiceIdentifier(
@@ -214,8 +242,18 @@ final class SystemAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentity
                 recordIdentifier: identity.recordIdentifier
             )
         }
+        let systemPasskeyIdentities = passkeyIdentities.map { identity in
+            ASPasskeyCredentialIdentity(
+                relyingPartyIdentifier: identity.relyingPartyIdentifier,
+                userName: identity.username,
+                credentialID: identity.credentialID,
+                userHandle: identity.userHandle,
+                recordIdentifier: identity.recordIdentifier
+            )
+        }
+        let credentialIdentities: [any ASCredentialIdentity] = passwordIdentities + systemPasskeyIdentities
 
-        store.replaceCredentialIdentities(passwordIdentities) { _, _ in
+        store.replaceCredentialIdentities(credentialIdentities) { _, _ in
             // AutoFill identity sync is best-effort; signed-device validation covers entitlement errors.
         }
     }

@@ -1334,6 +1334,20 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(capabilities["ProvidesPasskeys"] as? Bool, true)
     }
 
+    func testAutoFillExtensionCompletesPasskeyRegistrationAndAssertionRequests() throws {
+        let sourceURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("completeRegistrationRequest"))
+        XCTAssertTrue(source.contains("completeAssertionRequest"))
+        XCTAssertTrue(source.contains("saveCredentialIdentities"))
+        XCTAssertFalse(source.contains("Passkey 认证需要 Monica 完成签名能力后提供"))
+    }
+
     func testSystemPasskeyRegistrationCreatesVaultMetadataWithoutTransientSecrets() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
@@ -7761,6 +7775,73 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(identityStore.savedIdentities.last?.count, 2)
     }
 
+    func testPasskeyEntryMutationsKeepAutoFillCredentialIdentitiesInSync() throws {
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            autoFillCredentialIdentityStore: identityStore
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.passkeyTitle = "GitHub Passkey"
+        model.passkeyRelyingPartyID = "github.com"
+        model.passkeyUsername = "joyin@example.com"
+        model.passkeyUserHandle = Data("github-user-handle".utf8).base64EncodedString()
+        model.passkeyCredentialID = Data("credential-1".utf8).base64EncodedString()
+        model.passkeyPublicKeyCOSE = Data([0xA5, 0x01, 0x02]).base64EncodedString()
+        model.passkeyPrivateKeyReference = "monica-passkey://credential-1"
+        try model.createPasskeyEntry(projectTitle: "Personal")
+
+        XCTAssertEqual(identityStore.savedIdentities.last, [])
+        XCTAssertEqual(
+            identityStore.savedPasskeyIdentities.last,
+            [
+                AppAutoFillPasskeyCredentialIdentity(
+                    recordIdentifier: "passkey-1",
+                    relyingPartyIdentifier: "github.com",
+                    username: "joyin@example.com",
+                    credentialID: Data("credential-1".utf8),
+                    userHandle: Data("github-user-handle".utf8)
+                )
+            ]
+        )
+
+        let created = try XCTUnwrap(model.passkeyEntries.first)
+        model.selectPasskeyEntryForEditing(created)
+        model.editingPasskeyUsername = "joyin@work.example"
+        model.editingPasskeyCredentialID = Data("credential-2".utf8).base64EncodedString()
+        model.editingPasskeyUserHandle = Data("github-work-user-handle".utf8).base64EncodedString()
+        try model.updateSelectedPasskeyEntry()
+
+        XCTAssertEqual(
+            identityStore.savedPasskeyIdentities.last,
+            [
+                AppAutoFillPasskeyCredentialIdentity(
+                    recordIdentifier: "passkey-1",
+                    relyingPartyIdentifier: "github.com",
+                    username: "joyin@work.example",
+                    credentialID: Data("credential-2".utf8),
+                    userHandle: Data("github-work-user-handle".utf8)
+                )
+            ]
+        )
+
+        try model.deleteSelectedPasskeyEntry()
+
+        XCTAssertEqual(identityStore.savedPasskeyIdentities.last, [])
+
+        let deleted = try XCTUnwrap(model.deletedPasskeyEntries.first)
+        try model.restorePasskeyEntry(deleted)
+
+        XCTAssertEqual(identityStore.savedPasskeyIdentities.last?.count, 1)
+    }
+
     func testAppSessionWritesAutoFillIndexThatExtensionCanUnlockAndMatch() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
@@ -8480,9 +8561,14 @@ private final class RecordingAutoFillCredentialSecretStore: AutoFillCredentialSe
 
 private final class RecordingAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentityStore, @unchecked Sendable {
     private(set) var savedIdentities: [[AppAutoFillCredentialIdentity]] = []
+    private(set) var savedPasskeyIdentities: [[AppAutoFillPasskeyCredentialIdentity]] = []
 
-    func replaceCredentialIdentities(_ identities: [AppAutoFillCredentialIdentity]) {
+    func replaceCredentialIdentities(
+        _ identities: [AppAutoFillCredentialIdentity],
+        passkeyIdentities: [AppAutoFillPasskeyCredentialIdentity]
+    ) {
         savedIdentities.append(identities)
+        savedPasskeyIdentities.append(passkeyIdentities)
     }
 }
 

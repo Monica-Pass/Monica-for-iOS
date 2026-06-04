@@ -9,6 +9,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     private var loadTask: Task<Void, Never>?
     private var credentialResolver: AutoFillCredentialResolver?
     private var matchedCredentialRecords: [AutoFillCredentialIndexRecord] = []
+    private let passkeyCredentialManager = MonicaPasskeyCredentialManager(
+        privateKeyStore: KeychainPasskeyPrivateKeyStore()
+    )
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,6 +50,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     }
 
     override func provideCredentialWithoutUserInteraction(for credentialRequest: any ASCredentialRequest) {
+        if let passkeyRequest = credentialRequest as? ASPasskeyCredentialRequest {
+            completePasskeyAssertion(for: passkeyRequest)
+            return
+        }
+
         cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
     }
 
@@ -59,10 +67,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
     override func prepareInterfaceToProvideCredential(for credentialRequest: any ASCredentialRequest) {
         if let passkeyRequest = credentialRequest as? ASPasskeyCredentialRequest {
-            configurePasskeyStatusView(
-                relyingPartyID: relyingPartyID(for: passkeyRequest),
-                status: "Passkey 认证需要 Monica 完成签名能力后提供"
-            )
+            completePasskeyAssertion(for: passkeyRequest)
             return
         }
 
@@ -71,10 +76,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
     override func prepareInterface(forPasskeyRegistration registrationRequest: any ASCredentialRequest) {
         if let passkeyRequest = registrationRequest as? ASPasskeyCredentialRequest {
-            configurePasskeyStatusView(
-                relyingPartyID: relyingPartyID(for: passkeyRequest),
-                status: "Passkey 注册请求已收到，请在 Monica 中解锁保险库后保存"
-            )
+            completePasskeyRegistration(for: passkeyRequest)
             return
         }
 
@@ -268,6 +270,85 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         return identity.relyingPartyIdentifier
     }
 
+    private func passkeyIdentity(for request: ASPasskeyCredentialRequest) throws -> ASPasskeyCredentialIdentity {
+        guard let identity = request.credentialIdentity as? ASPasskeyCredentialIdentity else {
+            throw AutoFillExtensionError.passkeyIdentityUnavailable
+        }
+        return identity
+    }
+
+    private func completePasskeyRegistration(for request: ASPasskeyCredentialRequest) {
+        do {
+            let identity = try passkeyIdentity(for: request)
+            let registration = try passkeyCredentialManager.createRegistration(
+                relyingPartyID: identity.relyingPartyIdentifier,
+                username: identity.userName,
+                userHandle: identity.userHandle,
+                clientDataHash: request.clientDataHash
+            )
+            let credential = ASPasskeyRegistrationCredential(
+                relyingParty: registration.relyingPartyID,
+                clientDataHash: request.clientDataHash,
+                credentialID: registration.credentialID,
+                attestationObject: registration.attestationObject
+            )
+            savePasskeyIdentity(for: registration)
+            extensionContext.completeRegistrationRequest(
+                using: credential,
+                completionHandler: nil
+            )
+        } catch {
+            configurePasskeyStatusView(
+                relyingPartyID: relyingPartyID(for: request),
+                status: "Passkey 注册失败，请回到 Monica 检查凭据状态"
+            )
+            cancelRequest(code: ASExtensionError.Code.failed)
+        }
+    }
+
+    private func completePasskeyAssertion(for request: ASPasskeyCredentialRequest) {
+        do {
+            let identity = try passkeyIdentity(for: request)
+            let assertion = try passkeyCredentialManager.createAssertion(
+                relyingPartyID: identity.relyingPartyIdentifier,
+                credentialID: identity.credentialID,
+                userHandle: identity.userHandle,
+                clientDataHash: request.clientDataHash
+            )
+            let credential = ASPasskeyAssertionCredential(
+                userHandle: assertion.userHandle,
+                relyingParty: assertion.relyingPartyID,
+                signature: assertion.signature,
+                clientDataHash: assertion.clientDataHash,
+                authenticatorData: assertion.authenticatorData,
+                credentialID: assertion.credentialID
+            )
+            extensionContext.completeAssertionRequest(
+                using: credential,
+                completionHandler: nil
+            )
+        } catch {
+            configurePasskeyStatusView(
+                relyingPartyID: relyingPartyID(for: request),
+                status: "Passkey 认证失败，请回到 Monica 检查凭据状态"
+            )
+            cancelRequest(code: ASExtensionError.Code.credentialIdentityNotFound)
+        }
+    }
+
+    private func savePasskeyIdentity(for registration: MonicaPasskeyRegistrationResult) {
+        let identity = ASPasskeyCredentialIdentity(
+            relyingPartyIdentifier: registration.relyingPartyID,
+            userName: registration.username,
+            credentialID: registration.credentialID,
+            userHandle: registration.userHandle,
+            recordIdentifier: registration.privateKeyReference
+        )
+        ASCredentialIdentityStore.shared.saveCredentialIdentities([identity]) { _, _ in
+            // Best-effort system discovery; the private key is already persisted in Keychain.
+        }
+    }
+
     private func configureCredentialList(
         _ records: [AutoFillCredentialIndexRecord],
         searchQuery: String
@@ -397,6 +478,7 @@ private enum AutoFillExtensionError: Error, LocalizedError {
     case indexUnavailable
     case credentialSecretsUnavailable
     case credentialSecretUnavailable
+    case passkeyIdentityUnavailable
 
     var errorDescription: String? {
         switch self {
@@ -408,6 +490,8 @@ private enum AutoFillExtensionError: Error, LocalizedError {
             return "自动填充凭据密钥不可用。"
         case .credentialSecretUnavailable:
             return "自动填充凭据密钥不可用。"
+        case .passkeyIdentityUnavailable:
+            return "Passkey 身份不可用。"
         }
     }
 }

@@ -91,6 +91,62 @@ import MonicaCore
     }
 }
 
+@Test func passkeyRegistrationBuildsCredentialMetadataAndStoresPrivateKey() throws {
+    let store = MemoryPasskeyPrivateKeyStore()
+    let manager = MonicaPasskeyCredentialManager(
+        privateKeyStore: store,
+        randomBytes: { count in Array(UInt8(1)...UInt8(count)) }
+    )
+
+    let registration = try manager.createRegistration(
+        relyingPartyID: "github.com",
+        username: "joyin@example.com",
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCA, count: 32)
+    )
+
+    #expect(registration.credentialID.count == 32)
+    #expect(registration.publicKeyCOSE.count > 70)
+    #expect(registration.attestationObject.count > 120)
+    #expect(registration.privateKeyReference.hasPrefix("monica-passkey://"))
+    #expect(try store.loadPrivateKey(credentialID: registration.credentialID) != nil)
+    #expect(registration.vaultMetadataDraft(title: "GitHub").credentialID == registration.credentialID.base64EncodedString())
+    #expect(registration.vaultMetadataDraft(title: "GitHub").publicKeyCOSE == registration.publicKeyCOSE.base64EncodedString())
+    #expect(!String(decoding: registration.attestationObject, as: UTF8.self).contains("github-user-handle"))
+}
+
+@Test func passkeyAssertionSignsAuthenticatorDataAndClientDataHash() throws {
+    let store = MemoryPasskeyPrivateKeyStore()
+    let manager = MonicaPasskeyCredentialManager(
+        privateKeyStore: store,
+        randomBytes: { count in Array(repeating: 0x2A, count: count) }
+    )
+    let registration = try manager.createRegistration(
+        relyingPartyID: "github.com",
+        username: "joyin@example.com",
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCA, count: 32)
+    )
+
+    let assertion = try manager.createAssertion(
+        relyingPartyID: "github.com",
+        credentialID: registration.credentialID,
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCB, count: 32)
+    )
+
+    #expect(assertion.credentialID == registration.credentialID)
+    #expect(assertion.userHandle == Data("github-user-handle".utf8))
+    #expect(assertion.authenticatorData.count == 37)
+    #expect(assertion.signature.count > 60)
+    #expect(
+        try manager.verifyAssertion(
+            assertion,
+            publicKeyCOSE: registration.publicKeyCOSE
+        )
+    )
+}
+
 @Test func totpURIParserImportsStandardOtpauthTotpURI() throws {
     let draft = try TotpURIParser.parse(
         "otpauth://totp/GitHub:alice%40example.com?secret=JBSWY3DPEHPK3PXP&issuer=GitHub&period=60&digits=8&algorithm=SHA256"
