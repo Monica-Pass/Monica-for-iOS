@@ -16,6 +16,33 @@ import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
 
+struct AppSystemPasskeyRegistrationResult: Sendable, Equatable {
+    let relyingPartyID: String
+    let username: String
+    let userHandle: Data
+    let credentialID: Data
+    let publicKeyCOSE: Data
+    let privateKeyReference: String
+    let title: String
+    let attestationObject: Data
+    let clientDataHash: Data
+
+    var metadataDraft: LocalPasskeyEntryDraft {
+        let displayTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let relyingParty = relyingPartyID.trimmingCharacters(in: .whitespacesAndNewlines)
+        return LocalPasskeyEntryDraft(
+            title: displayTitle.isEmpty ? relyingParty : displayTitle,
+            relyingPartyID: relyingParty,
+            username: username.trimmingCharacters(in: .whitespacesAndNewlines),
+            userHandle: userHandle.base64EncodedString(),
+            credentialID: credentialID.base64EncodedString(),
+            publicKeyCOSE: publicKeyCOSE.base64EncodedString(),
+            privateKeyReference: privateKeyReference,
+            notes: "iOS system passkey registration. Transient WebAuthn attestation and client data hash are not stored."
+        )
+    }
+}
+
 struct SecurityQuestionOption: Identifiable, Sendable, Equatable {
     let id: Int
     let text: String
@@ -5791,6 +5818,47 @@ final class AppSessionModel {
                 itemTitle: entry.title
             )
             entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func recordSystemPasskeyRegistration(
+        _ result: AppSystemPasskeyRegistrationResult,
+        projectTitle: String
+    ) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project: LocalVaultProject
+            if let activeProject {
+                project = activeProject
+            } else {
+                project = try entryRepository.createProject(title: projectTitle)
+                activeProject = project
+            }
+
+            let entry = try entryRepository.createPasskeyEntry(
+                projectID: project.id,
+                draft: result.metadataDraft
+            )
+            passkeyCredentialID = ""
+            passkeyPublicKeyCOSE = ""
+            passkeyPrivateKeyReference = ""
+            passkeyEntries = try entryRepository.listPasskeyEntries(projectID: project.id)
+            deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .passkey,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
+            entryOperationState = .succeeded("Passkey 已保存：\(entry.title)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error

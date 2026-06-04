@@ -1310,6 +1310,69 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(querySchemes.contains("msauthv3"))
     }
 
+    func testAutoFillExtensionDeclaresPasskeyProviderCapability() throws {
+        let plistURL = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Extensions/MonicaAutoFillExtension/Info.plist")
+        let data = try Data(contentsOf: plistURL)
+        guard let plist = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) as? [String: Any],
+              let extensionConfig = plist["NSExtension"] as? [String: Any],
+              let attributes = extensionConfig["NSExtensionAttributes"] as? [String: Any],
+              let capabilities = attributes["ASCredentialProviderExtensionCapabilities"] as? [String: Any]
+        else {
+            XCTFail("AutoFill extension Info.plist should declare AuthenticationServices capabilities.")
+            return
+        }
+
+        XCTAssertEqual(capabilities["ProvidesPasswords"] as? Bool, true)
+        XCTAssertEqual(capabilities["ProvidesPasskeys"] as? Bool, true)
+    }
+
+    func testSystemPasskeyRegistrationCreatesVaultMetadataWithoutTransientSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+        try unlockNewVault(model)
+
+        try model.recordSystemPasskeyRegistration(
+            AppSystemPasskeyRegistrationResult(
+                relyingPartyID: "github.com",
+                username: "joyin@example.com",
+                userHandle: Data("github-user-handle".utf8),
+                credentialID: Data("credential-id-secret".utf8),
+                publicKeyCOSE: Data([0xA5, 0x01, 0x02, 0x03]),
+                privateKeyReference: "secure-enclave://passkeys/github/credential-id-secret",
+                title: "GitHub Passkey",
+                attestationObject: Data("attestation-secret".utf8),
+                clientDataHash: Data("client-data-hash-secret".utf8)
+            ),
+            projectTitle: "Personal"
+        )
+
+        let created = try XCTUnwrap(model.passkeyEntries.first)
+        XCTAssertEqual(created.title, "GitHub Passkey")
+        XCTAssertEqual(created.relyingPartyID, "github.com")
+        XCTAssertEqual(created.username, "joyin@example.com")
+        XCTAssertEqual(created.userHandle, "Z2l0aHViLXVzZXItaGFuZGxl")
+        XCTAssertEqual(created.credentialID, "Y3JlZGVudGlhbC1pZC1zZWNyZXQ=")
+        XCTAssertEqual(created.publicKeyCOSE, "pQECAw==")
+        XCTAssertEqual(created.privateKeyReference, "secure-enclave://passkeys/github/credential-id-secret")
+        XCTAssertTrue(created.notes.contains("iOS system passkey registration"))
+        XCTAssertFalse(created.notes.contains("attestation-secret"))
+        XCTAssertFalse(created.notes.contains("client-data-hash-secret"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("Passkey 已保存：GitHub Passkey"))
+        XCTAssertEqual(model.passkeyCredentialID, "")
+        XCTAssertEqual(model.passkeyPrivateKeyReference, "")
+        XCTAssertEqual(engine.createdPasskeyEntries.first?.draft.credentialID, "Y3JlZGVudGlhbC1pZC1zZWNyZXQ=")
+    }
+
     func testOneDriveMSALUsesRegisteredAppPrivateKeychainGroup() throws {
         XCTAssertEqual(
             DefaultAppOneDriveMSALAuthenticationService.keychainSharingGroup,

@@ -19,6 +19,16 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         loadMatchingCredentialIndexRecords(for: serviceIdentifiers)
     }
 
+    override func prepareCredentialList(
+        for serviceIdentifiers: [ASCredentialServiceIdentifier],
+        requestParameters: ASPasskeyCredentialRequestParameters
+    ) {
+        configurePasskeyStatusView(
+            relyingPartyID: requestParameters.relyingPartyIdentifier,
+            status: "Passkey 认证需要在 Monica 中解锁并选择凭据"
+        )
+    }
+
     override func provideCredentialWithoutUserInteraction(for credentialIdentity: ASPasswordCredentialIdentity) {
         if let recordIdentifier = credentialIdentity.recordIdentifier,
            let secret = try? credentialResolver?.credential(recordIdentifier: recordIdentifier) {
@@ -36,11 +46,39 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
     }
 
+    override func provideCredentialWithoutUserInteraction(for credentialRequest: any ASCredentialRequest) {
+        cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
+    }
+
     override func prepareInterfaceToProvideCredential(for credentialIdentity: ASPasswordCredentialIdentity) {
         loadMatchingCredentialIndexRecords(
             for: [credentialIdentity.serviceIdentifier],
             preferredRecordIdentifier: credentialIdentity.recordIdentifier
         )
+    }
+
+    override func prepareInterfaceToProvideCredential(for credentialRequest: any ASCredentialRequest) {
+        if let passkeyRequest = credentialRequest as? ASPasskeyCredentialRequest {
+            configurePasskeyStatusView(
+                relyingPartyID: relyingPartyID(for: passkeyRequest),
+                status: "Passkey 认证需要 Monica 完成签名能力后提供"
+            )
+            return
+        }
+
+        configureStatusView(title: "Monica", status: "此凭据请求需要在 Monica 中完成")
+    }
+
+    override func prepareInterface(forPasskeyRegistration registrationRequest: any ASCredentialRequest) {
+        if let passkeyRequest = registrationRequest as? ASPasskeyCredentialRequest {
+            configurePasskeyStatusView(
+                relyingPartyID: relyingPartyID(for: passkeyRequest),
+                status: "Passkey 注册请求已收到，请在 Monica 中解锁保险库后保存"
+            )
+            return
+        }
+
+        configureStatusView(title: "Monica Passkey", status: "Passkey 注册请求已收到")
     }
 
     deinit {
@@ -212,6 +250,22 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             stack.leadingAnchor.constraint(greaterThanOrEqualTo: view.layoutMarginsGuide.leadingAnchor),
             stack.trailingAnchor.constraint(lessThanOrEqualTo: view.layoutMarginsGuide.trailingAnchor)
         ])
+    }
+
+    private func configurePasskeyStatusView(relyingPartyID: String, status: String) {
+        let sanitizedRelyingPartyID = relyingPartyID
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let title = sanitizedRelyingPartyID.isEmpty
+            ? "Monica Passkey"
+            : "Monica Passkey · \(sanitizedRelyingPartyID)"
+        configureStatusView(title: title, status: status)
+    }
+
+    private func relyingPartyID(for request: ASPasskeyCredentialRequest) -> String {
+        guard let identity = request.credentialIdentity as? ASPasskeyCredentialIdentity else {
+            return ""
+        }
+        return identity.relyingPartyIdentifier
     }
 
     private func configureCredentialList(
