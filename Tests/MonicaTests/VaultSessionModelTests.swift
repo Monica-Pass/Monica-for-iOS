@@ -8969,6 +8969,77 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("revision-secret"))
     }
 
+    func testBitwardenSyncBlocksSuspiciousEmptyRemoteVaultWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "empty-vault-revision-secret"
+        )
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice"
+        model.loginPassword = "local-password-secret"
+        model.loginURL = "https://github.com/session?token=query-secret"
+        try model.createLoginEntry(projectTitle: "Personal")
+        let syncedState = BitwardenItemSyncState(
+            localID: "entry-1",
+            remoteID: "remote-login-secret-id",
+            kind: .login,
+            lastSyncedFingerprint: BitwardenLocalItemSyncItem(
+                localID: "entry-1",
+                kind: .login,
+                title: "GitHub",
+                username: "alice",
+                url: "https://github.com/session?token=query-secret",
+                password: "local-password-secret"
+            ).syncFingerprint,
+            lastRemoteRevision: "remote-revision-secret"
+        )
+        try itemStateStore.saveStates([syncedState], vaultID: "created-vault")
+
+        do {
+            _ = try await model.pushLocalBitwardenChanges()
+            XCTFail("Suspicious empty Bitwarden vault should be blocked before pushing mutations.")
+        } catch {
+            XCTAssertEqual(error as? AppBitwardenSyncError, .emptyRemoteVault(localCount: 1))
+        }
+
+        XCTAssertEqual(bitwarden.pullCallCount, 1)
+        XCTAssertTrue(bitwarden.pushedMutations.isEmpty)
+        XCTAssertEqual(try itemStateStore.loadStates(vaultID: "created-vault"), [syncedState])
+        XCTAssertEqual(
+            model.bitwardenSyncState.label,
+            "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 1 个已同步条目。请确认账号或稍后重试。"
+        )
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            model.bitwardenSyncPreview?.redactedSummary ?? "",
+            try itemStateStore.loadStates(vaultID: "created-vault").map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("empty-vault-revision-secret"))
+        XCTAssertFalse(visibleText.contains("remote-login-secret-id"))
+        XCTAssertFalse(visibleText.contains("remote-revision-secret"))
+        XCTAssertFalse(visibleText.contains("local-password-secret"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+    }
+
     func testBitwardenSyncImportsFoldersReconcilesAttachmentsAndPushesFolderLinkedCiphers() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
