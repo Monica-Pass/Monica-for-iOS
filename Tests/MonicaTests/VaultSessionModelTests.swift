@@ -8772,6 +8772,100 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("queued-send-note-secret"))
     }
 
+    func testBitwardenPendingMutationQueueCanBeReviewedClearedAndRetriedWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let queueStore = MemoryAppBitwardenPendingMutationQueueStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-queue-review-revision-secret"
+        )
+        bitwarden.pushError = URLError(.timedOut)
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenPendingMutationQueueStore: queueStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        model.sendTitle = "Queue visible link"
+        model.sendBody = "visible-queue-body-secret"
+        model.sendNotes = "visible-queue-note-secret"
+        model.sendExpiresAt = "2026-06-03"
+        model.sendMaxViews = 4
+        try model.createSendEntry(projectTitle: "Personal")
+
+        do {
+            _ = try await model.pushLocalBitwardenChanges()
+            XCTFail("Expected retryable Bitwarden push failure")
+        } catch {
+            XCTAssertTrue(error is URLError)
+        }
+
+        XCTAssertEqual(model.bitwardenPendingMutationBatches.map(\.redactedSummary), [
+            "Bitwarden 待重试 1 个变更（第 1 次）"
+        ])
+        XCTAssertEqual(model.bitwardenPendingMutationBatches.first?.redactedSummaries, [
+            "upsert Send Queue visible link 4 次"
+        ])
+        let queuedVisibleText = model.bitwardenPendingMutationBatches
+            .flatMap { [$0.redactedSummary, $0.lastErrorSummary] + $0.redactedSummaries }
+            .joined(separator: " ")
+
+        try model.clearBitwardenPendingMutationQueue()
+
+        XCTAssertEqual(model.bitwardenPendingMutationBatches, [])
+        XCTAssertEqual(queueStore.loadAllBatches(), [])
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 同步队列已清空")
+
+        do {
+            _ = try await model.pushLocalBitwardenChanges()
+            XCTFail("Expected retryable Bitwarden push failure")
+        } catch {
+            XCTAssertTrue(error is URLError)
+        }
+        XCTAssertEqual(model.bitwardenPendingMutationBatches.count, 1)
+
+        bitwarden.pushError = nil
+        bitwarden.pushResult = BitwardenSyncPushResult(
+            acceptedMutationCount: 1,
+            revision: "bw-queue-retry-revision-secret",
+            assignedRemoteIDs: ["send-1": "remote-queue-retry-secret-id"]
+        )
+
+        let retryResult = try await model.retryBitwardenPendingMutationQueue()
+
+        XCTAssertEqual(retryResult.acceptedMutationCount, 1)
+        XCTAssertEqual(model.bitwardenPendingMutationBatches, [])
+        XCTAssertEqual(queueStore.loadAllBatches(), [])
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已推送 1 个变更，0 个冲突")
+
+        let visibleText = ([
+            model.bitwardenSyncState.label,
+            queuedVisibleText,
+            model.bitwardenPendingMutationBatches.map(\.redactedSummary).joined(separator: " "),
+            queueStore.loadAllBatches().map(\.redactedSummary).joined(separator: " ")
+        ] + bitwarden.pushedMutations.map(\.redactedSummary))
+            .joined(separator: " ")
+        [
+            "bw-queue-review-revision-secret",
+            "bw-queue-retry-revision-secret",
+            "remote-queue-retry-secret-id",
+            "visible-queue-body-secret",
+            "visible-queue-note-secret"
+        ].forEach { secret in
+            XCTAssertFalse(visibleText.contains(secret))
+        }
+    }
+
     func testBitwardenSyncImportsRemoteVaultItemsIntoLocalEntriesWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()

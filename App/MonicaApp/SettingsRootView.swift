@@ -818,6 +818,41 @@ struct SettingsRootView: View {
                         AndroidParityInfoRow(title: "类型", value: preview.kindSummary)
                         AndroidParityInfoRow(title: "附件", value: preview.attachmentSummary)
                     }
+                    if !session.bitwardenPendingMutationBatches.isEmpty {
+                        AndroidParityDivider()
+                        ForEach(Array(session.bitwardenPendingMutationBatches.prefix(3))) { batch in
+                            AndroidParityInfoRow(title: "待重试", value: batch.redactedSummary)
+                            AndroidParityInfoRow(title: "最近错误", value: batch.lastErrorSummary)
+                            ForEach(Array(batch.redactedSummaries.prefix(3)).indices, id: \.self) { index in
+                                AndroidParityInfoRow(
+                                    title: "变更 \(index + 1)",
+                                    value: batch.redactedSummaries[index]
+                                )
+                            }
+                        }
+                        Button {
+                            Task {
+                                try? await session.retryBitwardenPendingMutationQueue()
+                            }
+                        } label: {
+                            Label("重试队列", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(
+                            !session.bitwardenAuthenticationState.isConnected
+                                || session.vaultState != .unlocked
+                                || session.bitwardenSyncState.isRunning
+                        )
+                        Button(role: .destructive) {
+                            try? session.clearBitwardenPendingMutationQueue()
+                        } label: {
+                            Label("清空队列", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+                        .disabled(session.vaultState != .unlocked || session.bitwardenSyncState.isRunning)
+                    }
                     if session.bitwardenAuthenticationState.isConnected {
                         Button(role: .destructive) {
                             try? session.signOutFromBitwarden()

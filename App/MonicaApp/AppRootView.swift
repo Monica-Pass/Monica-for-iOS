@@ -2261,6 +2261,7 @@ final class AppSessionModel {
     var bitwardenAuthenticationState: BitwardenAuthenticationState = .disconnected
     var bitwardenSyncState: BitwardenSyncState = .idle
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
+    var bitwardenPendingMutationBatches: [AppBitwardenPendingMutationBatch] = []
     var csvImportPreview: CSVImportPreview?
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
@@ -4538,6 +4539,9 @@ final class AppSessionModel {
             activeProject = nil
             vaultProjects = try entryRepository.listProjects()
             rememberVault(session)
+            bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
+                vaultID: session.handle.vaultID
+            )) ?? []
             loginEntries = []
             deletedLoginEntries = []
             noteEntries = []
@@ -4587,6 +4591,9 @@ final class AppSessionModel {
             activeProject = nil
             vaultProjects = try entryRepository.listProjects()
             rememberVault(session)
+            bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
+                vaultID: session.handle.vaultID
+            )) ?? []
             loginEntries = []
             deletedLoginEntries = []
             noteEntries = []
@@ -8808,8 +8815,49 @@ final class AppSessionModel {
             bitwardenAuthenticationState = .disconnected
             bitwardenSyncState = .idle
             bitwardenSyncPreview = nil
+            bitwardenPendingMutationBatches = []
         } catch {
             bitwardenAuthenticationState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    @discardableResult
+    func refreshBitwardenPendingMutationQueue() throws -> [AppBitwardenPendingMutationBatch] {
+        let session = try requireActiveVaultSession()
+        let batches = try bitwardenPendingMutationQueueStore.loadBatches(vaultID: session.handle.vaultID)
+        bitwardenPendingMutationBatches = batches
+        return batches
+    }
+
+    func clearBitwardenPendingMutationQueue() throws {
+        recordUserActivity()
+        do {
+            let session = try requireActiveVaultSession()
+            try bitwardenPendingMutationQueueStore.saveBatches([], vaultID: session.handle.vaultID)
+            bitwardenPendingMutationBatches = []
+            bitwardenSyncState = .queueCleared
+        } catch {
+            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    @discardableResult
+    func retryBitwardenPendingMutationQueue() async throws -> BitwardenSyncPushResult {
+        recordUserActivity()
+        do {
+            let pendingBatches = try refreshBitwardenPendingMutationQueue()
+            guard !pendingBatches.isEmpty else {
+                bitwardenSyncState = .queueCleared
+                return BitwardenSyncPushResult(acceptedMutationCount: 0)
+            }
+            return try await pushLocalBitwardenChanges()
+        } catch {
+            if case .queuedForRetry = bitwardenSyncState {
+                throw error
+            }
+            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
             throw error
         }
     }
@@ -8985,6 +9033,7 @@ final class AppSessionModel {
                 previousStates: previousSendStates
             )
             let pendingBatches = try bitwardenPendingMutationQueueStore.loadBatches(vaultID: session.handle.vaultID)
+            bitwardenPendingMutationBatches = pendingBatches
             let mutations = itemPlan.mutations + sendPlan.mutations
             let result: BitwardenSyncPushResult
             do {
@@ -9022,6 +9071,7 @@ final class AppSessionModel {
             if !pendingBatches.isEmpty {
                 try bitwardenPendingMutationQueueStore.saveBatches([], vaultID: session.handle.vaultID)
             }
+            bitwardenPendingMutationBatches = []
             let conflicts = itemPlan.conflicts + sendPlan.conflicts + result.conflicts
             bitwardenSyncState = .pushed(
                 acceptedMutationCount: result.acceptedMutationCount,
@@ -9057,6 +9107,7 @@ final class AppSessionModel {
             lastErrorSummary: readableBitwardenSyncErrorMessage(for: error)
         )
         try bitwardenPendingMutationQueueStore.saveBatches([batch], vaultID: vaultID)
+        bitwardenPendingMutationBatches = [batch]
     }
 
     private func isRetryableBitwardenPushError(_ error: Error) -> Bool {
@@ -9986,6 +10037,7 @@ final class AppSessionModel {
         downloadedCloudFileRestore = nil
         bitwardenSyncState = .idle
         bitwardenSyncPreview = nil
+        bitwardenPendingMutationBatches = []
         clearPendingAndroidEncryptedBackup()
         dismissAttachmentQuickLookPreview()
         try? refreshWidgetSnapshotIfConfigured()
@@ -10110,6 +10162,7 @@ final class AppSessionModel {
         androidBackupImportPreview = nil
         bitwardenSyncState = .idle
         bitwardenSyncPreview = nil
+        bitwardenPendingMutationBatches = []
         clearKeePassImportState()
         entryOperationState = .idle
         clearOperationTimelineEvents()
@@ -10164,6 +10217,7 @@ final class AppSessionModel {
         downloadedWebDAVRestoreBackup = nil
         bitwardenSyncState = .idle
         bitwardenSyncPreview = nil
+        bitwardenPendingMutationBatches = []
         clearPendingAndroidEncryptedBackup()
         clearKeePassImportState()
     }
@@ -11481,6 +11535,7 @@ enum BitwardenSyncState: Sendable, Equatable {
     case synced(itemCount: Int, sendCount: Int)
     case pushed(acceptedMutationCount: Int, conflictCount: Int)
     case queuedForRetry(mutationCount: Int)
+    case queueCleared
     case failed(String)
 
     var label: String {
@@ -11497,6 +11552,8 @@ enum BitwardenSyncState: Sendable, Equatable {
             return "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflictCount) 个冲突"
         case .queuedForRetry(let mutationCount):
             return "Bitwarden 已暂存 \(mutationCount) 个变更，等待网络恢复后重试"
+        case .queueCleared:
+            return "Bitwarden 同步队列已清空"
         case .failed(let message):
             return message
         }
