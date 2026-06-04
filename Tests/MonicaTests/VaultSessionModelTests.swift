@@ -1335,6 +1335,69 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(accessGroups.contains("$(AppIdentifierPrefix)com.monica-pass.monica"))
     }
 
+    func testOneDriveGraphAcceptanceHarnessIsLaunchArgumentGated() {
+        XCTAssertFalse(AppOneDriveGraphAcceptanceHarness.shouldRun(arguments: []))
+        XCTAssertFalse(AppOneDriveGraphAcceptanceHarness.shouldRun(arguments: ["--unrelated"]))
+        XCTAssertTrue(AppOneDriveGraphAcceptanceHarness.shouldRun(arguments: [
+            "--unrelated",
+            "--monica-onedrive-graph-acceptance"
+        ]))
+    }
+
+    func testOneDriveGraphRealNetworkAcceptanceUsesPersistedMSALSession() async throws {
+        guard ProcessInfo.processInfo.environment["MONICA_ONEDRIVE_GRAPH_ACCEPTANCE"] == "1" else {
+            throw XCTSkip("Set MONICA_ONEDRIVE_GRAPH_ACCEPTANCE=1 to run real OneDrive Graph acceptance.")
+        }
+
+        let authenticationService = DefaultAppOneDriveMSALAuthenticationService()
+        guard try await authenticationService.restoreSession() != nil else {
+            XCTFail("Expected a persisted OneDrive MSAL session from the signed device login acceptance.")
+            return
+        }
+
+        let provider = OneDriveCloudFileProvider(tokenProvider: authenticationService)
+        let initialItems = try await provider.listFiles()
+        let fileName = "monica-graph-acceptance-\(Int(Date().timeIntervalSince1970)).txt"
+        let originalData = Data("Monica OneDrive Graph acceptance original".utf8)
+        let updatedData = Data("Monica OneDrive Graph acceptance updated".utf8)
+
+        let uploadReceipt = try await provider.uploadFile(named: fileName, data: originalData)
+        XCTAssertEqual(uploadReceipt.name, fileName)
+        XCTAssertEqual(uploadReceipt.byteCount, originalData.count)
+        XCTAssertFalse(uploadReceipt.itemID.isEmpty)
+
+        let itemsAfterUpload = try await provider.listFiles()
+        XCTAssertTrue(itemsAfterUpload.contains { $0.id == uploadReceipt.itemID && $0.name == fileName })
+
+        let downloadedOriginal = try await provider.downloadFile(id: uploadReceipt.itemID)
+        XCTAssertEqual(downloadedOriginal.data, originalData)
+        XCTAssertEqual(downloadedOriginal.item.name, fileName)
+        XCTAssertEqual(downloadedOriginal.sha256, Self.sha256Hex(originalData))
+
+        let overwriteReceipt = try await provider.overwriteFile(
+            id: uploadReceipt.itemID,
+            data: updatedData,
+            fileName: fileName,
+            expectedRevision: uploadReceipt.revision
+        )
+        XCTAssertEqual(overwriteReceipt.name, fileName)
+        XCTAssertEqual(overwriteReceipt.byteCount, updatedData.count)
+
+        let downloadedUpdated = try await provider.downloadFile(id: uploadReceipt.itemID)
+        XCTAssertEqual(downloadedUpdated.data, updatedData)
+        XCTAssertEqual(downloadedUpdated.sha256, Self.sha256Hex(updatedData))
+
+        let finalItems = try await provider.listFiles()
+        XCTAssertGreaterThanOrEqual(finalItems.count, initialItems.count)
+        XCTAssertTrue(finalItems.contains { $0.id == uploadReceipt.itemID && $0.name == fileName })
+    }
+
+    private static func sha256Hex(_ data: Data) -> String {
+        SHA256.hash(data: data)
+            .map { String(format: "%02x", $0) }
+            .joined()
+    }
+
     func testSecurityCenterSummarizesWeakAndReusedPasswordsWithoutLeakingSecrets() {
         let model = AppSessionModel()
         model.loginEntries = [
