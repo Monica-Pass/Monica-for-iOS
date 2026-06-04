@@ -8697,6 +8697,116 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
     }
 
+    func testBitwardenFileSendCreationUploadsNativeFileWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let syncStateStore = MemoryAppBitwardenSendSyncStateStore()
+        let pendingQueueStore = MemoryAppBitwardenPendingMutationQueueStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "file-send-snapshot-revision-secret"
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(
+            acceptedMutationCount: 1,
+            revision: "file-send-push-revision-secret",
+            assignedRemoteIDs: ["file-send-local-id": "remote-file-send-secret-id"]
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenSendSyncStateStore: syncStateStore,
+            bitwardenPendingMutationQueueStore: pendingQueueStore,
+            bitwardenFileSendLocalIDProvider: { "file-send-local-id" }
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        try pendingQueueStore.saveBatches(
+            [
+                AppBitwardenPendingMutationBatch(
+                    vaultID: "created-vault",
+                    mutationCount: 1,
+                    redactedSummaries: ["upsert Send Existing pending 1 次"],
+                    retryCount: 1,
+                    lastErrorSummary: "network unavailable"
+                )
+            ],
+            vaultID: "created-vault"
+        )
+
+        let result = try await model.createBitwardenFileSend(
+            title: "Incident package",
+            fileName: "incident.txt",
+            fileContent: Data("file-send-content-secret".utf8),
+            mediaType: "text/plain",
+            notes: "file-send-note-secret",
+            expiresAt: "2026-06-03",
+            maxViews: 4,
+            password: "file-send-password-secret",
+            hideEmail: true
+        )
+
+        XCTAssertEqual(bitwarden.pullCallCount, 1)
+        XCTAssertEqual(result.acceptedMutationCount, 1)
+        XCTAssertEqual(bitwarden.pushedMutations.count, 1)
+        guard case .upsertFileSend(
+            let localID,
+            let remoteID,
+            let title,
+            let fileName,
+            let fileContent,
+            let mediaType,
+            let notes,
+            let expiresAt,
+            let maxViews,
+            let password,
+            let hideEmail
+        ) = bitwarden.pushedMutations.first else {
+            return XCTFail("Expected File Send upsert mutation")
+        }
+        XCTAssertEqual(localID, "file-send-local-id")
+        XCTAssertNil(remoteID)
+        XCTAssertEqual(title, "Incident package")
+        XCTAssertEqual(fileName, "incident.txt")
+        XCTAssertEqual(fileContent, Data("file-send-content-secret".utf8))
+        XCTAssertEqual(mediaType, "text/plain")
+        XCTAssertEqual(notes, "file-send-note-secret")
+        XCTAssertEqual(expiresAt, "2026-06-03")
+        XCTAssertEqual(maxViews, 4)
+        XCTAssertEqual(password, "file-send-password-secret")
+        XCTAssertTrue(hideEmail)
+        XCTAssertEqual(model.bitwardenSyncState.label, "Bitwarden 已推送 1 个变更，0 个冲突")
+
+        let states = try syncStateStore.loadStates(vaultID: "created-vault")
+        XCTAssertEqual(states.count, 1)
+        XCTAssertEqual(states.first?.localID, "file-send-local-id")
+        XCTAssertEqual(states.first?.remoteID, "remote-file-send-secret-id")
+        XCTAssertEqual(states.first?.lastRemoteRevision, "file-send-push-revision-secret")
+        XCTAssertEqual(
+            states.first?.lastSyncedFingerprint,
+            "file\u{1F}Incident package\u{1F}incident.txt\u{1F}24\u{1F}file-send-note-secret\u{1F}2026-06-03\u{1F}4\u{1F}true"
+        )
+        XCTAssertEqual(try pendingQueueStore.loadBatches(vaultID: "created-vault").count, 1)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            bitwarden.pushedMutations.first?.redactedSummary ?? ""
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("file-send-snapshot-revision-secret"))
+        XCTAssertFalse(visibleText.contains("file-send-push-revision-secret"))
+        XCTAssertFalse(visibleText.contains("remote-file-send-secret-id"))
+        XCTAssertFalse(visibleText.contains("file-send-content-secret"))
+        XCTAssertFalse(visibleText.contains("file-send-note-secret"))
+        XCTAssertFalse(visibleText.contains("file-send-password-secret"))
+    }
+
     func testBitwardenPushQueuesRetryableMutationsAndReplaysThemWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()

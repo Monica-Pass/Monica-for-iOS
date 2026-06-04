@@ -513,6 +513,7 @@ enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
     case invalidServerURL
     case attachmentUnavailable
+    case fileSendUnavailable
     case emptyRemoteVault(localCount: Int)
 
     var errorDescription: String? {
@@ -523,6 +524,8 @@ enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
             "Bitwarden 服务器 URL 无效，仅支持 http/https。"
         case .attachmentUnavailable:
             "Bitwarden 附件不可用，请重新同步后再试。"
+        case .fileSendUnavailable:
+            "请选择要上传的 Bitwarden Send 文件。"
         case .emptyRemoteVault(let localCount):
             "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 \(localCount) 个已同步条目。请确认账号或稍后重试。"
         }
@@ -2215,11 +2218,17 @@ final class AppSessionModel {
     var editingWifiFavorite = false
     var sendEntries: [LocalSendEntry] = []
     var deletedSendEntries: [LocalSendEntry] = []
+    var sendCreateType: SendCreateType = .text
     var sendTitle = ""
     var sendBody = ""
+    var sendFileName = ""
+    var sendFileContent: Data?
+    var sendFileMediaType = "application/octet-stream"
     var sendExpiresAt = ""
     var sendMaxViews = 1
     var sendNotes = ""
+    var sendPassword = ""
+    var sendHideEmail = false
     var sendSearchQuery = ""
     var showFavoriteSendEntriesOnly = false
     var editingSendEntryID: String?
@@ -2343,6 +2352,7 @@ final class AppSessionModel {
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
+    private let bitwardenFileSendLocalIDProvider: () -> String
     private var activeVaultSession: LocalVaultSession?
     private var activeEntryRepository: LocalVaultEntryRepository?
     private var activeProject: LocalVaultProject?
@@ -2395,6 +2405,9 @@ final class AppSessionModel {
         passwordGenerator: @escaping () throws -> String = {
             try PasswordGenerator.generate()
         },
+        bitwardenFileSendLocalIDProvider: @escaping () -> String = {
+            "bitwarden-file-send-\(UUID().uuidString)"
+        },
         autoLockPolicy: AppAutoLockPolicy = .default
     ) {
         self.vaultRepository = vaultRepository
@@ -2436,6 +2449,7 @@ final class AppSessionModel {
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
+        self.bitwardenFileSendLocalIDProvider = bitwardenFileSendLocalIDProvider
         self.autoLockPolicy = autoLockPolicy
         self.notificationPermissionState = notificationPermissionStatusProvider()
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
@@ -4906,6 +4920,19 @@ final class AppSessionModel {
         self.presentedEditorMode = nil
     }
 
+    func savePresentedEditorWithBitwardenFileSend(projectTitle: String) async throws {
+        guard let presentedEditorMode else {
+            return
+        }
+        if case .add(.send) = presentedEditorMode,
+           sendCreateType == .file {
+            try await createSelectedBitwardenFileSend()
+            self.presentedEditorMode = nil
+            return
+        }
+        try savePresentedEditor(projectTitle: projectTitle)
+    }
+
     private func saveNewEntry(kind: UnifiedVaultItemKind, projectTitle: String) throws {
         switch kind {
         case .login:
@@ -7035,6 +7062,136 @@ final class AppSessionModel {
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
+        }
+    }
+
+    @discardableResult
+    func createBitwardenFileSend(
+        title: String,
+        fileName: String,
+        fileContent: Data,
+        mediaType: String,
+        notes: String,
+        expiresAt: String,
+        maxViews: Int,
+        password: String?,
+        hideEmail: Bool
+    ) async throws -> BitwardenSyncPushResult {
+        recordUserActivity()
+        bitwardenSyncState = .running
+        entryOperationState = .running
+
+        do {
+            let session = try requireActiveVaultSession()
+            let provider = try requireBitwardenSyncProvider()
+            let snapshot = try await provider.pullSnapshot()
+            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            try validateBitwardenRemoteSnapshotIsSafe(
+                snapshot,
+                previousItemStates: previousItemStates,
+                previousSendStates: previousSendStates
+            )
+            bitwardenSyncPreview = preview
+            let localID = bitwardenFileSendLocalIDProvider()
+            let sanitizedFileName = sanitizedAttachmentPreviewFileName(fileName)
+            let mutation = BitwardenSyncMutation.upsertFileSend(
+                localID: localID,
+                remoteID: nil,
+                title: title,
+                fileName: sanitizedFileName,
+                fileContent: fileContent,
+                mediaType: mediaType.nonBlankValue ?? "application/octet-stream",
+                notes: notes.nonBlankValue,
+                expiresAt: expiresAt,
+                maxViews: maxViews,
+                password: password?.nonBlankValue,
+                hideEmail: hideEmail
+            )
+            let result: BitwardenSyncPushResult
+            do {
+                result = try await provider.pushMutations([mutation])
+            } catch {
+                throw error
+            }
+
+            var statesByLocalID = Dictionary(uniqueKeysWithValues: previousSendStates.map { ($0.localID, $0) })
+            statesByLocalID[localID] = BitwardenSendSyncState(
+                localID: localID,
+                remoteID: result.assignedRemoteIDs[localID],
+                lastSyncedFingerprint: bitwardenFileSendFingerprint(
+                    title: title,
+                    fileName: sanitizedFileName,
+                    byteCount: fileContent.count,
+                    notes: notes.nonBlankValue,
+                    expiresAt: expiresAt,
+                    maxViews: maxViews,
+                    hideEmail: hideEmail
+                ),
+                lastRemoteRevision: result.revision.nonBlankValue,
+                isDeleted: false
+            )
+            try bitwardenSendSyncStateStore.saveStates(
+                statesByLocalID.values.sorted { $0.localID < $1.localID },
+                vaultID: session.handle.vaultID
+            )
+            bitwardenSyncState = .pushed(
+                acceptedMutationCount: result.acceptedMutationCount,
+                conflictCount: result.conflicts.count
+            )
+            entryOperationState = .succeeded(title)
+            return result
+        } catch {
+            if case .queuedForRetry = bitwardenSyncState {
+                entryOperationState = .failed(readableBitwardenSyncErrorMessage(for: error))
+                throw error
+            }
+            let message = readableBitwardenSyncErrorMessage(for: error)
+            bitwardenSyncState = .failed(message)
+            entryOperationState = .failed(message)
+            throw error
+        }
+    }
+
+    @discardableResult
+    func createSelectedBitwardenFileSend() async throws -> BitwardenSyncPushResult {
+        guard let fileContent = sendFileContent,
+              !sendFileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        else {
+            throw AppBitwardenSyncError.fileSendUnavailable
+        }
+        let result = try await createBitwardenFileSend(
+            title: sendTitle,
+            fileName: sendFileName,
+            fileContent: fileContent,
+            mediaType: sendFileMediaType,
+            notes: sendNotes,
+            expiresAt: sendExpiresAt,
+            maxViews: sendMaxViews,
+            password: sendPassword,
+            hideEmail: sendHideEmail
+        )
+        sendFileName = ""
+        sendFileContent = nil
+        sendFileMediaType = "application/octet-stream"
+        sendPassword = ""
+        return result
+    }
+
+    func selectBitwardenSendFile(url: URL) throws {
+        recordUserActivity()
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+        sendFileContent = try Data(contentsOf: url)
+        sendFileName = sanitizedAttachmentPreviewFileName(url.lastPathComponent)
+        sendFileMediaType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
+        if sendTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            sendTitle = sendFileName
         }
     }
 
@@ -9871,6 +10028,27 @@ final class AppSessionModel {
         }
     }
 
+    private func bitwardenFileSendFingerprint(
+        title: String,
+        fileName: String,
+        byteCount: Int,
+        notes: String?,
+        expiresAt: String,
+        maxViews: Int,
+        hideEmail: Bool
+    ) -> String {
+        [
+            "file",
+            title,
+            fileName,
+            String(byteCount),
+            notes ?? "",
+            expiresAt,
+            String(maxViews),
+            String(hideEmail)
+        ].joined(separator: "\u{1F}")
+    }
+
     private func bitwardenLocalItem(from entry: LocalLoginEntry, folderID: String? = nil, folderName: String? = nil) -> BitwardenLocalItemSyncItem {
         BitwardenLocalItemSyncItem(
             localID: entry.id,
@@ -11376,6 +11554,20 @@ enum VaultItemEditorMode: Hashable, Sendable {
             return true
         }
         return false
+    }
+}
+
+enum SendCreateType: String, CaseIterable, Identifiable, Sendable {
+    case text
+    case file
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .text: return "文本"
+        case .file: return "文件"
+        }
     }
 }
 
