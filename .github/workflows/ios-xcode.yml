@@ -16,6 +16,9 @@ on:
 permissions:
   contents: read
 
+env:
+  MONICA_CI_XCODE_APP: /Applications/Xcode_26.5.app
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.mdbx_ref || 'master' }}
   cancel-in-progress: true
@@ -23,7 +26,7 @@ concurrency:
 jobs:
   mdbx-artifact:
     name: Prepare MDBX artifact (${{ github.event.inputs.mdbx_ref || 'master' }})
-    runs-on: macos-15
+    runs-on: macos-26
     outputs:
       mdbx-sha: ${{ steps.mdbx-cache-key.outputs.sha }}
       mdbx-tooling: ${{ steps.mdbx-cache-key.outputs.tooling }}
@@ -46,6 +49,14 @@ jobs:
         with:
           targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
 
+      - name: Select Xcode 26 SDK
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s "$MONICA_CI_XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
       - name: Capture MDBX cache key inputs
         id: mdbx-cache-key
         run: |
@@ -55,6 +66,9 @@ jobs:
             shasum ios/Scripts/build-mdbx-xcframework.sh
             shasum ios/Scripts/generate-mdbx-swift-bindings.sh
             shasum ios/SwiftPackages/MonicaMDBX/Package.swift
+            xcodebuild -version
+            xcrun --sdk iphoneos --show-sdk-version
+            xcrun --sdk iphonesimulator --show-sdk-version
             rustc -Vv
           } | shasum | awk '{print "tooling="$1}' >> "$GITHUB_OUTPUT"
 
@@ -117,7 +131,7 @@ jobs:
 
   build:
     name: Build ${{ matrix.scheme }} (${{ matrix.configuration }})
-    runs-on: macos-15
+    runs-on: macos-26
     needs: mdbx-artifact
     strategy:
       fail-fast: false
@@ -147,6 +161,13 @@ jobs:
         working-directory: ios
         run: tar -xzf mdbx-ios-artifacts.tgz
 
+      - name: Select Xcode 26 SDK
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s "$MONICA_CI_XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
+
       - name: Cache Xcode build data
         uses: actions/cache@v4
         with:
@@ -171,7 +192,7 @@ jobs:
 
   tests:
     name: Run Monica XCTest suite
-    runs-on: macos-15
+    runs-on: macos-26
     needs: mdbx-artifact
 
     steps:
@@ -189,6 +210,13 @@ jobs:
       - name: Unpack MDBX artifact
         working-directory: ios
         run: tar -xzf mdbx-ios-artifacts.tgz
+
+      - name: Select Xcode 26 SDK
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s "$MONICA_CI_XCODE_APP/Contents/Developer"
+          xcodebuild -version
+          xcrun --sdk iphonesimulator --show-sdk-version
 
       - name: Cache Xcode test build data
         uses: actions/cache@v4

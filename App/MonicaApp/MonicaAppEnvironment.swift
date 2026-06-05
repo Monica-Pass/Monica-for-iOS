@@ -331,6 +331,7 @@ extension AppSessionModel {
                 appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
                 cloudFileProviders: environment.productionCloudFileProviders,
                 oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
+                autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
                 plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
                 plusEntitlementStore: environment.plusEntitlementStore
             )
@@ -385,6 +386,7 @@ extension AppSessionModel {
             autoFillIndexStore: indexStore,
             autoFillCredentialSecretStore: secretStore,
             autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(),
+            autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
             autoFillIndexKeyMaterialProvider: { vaultID in
                 try keyMaterialProvider.keyMaterial(for: vaultID)
             },

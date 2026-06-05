@@ -831,6 +831,106 @@ protocol AppBitwardenPasswordAuthenticationService: Sendable {
     func requestEmailTwoFactorCode(for challenge: BitwardenTwoFactorLoginChallenge) async throws
 }
 
+struct AppAutoFillPolicy: Sendable, Equatable, Codable {
+    var blockedFields: [String]
+    var blockedSaveTargets: [String]
+
+    init(blockedFields: [String] = [], blockedSaveTargets: [String] = []) {
+        self.blockedFields = Self.normalizedUnique(blockedFields)
+        self.blockedSaveTargets = Self.normalizedUnique(blockedSaveTargets)
+    }
+
+    func blocksSaveTarget(_ value: String) -> Bool {
+        let identifiers = AppAutoFillPolicy.serviceIdentifiers(for: value).map(Self.normalizedMatchValue)
+        let blockedIdentifiers = blockedSaveTargets
+            .flatMap(Self.serviceIdentifiers(for:))
+            .map(Self.normalizedMatchValue)
+        return blockedIdentifiers.contains { blocked in
+            identifiers.contains(blocked)
+        }
+    }
+
+    static func normalizedUnique(_ values: [String]) -> [String] {
+        var seen = Set<String>()
+        return values.compactMap { value in
+            let normalized = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !normalized.isEmpty else { return nil }
+            let key = normalizedMatchValue(normalized)
+            guard seen.insert(key).inserted else { return nil }
+            return normalized
+        }
+    }
+
+    private static func serviceIdentifiers(for value: String) -> [String] {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        var identifiers: [String] = []
+        if let url = URL(string: trimmed),
+           let host = url.host(),
+           !host.isEmpty {
+            identifiers.append(host)
+        }
+        identifiers.append(trimmed)
+        return identifiers
+    }
+
+    private static func normalizedMatchValue(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
+}
+
+protocol AppAutoFillPolicyStore: Sendable {
+    func loadPolicy() -> AppAutoFillPolicy
+    func savePolicy(_ policy: AppAutoFillPolicy)
+}
+
+final class MemoryAppAutoFillPolicyStore: AppAutoFillPolicyStore, @unchecked Sendable {
+    private var policy: AppAutoFillPolicy
+
+    init(policy: AppAutoFillPolicy = AppAutoFillPolicy()) {
+        self.policy = policy
+    }
+
+    func loadPolicy() -> AppAutoFillPolicy {
+        policy
+    }
+
+    func savePolicy(_ policy: AppAutoFillPolicy) {
+        self.policy = policy
+    }
+}
+
+final class UserDefaultsAppAutoFillPolicyStore: AppAutoFillPolicyStore, @unchecked Sendable {
+    private let userDefaults: UserDefaults
+    private let key: String
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(userDefaults: UserDefaults = .standard, key: String = "app.autofill.policy.v1") {
+        self.userDefaults = userDefaults
+        self.key = key
+    }
+
+    func loadPolicy() -> AppAutoFillPolicy {
+        guard let data = userDefaults.data(forKey: key),
+              let policy = try? decoder.decode(AppAutoFillPolicy.self, from: data)
+        else {
+            return AppAutoFillPolicy()
+        }
+        return policy
+    }
+
+    func savePolicy(_ policy: AppAutoFillPolicy) {
+        let normalized = AppAutoFillPolicy(
+            blockedFields: policy.blockedFields,
+            blockedSaveTargets: policy.blockedSaveTargets
+        )
+        if let data = try? encoder.encode(normalized) {
+            userDefaults.set(data, forKey: key)
+        }
+    }
+}
+
 struct MonicaSyncBitwardenPasswordAuthenticationService: AppBitwardenPasswordAuthenticationService {
     private let authenticator: BitwardenPasswordAuthenticator
 
@@ -2300,6 +2400,7 @@ final class AppSessionModel {
     var autoLockPolicy: AppAutoLockPolicy
     var autoFillIndexState: AutoFillIndexState = .idle
     var notificationPermissionState: AppPermissionStatusRow.State = .checkable
+    var autoFillPolicy: AppAutoFillPolicy
     var vaultKeychainState: VaultKeychainState = .idle
     private var plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
     var plusActivationState: PlusActivationState = .idle
@@ -2387,6 +2488,7 @@ final class AppSessionModel {
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
+    private let autoFillPolicyStore: any AppAutoFillPolicyStore
     private let autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)?
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
@@ -2446,6 +2548,7 @@ final class AppSessionModel {
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
+        autoFillPolicyStore: any AppAutoFillPolicyStore = MemoryAppAutoFillPolicyStore(),
         autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)? = nil,
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
@@ -2493,6 +2596,7 @@ final class AppSessionModel {
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
+        self.autoFillPolicyStore = autoFillPolicyStore
         self.autoFillIndexKeyMaterialProvider = autoFillIndexKeyMaterialProvider
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
@@ -2514,6 +2618,7 @@ final class AppSessionModel {
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
+        self.autoFillPolicy = autoFillPolicyStore.loadPolicy()
         if plusEntitlementStore.loadIsResourceUnlocked() {
             self.plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
         }
@@ -3852,6 +3957,23 @@ final class AppSessionModel {
                 detail: "保存受系统保护的本地解锁材料，不保存主密码。"
             )
         ]
+    }
+
+    var autoFillPolicyRows: [(title: String, value: String)] {
+        [
+            (title: "Blocked fields", value: "\(autoFillPolicy.blockedFields.count)"),
+            (title: "Save blocked targets", value: "\(autoFillPolicy.blockedSaveTargets.count)")
+        ]
+    }
+
+    func updateAutoFillPolicy(blockedFields: [String], blockedSaveTargets: [String]) {
+        let policy = AppAutoFillPolicy(
+            blockedFields: blockedFields,
+            blockedSaveTargets: blockedSaveTargets
+        )
+        autoFillPolicy = policy
+        autoFillPolicyStore.savePolicy(policy)
+        entryOperationState = .succeeded("AutoFill 策略已更新")
     }
 
     var securityCenterRows: [AppSecurityCenterRow] {
@@ -5280,6 +5402,9 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
             let normalizedRequest = try normalizedAutoFillSaveRequest(request)
+            guard !autoFillPolicy.blocksSaveTarget(normalizedRequest.serviceIdentifier) else {
+                throw AppAutoFillPolicyError.saveTargetBlocked
+            }
             let project: LocalVaultProject
             if let activeProject {
                 project = activeProject
@@ -5749,6 +5874,33 @@ final class AppSessionModel {
         try importTotpURI(value, source: .scannedQRCode)
     }
 
+    func importSteamAuthenticator(_ data: Data) throws {
+        recordUserActivity()
+
+        do {
+            let draft = try SteamAuthenticatorImportParser.parse(data)
+            guard let period = UInt32(exactly: draft.period) else {
+                throw TotpError.invalidPeriod
+            }
+            guard let digits = UInt32(exactly: draft.digits) else {
+                throw TotpError.invalidDigits
+            }
+
+            totpTitle = draft.title
+            totpSecret = draft.secret
+            totpIssuer = draft.issuer
+            totpAccountName = draft.accountName
+            totpPeriod = period
+            totpDigits = digits
+            totpAlgorithm = draft.algorithm.rawValue
+            totpImportURI = ""
+            entryOperationState = .succeeded("已导入 \(draft.redactedSummary)")
+        } catch {
+            entryOperationState = .failed(readableSteamImportErrorMessage(for: error))
+            throw error
+        }
+    }
+
     private func importTotpURI(_ value: String, source: TotpImportSource) throws {
         recordUserActivity()
 
@@ -5802,6 +5954,21 @@ final class AppSessionModel {
             return "扫描到的二维码使用了不支持的 TOTP 算法。"
         case (.manualURI, .invalidAlgorithm):
             return "TOTP 设置 URI 使用了不支持的算法。"
+        }
+    }
+
+    private func readableSteamImportErrorMessage(for error: Error) -> String {
+        guard let totpError = error as? TotpError else {
+            return error.localizedDescription
+        }
+
+        switch totpError {
+        case .invalidSecret:
+            return "Steam 验证器文件缺少有效 shared_secret。"
+        case .invalidURI:
+            return "请输入有效的 Steam maFile/JSON 验证器文件。"
+        case .invalidDigits, .invalidPeriod, .invalidAlgorithm:
+            return "Steam 验证器参数暂不支持。"
         }
     }
 
@@ -12324,6 +12491,17 @@ enum BitwardenSyncState: Sendable, Equatable {
             return true
         }
         return false
+    }
+}
+
+enum AppAutoFillPolicyError: Error, LocalizedError, Sendable, Equatable {
+    case saveTargetBlocked
+
+    var errorDescription: String? {
+        switch self {
+        case .saveTargetBlocked:
+            return "AutoFill 保存目标已被拦截。"
+        }
     }
 }
 
