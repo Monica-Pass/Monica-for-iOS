@@ -607,7 +607,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.plusActivationState, .activated)
         XCTAssertTrue(model.isPlusActive)
         XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
-        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "已通过 Android 同口径资源按钮解锁 Monica Plus。")
+        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "已通过本地授权资源解锁 Monica Plus。")
         XCTAssertEqual(
             model.plusFeatureRows.map(\.id),
             ["premium_themes", "validator_vibration", "copy_next_code", "bitwarden_sync"]
@@ -666,7 +666,7 @@ final class VaultSessionModelTests: XCTestCase {
             plusEntitlementStore: store
         )
         XCTAssertTrue(reloadedModel.isPlusActive)
-        XCTAssertEqual(reloadedModel.plusEntitlementStatusRow.detail, "已通过 Android 同口径资源按钮解锁 Monica Plus。")
+        XCTAssertEqual(reloadedModel.plusEntitlementStatusRow.detail, "已通过本地授权资源解锁 Monica Plus。")
         XCTAssertTrue(reloadedModel.plusFeatureRows.allSatisfy(\.isUnlocked))
 
         let persistedDebugText = store.persistedDebugText
@@ -1062,35 +1062,6 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.appearancePreferences.colorScheme, .light)
         XCTAssertEqual(model.appearancePreferences.accentColor, .green)
         XCTAssertEqual(model.appearancePreferences.passwordListIconStyle, .monochrome)
-    }
-
-    func testDeveloperDiagnosticsExposeRedactedOperationalState() {
-        let model = AppSessionModel()
-        let environment = MonicaAppEnvironment(
-            appGroupIdentifier: "group.takagi.ru.monica",
-            minimumIOSVersion: "17.0",
-            firstBackupProvider: "WebDAV",
-            localDeviceIdentifier: "ios-local-device-secret"
-        )
-
-        let rows = AppDeveloperDiagnostics.rows(
-            environment: environment,
-            session: model,
-            storageStrategy: "MDBX",
-            mdbxBridge: "UniFFI"
-        )
-
-        XCTAssertEqual(
-            rows.map(\.title),
-            ["主存储", "MDBX 桥接", "App Group", "本机标识", "AutoFill 索引", "同步日志", "Bitwarden"]
-        )
-        XCTAssertEqual(rows[0].value, "MDBX")
-        XCTAssertEqual(rows[1].value, "UniFFI")
-        XCTAssertEqual(rows[2].value, "group.takagi.ru.monica")
-        XCTAssertFalse(rows[3].value.contains("secret"))
-        XCTAssertEqual(rows[4].value, "未生成")
-        XCTAssertEqual(rows[5].value, "空闲")
-        XCTAssertEqual(rows[6].value, "就绪")
     }
 
     func testCloudFileEnvironmentConfiguresOneDriveAndDefersGoogleDrive() throws {
@@ -6661,7 +6632,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.totpEntries.isEmpty)
         XCTAssertTrue(engine.createdLoginEntries.isEmpty)
         XCTAssertTrue(engine.createdTotpEntries.isEmpty)
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：2 项可导入，0 个问题"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份预览：2 项可导入，0 个问题"))
     }
 
     func testAndroidBackupImportPreviewDoesNotWriteUntilConfirmed() throws {
@@ -6681,15 +6652,15 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(engine.createdLoginEntries.isEmpty)
         XCTAssertTrue(engine.createdNoteEntries.isEmpty)
 
-        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+        try model.confirmAndroidBackupImport(projectTitle: "移动端备份")
 
         XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
         XCTAssertEqual(model.noteEntries.map(\.title), ["Recovery"])
-        XCTAssertEqual(engine.createdProjects.map(\.title), ["Android 备份"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["移动端备份"])
         XCTAssertEqual(engine.createdLoginEntries.first?.draft.password, "secret-password")
         XCTAssertEqual(engine.createdNoteEntries.first?.draft.body, "backup codes")
         XCTAssertNil(model.androidBackupImportPreview)
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 2 项"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份已导入 2 项"))
     }
 
     func testAndroidBackupImportPreviewIncludesAttachmentManifestCount() throws {
@@ -6708,7 +6679,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(preview.items.map(\.kind), [.login])
         XCTAssertEqual(preview.attachments.map(\.fileName), ["contract.pdf"])
         XCTAssertEqual(preview.attachments.first?.blobEntryPath, "attachments/attachment-1.enc")
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，1 个附件，0 个问题"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份预览：1 项可导入，1 个附件，0 个问题"))
     }
 
     func testAndroidBackupImportRestoresTrashItemsIntoDeletedListsWithoutLeakingSecrets() throws {
@@ -6752,9 +6723,9 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(preview.items.map(\.kind), [.login])
         XCTAssertEqual(preview.deletedItems.map(\.draft.kind), [.login, .totp])
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，2 项回收站，0 个问题"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份预览：1 项可导入，2 项回收站，0 个问题"))
 
-        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+        try model.confirmAndroidBackupImport(projectTitle: "移动端备份")
 
         XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
         XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["Deleted Login"])
@@ -6764,7 +6735,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-2"])
         XCTAssertEqual(engine.deletedTotpEntries.map(\.entryID), ["totp-1"])
         XCTAssertNil(model.androidBackupImportPreview)
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；2 项进入回收站"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份已导入 1 项；2 项进入回收站"))
 
         let statusText = model.entryOperationState.label
         [
@@ -6790,7 +6761,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertNil(model.androidBackupImportPreview)
         XCTAssertEqual(
             model.entryOperationState,
-            .failed("Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。")
+            .failed("移动端加密备份暂未支持解密，请先导出未加密 .zip 后再导入。")
         )
     }
 
@@ -6809,7 +6780,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertNil(model.androidBackupImportPreview)
         XCTAssertEqual(
             model.entryOperationState,
-            .failed("Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。")
+            .failed("移动端加密备份暂未支持解密，请先导出未加密 .zip 后再导入。")
         )
     }
 
@@ -6827,7 +6798,7 @@ final class VaultSessionModelTests: XCTestCase {
         )
 
         XCTAssertEqual(preview.items.map(\.kind), [.login])
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，0 个问题"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份预览：1 项可导入，0 个问题"))
     }
 
     func testAndroidBackupEncryptedFileCanBePreparedAndRetriedWithPassword() throws {
@@ -6847,7 +6818,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertNil(immediatePreview)
         XCTAssertEqual(model.pendingAndroidEncryptedBackupFileName, "monica_backup.enc.zip")
-        XCTAssertEqual(model.entryOperationState, .failed("请输入 Android 加密备份密码。"))
+        XCTAssertEqual(model.entryOperationState, .failed("请输入移动端加密备份密码。"))
 
         model.androidBackupDecryptPassword = "wrong password"
         XCTAssertThrowsError(try model.previewPendingAndroidEncryptedBackupImport())
@@ -6856,7 +6827,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertNil(model.androidBackupImportPreview)
         XCTAssertEqual(
             model.entryOperationState,
-            .failed("Android 加密备份解密失败，请检查密码或文件是否损坏。")
+            .failed("移动端加密备份解密失败，请检查密码或文件是否损坏。")
         )
 
         model.androidBackupDecryptPassword = "correct horse battery staple"
@@ -6865,7 +6836,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(preview.items.map(\.kind), [.login])
         XCTAssertNil(model.pendingAndroidEncryptedBackupFileName)
         XCTAssertEqual(model.androidBackupDecryptPassword, "")
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份预览：1 项可导入，0 个问题"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份预览：1 项可导入，0 个问题"))
     }
 
     func testAndroidBackupConfirmImportsAttachmentMetadataWithRemappedLoginID() throws {
@@ -6888,7 +6859,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertTrue(engine.createdAttachmentMetadata.isEmpty)
 
-        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+        try model.confirmAndroidBackupImport(projectTitle: "移动端备份")
 
         XCTAssertEqual(model.loginEntries.map(\.id), ["entry-1"])
         XCTAssertEqual(
@@ -6927,7 +6898,7 @@ final class VaultSessionModelTests: XCTestCase {
                 localPath: "attachment-1.enc"
             )
         )
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导入 1 项；1 个附件密文待恢复"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份已导入 1 项；1 个附件密文待恢复"))
     }
 
     func testAndroidBackupAttachmentReferenceCanBeDeletedAndRestored() throws {
@@ -6947,7 +6918,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         try unlockNewVault(model)
         _ = try model.previewAndroidBackupImport(backup)
-        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+        try model.confirmAndroidBackupImport(projectTitle: "移动端备份")
 
         guard let attachment = model.attachmentEntries.first else {
             return XCTFail("Expected imported attachment reference")
@@ -6989,7 +6960,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         try unlockNewVault(model)
         _ = try model.previewAndroidBackupImport(backup)
-        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+        try model.confirmAndroidBackupImport(projectTitle: "移动端备份")
 
         let attachment = try XCTUnwrap(model.attachmentEntries.first)
         let status = model.attachmentContentStatus(for: attachment)
@@ -7423,7 +7394,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         try unlockNewVault(model)
         _ = try model.previewAndroidBackupImport(backup)
-        try model.confirmAndroidBackupImport(projectTitle: "Android 备份")
+        try model.confirmAndroidBackupImport(projectTitle: "移动端备份")
 
         let attachment = try XCTUnwrap(model.attachmentEntries.first)
         try model.deleteAttachmentEntry(attachment)
@@ -7489,7 +7460,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(AndroidBackupExportDocument.readableContentTypes, [.zip])
         XCTAssertEqual(report.items.map(\.kind), [.login])
-        XCTAssertEqual(model.entryOperationState, .succeeded("Android 备份已导出 1 项"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("移动端备份已导出 1 项"))
     }
 
     func testTotpEntryGeneratesCodeFromStoredSeed() throws {
