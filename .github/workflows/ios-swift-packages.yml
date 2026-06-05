@@ -1,0 +1,175 @@
+name: iOS Swift Packages
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+  schedule:
+    - cron: "23 18 * * *"
+  workflow_dispatch:
+    inputs:
+      mdbx_ref:
+        description: Monica-Pass/Mdbx ref for MDBX-backed package checks
+        required: false
+        default: master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event.inputs.mdbx_ref || 'master' }}
+  cancel-in-progress: true
+
+jobs:
+  pure-swift-packages:
+    name: SwiftPM test (${{ matrix.package }})
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - MonicaCore
+          - MonicaSecurity
+          - MonicaSync
+          - MonicaUI
+
+    steps:
+      - name: Check out iOS repository
+        uses: actions/checkout@v4
+        with:
+          path: ios
+
+      - name: Cache SwiftPM build artifacts
+        uses: actions/cache@v4
+        with:
+          path: ios/SwiftPackages/${{ matrix.package }}/.build
+          key: ${{ runner.os }}-spm-${{ matrix.package }}-${{ hashFiles('ios/SwiftPackages/**/Package.swift', 'ios/SwiftPackages/**/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-${{ matrix.package }}-
+
+      - name: Run package tests
+        working-directory: ios
+        run: swift test --package-path "SwiftPackages/${{ matrix.package }}"
+
+      - name: Build package in release
+        working-directory: ios
+        run: swift build --package-path "SwiftPackages/${{ matrix.package }}" -c release
+
+  binary-package:
+    name: SwiftPM validate binary package
+    runs-on: macos-15
+
+    steps:
+      - name: Check out iOS repository
+        uses: actions/checkout@v4
+        with:
+          path: ios
+
+      - name: Validate MSAL binary package manifest
+        working-directory: ios
+        run: swift package --package-path SwiftPackages/MSAL dump-package >/dev/null
+
+  mdbx-backed-packages:
+    name: SwiftPM test MDBX-backed packages (${{ github.event.inputs.mdbx_ref || 'master' }})
+    runs-on: macos-15
+
+    steps:
+      - name: Check out iOS repository
+        uses: actions/checkout@v4
+        with:
+          path: ios
+
+      - name: Check out Monica MDBX
+        uses: actions/checkout@v4
+        with:
+          repository: Monica-Pass/Mdbx
+          ref: ${{ github.event.inputs.mdbx_ref || 'master' }}
+          path: mdbx
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Capture MDBX cache key inputs
+        id: mdbx-cache-key
+        run: |
+          set -euo pipefail
+          echo "sha=$(git -C mdbx rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          {
+            shasum ios/Scripts/build-mdbx-xcframework.sh
+            shasum ios/Scripts/generate-mdbx-swift-bindings.sh
+            shasum ios/SwiftPackages/MonicaMDBX/Package.swift
+            rustc -Vv
+          } | shasum | awk '{print "tooling="$1}' >> "$GITHUB_OUTPUT"
+
+      - name: Cache Rust dependencies and MDBX targets
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/uniffi-bindgen-swift
+            mdbx/target
+          key: ${{ runner.os }}-cargo-mdbx-${{ steps.mdbx-cache-key.outputs.sha }}-${{ steps.mdbx-cache-key.outputs.tooling }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-mdbx-${{ steps.mdbx-cache-key.outputs.sha }}-
+            ${{ runner.os }}-cargo-mdbx-
+
+      - name: Install UniFFI Swift bindgen
+        run: |
+          set -euo pipefail
+          if ! command -v uniffi-bindgen-swift >/dev/null 2>&1; then
+            cargo install uniffi --version 0.31.1 --locked --features cli
+          fi
+
+      - name: Cache MDBX generated artifact
+        id: mdbx-artifact-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/Artifacts/MDBX/MonicaMDBXGenerated.xcframework
+            ios/SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated
+          key: ${{ runner.os }}-mdbx-ios-artifact-${{ steps.mdbx-cache-key.outputs.sha }}-${{ steps.mdbx-cache-key.outputs.tooling }}
+
+      - name: Build MDBX XCFramework
+        if: steps.mdbx-artifact-cache.outputs.cache-hit != 'true'
+        working-directory: ios
+        run: Scripts/build-mdbx-xcframework.sh
+
+      - name: Validate generated MDBX artifact
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          test -d Artifacts/MDBX/MonicaMDBXGenerated.xcframework
+          test -f SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated/mdbx_ffi.swift
+          plutil -lint Artifacts/MDBX/MonicaMDBXGenerated.xcframework/Info.plist
+
+      - name: Cache MDBX-backed SwiftPM artifacts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ios/SwiftPackages/MonicaMDBX/.build
+            ios/SwiftPackages/MonicaStorage/.build
+          key: ${{ runner.os }}-spm-mdbx-backed-${{ steps.mdbx-cache-key.outputs.sha }}-${{ hashFiles('ios/SwiftPackages/MonicaMDBX/Package.swift', 'ios/SwiftPackages/MonicaStorage/Package.swift', 'ios/SwiftPackages/MonicaStorage/Package.resolved') }}
+          restore-keys: |
+            ${{ runner.os }}-spm-mdbx-backed-${{ steps.mdbx-cache-key.outputs.sha }}-
+            ${{ runner.os }}-spm-mdbx-backed-
+
+      - name: Run MonicaMDBX tests
+        working-directory: ios
+        run: swift test --package-path SwiftPackages/MonicaMDBX
+
+      - name: Build MonicaMDBX in release
+        working-directory: ios
+        run: swift build --package-path SwiftPackages/MonicaMDBX -c release
+
+      - name: Run MonicaStorage tests
+        working-directory: ios
+        run: swift test --package-path SwiftPackages/MonicaStorage
+
+      - name: Build MonicaStorage in release
+        working-directory: ios
+        run: swift build --package-path SwiftPackages/MonicaStorage -c release

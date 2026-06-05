@@ -1,0 +1,67 @@
+name: iOS Quality
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  repository-quality:
+    name: Repository quality checks
+    runs-on: macos-15
+
+    steps:
+      - name: Check out iOS repository
+        uses: actions/checkout@v4
+        with:
+          path: ios
+
+      - name: Check whitespace
+        working-directory: ios
+        run: git diff --check
+
+      - name: Check merge conflict markers
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          if git grep -nE '^(<<<<<<<|>>>>>>>)' -- .; then
+            echo "Merge conflict marker found."
+            exit 1
+          fi
+
+      - name: Lint property lists and entitlements
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          find App Extensions -type f \( -name '*.plist' -o -name '*.entitlements' \) -print0 \
+            | xargs -0 plutil -lint
+
+      - name: Validate Swift package manifests
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          for manifest in SwiftPackages/*/Package.swift; do
+            package_dir="$(dirname "$manifest")"
+            echo "::group::${package_dir}"
+            swift package --package-path "$package_dir" dump-package >/dev/null
+            echo "::endgroup::"
+          done
+
+      - name: Check required local artifacts and scripts
+        working-directory: ios
+        run: |
+          set -euo pipefail
+          test -x Scripts/build-mdbx-xcframework.sh
+          test -x Scripts/generate-mdbx-swift-bindings.sh
+          test -d Artifacts/MSAL/MSAL.xcframework
+          test -f Monica.xcodeproj/xcshareddata/xcschemes/Monica.xcscheme
