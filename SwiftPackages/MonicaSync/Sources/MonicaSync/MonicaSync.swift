@@ -2,6 +2,7 @@ import CommonCrypto
 import CryptoKit
 import Foundation
 import Security
+import argon2
 
 public enum MonicaSyncBaseline {
     public static let firstBackupProvider = "WebDAV"
@@ -934,15 +935,23 @@ public struct BitwardenPasswordAuthenticator: Sendable {
             throw BitwardenSyncProviderError.serverRejected(statusCode: preloginResponse.statusCode)
         }
         let prelogin = try BitwardenPreloginPayload.decode(preloginResponse.body)
-        guard prelogin.kdf == .pbkdf2 else {
-            throw BitwardenSyncProviderError.unsupportedKDF(prelogin.kdf.rawValue)
+        let masterKey: Data
+        switch prelogin.kdf {
+        case .pbkdf2:
+            masterKey = try BitwardenCrypto.deriveMasterKeyPBKDF2(
+                password: masterPassword,
+                salt: normalizedEmail.lowercased(),
+                iterations: prelogin.iterations
+            )
+        case .argon2id:
+            masterKey = try BitwardenCrypto.deriveMasterKeyArgon2id(
+                password: masterPassword,
+                salt: normalizedEmail.lowercased(),
+                iterations: prelogin.iterations,
+                memory: prelogin.memory ?? 64,
+                parallelism: prelogin.parallelism ?? 4
+            )
         }
-
-        let masterKey = try BitwardenCrypto.deriveMasterKeyPBKDF2(
-            password: masterPassword,
-            salt: normalizedEmail.lowercased(),
-            iterations: prelogin.iterations
-        )
         let passwordHash = try BitwardenCrypto.deriveMasterPasswordHash(
             masterKey: masterKey,
             password: masterPassword
@@ -1063,6 +1072,61 @@ public final class URLSessionBitwardenPasswordAuthenticationTransport: Bitwarden
 public enum BitwardenCrypto {
     public static func deriveMasterKeyPBKDF2(password: String, salt: String, iterations: Int) throws -> Data {
         try pbkdf2(seed: Data(password.utf8), salt: Data(salt.utf8), iterations: iterations, length: 32)
+    }
+
+    public static func deriveMasterKeyArgon2id(
+        password: String,
+        salt: String,
+        iterations: Int,
+        memory: Int,
+        parallelism: Int
+    ) throws -> Data {
+        guard iterations > 0,
+              memory > 0,
+              parallelism > 0,
+              let iterationCost = UInt32(exactly: iterations),
+              let memoryMiB = UInt32(exactly: memory),
+              let laneCount = UInt32(exactly: parallelism) else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        let memoryCost = memoryMiB.multipliedReportingOverflow(by: 1024)
+        guard !memoryCost.overflow else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        var passwordBytes = Data(password.utf8)
+        let saltHash = SHA256.hash(data: Data(salt.utf8))
+        var saltBytes = Data(saltHash)
+        var output = Data(repeating: 0, count: 32)
+        let passwordLength = passwordBytes.count
+        let saltLength = saltBytes.count
+        let outputLength = output.count
+        let status = output.withUnsafeMutableBytes { outputBuffer in
+            passwordBytes.withUnsafeMutableBytes { passwordBuffer in
+                saltBytes.withUnsafeMutableBytes { saltBuffer in
+                    argon2_hash(
+                        iterationCost,
+                        memoryCost.partialValue,
+                        laneCount,
+                        passwordBuffer.baseAddress,
+                        passwordLength,
+                        saltBuffer.baseAddress,
+                        saltLength,
+                        outputBuffer.baseAddress,
+                        outputLength,
+                        nil,
+                        0,
+                        Argon2_id,
+                        UInt32(argon2.ARGON2_VERSION_13.rawValue)
+                    )
+                }
+            }
+        }
+        passwordBytes.resetBytes(in: passwordBytes.startIndex..<passwordBytes.endIndex)
+        saltBytes.resetBytes(in: saltBytes.startIndex..<saltBytes.endIndex)
+        guard status == ARGON2_OK.rawValue else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        return output
     }
 
     public static func deriveMasterPasswordHash(masterKey: Data, password: String) throws -> String {

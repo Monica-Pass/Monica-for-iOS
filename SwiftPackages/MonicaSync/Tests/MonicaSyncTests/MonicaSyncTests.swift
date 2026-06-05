@@ -663,6 +663,74 @@ import Foundation
     }
 }
 
+@Test func bitwardenPasswordAuthenticatorLogsInWithArgon2idAndStoresDecryptionSession() async throws {
+    let masterKey = try BitwardenCrypto.deriveMasterKeyArgon2id(
+        password: "correct horse battery staple",
+        salt: "alice@example.com",
+        iterations: 2,
+        memory: 1,
+        parallelism: 1
+    )
+    #expect(masterKey == Data(hex: "ba1b5e465cedd4459ba003d4fbc5e294341beb7da9c8b392ec832a167653a10e"))
+
+    let transport = RecordingBitwardenPasswordAuthenticationTransport()
+    transport.enqueuePrelogin(
+        statusCode: 200,
+        body: #"{"Kdf":1,"KdfIterations":2,"KdfMemory":1,"KdfParallelism":1}"#
+    )
+    transport.enqueueToken(
+        statusCode: 200,
+        body: """
+        {
+          "access_token": "bitwarden-argon-access-token-secret",
+          "refresh_token": "bitwarden-argon-refresh-token-secret",
+          "expires_in": 1800,
+          "Key": "2.AAECAwQFBgcICQoLDA0ODw==|H2SuUqC9uuKkT4JPDpjewhr0kKJYmEc0eJvM6vaCWRgT5hWQehQEADtZ0nuRfMYUbS67ZEs578rdPasvjkTmwUf/ZmOkFPNXQddgfUW8EJk=|8btcH81tvRxboZ8xwe6hyi7f4ijP9nf7PHrvlJvqnqc="
+        }
+        """
+    )
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore()
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    let authenticator = BitwardenPasswordAuthenticator(
+        sessionStore: sessionStore,
+        vaultKeyStore: keyStore,
+        transport: transport,
+        deviceIdentifier: { "ios-argon-device-id" },
+        now: { Date(timeIntervalSince1970: 1_804_010_000) }
+    )
+
+    let session = try await authenticator.signIn(
+        email: "Alice@Example.com",
+        masterPassword: "correct horse battery staple",
+        serverURL: URL(string: "https://vault.bitwarden.com")!
+    )
+
+    #expect(session.accountLabel == "Alice@Example.com")
+    #expect(session.accessToken == "bitwarden-argon-access-token-secret")
+    #expect(session.refreshToken == "bitwarden-argon-refresh-token-secret")
+    #expect(session.expiresAt == Date(timeIntervalSince1970: 1_804_011_800))
+    #expect(try sessionStore.loadSession() == session)
+    let vaultKey = try #require(try keyStore.loadVaultKey(accountLabel: "Alice@Example.com"))
+    #expect(vaultKey.encryptionKey == Data((1...32).map(UInt8.init)))
+    #expect(vaultKey.macKey == Data((33...64).map(UInt8.init)))
+
+    let token = try #require(transport.tokenRequests.first)
+    #expect(token.form["password"] == "9lpmZall6jkkqAnvX88B31KeFcNhz9iuphEAcLQfdHE=")
+    #expect(token.form["username"] == "Alice@Example.com")
+    #expect(token.form["deviceIdentifier"] == "ios-argon-device-id")
+
+    let visibleText = [session.redactedSummary, vaultKey.redactedSummary].joined(separator: " ")
+    [
+        "bitwarden-argon-access-token-secret",
+        "bitwarden-argon-refresh-token-secret",
+        "correct horse battery staple",
+        "9lpmZall6jkkqAnvX88B31KeFcNhz9iuphEAcLQfdHE",
+        "H2SuU"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
 @Test func bitwardenPasswordAuthenticatorMapsObjectShapedTwoFactorChallenge() async throws {
     let transport = RecordingBitwardenPasswordAuthenticationTransport()
     transport.enqueuePrelogin(
@@ -2625,6 +2693,22 @@ private final class RecordingBitwardenVaultSyncTransport: BitwardenVaultSyncTran
 private func decodedJSONDictionary(_ data: Data?) throws -> [String: Any] {
     let data = try #require(data)
     return try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+}
+
+private extension Data {
+    init(hex: String) {
+        var bytes: [UInt8] = []
+        bytes.reserveCapacity(hex.count / 2)
+        var index = hex.startIndex
+        while index < hex.endIndex {
+            let next = hex.index(index, offsetBy: 2, limitedBy: hex.endIndex) ?? hex.endIndex
+            if let byte = UInt8(hex[index..<next], radix: 16) {
+                bytes.append(byte)
+            }
+            index = next
+        }
+        self.init(bytes)
+    }
 }
 
 private final class RecordingOneDriveAccessTokenProvider: OneDriveAccessTokenProvider {
