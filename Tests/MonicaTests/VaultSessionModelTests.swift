@@ -8086,6 +8086,40 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(identityStore.savedPasskeyIdentities.last?.count, 1)
     }
 
+    func testPasskeyEntryCreationNormalizesRelyingPartyIDForSystemIdentities() throws {
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            autoFillCredentialIdentityStore: identityStore
+        )
+        try unlockNewVault(model)
+
+        model.passkeyTitle = "Books Passkey"
+        model.passkeyRelyingPartyID = "  Bücher.Example.  "
+        model.passkeyUsername = "joyin@example.com"
+        model.passkeyUserHandle = Data("books-user-handle".utf8).base64EncodedString()
+        model.passkeyCredentialID = Data("books-credential".utf8).base64EncodedString()
+        model.passkeyPublicKeyCOSE = Data([0xA5, 0x01, 0x02]).base64EncodedString()
+        model.passkeyPrivateKeyReference = "monica-passkey://books-credential"
+
+        try model.createPasskeyEntry(projectTitle: "Personal")
+
+        let created = try XCTUnwrap(model.passkeyEntries.first)
+        XCTAssertEqual(created.relyingPartyID, "xn--bcher-kva.example")
+        XCTAssertEqual(
+            identityStore.savedPasskeyIdentities.last,
+            [
+                AppAutoFillPasskeyCredentialIdentity(
+                    recordIdentifier: created.id,
+                    relyingPartyIdentifier: "xn--bcher-kva.example",
+                    username: "joyin@example.com",
+                    credentialID: Data("books-credential".utf8),
+                    userHandle: Data("books-user-handle".utf8)
+                )
+            ]
+        )
+    }
+
     func testAppSessionWritesAutoFillIndexThatExtensionCanUnlockAndMatch() async throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
