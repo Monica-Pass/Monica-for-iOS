@@ -757,6 +757,101 @@ import Foundation
     }
 }
 
+@Test func bitwardenPasswordAuthenticatorContinuesTwoFactorLoginAndCanRequestEmailCode() async throws {
+    let transport = RecordingBitwardenPasswordAuthenticationTransport()
+    transport.enqueuePrelogin(
+        statusCode: 200,
+        body: #"{"Kdf":0,"KdfIterations":1000}"#
+    )
+    transport.enqueueToken(
+        statusCode: 400,
+        body: """
+        {
+          "TwoFactorProviders": ["0", "1"],
+          "TwoFactorProviders2": {
+            "1": { "Email": "a***@example.com" }
+          }
+        }
+        """
+    )
+    transport.enqueueEmailTwoFactor(statusCode: 200, body: "")
+    transport.enqueueToken(
+        statusCode: 200,
+        body: """
+        {
+          "access_token": "bitwarden-two-factor-access-token-secret",
+          "refresh_token": "bitwarden-two-factor-refresh-token-secret",
+          "expires_in": 3600,
+          "Key": "2.AAECAwQFBgcICQoLDA0ODw==|bNW5Cs/xXNANXQtJ2ANJ+ZGT+Am0HFQ2QCSW1ojvZ+8peMsiFJJsM3HNXENFKcKmnyRIDVS8KbGBcIfyeRfzNm1TjUcSXZGrkB+R3famzG4=|5l1Q9FFGqTJViCO4tcJkphzXxhR31DWD143x2EUeRyo="
+        }
+        """
+    )
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore()
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    let authenticator = BitwardenPasswordAuthenticator(
+        sessionStore: sessionStore,
+        vaultKeyStore: keyStore,
+        transport: transport,
+        deviceIdentifier: { "ios-device-id" },
+        now: { Date(timeIntervalSince1970: 1_804_020_000) }
+    )
+
+    let result = try await authenticator.beginSignIn(
+        email: "Alice@Example.com",
+        masterPassword: "correct horse battery staple",
+        serverURL: URL(string: "https://vault.bitwarden.com")!
+    )
+    guard case .twoFactorRequired(let challenge) = result else {
+        Issue.record("Expected Bitwarden two-factor challenge")
+        return
+    }
+
+    #expect(challenge.accountLabel == "Alice@Example.com")
+    #expect(challenge.providers.map(\.id) == [0, 1])
+    #expect(challenge.providers.map(\.displayName) == ["Authenticator App", "Email"])
+    #expect(challenge.supportsEmailCodeRequest)
+    #expect(challenge.redactedSummary == "Bitwarden Alice@Example.com 需要两步验证：Authenticator App、Email")
+
+    try await authenticator.requestEmailTwoFactorCode(for: challenge)
+    let emailRequest = try #require(transport.emailTwoFactorRequests.first)
+    #expect(emailRequest.url.absoluteString == "https://api.bitwarden.com/two-factor/send-email-login")
+    #expect(emailRequest.email == "Alice@Example.com")
+    #expect(emailRequest.masterPasswordHash == "nidpx1SblZnybnMO5LIGKfdtOqx3HxJra2/cdFR2lNc=")
+
+    let session = try await authenticator.completeTwoFactorSignIn(
+        challenge,
+        code: " 123456 ",
+        providerID: 1,
+        rememberDevice: true
+    )
+
+    #expect(session.accountLabel == "Alice@Example.com")
+    #expect(session.accessToken == "bitwarden-two-factor-access-token-secret")
+    #expect(try sessionStore.loadSession() == session)
+    #expect(try keyStore.loadVaultKey(accountLabel: "Alice@Example.com") != nil)
+    #expect(transport.tokenRequests.count == 2)
+    let continuation = transport.tokenRequests[1]
+    #expect(continuation.form["grant_type"] == "password")
+    #expect(continuation.form["username"] == "Alice@Example.com")
+    #expect(continuation.form["password"] == "nidpx1SblZnybnMO5LIGKfdtOqx3HxJra2/cdFR2lNc=")
+    #expect(continuation.form["twoFactorToken"] == "123456")
+    #expect(continuation.form["twoFactorProvider"] == "1")
+    #expect(continuation.form["twoFactorRemember"] == "1")
+    #expect(continuation.form["deviceIdentifier"] == "ios-device-id")
+
+    let visibleText = [challenge.redactedSummary, session.redactedSummary].joined(separator: " ")
+    [
+        "correct horse battery staple",
+        "nidpx1SblZnybnMO5LIGKfdtOqx3HxJra2/cdFR2lNc",
+        "123456",
+        "bitwarden-two-factor-access-token-secret",
+        "bitwarden-two-factor-refresh-token-secret",
+        "bNW5Cs"
+    ].forEach { secret in
+        #expect(!visibleText.contains(secret))
+    }
+}
+
 @Test func bitwardenPasswordAuthenticatorRejectsInvalidInputsBeforeTransport() async throws {
     let transport = RecordingBitwardenPasswordAuthenticationTransport()
     let authenticator = BitwardenPasswordAuthenticator(
@@ -1020,6 +1115,7 @@ import Foundation
             "Name": "Alice",
             "Email": "alice@example.com",
             "Premium": true,
+            "PremiumFromOrganization": true,
             "SecurityStamp": "server-security-stamp-secret"
           },
           "Folders": [
@@ -1029,10 +1125,21 @@ import Foundation
               "RevisionDate": "2026-06-03T12:00:00Z"
             }
           ],
+          "Collections": [
+            {
+              "Id": "collection-private-secret-id",
+              "Name": "Private"
+            },
+            {
+              "Id": "collection-shared-secret-id",
+              "Name": "Shared"
+            }
+          ],
           "Ciphers": [
             {
               "Id": "cipher-login-secret-id",
               "FolderId": "folder-work-secret-id",
+              "CollectionIds": ["collection-private-secret-id", "collection-shared-secret-id"],
               "Type": 1,
               "Name": "GitHub",
               "Notes": "login-note-secret",
@@ -1142,6 +1249,8 @@ import Foundation
 
     #expect(snapshot.accountLabel == "Alice")
     #expect(snapshot.revision == "server-security-stamp-secret")
+    #expect(snapshot.isPremium)
+    #expect(snapshot.premiumSource == .organization)
     #expect(snapshot.items.map(\.remoteID) == [
         "cipher-login-secret-id",
         "cipher-note-secret-id",
@@ -1157,6 +1266,7 @@ import Foundation
     #expect(snapshot.items[0].totpSecret == "totp-secret")
     #expect(snapshot.items[0].notes == "login-note-secret")
     #expect(snapshot.items[0].folderName == "Work")
+    #expect(snapshot.items[0].collectionNames == ["Private", "Shared"])
     #expect(snapshot.items[0].attachmentByteCount == 42)
     #expect(snapshot.items[1].title == "Recovery")
     #expect(snapshot.items[1].notes == "recovery-note-secret")
@@ -1191,6 +1301,8 @@ import Foundation
         "bitwarden-refresh-token-secret",
         "profile-secret-id",
         "folder-work-secret-id",
+        "collection-private-secret-id",
+        "collection-shared-secret-id",
         "cipher-login-secret-id",
         "cipher-note-secret-id",
         "cipher-card-secret-id",
@@ -2083,6 +2195,7 @@ import Foundation
         body: #"{"Id":"restored-cipher-secret-id","RevisionDate":"2026-06-04T10:06:00Z"}"#
     )
     vaultTransport.enqueue(statusCode: 204, body: "")
+    vaultTransport.enqueue(statusCode: 204, body: "")
     let provider = BitwardenVaultSyncProvider(
         sessionStore: sessionStore,
         identityTransport: RecordingBitwardenIdentityTransport(),
@@ -2134,18 +2247,25 @@ import Foundation
             remoteID: "remote-delete-secret-id",
             kind: .secureNote,
             title: "Deleted Note"
+        ),
+        .permanentlyDeleteCipher(
+            localID: "local-permanent-delete-secret-id",
+            remoteID: "remote-permanent-delete-secret-id",
+            kind: .login,
+            title: "Permanently Deleted Login"
         )
     ])
 
-    #expect(result.acceptedMutationCount == 4)
+    #expect(result.acceptedMutationCount == 5)
     #expect(result.revision == "2026-06-04T10:06:00Z")
     #expect(result.assignedRemoteIDs == ["local-create-secret-id": "created-cipher-secret-id"])
-    #expect(vaultTransport.requests.map(\.method) == ["POST", "PUT", "PUT", "DELETE"])
+    #expect(vaultTransport.requests.map(\.method) == ["POST", "PUT", "PUT", "DELETE", "DELETE"])
     #expect(vaultTransport.requests.map { $0.url.absoluteString } == [
         "https://api.bitwarden.com/ciphers",
         "https://api.bitwarden.com/ciphers/remote-update-secret-id",
         "https://api.bitwarden.com/ciphers/remote-restore-secret-id/restore",
-        "https://api.bitwarden.com/ciphers/remote-delete-secret-id"
+        "https://api.bitwarden.com/ciphers/remote-delete-secret-id",
+        "https://api.bitwarden.com/ciphers/remote-permanent-delete-secret-id/delete"
     ])
     vaultTransport.requests.forEach { request in
         #expect(request.headers["Authorization"] == "Bearer fresh-access-token-secret")
@@ -2644,8 +2764,10 @@ private final class RecordingBitwardenIdentityTransport: BitwardenIdentityTokenT
 private final class RecordingBitwardenPasswordAuthenticationTransport: BitwardenPasswordAuthenticationTransport, @unchecked Sendable {
     private(set) var preloginRequests: [BitwardenPreloginHTTPRequest] = []
     private(set) var tokenRequests: [BitwardenTokenHTTPRequest] = []
+    private(set) var emailTwoFactorRequests: [BitwardenTwoFactorEmailLoginHTTPRequest] = []
     private var preloginResponses: [BitwardenPasswordAuthenticationHTTPResponse] = []
     private var tokenResponses: [BitwardenPasswordAuthenticationHTTPResponse] = []
+    private var emailTwoFactorResponses: [BitwardenPasswordAuthenticationHTTPResponse] = []
 
     func enqueuePrelogin(statusCode: Int, body: String) {
         preloginResponses.append(
@@ -2659,6 +2781,12 @@ private final class RecordingBitwardenPasswordAuthenticationTransport: Bitwarden
         )
     }
 
+    func enqueueEmailTwoFactor(statusCode: Int, body: String) {
+        emailTwoFactorResponses.append(
+            BitwardenPasswordAuthenticationHTTPResponse(statusCode: statusCode, body: Data(body.utf8))
+        )
+    }
+
     func prelogin(_ request: BitwardenPreloginHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
         preloginRequests.append(request)
         return preloginResponses.removeFirst()
@@ -2667,6 +2795,13 @@ private final class RecordingBitwardenPasswordAuthenticationTransport: Bitwarden
     func token(_ request: BitwardenTokenHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
         tokenRequests.append(request)
         return tokenResponses.removeFirst()
+    }
+
+    func sendEmailTwoFactor(
+        _ request: BitwardenTwoFactorEmailLoginHTTPRequest
+    ) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
+        emailTwoFactorRequests.append(request)
+        return emailTwoFactorResponses.removeFirst()
     }
 }
 

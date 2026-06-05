@@ -817,7 +817,18 @@ protocol AppOneDriveAuthenticationService: OneDriveAccessTokenProvider {
 }
 
 protocol AppBitwardenPasswordAuthenticationService: Sendable {
-    func signIn(email: String, masterPassword: String, serverURL: URL) async throws -> BitwardenAuthenticationSession
+    func beginSignIn(
+        email: String,
+        masterPassword: String,
+        serverURL: URL
+    ) async throws -> BitwardenPasswordAuthenticationResult
+    func completeTwoFactorSignIn(
+        _ challenge: BitwardenTwoFactorLoginChallenge,
+        code: String,
+        providerID: Int,
+        rememberDevice: Bool
+    ) async throws -> BitwardenAuthenticationSession
+    func requestEmailTwoFactorCode(for challenge: BitwardenTwoFactorLoginChallenge) async throws
 }
 
 struct MonicaSyncBitwardenPasswordAuthenticationService: AppBitwardenPasswordAuthenticationService {
@@ -827,8 +838,30 @@ struct MonicaSyncBitwardenPasswordAuthenticationService: AppBitwardenPasswordAut
         self.authenticator = authenticator
     }
 
-    func signIn(email: String, masterPassword: String, serverURL: URL) async throws -> BitwardenAuthenticationSession {
-        try await authenticator.signIn(email: email, masterPassword: masterPassword, serverURL: serverURL)
+    func beginSignIn(
+        email: String,
+        masterPassword: String,
+        serverURL: URL
+    ) async throws -> BitwardenPasswordAuthenticationResult {
+        try await authenticator.beginSignIn(email: email, masterPassword: masterPassword, serverURL: serverURL)
+    }
+
+    func completeTwoFactorSignIn(
+        _ challenge: BitwardenTwoFactorLoginChallenge,
+        code: String,
+        providerID: Int,
+        rememberDevice: Bool
+    ) async throws -> BitwardenAuthenticationSession {
+        try await authenticator.completeTwoFactorSignIn(
+            challenge,
+            code: code,
+            providerID: providerID,
+            rememberDevice: rememberDevice
+        )
+    }
+
+    func requestEmailTwoFactorCode(for challenge: BitwardenTwoFactorLoginChallenge) async throws {
+        try await authenticator.requestEmailTwoFactorCode(for: challenge)
     }
 }
 
@@ -844,6 +877,7 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     let remoteIdentityCount: Int
     let remoteFolderCount: Int
     let remoteAttachmentByteCount: Int
+    let premiumSource: BitwardenSyncSnapshot.PremiumSource
     let remoteSendTitles: [String]
 
     init(snapshot: BitwardenSyncSnapshot) {
@@ -859,7 +893,19 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
         self.remoteFolderCount = snapshot.folders.count
         self.remoteAttachmentByteCount = snapshot.items.map(\.attachmentByteCount).reduce(0, +)
             + snapshot.sends.map(\.attachmentByteCount).reduce(0, +)
+        self.premiumSource = snapshot.premiumSource
         self.remoteSendTitles = snapshot.sends.map { Self.sanitizedTitle($0.title) }
+    }
+
+    var premiumSummary: String {
+        switch premiumSource {
+        case .none:
+            "未启用"
+        case .account:
+            "账号 Premium"
+        case .organization:
+            "组织 Premium"
+        }
     }
 
     var kindSummary: String {
@@ -2270,6 +2316,9 @@ final class AppSessionModel {
     var bitwardenServerURL = "https://vault.bitwarden.com"
     var bitwardenEmail = ""
     var bitwardenMasterPassword = ""
+    var bitwardenTwoFactorCode = ""
+    var bitwardenTwoFactorProviderID = 0
+    var bitwardenRememberTwoFactorDevice = false
     var bitwardenAuthenticationState: BitwardenAuthenticationState = .disconnected
     var bitwardenSyncState: BitwardenSyncState = .idle
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
@@ -2361,6 +2410,15 @@ final class AppSessionModel {
     private var lastUserActivityAt: Date?
     private var pendingAndroidEncryptedBackupData: Data?
     private var keePassLastSuccessfulUnlockCredentials: KeePassUnlockCredentials?
+    private var pendingBitwardenTwoFactorChallenge: BitwardenTwoFactorLoginChallenge?
+
+    var bitwardenTwoFactorProviders: [BitwardenTwoFactorProvider] {
+        pendingBitwardenTwoFactorChallenge?.providers ?? []
+    }
+
+    var canRequestBitwardenEmailTwoFactorCode: Bool {
+        pendingBitwardenTwoFactorChallenge?.supportsEmailCodeRequest ?? false
+    }
 
     init(
         vaultRepository: LocalVaultRepository = LocalVaultRepository(),
@@ -8944,17 +9002,35 @@ final class AppSessionModel {
             guard let serverURL = validBitwardenServerURL(bitwardenServerURL) else {
                 throw AppBitwardenSyncError.invalidServerURL
             }
-            let session = try await bitwardenPasswordAuthenticationService.signIn(
+            let result = try await bitwardenPasswordAuthenticationService.beginSignIn(
                 email: bitwardenEmail,
                 masterPassword: bitwardenMasterPassword,
                 serverURL: serverURL
             )
-            bitwardenMasterPassword = ""
-            bitwardenAuthenticationState = .connected(accountLabel: session.accountLabel)
-            bitwardenSyncState = .idle
-            return session
+            switch result {
+            case .authenticated(let session):
+                clearBitwardenTwoFactorState()
+                bitwardenMasterPassword = ""
+                bitwardenAuthenticationState = .connected(accountLabel: session.accountLabel)
+                bitwardenSyncState = .idle
+                return session
+            case .twoFactorRequired(let challenge):
+                pendingBitwardenTwoFactorChallenge = challenge
+                bitwardenTwoFactorProviderID = challenge.providers.first?.providerID ?? 0
+                bitwardenMasterPassword = ""
+                bitwardenAuthenticationState = .twoFactorRequired(
+                    accountLabel: challenge.accountLabel,
+                    providers: challenge.providers
+                )
+                bitwardenSyncState = .failed("Bitwarden 需要两步验证")
+                throw BitwardenSyncProviderError.twoFactorRequired
+            }
         } catch {
+            if case BitwardenSyncProviderError.twoFactorRequired = error {
+                throw error
+            }
             let message = readableBitwardenSyncErrorMessage(for: error)
+            clearBitwardenTwoFactorState()
             bitwardenMasterPassword = ""
             bitwardenAuthenticationState = .failed(message)
             bitwardenSyncState = .failed(message)
@@ -8983,6 +9059,7 @@ final class AppSessionModel {
             let accountLabel = try bitwardenAuthenticationSessionStore.loadSession()?.accountLabel
             try bitwardenAuthenticationSessionStore.clearSession()
             try bitwardenVaultKeyStore?.clearVaultKey(accountLabel: accountLabel)
+            clearBitwardenTwoFactorState()
             bitwardenAuthenticationState = .disconnected
             bitwardenSyncState = .idle
             bitwardenSyncPreview = nil
@@ -8991,6 +9068,60 @@ final class AppSessionModel {
             bitwardenAuthenticationState = .failed(readableBitwardenSyncErrorMessage(for: error))
             throw error
         }
+    }
+
+    func completeBitwardenTwoFactorSignIn() async throws -> BitwardenAuthenticationSession {
+        recordUserActivity()
+        guard let challenge = pendingBitwardenTwoFactorChallenge else {
+            throw AppBitwardenSyncError.providerUnavailable
+        }
+        guard let bitwardenPasswordAuthenticationService else {
+            throw AppBitwardenSyncError.providerUnavailable
+        }
+        do {
+            let session = try await bitwardenPasswordAuthenticationService.completeTwoFactorSignIn(
+                challenge,
+                code: bitwardenTwoFactorCode,
+                providerID: bitwardenTwoFactorProviderID,
+                rememberDevice: bitwardenRememberTwoFactorDevice
+            )
+            bitwardenMasterPassword = ""
+            clearBitwardenTwoFactorState()
+            bitwardenAuthenticationState = .connected(accountLabel: session.accountLabel)
+            bitwardenSyncState = .idle
+            return session
+        } catch {
+            let message = readableBitwardenSyncErrorMessage(for: error)
+            bitwardenAuthenticationState = .failed(message)
+            bitwardenSyncState = .failed(message)
+            throw error
+        }
+    }
+
+    func requestBitwardenEmailTwoFactorCode() async throws {
+        recordUserActivity()
+        guard let challenge = pendingBitwardenTwoFactorChallenge else {
+            throw AppBitwardenSyncError.providerUnavailable
+        }
+        guard let bitwardenPasswordAuthenticationService else {
+            throw AppBitwardenSyncError.providerUnavailable
+        }
+        do {
+            try await bitwardenPasswordAuthenticationService.requestEmailTwoFactorCode(for: challenge)
+            bitwardenSyncState = .twoFactorEmailSent
+        } catch {
+            let message = readableBitwardenSyncErrorMessage(for: error)
+            bitwardenAuthenticationState = .failed(message)
+            bitwardenSyncState = .failed(message)
+            throw error
+        }
+    }
+
+    private func clearBitwardenTwoFactorState() {
+        pendingBitwardenTwoFactorChallenge = nil
+        bitwardenTwoFactorCode = ""
+        bitwardenRememberTwoFactorDevice = false
+        bitwardenTwoFactorProviderID = 0
     }
 
     @discardableResult
@@ -12046,6 +12177,7 @@ enum OneDriveAuthenticationState: Sendable, Equatable {
 enum BitwardenAuthenticationState: Sendable, Equatable {
     case disconnected
     case connected(accountLabel: String)
+    case twoFactorRequired(accountLabel: String, providers: [BitwardenTwoFactorProvider])
     case failed(String)
 
     var label: String {
@@ -12055,6 +12187,13 @@ enum BitwardenAuthenticationState: Sendable, Equatable {
         case .connected(let accountLabel):
             let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
             return normalized.isEmpty ? "Bitwarden 已登录" : "Bitwarden 已登录 \(normalized)"
+        case .twoFactorRequired(let accountLabel, let providers):
+            let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
+            let providerSummary = providers.map(\.displayName).joined(separator: "、")
+            let account = normalized.isEmpty ? "Bitwarden" : "Bitwarden \(normalized)"
+            return providerSummary.isEmpty
+                ? "\(account) 需要两步验证"
+                : "\(account) 需要两步验证：\(providerSummary)"
         case .failed(let message):
             return message
         }
@@ -12062,6 +12201,13 @@ enum BitwardenAuthenticationState: Sendable, Equatable {
 
     var isConnected: Bool {
         if case .connected = self {
+            return true
+        }
+        return false
+    }
+
+    var isTwoFactorRequired: Bool {
+        if case .twoFactorRequired = self {
             return true
         }
         return false
@@ -12076,6 +12222,7 @@ enum BitwardenSyncState: Sendable, Equatable {
     case pushed(acceptedMutationCount: Int, conflictCount: Int)
     case queuedForRetry(mutationCount: Int)
     case queueCleared
+    case twoFactorEmailSent
     case failed(String)
 
     var label: String {
@@ -12094,6 +12241,8 @@ enum BitwardenSyncState: Sendable, Equatable {
             return "Bitwarden 已暂存 \(mutationCount) 个变更，等待网络恢复后重试"
         case .queueCleared:
             return "Bitwarden 同步队列已清空"
+        case .twoFactorEmailSent:
+            return "Bitwarden 验证码已发送"
         case .failed(let message):
             return message
         }

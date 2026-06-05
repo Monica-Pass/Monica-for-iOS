@@ -282,8 +282,15 @@ public struct BitwardenSendSyncItem: Sendable, Equatable, Identifiable {
 }
 
 public struct BitwardenSyncSnapshot: Sendable, Equatable {
+    public enum PremiumSource: String, Sendable, Equatable, Codable {
+        case none
+        case account
+        case organization
+    }
+
     public let accountLabel: String
     public let revision: String
+    public let premiumSource: PremiumSource
     public let folders: [BitwardenSyncFolder]
     public let items: [BitwardenSyncItem]
     public let sends: [BitwardenSendSyncItem]
@@ -291,15 +298,21 @@ public struct BitwardenSyncSnapshot: Sendable, Equatable {
     public init(
         accountLabel: String,
         revision: String,
+        premiumSource: PremiumSource = .none,
         folders: [BitwardenSyncFolder] = [],
         items: [BitwardenSyncItem] = [],
         sends: [BitwardenSendSyncItem] = []
     ) {
         self.accountLabel = accountLabel
         self.revision = revision
+        self.premiumSource = premiumSource
         self.folders = folders
         self.items = items
         self.sends = sends
+    }
+
+    public var isPremium: Bool {
+        premiumSource != .none
     }
 
     public var redactedSummary: String {
@@ -313,6 +326,7 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
     case upsertCipher(item: BitwardenLocalItemSyncItem, remoteID: String?)
     case restoreCipher(localID: String, remoteID: String?, kind: BitwardenSyncItemKind, title: String)
     case deleteCipher(localID: String, remoteID: String?, kind: BitwardenSyncItemKind, title: String)
+    case permanentlyDeleteCipher(localID: String, remoteID: String?, kind: BitwardenSyncItemKind, title: String)
     case upsertSend(
         localID: String,
         remoteID: String?,
@@ -360,6 +374,8 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
             "restore \(kind.displayName) \(sanitizedBitwardenTitle(title))"
         case .deleteCipher(_, _, let kind, let title):
             "delete \(kind.displayName) \(sanitizedBitwardenTitle(title))"
+        case .permanentlyDeleteCipher(_, _, let kind, let title):
+            "permanently delete \(kind.displayName) \(sanitizedBitwardenTitle(title))"
         case .upsertSend(_, _, let title, _, _, _, let maxViews):
             "upsert Send \(sanitizedBitwardenTitle(title)) \(maxViews) 次"
         case .upsertEncryptedSend:
@@ -873,6 +889,109 @@ public struct BitwardenTokenHTTPRequest: Sendable, Equatable {
     public let form: [String: String]
 }
 
+public struct BitwardenTwoFactorEmailLoginHTTPRequest: Sendable, Equatable {
+    public let url: URL
+    public let email: String
+    public let masterPasswordHash: String
+}
+
+public struct BitwardenTwoFactorProvider: Sendable, Equatable, Codable, Identifiable {
+    public var id: Int { providerID }
+
+    public let providerID: Int
+    public let displayName: String
+
+    public init(providerID: Int, displayName: String? = nil) {
+        self.providerID = providerID
+        self.displayName = displayName ?? Self.defaultDisplayName(for: providerID)
+    }
+
+    private static func defaultDisplayName(for providerID: Int) -> String {
+        switch providerID {
+        case 0:
+            "Authenticator App"
+        case 1:
+            "Email"
+        case 2:
+            "Duo"
+        case 3:
+            "YubiKey"
+        case 4:
+            "U2F"
+        case 5:
+            "Remembered Device"
+        case 6:
+            "Organization Duo"
+        case 7:
+            "WebAuthn"
+        case -100:
+            "Email New Device"
+        default:
+            "Unknown"
+        }
+    }
+}
+
+public struct BitwardenTwoFactorLoginChallenge: Sendable, Equatable {
+    public let accountLabel: String
+    public let serverURL: URL
+    public let identityURL: URL
+    public let apiURL: URL
+    public let providers: [BitwardenTwoFactorProvider]
+    public let kdf: BitwardenKDF
+    public let kdfIterations: Int
+    public let kdfMemory: Int?
+    public let kdfParallelism: Int?
+    let passwordHash: String
+    let stretchedKey: BitwardenVaultKey
+    let deviceIdentifier: String
+
+    public init(
+        accountLabel: String,
+        serverURL: URL,
+        identityURL: URL,
+        apiURL: URL,
+        providers: [BitwardenTwoFactorProvider],
+        kdf: BitwardenKDF,
+        kdfIterations: Int,
+        kdfMemory: Int?,
+        kdfParallelism: Int?,
+        passwordHash: String,
+        stretchedKey: BitwardenVaultKey,
+        deviceIdentifier: String
+    ) {
+        self.accountLabel = accountLabel
+        self.serverURL = serverURL
+        self.identityURL = identityURL
+        self.apiURL = apiURL
+        self.providers = providers
+        self.kdf = kdf
+        self.kdfIterations = kdfIterations
+        self.kdfMemory = kdfMemory
+        self.kdfParallelism = kdfParallelism
+        self.passwordHash = passwordHash
+        self.stretchedKey = stretchedKey
+        self.deviceIdentifier = deviceIdentifier
+    }
+
+    public var supportsEmailCodeRequest: Bool {
+        providers.contains { $0.providerID == 1 }
+    }
+
+    public var redactedSummary: String {
+        let providerSummary = providers.map(\.displayName).joined(separator: "、")
+        let normalized = sanitizedBitwardenText(accountLabel)
+        return providerSummary.isEmpty
+            ? "Bitwarden \(normalized) 需要两步验证"
+            : "Bitwarden \(normalized) 需要两步验证：\(providerSummary)"
+    }
+}
+
+public enum BitwardenPasswordAuthenticationResult: Sendable, Equatable {
+    case authenticated(BitwardenAuthenticationSession)
+    case twoFactorRequired(BitwardenTwoFactorLoginChallenge)
+}
+
 public struct BitwardenPasswordAuthenticationHTTPResponse: Sendable, Equatable {
     public let statusCode: Int
     public let body: Data
@@ -886,6 +1005,15 @@ public struct BitwardenPasswordAuthenticationHTTPResponse: Sendable, Equatable {
 public protocol BitwardenPasswordAuthenticationTransport: Sendable {
     func prelogin(_ request: BitwardenPreloginHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse
     func token(_ request: BitwardenTokenHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse
+    func sendEmailTwoFactor(_ request: BitwardenTwoFactorEmailLoginHTTPRequest) async throws -> BitwardenPasswordAuthenticationHTTPResponse
+}
+
+public extension BitwardenPasswordAuthenticationTransport {
+    func sendEmailTwoFactor(
+        _ request: BitwardenTwoFactorEmailLoginHTTPRequest
+    ) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
+        throw BitwardenSyncProviderError.unsupportedOperation
+    }
 }
 
 public struct BitwardenPasswordAuthenticator: Sendable {
@@ -914,6 +1042,19 @@ public struct BitwardenPasswordAuthenticator: Sendable {
         masterPassword: String,
         serverURL: URL = URL(string: "https://vault.bitwarden.com")!
     ) async throws -> BitwardenAuthenticationSession {
+        switch try await beginSignIn(email: email, masterPassword: masterPassword, serverURL: serverURL) {
+        case .authenticated(let session):
+            return session
+        case .twoFactorRequired:
+            throw BitwardenSyncProviderError.twoFactorRequired
+        }
+    }
+
+    public func beginSignIn(
+        email: String,
+        masterPassword: String,
+        serverURL: URL = URL(string: "https://vault.bitwarden.com")!
+    ) async throws -> BitwardenPasswordAuthenticationResult {
         guard Self.isValidServerURL(serverURL) else {
             throw BitwardenSyncProviderError.invalidServerURL
         }
@@ -957,32 +1098,33 @@ public struct BitwardenPasswordAuthenticator: Sendable {
             password: masterPassword
         )
         let stretchedKey = try BitwardenCrypto.stretchMasterKey(masterKey)
+        let currentDeviceIdentifier = deviceIdentifier()
         let tokenResponse = try await transport.token(
-            BitwardenTokenHTTPRequest(
-                url: Self.tokenURL(identityURL: urls.identityURL),
-                headers: [
-                    "Auth-Email": Data(normalizedEmail.utf8).base64URLEncodedString(),
-                    "device-type": "8",
-                    "cache-control": "no-store",
-                    "Bitwarden-Client-Name": "desktop",
-                    "Bitwarden-Client-Version": "2025.9.1",
-                    "Content-Type": "application/x-www-form-urlencoded"
-                ],
-                form: [
-                    "grant_type": "password",
-                    "username": normalizedEmail,
-                    "password": passwordHash,
-                    "scope": "api offline_access",
-                    "client_id": "desktop",
-                    "deviceIdentifier": deviceIdentifier(),
-                    "deviceType": "8",
-                    "deviceName": "linux"
-                ]
+            Self.passwordTokenRequest(
+                identityURL: urls.identityURL,
+                email: normalizedEmail,
+                passwordHash: passwordHash,
+                deviceIdentifier: currentDeviceIdentifier
             )
         )
         guard (200...299).contains(tokenResponse.statusCode) else {
             if BitwardenTokenPayload.containsTwoFactorChallenge(tokenResponse.body) {
-                throw BitwardenSyncProviderError.twoFactorRequired
+                return .twoFactorRequired(
+                    BitwardenTwoFactorLoginChallenge(
+                        accountLabel: normalizedEmail,
+                        serverURL: urls.serverURL,
+                        identityURL: urls.identityURL,
+                        apiURL: urls.apiURL,
+                        providers: BitwardenTokenPayload.twoFactorProviders(from: tokenResponse.body),
+                        kdf: prelogin.kdf,
+                        kdfIterations: prelogin.iterations,
+                        kdfMemory: prelogin.memory,
+                        kdfParallelism: prelogin.parallelism,
+                        passwordHash: passwordHash,
+                        stretchedKey: stretchedKey,
+                        deviceIdentifier: currentDeviceIdentifier
+                    )
+                )
             }
             throw BitwardenSyncProviderError.authenticationRequired
         }
@@ -1002,7 +1144,69 @@ public struct BitwardenPasswordAuthenticator: Sendable {
         )
         try sessionStore.saveSession(session)
         try vaultKeyStore.saveVaultKey(vaultKey, accountLabel: normalizedEmail)
+        return .authenticated(session)
+    }
+
+    public func completeTwoFactorSignIn(
+        _ challenge: BitwardenTwoFactorLoginChallenge,
+        code: String,
+        providerID: Int,
+        rememberDevice: Bool = false
+    ) async throws -> BitwardenAuthenticationSession {
+        let normalizedCode = code.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedCode.isEmpty else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        let request = Self.passwordTokenRequest(
+            identityURL: challenge.identityURL,
+            email: challenge.accountLabel,
+            passwordHash: challenge.passwordHash,
+            deviceIdentifier: challenge.deviceIdentifier,
+            extraForm: [
+                "twoFactorToken": normalizedCode,
+                "twoFactorProvider": String(providerID),
+                "twoFactorRemember": rememberDevice ? "1" : "0"
+            ]
+        )
+        let tokenResponse = try await transport.token(request)
+        guard (200...299).contains(tokenResponse.statusCode) else {
+            throw BitwardenTokenPayload.containsTwoFactorChallenge(tokenResponse.body)
+                ? BitwardenSyncProviderError.twoFactorRequired
+                : BitwardenSyncProviderError.authenticationRequired
+        }
+        let payload = try BitwardenTokenPayload.decode(tokenResponse.body)
+        guard let encryptedKey = payload.key, !encryptedKey.isEmpty else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        let vaultKey = try BitwardenCrypto.decryptSymmetricKey(encryptedKey, key: challenge.stretchedKey)
+        let session = BitwardenAuthenticationSession(
+            accountLabel: challenge.accountLabel,
+            serverURL: challenge.serverURL,
+            identityURL: challenge.identityURL,
+            apiURL: challenge.apiURL,
+            accessToken: payload.accessToken,
+            refreshToken: payload.refreshToken,
+            expiresAt: now().addingTimeInterval(payload.expiresIn)
+        )
+        try sessionStore.saveSession(session)
+        try vaultKeyStore.saveVaultKey(vaultKey, accountLabel: challenge.accountLabel)
         return session
+    }
+
+    public func requestEmailTwoFactorCode(for challenge: BitwardenTwoFactorLoginChallenge) async throws {
+        guard challenge.supportsEmailCodeRequest else {
+            throw BitwardenSyncProviderError.unsupportedOperation
+        }
+        let response = try await transport.sendEmailTwoFactor(
+            BitwardenTwoFactorEmailLoginHTTPRequest(
+                url: Self.emailTwoFactorURL(apiURL: challenge.apiURL),
+                email: challenge.accountLabel,
+                masterPasswordHash: challenge.passwordHash
+            )
+        )
+        guard (200...299).contains(response.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: response.statusCode)
+        }
     }
 
     private static func preloginURL(identityURL: URL) -> URL {
@@ -1011,6 +1215,42 @@ public struct BitwardenPasswordAuthenticator: Sendable {
 
     private static func tokenURL(identityURL: URL) -> URL {
         identityURL.appendingBitwardenPath("connect/token")
+    }
+
+    private static func emailTwoFactorURL(apiURL: URL) -> URL {
+        apiURL.appendingBitwardenPath("two-factor/send-email-login")
+    }
+
+    private static func passwordTokenRequest(
+        identityURL: URL,
+        email: String,
+        passwordHash: String,
+        deviceIdentifier: String,
+        extraForm: [String: String] = [:]
+    ) -> BitwardenTokenHTTPRequest {
+        var form: [String: String] = [
+            "grant_type": "password",
+            "username": email,
+            "password": passwordHash,
+            "scope": "api offline_access",
+            "client_id": "desktop",
+            "deviceIdentifier": deviceIdentifier,
+            "deviceType": "8",
+            "deviceName": "linux"
+        ]
+        extraForm.forEach { form[$0.key] = $0.value }
+        return BitwardenTokenHTTPRequest(
+            url: tokenURL(identityURL: identityURL),
+            headers: [
+                "Auth-Email": Data(email.utf8).base64URLEncodedString(),
+                "device-type": "8",
+                "cache-control": "no-store",
+                "Bitwarden-Client-Name": "desktop",
+                "Bitwarden-Client-Version": "2025.9.1",
+                "Content-Type": "application/x-www-form-urlencoded"
+            ],
+            form: form
+        )
     }
 
     private static func isValidServerURL(_ url: URL) -> Bool {
@@ -1047,6 +1287,23 @@ public final class URLSessionBitwardenPasswordAuthenticationTransport: Bitwarden
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
         urlRequest.httpBody = formURLEncodedBody(request.form.sorted { $0.key < $1.key })
+        return try await send(urlRequest)
+    }
+
+    public func sendEmailTwoFactor(
+        _ request: BitwardenTwoFactorEmailLoginHTTPRequest
+    ) async throws -> BitwardenPasswordAuthenticationHTTPResponse {
+        var urlRequest = URLRequest(url: request.url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+        urlRequest.httpBody = try JSONSerialization.data(
+            withJSONObject: [
+                "email": request.email,
+                "masterPasswordHash": request.masterPasswordHash
+            ],
+            options: [.sortedKeys]
+        )
         return try await send(urlRequest)
     }
 
@@ -1477,6 +1734,45 @@ private struct BitwardenTokenPayload {
             return true
         }
         return false
+    }
+
+    static func twoFactorProviders(from data: Data) -> [BitwardenTwoFactorProvider] {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return []
+        }
+        var providersByID: [Int: BitwardenTwoFactorProvider] = [:]
+        for key in ["TwoFactorProviders", "twoFactorProviders"] {
+            if let values = root[key] as? [Any] {
+                values.compactMap(providerID).forEach { id in
+                    providersByID[id] = BitwardenTwoFactorProvider(providerID: id)
+                }
+            }
+            if let values = root[key] as? [String: Any] {
+                values.forEach { rawID, value in
+                    guard let id = Int(rawID) else { return }
+                    let name = (value as? [String: Any]).flatMap { jsonString($0, "name", "Name") }
+                    providersByID[id] = BitwardenTwoFactorProvider(providerID: id, displayName: name)
+                }
+            }
+        }
+        for key in ["TwoFactorProviders2", "twoFactorProviders2"] {
+            if let values = root[key] as? [String: Any] {
+                values.keys.compactMap(Int.init).forEach { id in
+                    providersByID[id] = providersByID[id] ?? BitwardenTwoFactorProvider(providerID: id)
+                }
+            }
+        }
+        return providersByID.keys.sorted().map { providersByID[$0] ?? BitwardenTwoFactorProvider(providerID: $0) }
+    }
+
+    private static func providerID(_ value: Any) -> Int? {
+        if let intValue = value as? Int {
+            return intValue
+        }
+        if let stringValue = value as? String {
+            return Int(stringValue)
+        }
+        return nil
     }
 }
 
@@ -2048,6 +2344,10 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 acceptedMutationCount += 1
                 continue
             }
+            if case .permanentlyDeleteCipher = mutation, response.statusCode == 404 {
+                acceptedMutationCount += 1
+                continue
+            }
             if case .restoreCipher = mutation,
                response.statusCode == 400 || response.statusCode == 404 {
                 acceptedMutationCount += 1
@@ -2257,6 +2557,18 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             return BitwardenVaultSyncRequest(
                 method: "DELETE",
                 url: cipherURL(apiURL: apiURL, remoteID: remoteID),
+                headers: [
+                    "Authorization": "Bearer \(accessToken)",
+                    "Accept": "application/json"
+                ]
+            )
+        case .permanentlyDeleteCipher(_, let remoteID, _, _):
+            guard let remoteID, !remoteID.isEmpty else {
+                throw BitwardenSyncProviderError.unsupportedOperation
+            }
+            return BitwardenVaultSyncRequest(
+                method: "DELETE",
+                url: cipherPermanentDeleteURL(apiURL: apiURL, remoteID: remoteID),
                 headers: [
                     "Authorization": "Bearer \(accessToken)",
                     "Accept": "application/json"
@@ -2523,6 +2835,16 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         return components?.url ?? apiURL
     }
 
+    private static func cipherPermanentDeleteURL(apiURL: URL, remoteID: String) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + [basePath, "ciphers", remoteID, "delete"]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
     private static func attachmentPlanURL(apiURL: URL, cipherRemoteID: String) -> URL {
         var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
         let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
@@ -2715,7 +3037,7 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             remoteID == nil ? localID : nil
         case .upsertFileSend(let localID, let remoteID, _, _, _, _, _, _, _, _, _):
             remoteID == nil ? localID : nil
-        case .deleteFolder, .restoreCipher, .deleteCipher, .deleteSend:
+        case .deleteFolder, .restoreCipher, .deleteCipher, .permanentlyDeleteCipher, .deleteSend:
             nil
         }
     }
@@ -2847,6 +3169,7 @@ private enum BitwardenVaultSyncSnapshotParser {
         }
         let profile = dictionary(root, "profile", "Profile")
         let folders = array(root, "folders", "Folders")
+        let collections = array(root, "collections", "Collections")
         let ciphers = array(root, "ciphers", "Ciphers")
         let sends = array(root, "sends", "Sends")
         let folderItems = folders.compactMap { folder -> BitwardenSyncFolder? in
@@ -2858,6 +3181,10 @@ private enum BitwardenVaultSyncSnapshotParser {
             )
         }
         let folderNamesByID = Dictionary(uniqueKeysWithValues: folderItems.map { ($0.remoteID, $0.name) })
+        let collectionNamesByID = collections.reduce(into: [String: String]()) { result, collection in
+            guard let id = string(collection, "id", "Id"), !id.isEmpty else { return }
+            result[id] = decryptedString(collection, "name", "Name", key: vaultKey) ?? ""
+        }
         let items = ciphers.compactMap { cipher -> BitwardenSyncItem? in
             guard let id = string(cipher, "id", "Id"), !id.isEmpty else { return nil }
             let effectiveKey: BitwardenVaultKey?
@@ -2869,6 +3196,9 @@ private enum BitwardenVaultSyncSnapshotParser {
                 effectiveKey = vaultKey
             }
             let folderID = string(cipher, "folderId", "FolderId")
+            let collectionNames = stringArray(cipher, "collectionIds", "CollectionIds")
+                .compactMap { collectionNamesByID[$0] }
+                .filter { !$0.isEmpty }
             let login = dictionary(cipher, "login", "Login")
             let card = dictionary(cipher, "card", "Card")
             let identity = dictionary(cipher, "identity", "Identity")
@@ -2904,7 +3234,7 @@ private enum BitwardenVaultSyncSnapshotParser {
                 notes: notes,
                 folderID: folderID,
                 folderName: folderID.flatMap { folderNamesByID[$0] },
-                collectionNames: [],
+                collectionNames: collectionNames,
                 attachments: attachments,
                 attachmentByteCount: byteCount(array(cipher, "attachments", "Attachments")),
                 updatedAt: date(string(cipher, "revisionDate", "RevisionDate")),
@@ -2968,10 +3298,21 @@ private enum BitwardenVaultSyncSnapshotParser {
         return BitwardenSyncSnapshot(
             accountLabel: accountLabel(profile: profile, fallback: fallbackAccountLabel),
             revision: string(profile, "securityStamp", "SecurityStamp") ?? "",
+            premiumSource: premiumSource(profile: profile),
             folders: folderItems,
             items: items,
             sends: sendItems
         )
+    }
+
+    private static func premiumSource(profile: [String: Any]) -> BitwardenSyncSnapshot.PremiumSource {
+        if bool(profile, "premiumFromOrganization", "PremiumFromOrganization") == true {
+            return .organization
+        }
+        if bool(profile, "premium", "Premium") == true {
+            return .account
+        }
+        return .none
     }
 
     private static func itemKind(
@@ -3186,6 +3527,26 @@ private enum BitwardenVaultSyncSnapshotParser {
         for key in keys {
             if let value = json[key] as? [[String: Any]] {
                 return value
+            }
+        }
+        return []
+    }
+
+    private static func stringArray(_ json: [String: Any], _ keys: String...) -> [String] {
+        for key in keys {
+            if let values = json[key] as? [String] {
+                return values
+            }
+            if let values = json[key] as? [Any] {
+                return values.compactMap { value in
+                    if let stringValue = value as? String {
+                        return stringValue
+                    }
+                    if let number = value as? NSNumber {
+                        return number.stringValue
+                    }
+                    return nil
+                }
             }
         }
         return []

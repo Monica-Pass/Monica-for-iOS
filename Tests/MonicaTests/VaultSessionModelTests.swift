@@ -10373,6 +10373,77 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 服务器 URL 无效，仅支持 http/https。")
         XCTAssertFalse(model.bitwardenAuthenticationState.label.contains("master-password-secret"))
     }
+
+    func testBitwardenPasswordSignInCompletesTwoFactorChallengeWithoutLeakingSecrets() async throws {
+        let service = RecordingAppBitwardenPasswordAuthenticationService()
+        let challenge = BitwardenTwoFactorLoginChallenge(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            providers: [
+                BitwardenTwoFactorProvider(providerID: 0),
+                BitwardenTwoFactorProvider(providerID: 1)
+            ],
+            kdf: .pbkdf2,
+            kdfIterations: 600_000,
+            kdfMemory: nil,
+            kdfParallelism: nil,
+            passwordHash: "password-hash-secret",
+            stretchedKey: BitwardenVaultKey(
+                encryptionKey: Data((1...32).map(UInt8.init)),
+                macKey: Data((33...64).map(UInt8.init))
+            ),
+            deviceIdentifier: "device-id-secret"
+        )
+        service.beginResult = .twoFactorRequired(challenge)
+        let model = AppSessionModel(bitwardenPasswordAuthenticationService: service)
+        model.bitwardenServerURL = "https://vault.bitwarden.com"
+        model.bitwardenEmail = "alice@example.com"
+        model.bitwardenMasterPassword = "master-password-secret"
+
+        do {
+            _ = try await model.signInToBitwarden()
+            XCTFail("Expected Bitwarden sign-in to request two-factor verification")
+        } catch {
+            XCTAssertEqual(error as? BitwardenSyncProviderError, .twoFactorRequired)
+        }
+
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden alice@example.com 需要两步验证：Authenticator App、Email")
+        XCTAssertEqual(model.bitwardenMasterPassword, "")
+        XCTAssertEqual(model.bitwardenTwoFactorProviderID, 0)
+        XCTAssertTrue(model.canRequestBitwardenEmailTwoFactorCode)
+
+        try await model.requestBitwardenEmailTwoFactorCode()
+        model.bitwardenTwoFactorProviderID = 1
+        model.bitwardenTwoFactorCode = " 123456 "
+        model.bitwardenRememberTwoFactorDevice = true
+        let session = try await model.completeBitwardenTwoFactorSignIn()
+
+        XCTAssertEqual(service.emailCodeRequestCount, 1)
+        XCTAssertEqual(service.twoFactorRequests, [
+            RecordingAppBitwardenPasswordAuthenticationService.TwoFactorRequest(
+                providerID: 1,
+                code: " 123456 ",
+                rememberDevice: true
+            )
+        ])
+        XCTAssertEqual(session.accountLabel, "alice@example.com")
+        XCTAssertEqual(model.bitwardenAuthenticationState.label, "Bitwarden 已登录 alice@example.com")
+        XCTAssertEqual(model.bitwardenTwoFactorCode, "")
+        XCTAssertFalse(model.canRequestBitwardenEmailTwoFactorCode)
+
+        let visibleText = [
+            model.bitwardenAuthenticationState.label,
+            model.bitwardenSyncState.label,
+            session.redactedSummary
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("master-password-secret"))
+        XCTAssertFalse(visibleText.contains("password-hash-secret"))
+        XCTAssertFalse(visibleText.contains("123456"))
+        XCTAssertFalse(visibleText.contains("access-token-secret"))
+        XCTAssertFalse(visibleText.contains("refresh-token-secret"))
+    }
 }
 
 private final class RecordingAppAutoFillIndexKeyMaterialStore: AppAutoFillIndexKeyMaterialStore {
@@ -10706,6 +10777,12 @@ private final class RecordingAppBitwardenPasswordAuthenticationService: AppBitwa
         let serverURL: URL
     }
 
+    struct TwoFactorRequest: Equatable {
+        let providerID: Int
+        let code: String
+        let rememberDevice: Bool
+    }
+
     var session = BitwardenAuthenticationSession(
         accountLabel: "alice@example.com",
         serverURL: URL(string: "https://vault.bitwarden.com")!,
@@ -10715,15 +10792,48 @@ private final class RecordingAppBitwardenPasswordAuthenticationService: AppBitwa
         refreshToken: "refresh-token-secret",
         expiresAt: Date(timeIntervalSince1970: 1_804_000_000)
     )
+    var beginResult: BitwardenPasswordAuthenticationResult?
     var error: Error?
     private(set) var requests: [Request] = []
+    private(set) var twoFactorRequests: [TwoFactorRequest] = []
+    private(set) var emailCodeRequestCount = 0
 
-    func signIn(email: String, masterPassword: String, serverURL: URL) async throws -> BitwardenAuthenticationSession {
+    func beginSignIn(
+        email: String,
+        masterPassword: String,
+        serverURL: URL
+    ) async throws -> BitwardenPasswordAuthenticationResult {
         requests.append(Request(email: email, masterPassword: masterPassword, serverURL: serverURL))
         if let error {
             throw error
         }
+        return beginResult ?? .authenticated(session)
+    }
+
+    func completeTwoFactorSignIn(
+        _ challenge: BitwardenTwoFactorLoginChallenge,
+        code: String,
+        providerID: Int,
+        rememberDevice: Bool
+    ) async throws -> BitwardenAuthenticationSession {
+        twoFactorRequests.append(
+            TwoFactorRequest(
+                providerID: providerID,
+                code: code,
+                rememberDevice: rememberDevice
+            )
+        )
+        if let error {
+            throw error
+        }
         return session
+    }
+
+    func requestEmailTwoFactorCode(for challenge: BitwardenTwoFactorLoginChallenge) async throws {
+        emailCodeRequestCount += 1
+        if let error {
+            throw error
+        }
     }
 }
 
