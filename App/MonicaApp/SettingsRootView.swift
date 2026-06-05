@@ -815,6 +815,7 @@ struct SettingsRootView: View {
                     if let preview = session.bitwardenSyncPreview {
                         AndroidParityInfoRow(title: "远端", value: "\(preview.remoteItemCount) 个条目，\(preview.remoteSendCount) 个 Send")
                         AndroidParityInfoRow(title: "文件夹", value: "\(preview.remoteFolderCount) 个")
+                        AndroidParityInfoRow(title: "Premium", value: preview.premiumSummary)
                         AndroidParityInfoRow(title: "类型", value: preview.kindSummary)
                         AndroidParityInfoRow(title: "附件", value: preview.attachmentSummary)
                     }
@@ -862,6 +863,47 @@ struct SettingsRootView: View {
                         }
                         .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
                         .disabled(session.bitwardenSyncState.isRunning)
+                    } else if session.bitwardenAuthenticationState.isTwoFactorRequired {
+                        if !session.bitwardenTwoFactorProviders.isEmpty {
+                            Picker("验证方式", selection: $session.bitwardenTwoFactorProviderID) {
+                                ForEach(session.bitwardenTwoFactorProviders) { provider in
+                                    Text(provider.displayName).tag(provider.providerID)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        TextField("验证码", text: $session.bitwardenTwoFactorCode)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(AndroidParityTextFieldStyle())
+                        Toggle("记住此设备", isOn: $session.bitwardenRememberTwoFactorDevice)
+                            .tint(AndroidParityPalette.primary)
+                        if session.canRequestBitwardenEmailTwoFactorCode {
+                            Button {
+                                Task {
+                                    try? await session.requestBitwardenEmailTwoFactorCode()
+                                }
+                            } label: {
+                                Label("发送邮件验证码", systemImage: "envelope.badge")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                            .disabled(session.bitwardenSyncState.isRunning)
+                        }
+                        Button {
+                            Task {
+                                try? await session.completeBitwardenTwoFactorSignIn()
+                            }
+                        } label: {
+                            Label("验证并登录", systemImage: "checkmark.shield")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(
+                            session.bitwardenSyncState.isRunning
+                                || session.bitwardenTwoFactorCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
                     } else {
                         TextField("服务器 URL", text: $session.bitwardenServerURL)
                             .textInputAutocapitalization(.never)
