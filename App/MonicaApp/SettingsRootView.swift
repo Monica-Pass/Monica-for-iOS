@@ -28,6 +28,9 @@ struct SettingsRootView: View {
     @State private var isAndroidBackupExporterPresented = false
     @State private var isAndroidBackupPasswordPromptPresented = false
     @State private var androidBackupExportDocument = AndroidBackupExportDocument()
+    @State private var isSteamAuthenticatorImporterPresented = false
+    @State private var autoFillBlockedFieldInput = ""
+    @State private var autoFillBlockedSaveTargetInput = ""
 
     private var autoLockSelection: Binding<AppAutoLockPolicy> {
         Binding {
@@ -315,12 +318,64 @@ struct SettingsRootView: View {
                     )
                     AndroidParityInfoRow(title: "索引", value: session.autoFillIndexState.label)
                     AndroidParityInfoRow(title: "App Group", value: environment.appGroupIdentifier)
+                    ForEach(session.autoFillPolicyRows, id: \.title) { row in
+                        AndroidParityInfoRow(title: row.title, value: row.value)
+                    }
+                    TextField("Blocked field", text: $autoFillBlockedFieldInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    Button {
+                        addAutoFillBlockedField()
+                    } label: {
+                        Label("添加阻止字段", systemImage: "text.badge.xmark")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(autoFillBlockedFieldInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    TextField("Save blocked target", text: $autoFillBlockedSaveTargetInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    Button {
+                        addAutoFillBlockedSaveTarget()
+                    } label: {
+                        Label("添加保存阻止目标", systemImage: "link.badge.plus")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(autoFillBlockedSaveTargetInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    Button {
+                        clearAutoFillPolicy()
+                    } label: {
+                        Label("清空阻止策略", systemImage: "xmark.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(
+                        session.autoFillPolicy.blockedFields.isEmpty
+                            && session.autoFillPolicy.blockedSaveTargets.isEmpty
+                    )
                     Button(action: refreshAutoFillIndex) {
                         Label("更新自动填充索引", systemImage: "key.viewfinder")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                     .disabled(session.vaultState != .unlocked || session.autoFillIndexState.isRunning)
+                }
+            }
+
+            AndroidParitySection(title: "Steam 导入") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    AndroidParityInfoRow(title: "格式", value: "Steam maFile / JSON")
+                    Button {
+                        isSteamAuthenticatorImporterPresented = true
+                    } label: {
+                        Label("导入 Steam maFile", systemImage: "gamecontroller")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    .disabled(session.vaultState != .unlocked)
                 }
             }
 
@@ -1179,6 +1234,21 @@ struct SettingsRootView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
+        .fileImporter(
+            isPresented: $isSteamAuthenticatorImporterPresented,
+            allowedContentTypes: [.json, .data],
+            allowsMultipleSelection: false
+        ) { result in
+            switch result {
+            case .success(let urls):
+                guard let fileURL = urls.first else {
+                    return
+                }
+                importSteamAuthenticator(from: fileURL)
+            case .failure(let error):
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
         .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
             SecureField("备份密码", text: $session.androidBackupDecryptPassword)
             Button("取消", role: .cancel) {
@@ -1230,6 +1300,47 @@ struct SettingsRootView: View {
         } catch {
             session.entryOperationState = .failed(error.localizedDescription)
         }
+    }
+
+    private func importSteamAuthenticator(from fileURL: URL) {
+        let didAccess = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            try session.importSteamAuthenticator(Data(contentsOf: fileURL))
+        } catch {
+            // AppSessionModel owns the redacted user-visible failure state.
+        }
+    }
+
+    private func addAutoFillBlockedField() {
+        var fields = session.autoFillPolicy.blockedFields
+        fields.append(autoFillBlockedFieldInput)
+        session.updateAutoFillPolicy(
+            blockedFields: fields,
+            blockedSaveTargets: session.autoFillPolicy.blockedSaveTargets
+        )
+        autoFillBlockedFieldInput = ""
+    }
+
+    private func addAutoFillBlockedSaveTarget() {
+        var targets = session.autoFillPolicy.blockedSaveTargets
+        targets.append(autoFillBlockedSaveTargetInput)
+        session.updateAutoFillPolicy(
+            blockedFields: session.autoFillPolicy.blockedFields,
+            blockedSaveTargets: targets
+        )
+        autoFillBlockedSaveTargetInput = ""
+    }
+
+    private func clearAutoFillPolicy() {
+        session.updateAutoFillPolicy(blockedFields: [], blockedSaveTargets: [])
+        autoFillBlockedFieldInput = ""
+        autoFillBlockedSaveTargetInput = ""
     }
 
     private var shouldShowSecurityQuestionState: Bool {
