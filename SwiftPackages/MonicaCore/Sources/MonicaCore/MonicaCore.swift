@@ -337,6 +337,14 @@ public struct TotpImportDraft: Sendable, Equatable {
         self.digits = digits
         self.algorithm = algorithm
     }
+
+    public var redactedSummary: String {
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAccount = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return [normalizedTitle.isEmpty ? issuer : normalizedTitle, normalizedAccount]
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+    }
 }
 
 public enum TotpURIParser {
@@ -492,8 +500,71 @@ public enum TotpGenerator {
     }
 }
 
+public enum SteamAuthenticatorImportParser {
+    public static func parse(_ data: Data) throws -> TotpImportDraft {
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw TotpError.invalidURI
+        }
+        guard let sharedSecret = jsonString(root, "shared_secret", "sharedSecret"),
+              let sharedSecretData = Data(steamBase64Encoded: sharedSecret),
+              !sharedSecretData.isEmpty
+        else {
+            throw TotpError.invalidSecret
+        }
+
+        let accountName = jsonString(root, "account_name", "accountName", "steamid", "steam_id")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let secret = Base32.encode(sharedSecretData)
+        _ = try Base32.decode(secret)
+
+        return TotpImportDraft(
+            title: "Steam",
+            secret: secret,
+            issuer: "Steam",
+            accountName: accountName,
+            period: 30,
+            digits: 6,
+            algorithm: .sha1
+        )
+    }
+
+    private static func jsonString(_ json: [String: Any], _ keys: String...) -> String? {
+        for key in keys {
+            if let value = json[key] as? String {
+                return value
+            }
+            if let number = json[key] as? NSNumber {
+                return number.stringValue
+            }
+        }
+        return nil
+    }
+}
+
 private enum Base32 {
     private static let alphabet = Array("ABCDEFGHIJKLMNOPQRSTUVWXYZ234567")
+
+    static func encode(_ data: Data) -> String {
+        guard !data.isEmpty else { return "" }
+        var output = ""
+        var buffer = 0
+        var bitsLeft = 0
+
+        for byte in data {
+            buffer = (buffer << 8) | Int(byte)
+            bitsLeft += 8
+            while bitsLeft >= 5 {
+                bitsLeft -= 5
+                output.append(alphabet[(buffer >> bitsLeft) & 0x1f])
+                buffer &= (1 << bitsLeft) - 1
+            }
+        }
+
+        if bitsLeft > 0 {
+            output.append(alphabet[(buffer << (5 - bitsLeft)) & 0x1f])
+        }
+        return output
+    }
 
     static func decode(_ value: String) throws -> Data {
         let normalized = value
@@ -528,5 +599,16 @@ private enum Base32 {
         }
 
         return Data(bytes)
+    }
+}
+
+private extension Data {
+    init?(steamBase64Encoded value: String) {
+        let normalized = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padded = normalized + String(repeating: "=", count: (4 - normalized.count % 4) % 4)
+        self.init(base64Encoded: padded)
     }
 }
