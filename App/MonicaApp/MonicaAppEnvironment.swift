@@ -329,6 +329,8 @@ extension AppSessionModel {
             return AppSessionModel(
                 vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
                 appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
+                operationTimelineStore: UserDefaultsAppOperationTimelineStore(),
+                quickSetupStateStore: UserDefaultsAppQuickSetupStateStore(),
                 cloudFileProviders: environment.productionCloudFileProviders,
                 oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
                 autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
@@ -336,6 +338,7 @@ extension AppSessionModel {
                 plusEntitlementStore: environment.plusEntitlementStore
             )
         }
+        let appGroupDefaults = UserDefaults(suiteName: environment.appGroupIdentifier) ?? .standard
         let indexStore = FileAutoFillEncryptedIndexStore(appGroupContainerURL: appGroupContainerURL)
         let secretStore = FileAutoFillCredentialSecretStore(appGroupContainerURL: appGroupContainerURL)
         let widgetSnapshotStore = AppWidgetSnapshotFileStore(containerURL: appGroupContainerURL)
@@ -365,6 +368,8 @@ extension AppSessionModel {
             appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
             biometricUnlockAuthorizer: DeviceBiometricUnlockAuthorizer(),
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
+            operationTimelineStore: UserDefaultsAppOperationTimelineStore(defaults: appGroupDefaults),
+            quickSetupStateStore: UserDefaultsAppQuickSetupStateStore(defaults: appGroupDefaults),
             cloudFileProviders: environment.productionCloudFileProviders,
             oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
             bitwardenPasswordAuthenticationService: MonicaSyncBitwardenPasswordAuthenticationService(

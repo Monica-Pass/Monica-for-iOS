@@ -15,6 +15,7 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 import UserNotifications
+import BackgroundTasks
 
 struct SecurityQuestionOption: Identifiable, Sendable, Equatable {
     let id: Int
@@ -445,13 +446,18 @@ private struct AppLoginStackedGroupKey: Hashable {
     let isWebsite: Bool
 }
 
-enum AppOperationTimelineAction: String, Sendable, Equatable {
+enum AppOperationTimelineAction: String, Sendable, Equatable, Codable {
     case created
     case updated
     case deleted
     case restored
     case moved
     case viewed
+    case backedUp
+    case restoredBackup
+    case cleanedUp
+    case synced
+    case blocked
 
     var title: String {
         switch self {
@@ -467,6 +473,16 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
             "已移动"
         case .viewed:
             "已查看"
+        case .backedUp:
+            "已备份"
+        case .restoredBackup:
+            "已恢复备份"
+        case .cleanedUp:
+            "已清理"
+        case .synced:
+            "已同步"
+        case .blocked:
+            "已阻止"
         }
     }
 
@@ -484,29 +500,258 @@ enum AppOperationTimelineAction: String, Sendable, Equatable {
             "arrow.right.circle"
         case .viewed:
             "eye.circle"
+        case .backedUp:
+            "arrow.up.doc"
+        case .restoredBackup:
+            "arrow.down.doc"
+        case .cleanedUp:
+            "sparkles"
+        case .synced:
+            "arrow.triangle.2.circlepath.circle"
+        case .blocked:
+            "hand.raised.circle"
         }
     }
 }
 
-struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable {
+struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable, Codable {
     let id: String
     let action: AppOperationTimelineAction
     let itemKind: UnifiedVaultItemKind
     let itemID: String
     let itemTitle: String
     let occurredAt: Date
+    let result: String
+    let errorCategory: String?
+
+    init(
+        id: String,
+        action: AppOperationTimelineAction,
+        itemKind: UnifiedVaultItemKind,
+        itemID: String,
+        itemTitle: String,
+        occurredAt: Date,
+        result: String = "success",
+        errorCategory: String? = nil
+    ) {
+        self.id = id
+        self.action = action
+        self.itemKind = itemKind
+        self.itemID = itemID
+        self.itemTitle = itemTitle
+        self.occurredAt = occurredAt
+        self.result = result
+        self.errorCategory = errorCategory
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id
+        case action
+        case itemKind
+        case itemID
+        case itemTitle
+        case occurredAt
+        case result
+        case errorCategory
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(String.self, forKey: .id)
+        action = try container.decode(AppOperationTimelineAction.self, forKey: .action)
+        let rawKind = try container.decode(String.self, forKey: .itemKind)
+        itemKind = UnifiedVaultItemKind(rawValue: rawKind) ?? .login
+        itemID = try container.decode(String.self, forKey: .itemID)
+        itemTitle = try container.decode(String.self, forKey: .itemTitle)
+        occurredAt = try container.decode(Date.self, forKey: .occurredAt)
+        result = try container.decodeIfPresent(String.self, forKey: .result) ?? "success"
+        errorCategory = try container.decodeIfPresent(String.self, forKey: .errorCategory)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(id, forKey: .id)
+        try container.encode(action, forKey: .action)
+        try container.encode(itemKind.rawValue, forKey: .itemKind)
+        try container.encode(itemID, forKey: .itemID)
+        try container.encode(itemTitle, forKey: .itemTitle)
+        try container.encode(occurredAt, forKey: .occurredAt)
+        try container.encode(result, forKey: .result)
+        try container.encodeIfPresent(errorCategory, forKey: .errorCategory)
+    }
 
     var title: String {
         "\(action.title) \(itemKind.displayName)"
     }
 
     var detail: String {
-        itemTitle.isEmpty ? "未命名条目" : itemTitle
+        let displayTitle = itemTitle.isEmpty ? "未命名条目" : itemTitle
+        guard let errorCategory, !errorCategory.isEmpty else {
+            return displayTitle
+        }
+        return "\(displayTitle) · \(errorCategory)"
     }
 
     var systemImage: String {
         action.systemImage
     }
+}
+
+protocol AppOperationTimelineStore: Sendable {
+    func loadEvents() -> [AppOperationTimelineEvent]
+    func saveEvents(_ events: [AppOperationTimelineEvent])
+}
+
+final class MemoryAppOperationTimelineStore: AppOperationTimelineStore, @unchecked Sendable {
+    private var events: [AppOperationTimelineEvent]
+
+    init(events: [AppOperationTimelineEvent] = []) {
+        self.events = events
+    }
+
+    func loadEvents() -> [AppOperationTimelineEvent] {
+        events
+    }
+
+    func saveEvents(_ events: [AppOperationTimelineEvent]) {
+        self.events = events
+    }
+}
+
+final class UserDefaultsAppOperationTimelineStore: AppOperationTimelineStore, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(defaults: UserDefaults = .standard, key: String = "app-operation-timeline-v1") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    func loadEvents() -> [AppOperationTimelineEvent] {
+        guard let data = defaults.data(forKey: key),
+              let events = try? decoder.decode([AppOperationTimelineEvent].self, from: data)
+        else {
+            return []
+        }
+        return events
+    }
+
+    func saveEvents(_ events: [AppOperationTimelineEvent]) {
+        guard let data = try? encoder.encode(Array(events.prefix(500))) else {
+            return
+        }
+        defaults.set(data, forKey: key)
+    }
+}
+
+struct AppQuickSetupState: Sendable, Equatable, Codable {
+    var completedVaultIDs: Set<String> = []
+    var lastCompletedAt: Date?
+
+    func shouldPresent(for vaultID: String?) -> Bool {
+        guard let vaultID, !vaultID.isEmpty else {
+            return false
+        }
+        return !completedVaultIDs.contains(vaultID)
+    }
+}
+
+protocol AppQuickSetupStateStore: Sendable {
+    func loadState() -> AppQuickSetupState
+    func saveState(_ state: AppQuickSetupState)
+}
+
+final class MemoryAppQuickSetupStateStore: AppQuickSetupStateStore, @unchecked Sendable {
+    private var state: AppQuickSetupState
+
+    init(state: AppQuickSetupState = AppQuickSetupState()) {
+        self.state = state
+    }
+
+    func loadState() -> AppQuickSetupState { state }
+    func saveState(_ state: AppQuickSetupState) { self.state = state }
+}
+
+final class UserDefaultsAppQuickSetupStateStore: AppQuickSetupStateStore, @unchecked Sendable {
+    private let defaults: UserDefaults
+    private let key: String
+    private let encoder = JSONEncoder()
+    private let decoder = JSONDecoder()
+
+    init(defaults: UserDefaults = .standard, key: String = "quick-setup-state-v1") {
+        self.defaults = defaults
+        self.key = key
+    }
+
+    func loadState() -> AppQuickSetupState {
+        guard let data = defaults.data(forKey: key),
+              let state = try? decoder.decode(AppQuickSetupState.self, from: data)
+        else {
+            return AppQuickSetupState()
+        }
+        return state
+    }
+
+    func saveState(_ state: AppQuickSetupState) {
+        guard let data = try? encoder.encode(state) else {
+            return
+        }
+        defaults.set(data, forKey: key)
+    }
+}
+
+enum AppBackgroundBackupSchedulerState: Sendable, Equatable {
+    case unavailable
+    case idle
+    case scheduled(Date?)
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .unavailable:
+            return "后台任务不可用"
+        case .idle:
+            return "未调度"
+        case .scheduled(let date):
+            guard let date else { return "已调度" }
+            return "已调度 \(date.formatted(date: .abbreviated, time: .shortened))"
+        case .failed(let message):
+            return message
+        }
+    }
+}
+
+protocol AppBackgroundBackupScheduler: Sendable {
+    func scheduleNextBackup(after interval: TimeInterval) async -> AppBackgroundBackupSchedulerState
+}
+
+struct SystemAppBackgroundBackupScheduler: AppBackgroundBackupScheduler {
+    let refreshIdentifier: String
+
+    init(refreshIdentifier: String = "com.monica-pass.monica.backup.refresh") {
+        self.refreshIdentifier = refreshIdentifier
+    }
+
+    func scheduleNextBackup(after interval: TimeInterval) async -> AppBackgroundBackupSchedulerState {
+        let request = BGAppRefreshTaskRequest(identifier: refreshIdentifier)
+        request.earliestBeginDate = Date(timeIntervalSinceNow: interval)
+        do {
+            try BGTaskScheduler.shared.submit(request)
+            return .scheduled(request.earliestBeginDate)
+        } catch {
+            return .failed("后台备份调度失败")
+        }
+    }
+}
+
+struct AppExtensionCapabilityRow: Sendable, Equatable, Identifiable {
+    let id: String
+    let title: String
+    let value: String
+    let detail: String
+    let systemImage: String
 }
 
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
@@ -1555,7 +1800,7 @@ enum AppDeveloperDiagnostics {
         switch state {
         case .idle:
             return "空闲"
-        case .running, .backupSucceeded, .restorePreviewReady, .restoreSucceeded, .failed:
+        case .running, .listed, .backupSucceeded, .restorePreviewReady, .restoreSucceeded, .deleted, .permanentUpdated, .cleanupSucceeded, .failed:
             return state.label
         }
     }
@@ -2195,6 +2440,8 @@ final class AppSessionModel {
     var deletedLoginEntries: [LocalLoginEntry] = []
     var breachedPasswordSHA256Fingerprints: Set<String> = []
     var operationTimelineEvents: [AppOperationTimelineEvent] = []
+    var operationTimelineFilterKind: UnifiedVaultItemKind?
+    var operationTimelineFilterAction: AppOperationTimelineAction?
     private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
     private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
     private var nextOperationTimelineEventSequence = 0
@@ -2411,9 +2658,14 @@ final class AppSessionModel {
     var webDAVRestoreVaultPassword = ""
     var webDAVBackupState: WebDAVBackupState = .idle
     var webDAVRestorePreview: WebDAVRestorePreview?
+    var webDAVBackupItems: [WebDAVBackupItem] = []
+    var webDAVBackupRetentionDays = 30
+    var webDAVBackgroundBackupEnabled = false
+    var webDAVBackgroundBackupSchedulerState: AppBackgroundBackupSchedulerState = .idle
     var cloudFileState: CloudFileState = .idle
     var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
+    var cloudFileSelectedBackupItemByProvider: [CloudFileProviderKind: CloudFileItem] = [:]
     var oneDriveAuthenticationState: OneDriveAuthenticationState = .disconnected
     var bitwardenServerURL = "https://vault.bitwarden.com"
     var bitwardenEmail = ""
@@ -2441,6 +2693,9 @@ final class AppSessionModel {
     var androidBackupDecryptPassword = ""
     var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
+    var presentedDetailRoute: VaultItemRoute?
+    var isQuickSetupPresented = false
+    var isExtensionsPresented = false
     var expandedToolbarAction: AndroidParityToolbarAction?
     var isFabMenuPresented = false
     var securityQuestion1ID = AppSessionModel.securityQuestionOptions[0].id
@@ -2475,6 +2730,9 @@ final class AppSessionModel {
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
     private let webDAVBackupService: any AppWebDAVBackupService
+    private let operationTimelineStore: any AppOperationTimelineStore
+    private let quickSetupStateStore: any AppQuickSetupStateStore
+    private let backgroundBackupScheduler: any AppBackgroundBackupScheduler
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
     private let oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)?
     private let bitwardenPasswordAuthenticationService: (any AppBitwardenPasswordAuthenticationService)?
@@ -2514,6 +2772,7 @@ final class AppSessionModel {
     private var pendingAndroidEncryptedBackupData: Data?
     private var keePassLastSuccessfulUnlockCredentials: KeePassUnlockCredentials?
     private var pendingBitwardenTwoFactorChallenge: BitwardenTwoFactorLoginChallenge?
+    private var quickSetupState: AppQuickSetupState
 
     var bitwardenTwoFactorProviders: [BitwardenTwoFactorProvider] {
         pendingBitwardenTwoFactorChallenge?.providers ?? []
@@ -2535,6 +2794,9 @@ final class AppSessionModel {
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
         securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
+        operationTimelineStore: any AppOperationTimelineStore = MemoryAppOperationTimelineStore(),
+        quickSetupStateStore: any AppQuickSetupStateStore = MemoryAppQuickSetupStateStore(),
+        backgroundBackupScheduler: any AppBackgroundBackupScheduler = SystemAppBackgroundBackupScheduler(),
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         bitwardenPasswordAuthenticationService: (any AppBitwardenPasswordAuthenticationService)? = nil,
@@ -2583,6 +2845,9 @@ final class AppSessionModel {
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
         self.webDAVBackupService = webDAVBackupService
+        self.operationTimelineStore = operationTimelineStore
+        self.quickSetupStateStore = quickSetupStateStore
+        self.backgroundBackupScheduler = backgroundBackupScheduler
         self.cloudFileProviders = cloudFileProviders
         self.oneDriveAuthenticationService = oneDriveAuthenticationService
         self.bitwardenPasswordAuthenticationService = bitwardenPasswordAuthenticationService
@@ -2614,6 +2879,10 @@ final class AppSessionModel {
         self.passwordGenerator = passwordGenerator
         self.bitwardenFileSendLocalIDProvider = bitwardenFileSendLocalIDProvider
         self.autoLockPolicy = autoLockPolicy
+        self.quickSetupState = quickSetupStateStore.loadState()
+        let loadedTimelineEvents = operationTimelineStore.loadEvents()
+        self.operationTimelineEvents = loadedTimelineEvents
+        self.nextOperationTimelineEventSequence = loadedTimelineEvents.count
         self.notificationPermissionState = notificationPermissionStatusProvider()
         self.isBiometricUnlockEnabled = biometricUnlockPreferenceStore.loadIsEnabled()
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
@@ -3247,6 +3516,16 @@ final class AppSessionModel {
         if let attachmentContentEncryptionKeyProvider {
             return try attachmentContentEncryptionKeyProvider(entry)
         }
+        if let wrappedContentEncryptionKey = entry.wrappedContentEncryptionKey,
+           wrappedContentEncryptionKey.hasPrefix("IOS-RAWCEK:") {
+            let encoded = String(wrappedContentEncryptionKey.dropFirst("IOS-RAWCEK:".count))
+            guard let data = Data(base64Encoded: encoded),
+                  data.count == LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount
+            else {
+                throw AppAttachmentPreviewError.contentEncryptionKeyUnavailable
+            }
+            return data
+        }
         guard let wrappedContentEncryptionKey = entry.wrappedContentEncryptionKey,
               !wrappedContentEncryptionKey.isEmpty,
               let androidAttachmentWrappingKeyProvider
@@ -3323,6 +3602,81 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    func addLocalAttachmentContent(
+        entryID: String?,
+        fileURL: URL
+    ) throws -> LocalAttachmentMetadata {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard isPlusActive else {
+                throw AppPlusResourceUnlockError.serviceUnavailable
+            }
+            let vaultSession = try requireActiveVaultSession()
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+            defer {
+                if didStartAccessing {
+                    fileURL.stopAccessingSecurityScopedResource()
+                }
+            }
+            let plaintext = try Data(contentsOf: fileURL)
+            let contentEncryptionKey = Data((0..<LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount).map { _ in UInt8.random(in: 0...255) })
+            let sealedBox = try AES.GCM.seal(
+                plaintext,
+                using: SymmetricKey(data: contentEncryptionKey)
+            )
+            guard let encryptedBlob = sealedBox.combined else {
+                throw AppAttachmentPreviewError.contentWriteFailed
+            }
+            let fileName = sanitizedAttachmentPreviewFileName(fileURL.lastPathComponent)
+            let localPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
+                encryptedBlob,
+                vaultID: vaultSession.handle.vaultID,
+                localPath: "ios-local-\(UUID().uuidString)-\(fileName).enc"
+            )
+            let contentHash = Data(SHA256.hash(data: plaintext)).map { String(format: "%02x", $0) }.joined()
+            let attachment = try entryRepository.createAttachmentMetadata(
+                projectID: projectID,
+                entryID: entryID,
+                fileName: fileName,
+                mediaType: fileURL.pathExtension.isEmpty ? "application/octet-stream" : "application/\(fileURL.pathExtension.lowercased())",
+                originalSize: Int64(plaintext.count),
+                storedSize: Int64(encryptedBlob.count),
+                contentHash: "sha256:\(contentHash)",
+                storageMode: "ios-local-encrypted-blob",
+                source: "ios-file-importer",
+                downloadState: "downloaded",
+                wrappedContentEncryptionKey: "IOS-RAWCEK:\(contentEncryptionKey.base64EncodedString())",
+                localPath: localPath
+            )
+            attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .attachmentRef,
+                itemID: attachment.id,
+                itemTitle: attachment.fileName
+            )
+            entryOperationState = .succeeded("附件已添加：\(attachment.fileName)")
+            return attachment
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func attachmentEntries(for entryID: String?) -> [LocalAttachmentMetadata] {
+        guard let entryID, !entryID.isEmpty else {
+            return []
+        }
+        return attachmentEntries.filter { $0.entryID == entryID }
     }
 
     func materializeAttachmentPreview(
@@ -3959,6 +4313,168 @@ final class AppSessionModel {
         ]
     }
 
+    var filteredOperationTimelineEvents: [AppOperationTimelineEvent] {
+        operationTimelineEvents.filter { event in
+            if let operationTimelineFilterKind, event.itemKind != operationTimelineFilterKind {
+                return false
+            }
+            if let operationTimelineFilterAction, event.action != operationTimelineFilterAction {
+                return false
+            }
+            return true
+        }
+    }
+
+    var quickSetupRows: [AppExtensionCapabilityRow] {
+        [
+            AppExtensionCapabilityRow(
+                id: "security",
+                title: "安全",
+                value: areSecurityQuestionsSetForActiveVault ? "已配置" : "待配置",
+                detail: "主密码、密保问题、Keychain 与生物识别解锁。",
+                systemImage: "lock.shield"
+            ),
+            AppExtensionCapabilityRow(
+                id: "autofill",
+                title: "AutoFill",
+                value: autoFillIndexStore == nil ? "待配置" : autoFillIndexState.label,
+                detail: "使用 iOS Credential Provider 替代 Android AutoFill/Accessibility。",
+                systemImage: "key.viewfinder"
+            ),
+            AppExtensionCapabilityRow(
+                id: "appearance",
+                title: "外观",
+                value: appearancePreferences.accentColor.label,
+                detail: "颜色、图标、卡片密度、列表字段和底栏文字。",
+                systemImage: "paintpalette"
+            ),
+            AppExtensionCapabilityRow(
+                id: "backup",
+                title: "备份",
+                value: "WebDAV / OneDrive",
+                detail: "手动备份、恢复、远端管理和 iOS 后台调度状态。",
+                systemImage: "externaldrive.badge.icloud"
+            ),
+            AppExtensionCapabilityRow(
+                id: "plus",
+                title: "Monica Plus",
+                value: isPlusActive ? "已解锁" : "可一键解锁",
+                detail: "本地资源解锁，不接入支付、订单、价格或外部支付链接。",
+                systemImage: "checkmark.seal"
+            )
+        ]
+    }
+
+    var extensionCapabilityRows: [AppExtensionCapabilityRow] {
+        [
+            AppExtensionCapabilityRow(
+                id: "credential-provider",
+                title: "Credential Provider",
+                value: autoFillIndexStore == nil ? "待配置" : "iOS 原生",
+                detail: "域名/RP ID 匹配、blocked fields、save blocked targets 和加密索引。",
+                systemImage: "key.viewfinder"
+            ),
+            AppExtensionCapabilityRow(
+                id: "shortcuts",
+                title: "Shortcuts / AppIntents",
+                value: shortcutSnapshotStore == nil ? "待配置" : "已接入",
+                detail: "搜索条目、打开 URL、复制安全摘要；锁定态不泄密。",
+                systemImage: "sparkles.rectangle.stack"
+            ),
+            AppExtensionCapabilityRow(
+                id: "widget",
+                title: "Widget",
+                value: widgetSnapshotStore == nil ? "待配置" : "已接入",
+                detail: "替代 Android TOTP 常驻通知，只读取脱敏快照。",
+                systemImage: "rectangle.inset.filled"
+            ),
+            AppExtensionCapabilityRow(
+                id: "share",
+                title: "Share Extension",
+                value: "iOS 原生",
+                detail: "替代 Android 分享面板导入路径，锁定态只进入安全收件箱。",
+                systemImage: "square.and.arrow.down"
+            ),
+            AppExtensionCapabilityRow(
+                id: "ime",
+                title: "Android IME",
+                value: "不做",
+                detail: "iOS 使用 AutoFill、Shortcuts、Widget 和 Share Extension 替代。",
+                systemImage: "keyboard"
+            ),
+            AppExtensionCapabilityRow(
+                id: "accessibility",
+                title: "Android Accessibility",
+                value: "不做",
+                detail: "iOS 不复制 overlay 自动化，只展示原生权限与诊断。",
+                systemImage: "hand.raised"
+            )
+        ]
+    }
+
+    var autoFillSystemDiagnosticRows: [AppExtensionCapabilityRow] {
+        [
+            AppExtensionCapabilityRow(
+                id: "match",
+                title: "匹配规则",
+                value: "Domain / RP ID",
+                detail: "不使用 Android package name；URL host、Associated Domains 和 service identifier 归一后匹配。",
+                systemImage: "link"
+            ),
+            AppExtensionCapabilityRow(
+                id: "blocked-fields",
+                title: "Blocked fields",
+                value: "\(autoFillPolicy.blockedFields.count)",
+                detail: "命中后仅记录 blocked 分类，不输出字段原文之外的上下文。",
+                systemImage: "text.badge.xmark"
+            ),
+            AppExtensionCapabilityRow(
+                id: "blocked-save",
+                title: "Save blocked targets",
+                value: "\(autoFillPolicy.blockedSaveTargets.count)",
+                detail: "系统保存收件箱会先检查目标策略，再写入本地草稿。",
+                systemImage: "link.badge.plus"
+            ),
+            AppExtensionCapabilityRow(
+                id: "identity-sync",
+                title: "Credential identity",
+                value: autoFillCredentialIdentityStore == nil ? "待配置" : "已配置",
+                detail: "同步 QuickType identity 时只使用脱敏服务标识。",
+                systemImage: "person.text.rectangle"
+            )
+        ]
+    }
+
+    func presentQuickSetup(force: Bool = true) {
+        guard force || quickSetupState.shouldPresent(for: activeVaultSession?.handle.vaultID) else {
+            return
+        }
+        isQuickSetupPresented = true
+    }
+
+    func completeQuickSetup() {
+        if let vaultID = activeVaultSession?.handle.vaultID, !vaultID.isEmpty {
+            quickSetupState.completedVaultIDs.insert(vaultID)
+        }
+        quickSetupState.lastCompletedAt = Date()
+        quickSetupStateStore.saveState(quickSetupState)
+        isQuickSetupPresented = false
+        appendOperationTimelineEvent(
+            action: .updated,
+            itemKind: .login,
+            itemID: "quick-setup",
+            itemTitle: "Quick Setup"
+        )
+    }
+
+    func maybePresentQuickSetupAfterUnlock() {
+        presentQuickSetup(force: false)
+    }
+
+    func presentExtensions() {
+        isExtensionsPresented = true
+    }
+
     var autoFillPolicyRows: [(title: String, value: String)] {
         [
             (title: "Blocked fields", value: "\(autoFillPolicy.blockedFields.count)"),
@@ -4508,7 +5024,7 @@ final class AppSessionModel {
                     projectID: projectID,
                     entryRepository: entryRepository
                 )
-            case .created, .updated, .moved, .viewed:
+            case .created, .updated, .moved, .viewed, .backedUp, .restoredBackup, .cleanedUp, .synced, .blocked:
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
@@ -5081,6 +5597,78 @@ final class AppSessionModel {
     func presentEditEditor(for entry: LocalSendEntry) {
         selectSendEntryForEditing(entry)
         presentedEditorMode = .edit(VaultItemRoute(kind: .send, entryID: entry.id))
+    }
+
+    func presentDetail(kind: UnifiedVaultItemKind, entryID: String) {
+        presentedDetailRoute = VaultItemRoute(kind: kind, entryID: entryID)
+        appendOperationTimelineEvent(
+            action: .viewed,
+            itemKind: kind,
+            itemID: entryID,
+            itemTitle: detailTitle(kind: kind, entryID: entryID)
+        )
+    }
+
+    func dismissDetail() {
+        presentedDetailRoute = nil
+    }
+
+    func editPresentedDetail() {
+        guard let route = presentedDetailRoute else {
+            return
+        }
+        switch route.kind {
+        case .login:
+            if let entry = loginEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .note:
+            if let entry = noteEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .totp:
+            if let entry = totpEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .card:
+            if let entry = cardEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .identity:
+            if let entry = identityEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .passkey:
+            if let entry = passkeyEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .sshKey:
+            if let entry = sshKeyEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .apiToken:
+            if let entry = apiTokenEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .wifi:
+            if let entry = wifiEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .send:
+            if let entry = sendEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .attachmentRef:
+            break
+        }
+        presentedDetailRoute = nil
+    }
+
+    private func detailTitle(kind: UnifiedVaultItemKind, entryID: String) -> String {
+        switch kind {
+        case .login:
+            return loginEntries.first { $0.id == entryID }?.title ?? "密码"
+        case .note:
+            return noteEntries.first { $0.id == entryID }?.title ?? "笔记"
+        case .totp:
+            return totpEntries.first { $0.id == entryID }?.title ?? "验证器"
+        case .card:
+            return cardEntries.first { $0.id == entryID }?.title ?? "银行卡"
+        case .identity:
+            return identityEntries.first { $0.id == entryID }?.title ?? "证件"
+        case .passkey:
+            return passkeyEntries.first { $0.id == entryID }?.title ?? "通行密钥"
+        case .sshKey:
+            return sshKeyEntries.first { $0.id == entryID }?.title ?? "SSH 密钥"
+        case .apiToken:
+            return apiTokenEntries.first { $0.id == entryID }?.title ?? "API Token"
+        case .wifi:
+            return wifiEntries.first { $0.id == entryID }?.title ?? "Wi-Fi"
+        case .send:
+            return sendEntries.first { $0.id == entryID }?.title ?? "Send"
+        case .attachmentRef:
+            return attachmentEntries.first { $0.id == entryID }?.fileName ?? "附件"
+        }
     }
 
     func dismissPresentedEditor() {
@@ -9085,8 +9673,22 @@ final class AppSessionModel {
                 byteCount: receipt.byteCount,
                 sha256: receipt.sha256
             )
+            appendOperationTimelineEvent(
+                action: .backedUp,
+                itemKind: .attachmentRef,
+                itemID: "webdav-upload",
+                itemTitle: "WebDAV \(fileName)"
+            )
         } catch {
             webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            appendOperationTimelineEvent(
+                action: .backedUp,
+                itemKind: .attachmentRef,
+                itemID: "webdav-upload",
+                itemTitle: "WebDAV backup",
+                result: "failed",
+                errorCategory: "WebDAV"
+            )
             throw error
         }
     }
@@ -9105,6 +9707,139 @@ final class AppSessionModel {
             cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
             throw error
         }
+    }
+
+    func refreshWebDAVBackupItems() async throws -> [WebDAVBackupItem] {
+        recordUserActivity()
+        webDAVBackupState = .running
+        do {
+            _ = try requireActiveVaultSession()
+            let endpoint = try makeWebDAVEndpoint()
+            let backups = try await webDAVBackupService.listBackups(endpoint: endpoint)
+            webDAVBackupItems = backups
+            webDAVPassword = ""
+            webDAVBackupState = .listed(count: backups.count)
+            return backups
+        } catch {
+            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    func deleteWebDAVBackupItem(_ item: WebDAVBackupItem) async throws {
+        recordUserActivity()
+        webDAVBackupState = .running
+        do {
+            _ = try requireActiveVaultSession()
+            let endpoint = try makeWebDAVEndpoint()
+            try await webDAVBackupService.deleteBackup(endpoint: endpoint, fileName: item.fileName)
+            webDAVBackupItems.removeAll { $0.id == item.id }
+            webDAVPassword = ""
+            webDAVBackupState = .deleted(fileName: item.fileName)
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .attachmentRef,
+                itemID: "webdav-\(item.id)",
+                itemTitle: "WebDAV \(item.fileName)"
+            )
+        } catch {
+            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .attachmentRef,
+                itemID: "webdav-delete",
+                itemTitle: "WebDAV backup",
+                result: "failed",
+                errorCategory: "WebDAV"
+            )
+            throw error
+        }
+    }
+
+    func setWebDAVBackupItemPermanent(_ item: WebDAVBackupItem, isPermanent: Bool) async throws {
+        recordUserActivity()
+        webDAVBackupState = .running
+        do {
+            _ = try requireActiveVaultSession()
+            let endpoint = try makeWebDAVEndpoint()
+            let updated = try await webDAVBackupService.setBackupPermanent(
+                endpoint: endpoint,
+                fileName: item.fileName,
+                isPermanent: isPermanent
+            )
+            if let index = webDAVBackupItems.firstIndex(where: { $0.id == item.id }) {
+                webDAVBackupItems[index] = WebDAVBackupItem(
+                    fileName: updated.fileName,
+                    byteCount: item.byteCount,
+                    modifiedAt: item.modifiedAt
+                )
+            }
+            webDAVPassword = ""
+            webDAVBackupState = .permanentUpdated(fileName: updated.fileName, isPermanent: isPermanent)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .attachmentRef,
+                itemID: "webdav-\(updated.id)",
+                itemTitle: "WebDAV \(updated.fileName)"
+            )
+        } catch {
+            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    func cleanupExpiredWebDAVBackups() async throws {
+        recordUserActivity()
+        webDAVBackupState = .running
+        do {
+            _ = try requireActiveVaultSession()
+            let endpoint = try makeWebDAVEndpoint()
+            let cutoff = Calendar.current.date(
+                byAdding: .day,
+                value: -max(1, webDAVBackupRetentionDays),
+                to: Date()
+            ) ?? Date(timeIntervalSinceNow: -30 * 24 * 60 * 60)
+            let deleted = try await webDAVBackupService.cleanupBackups(
+                endpoint: endpoint,
+                backups: webDAVBackupItems,
+                olderThan: cutoff
+            )
+            let deletedIDs = Set(deleted.map(\.id))
+            webDAVBackupItems.removeAll { deletedIDs.contains($0.id) }
+            webDAVPassword = ""
+            webDAVBackupState = .cleanupSucceeded(count: deleted.count)
+            appendOperationTimelineEvent(
+                action: .cleanedUp,
+                itemKind: .attachmentRef,
+                itemID: "webdav-cleanup",
+                itemTitle: "WebDAV \(deleted.count) backups"
+            )
+        } catch {
+            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    func scheduleBackgroundWebDAVBackup() async {
+        webDAVBackgroundBackupEnabled = true
+        webDAVBackgroundBackupSchedulerState = await backgroundBackupScheduler.scheduleNextBackup(after: 12 * 60 * 60)
+        appendOperationTimelineEvent(
+            action: .updated,
+            itemKind: .attachmentRef,
+            itemID: "webdav-background",
+            itemTitle: "iOS BackgroundTasks"
+        )
+    }
+
+    func disableBackgroundWebDAVBackup() {
+        webDAVBackgroundBackupEnabled = false
+        webDAVBackgroundBackupSchedulerState = .idle
+        appendOperationTimelineEvent(
+            action: .updated,
+            itemKind: .attachmentRef,
+            itemID: "webdav-background",
+            itemTitle: "iOS BackgroundTasks"
+        )
     }
 
     func signInToOneDrive() async throws -> AppOneDriveAuthenticationSession {
@@ -9370,6 +10105,7 @@ final class AppSessionModel {
                 fileName: preview.fileName,
                 byteCount: preview.byteCount
             )
+            cloudFileSelectedBackupItemByProvider[kind] = download.item
             return download
         } catch {
             cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
@@ -9394,9 +10130,23 @@ final class AppSessionModel {
                 fileName: sanitizedCloudFileName(receipt.name),
                 byteCount: receipt.byteCount
             )
+            appendOperationTimelineEvent(
+                action: .backedUp,
+                itemKind: .attachmentRef,
+                itemID: "\(kind.rawValue)-upload",
+                itemTitle: "\(kind.displayName) \(sanitizedCloudFileName(receipt.name))"
+            )
             return receipt
         } catch {
             cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            appendOperationTimelineEvent(
+                action: .backedUp,
+                itemKind: .attachmentRef,
+                itemID: "\(kind.rawValue)-upload",
+                itemTitle: "\(kind.displayName) backup",
+                result: "failed",
+                errorCategory: kind.displayName
+            )
             throw error
         }
     }
@@ -9423,11 +10173,98 @@ final class AppSessionModel {
                 fileName: sanitizedCloudFileName(receipt.name),
                 byteCount: receipt.byteCount
             )
+            appendOperationTimelineEvent(
+                action: .synced,
+                itemKind: .attachmentRef,
+                itemID: "\(kind.rawValue)-overwrite",
+                itemTitle: "\(kind.displayName) \(sanitizedCloudFileName(receipt.name))"
+            )
             return receipt
         } catch {
             cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
             throw error
         }
+    }
+
+    func deleteCloudFileBackupItem(
+        provider kind: CloudFileProviderKind,
+        item: CloudFileItem
+    ) async throws {
+        recordUserActivity()
+        cloudFileState = .running(kind)
+        do {
+            _ = try requireActiveVaultSession()
+            let provider = try cloudFileProvider(for: kind)
+            _ = try await provider.deleteFile(id: item.id)
+            cloudFileItemsByProvider[kind]?.removeAll { $0.id == item.id }
+            cloudFileState = .deleted(provider: kind, fileName: sanitizedCloudFileName(item.name))
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .attachmentRef,
+                itemID: "\(kind.rawValue)-delete",
+                itemTitle: "\(kind.displayName) \(sanitizedCloudFileName(item.name))"
+            )
+        } catch {
+            cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            throw error
+        }
+    }
+
+    func setCloudFileBackupItemPermanent(
+        provider kind: CloudFileProviderKind,
+        item: CloudFileItem,
+        isPermanent: Bool
+    ) async throws {
+        recordUserActivity()
+        cloudFileState = .running(kind)
+        do {
+            _ = try requireActiveVaultSession()
+            let provider = try cloudFileProvider(for: kind)
+            let newName = permanentBackupFileName(for: item.name, isPermanent: isPermanent)
+            let receipt = try await provider.renameFile(id: item.id, newName: newName)
+            let updated = CloudFileItem(
+                id: receipt.itemID,
+                name: receipt.name,
+                path: receipt.name,
+                byteCount: item.byteCount,
+                modifiedAt: item.modifiedAt,
+                sha256: item.sha256,
+                revision: receipt.revision ?? item.revision
+            )
+            if let index = cloudFileItemsByProvider[kind]?.firstIndex(where: { $0.id == item.id }) {
+                cloudFileItemsByProvider[kind]?[index] = updated
+            }
+            cloudFileState = .permanentUpdated(
+                provider: kind,
+                fileName: sanitizedCloudFileName(receipt.name),
+                isPermanent: isPermanent
+            )
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .attachmentRef,
+                itemID: "\(kind.rawValue)-permanent",
+                itemTitle: "\(kind.displayName) \(sanitizedCloudFileName(receipt.name))"
+            )
+        } catch {
+            cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
+            throw error
+        }
+    }
+
+    private func permanentBackupFileName(for fileName: String, isPermanent: Bool) -> String {
+        let sanitized = sanitizedCloudFileName(fileName)
+        let marker = "_permanent"
+        let ext = ".mdbx"
+        guard sanitized.lowercased().hasSuffix(ext) else {
+            return isPermanent && !sanitized.hasSuffix(marker)
+                ? sanitized + marker
+                : sanitized.replacingOccurrences(of: marker, with: "")
+        }
+        let base = String(sanitized.dropLast(ext.count))
+        if isPermanent {
+            return base.hasSuffix(marker) ? sanitized : "\(base)\(marker)\(ext)"
+        }
+        return "\(base.replacingOccurrences(of: marker, with: ""))\(ext)"
     }
 
     func previewBitwardenSync() async throws -> AppBitwardenSyncPreview {
@@ -9775,9 +10612,23 @@ final class AppSessionModel {
                 fileName: preview.fileName,
                 byteCount: preview.byteCount
             )
+            appendOperationTimelineEvent(
+                action: .restoredBackup,
+                itemKind: .attachmentRef,
+                itemID: "webdav-restore",
+                itemTitle: "WebDAV \(preview.fileName)"
+            )
         } catch {
             webDAVRestoreVaultPassword = ""
             webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            appendOperationTimelineEvent(
+                action: .restoredBackup,
+                itemKind: .attachmentRef,
+                itemID: "webdav-restore",
+                itemTitle: "WebDAV backup",
+                result: "failed",
+                errorCategory: "WebDAV"
+            )
             throw error
         }
     }
@@ -11648,10 +12499,12 @@ final class AppSessionModel {
         action: AppOperationTimelineAction,
         itemKind: UnifiedVaultItemKind,
         itemID: String,
-        itemTitle: String
+        itemTitle: String,
+        result: String = "success",
+        errorCategory: String? = nil
     ) {
         nextOperationTimelineEventSequence += 1
-        let trimmedTitle = itemTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTitle = Self.redactedTimelineTitle(itemTitle)
         operationTimelineEvents.insert(
             AppOperationTimelineEvent(
                 id: "operation-\(nextOperationTimelineEventSequence)-\(itemID)",
@@ -11659,13 +12512,27 @@ final class AppSessionModel {
                 itemKind: itemKind,
                 itemID: itemID,
                 itemTitle: trimmedTitle,
-                occurredAt: Date()
+                occurredAt: Date(),
+                result: result,
+                errorCategory: errorCategory
             ),
             at: 0
         )
-        if operationTimelineEvents.count > 50 {
-            operationTimelineEvents.removeLast(operationTimelineEvents.count - 50)
+        if operationTimelineEvents.count > 500 {
+            operationTimelineEvents.removeLast(operationTimelineEvents.count - 500)
         }
+        operationTimelineStore.saveEvents(operationTimelineEvents)
+    }
+
+    private static func redactedTimelineTitle(_ value: String) -> String {
+        let trimmed = value
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(of: #"://[^\s]+"#, with: "://<redacted>", options: .regularExpression)
+            .replacingOccurrences(of: #"(?i)(password|token|secret|key|code)=\S+"#, with: "$1=<redacted>", options: .regularExpression)
+        guard !trimmed.isEmpty else {
+            return "未命名条目"
+        }
+        return String(trimmed.prefix(80))
     }
 
     private func sanitizedAttachmentPreviewFileName(_ value: String) -> String {
@@ -11704,6 +12571,7 @@ final class AppSessionModel {
     private func clearOperationTimelineEvents() {
         operationTimelineEvents = []
         nextOperationTimelineEventSequence = 0
+        operationTimelineStore.saveEvents([])
     }
 
     private func validateDownloadedWebDAVRestore(
@@ -12308,9 +13176,13 @@ enum VaultKeychainState: Sendable, Equatable {
 enum WebDAVBackupState: Sendable, Equatable {
     case idle
     case running
+    case listed(count: Int)
     case backupSucceeded(byteCount: Int, sha256: String)
     case restorePreviewReady(fileName: String, byteCount: Int)
     case restoreSucceeded(fileName: String, byteCount: Int)
+    case deleted(fileName: String)
+    case permanentUpdated(fileName: String, isPermanent: Bool)
+    case cleanupSucceeded(count: Int)
     case failed(String)
 
     var label: String {
@@ -12319,12 +13191,20 @@ enum WebDAVBackupState: Sendable, Equatable {
             return "就绪"
         case .running:
             return "处理中"
+        case .listed(let count):
+            return "已列出 \(count) 个备份"
         case .backupSucceeded(let byteCount, _):
             return "已备份 \(byteCount) 字节"
         case .restorePreviewReady(let fileName, let byteCount):
             return "预览 \(fileName) (\(byteCount) 字节)"
         case .restoreSucceeded(let fileName, let byteCount):
             return "已恢复 \(fileName) (\(byteCount) 字节)"
+        case .deleted(let fileName):
+            return "已删除 \(fileName)"
+        case .permanentUpdated(let fileName, let isPermanent):
+            return isPermanent ? "已永久保留 \(fileName)" : "已取消永久保留 \(fileName)"
+        case .cleanupSucceeded(let count):
+            return "已清理 \(count) 个过期备份"
         case .failed(let message):
             return message
         }
@@ -12345,6 +13225,8 @@ enum CloudFileState: Sendable, Equatable {
     case restorePreviewReady(provider: CloudFileProviderKind, fileName: String, byteCount: Int)
     case backupSucceeded(provider: CloudFileProviderKind, fileName: String, byteCount: Int)
     case writeSucceeded(provider: CloudFileProviderKind, fileName: String, byteCount: Int)
+    case deleted(provider: CloudFileProviderKind, fileName: String)
+    case permanentUpdated(provider: CloudFileProviderKind, fileName: String, isPermanent: Bool)
     case failed(String)
 
     var label: String {
@@ -12361,6 +13243,12 @@ enum CloudFileState: Sendable, Equatable {
             return "\(provider.displayName) 已备份 \(fileName) (\(byteCount) 字节)"
         case .writeSucceeded(let provider, let fileName, let byteCount):
             return "\(provider.displayName) 已写回 \(fileName) (\(byteCount) 字节)"
+        case .deleted(let provider, let fileName):
+            return "\(provider.displayName) 已删除 \(fileName)"
+        case .permanentUpdated(let provider, let fileName, let isPermanent):
+            return isPermanent
+                ? "\(provider.displayName) 已永久保留 \(fileName)"
+                : "\(provider.displayName) 已取消永久保留 \(fileName)"
         case .failed(let message):
             return message
         }
@@ -12642,6 +13530,11 @@ protocol AppWebDAVBackupService: Sendable {
         endpoint: WebDAVEndpoint,
         fileName: String
     ) async throws -> WebDAVDownloadedBackup
+
+    func listBackups(endpoint: WebDAVEndpoint) async throws -> [WebDAVBackupItem]
+    func deleteBackup(endpoint: WebDAVEndpoint, fileName: String) async throws
+    func setBackupPermanent(endpoint: WebDAVEndpoint, fileName: String, isPermanent: Bool) async throws -> WebDAVBackupItem
+    func cleanupBackups(endpoint: WebDAVEndpoint, backups: [WebDAVBackupItem], olderThan cutoff: Date) async throws -> [WebDAVBackupItem]
 }
 
 struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
@@ -12657,6 +13550,26 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
         fileName: String
     ) async throws -> WebDAVDownloadedBackup {
         try await WebDAVClient(endpoint: endpoint).download(fileName: fileName)
+    }
+
+    func listBackups(endpoint: WebDAVEndpoint) async throws -> [WebDAVBackupItem] {
+        try await WebDAVClient(endpoint: endpoint).listBackups()
+    }
+
+    func deleteBackup(endpoint: WebDAVEndpoint, fileName: String) async throws {
+        try await WebDAVClient(endpoint: endpoint).deleteBackup(fileName: fileName)
+    }
+
+    func setBackupPermanent(endpoint: WebDAVEndpoint, fileName: String, isPermanent: Bool) async throws -> WebDAVBackupItem {
+        try await WebDAVClient(endpoint: endpoint).setBackupPermanent(fileName: fileName, isPermanent: isPermanent)
+    }
+
+    func cleanupBackups(
+        endpoint: WebDAVEndpoint,
+        backups: [WebDAVBackupItem],
+        olderThan cutoff: Date
+    ) async throws -> [WebDAVBackupItem] {
+        try await WebDAVClient(endpoint: endpoint).cleanupBackups(backups, olderThan: cutoff)
     }
 }
 
@@ -12885,6 +13798,7 @@ struct AppRootView: View {
                                 fallbackDirectory: vaultDirectory
                             )
                             importPendingAutoFillSaveRequests()
+                            session.maybePresentQuickSetupAfterUnlock()
                         }
                     },
                     createVault: createLocalVault,
@@ -12940,6 +13854,16 @@ struct AppRootView: View {
                 deviceID: environment.localDeviceIdentifier
             )
             .presentationDetents([.medium, .large])
+        }
+        .sheet(isPresented: $session.isQuickSetupPresented) {
+            AppQuickSetupView(session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $session.isExtensionsPresented) {
+            AppExtensionsView(session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
     }
 
@@ -13082,6 +14006,7 @@ struct AppRootView: View {
                 deviceID: environment.localDeviceIdentifier
             )
             importPendingAutoFillSaveRequests()
+            session.maybePresentQuickSetupAfterUnlock()
         } catch {
             // AppSessionModel owns user-visible failure state.
         }
@@ -13098,6 +14023,8 @@ struct AppRootView: View {
                         in: vaultDirectory,
                         deviceID: environment.localDeviceIdentifier
                     )
+                    importPendingAutoFillSaveRequests()
+                    session.maybePresentQuickSetupAfterUnlock()
                 }
             } else {
                 try session.unlockRememberedVaultWithPassword(
@@ -13105,6 +14032,7 @@ struct AppRootView: View {
                     fallbackDirectory: vaultDirectory
                 )
                 importPendingAutoFillSaveRequests()
+                session.maybePresentQuickSetupAfterUnlock()
             }
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -13125,6 +14053,7 @@ struct AppRootView: View {
                 deviceID: environment.localDeviceIdentifier
             )
             importPendingAutoFillSaveRequests()
+            session.maybePresentQuickSetupAfterUnlock()
         } catch {
             // AppSessionModel owns user-visible failure state.
         }

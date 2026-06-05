@@ -2733,6 +2733,174 @@ import Foundation
     }
 }
 
+@Test func webDAVClientListsBackupFilesFromPropfindWithoutLeakingURLs() async throws {
+    let response = """
+    <?xml version="1.0" encoding="utf-8"?>
+    <d:multistatus xmlns:d="DAV:">
+      <d:response>
+        <d:href>/backups/</d:href>
+        <d:propstat><d:prop><d:resourcetype><d:collection/></d:resourcetype></d:prop></d:propstat>
+      </d:response>
+      <d:response>
+        <d:href>/backups/mobile-2026.mdbx</d:href>
+        <d:propstat><d:prop>
+          <d:getcontentlength>42</d:getcontentlength>
+          <d:getlastmodified>Fri, 05 Jun 2026 02:03:04 GMT</d:getlastmodified>
+        </d:prop></d:propstat>
+      </d:response>
+      <d:response>
+        <d:href>/backups/mobile-2026_permanent.mdbx</d:href>
+        <d:propstat><d:prop><d:getcontentlength>7</d:getcontentlength></d:prop></d:propstat>
+      </d:response>
+      <d:response>
+        <d:href>/backups/mobile-2026.mdbx.sha256</d:href>
+        <d:propstat><d:prop><d:getcontentlength>65</d:getcontentlength></d:prop></d:propstat>
+      </d:response>
+    </d:multistatus>
+    """
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 207, body: Data(response.utf8))
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    let backups = try await client.listBackups()
+
+    let request = try #require(transport.requests.first)
+    #expect(request.method == "PROPFIND")
+    #expect(request.url.absoluteString == "https://dav.example.com/backups/")
+    #expect(request.headers["Depth"] == "1")
+    #expect(backups.map(\.fileName) == ["mobile-2026.mdbx", "mobile-2026_permanent.mdbx"])
+    #expect(backups[0].byteCount == 42)
+    #expect(!backups[0].isPermanent)
+    #expect(backups[1].isPermanent)
+    #expect(backups[0].redactedSummary == "mobile-2026.mdbx 42 字节")
+    #expect(!backups[0].redactedSummary.contains("dav.example.com"))
+}
+
+@Test func webDAVClientDeletesBackupAndSidecar() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 204, body: Data()),
+            WebDAVTransportResponse(statusCode: 404, body: Data())
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    try await client.deleteBackup(fileName: "mobile.mdbx")
+
+    #expect(transport.requests.map(\.method) == ["DELETE", "DELETE"])
+    #expect(transport.requests.map(\.url.absoluteString) == [
+        "https://dav.example.com/backups/mobile.mdbx",
+        "https://dav.example.com/backups/mobile.mdbx.sha256"
+    ])
+}
+
+@Test func webDAVClientMarksAndUnmarksPermanentBackupsWithMove() async throws {
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 201, body: Data()),
+            WebDAVTransportResponse(statusCode: 204, body: Data())
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+
+    let permanent = try await client.setBackupPermanent(fileName: "mobile.mdbx", isPermanent: true)
+    let regular = try await client.setBackupPermanent(fileName: permanent.fileName, isPermanent: false)
+
+    #expect(permanent.fileName == "mobile_permanent.mdbx")
+    #expect(permanent.isPermanent)
+    #expect(regular.fileName == "mobile.mdbx")
+    #expect(!regular.isPermanent)
+    #expect(transport.requests.map(\.method) == ["MOVE", "MOVE"])
+    #expect(transport.requests[0].headers["Destination"] == "https://dav.example.com/backups/mobile_permanent.mdbx")
+    #expect(transport.requests[1].headers["Destination"] == "https://dav.example.com/backups/mobile.mdbx")
+}
+
+@Test func webDAVClientCleanupDeletesOnlyExpiredNonPermanentBackups() async throws {
+    let oldDate = Date(timeIntervalSince1970: 100)
+    let recentDate = Date(timeIntervalSinceNow: -60)
+    let transport = RecordingWebDAVTransport(
+        responses: [
+            WebDAVTransportResponse(statusCode: 204, body: Data()),
+            WebDAVTransportResponse(statusCode: 404, body: Data())
+        ]
+    )
+    let client = WebDAVClient(
+        endpoint: WebDAVEndpoint(
+            baseURL: try #require(URL(string: "https://dav.example.com/backups/")),
+            username: "alice",
+            password: "secret"
+        ),
+        transport: transport
+    )
+    let backups = [
+        WebDAVBackupItem(fileName: "old.mdbx", byteCount: 10, modifiedAt: oldDate),
+        WebDAVBackupItem(fileName: "old_permanent.mdbx", byteCount: 10, modifiedAt: oldDate),
+        WebDAVBackupItem(fileName: "recent.mdbx", byteCount: 10, modifiedAt: recentDate)
+    ]
+
+    let deleted = try await client.cleanupBackups(backups, olderThan: Date(timeIntervalSince1970: 200))
+
+    #expect(deleted.map(\.fileName) == ["old.mdbx"])
+    #expect(transport.requests.map(\.url.absoluteString) == [
+        "https://dav.example.com/backups/old.mdbx",
+        "https://dav.example.com/backups/old.mdbx.sha256"
+    ])
+}
+
+@Test func oneDriveProviderDeletesAndRenamesFilesUsingGraphEndpoints() async throws {
+    let transport = RecordingOneDriveGraphTransport()
+    transport.enqueue(statusCode: 204, body: "{}")
+    transport.enqueue(
+        statusCode: 200,
+        body: """
+        {"id":"item-1","name":"mobile_permanent.mdbx","size":12,"eTag":"rev-2","file":{}}
+        """
+    )
+    let provider = OneDriveCloudFileProvider(
+        configuration: OneDriveCloudFileConfiguration(
+            clientID: "client",
+            redirectURI: try #require(URL(string: "msauth.test://auth")),
+            graphBaseURL: try #require(URL(string: "https://graph.example.test/v1.0"))
+        ),
+        tokenProvider: RecordingOneDriveAccessTokenProvider(token: "token-secret"),
+        graphTransport: transport
+    )
+
+    try await provider.deleteFile(id: "item-1")
+    let receipt = try await provider.renameFile(id: "item-1", newName: "mobile_permanent.mdbx")
+
+    #expect(receipt.name == "mobile_permanent.mdbx")
+    #expect(transport.requests.map(\.method) == ["DELETE", "PATCH"])
+    #expect(transport.requests[0].url.absoluteString == "https://graph.example.test/v1.0/me/drive/items/item-1")
+    #expect(transport.requests[1].url.absoluteString == "https://graph.example.test/v1.0/me/drive/items/item-1")
+    #expect(transport.requests[1].headers["Content-Type"] == "application/json")
+    #expect(String(data: try #require(transport.requests[1].body), encoding: .utf8)?.contains("mobile_permanent.mdbx") == true)
+}
+
 private final class RecordingWebDAVTransport: WebDAVTransport {
     private var responses: [WebDAVTransportResponse]
     private(set) var requests: [WebDAVTransportRequest] = []

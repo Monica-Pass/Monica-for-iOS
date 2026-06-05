@@ -129,6 +129,13 @@ struct AndroidParityVaultHomeView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+        .sheet(isPresented: presentedDetailBinding) {
+            if let route = session.presentedDetailRoute {
+                VaultItemDetailView(session: session, route: route)
+                    .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+            }
+        }
         .sheet(isPresented: $isTotpScannerPresented) {
             TotpQRCodeScannerSheet(
                 session: session,
@@ -657,6 +664,17 @@ struct AndroidParityVaultHomeView: View {
         )
     }
 
+    private var presentedDetailBinding: Binding<Bool> {
+        Binding(
+            get: { session.presentedDetailRoute != nil },
+            set: { isPresented in
+                if !isPresented {
+                    session.dismissDetail()
+                }
+            }
+        )
+    }
+
     private var searchBinding: Binding<String> {
         Binding(
             get: {
@@ -876,7 +894,7 @@ struct AndroidParityVaultHomeView: View {
             if session.isVaultBatchSelectionActive {
                 session.toggleVaultBatchItemSelection(id, for: kind)
             } else {
-                edit()
+                session.presentDetail(kind: kind, entryID: id)
             }
         } label: {
             content()
@@ -1613,6 +1631,7 @@ struct AddEditVaultItemView: View {
 
     @State private var isTotpScannerPresented = false
     @State private var isSendFileImporterPresented = false
+    @State private var isAttachmentImporterPresented = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -1660,6 +1679,20 @@ struct AddEditVaultItemView: View {
                     return
                 }
                 try session.selectBitwardenSendFile(url: url)
+            } catch {
+                session.entryOperationState = .failed(error.localizedDescription)
+            }
+        }
+        .fileImporter(
+            isPresented: $isAttachmentImporterPresented,
+            allowedContentTypes: [.item],
+            allowsMultipleSelection: false
+        ) { result in
+            do {
+                guard case .success(let urls) = result, let url = urls.first else {
+                    return
+                }
+                _ = try session.addLocalAttachmentContent(entryID: currentEntryID, fileURL: url)
             } catch {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
@@ -1751,6 +1784,7 @@ struct AddEditVaultItemView: View {
                 Text("该类型当前只支持列表展示。")
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
+            attachmentEditSection
             AndroidParityInfoRow(title: "状态", value: session.entryOperationState.label)
             if !mode.isAdding {
                 Button(role: .destructive, action: deleteEntry) {
@@ -1760,6 +1794,77 @@ struct AddEditVaultItemView: View {
                 .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
             }
         }
+    }
+
+    @ViewBuilder
+    private var attachmentEditSection: some View {
+        if !mode.isAdding && mode.kind != .attachmentRef {
+            AndroidParityDivider()
+            Text("附件")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+            if session.isPlusActive {
+                Button {
+                    isAttachmentImporterPresented = true
+                } label: {
+                    Label("添加附件", systemImage: "paperclip.badge.plus")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                ForEach(session.attachmentEntries(for: currentEntryID)) { attachment in
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "paperclip")
+                            .foregroundStyle(AndroidParityPalette.primary)
+                            .frame(width: 28)
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(attachment.fileName)
+                                .font(.subheadline.weight(.semibold))
+                                .lineLimit(1)
+                            Text("\(attachment.downloadState) · \(attachment.storedSize) 字节")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                        Spacer()
+                        Button {
+                            try? session.presentAttachmentQuickLookPreview(attachment)
+                        } label: {
+                            Image(systemName: "eye")
+                                .frame(width: 32, height: 32)
+                        }
+                        .buttonStyle(.plain)
+                        Button(role: .destructive) {
+                            try? session.deleteAttachmentEntry(attachment)
+                        } label: {
+                            Image(systemName: "trash")
+                                .frame(width: 32, height: 32)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                if session.attachmentEntries(for: currentEntryID).isEmpty {
+                    Text("暂无附件")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+            } else {
+                AndroidParityInfoRow(title: "Plus", value: "附件编辑需要解锁")
+                Button {
+                    Task { try? await session.activatePlusFromResource() }
+                } label: {
+                    Label("解锁 Plus", systemImage: "checkmark.seal")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                .disabled(!session.canActivatePlusFromResource)
+            }
+        }
+    }
+
+    private var currentEntryID: String? {
+        guard case .edit(let route) = mode else {
+            return nil
+        }
+        return route.entryID
     }
 
     private var loginFields: some View {
@@ -2023,5 +2128,127 @@ private extension UnifiedVaultItemKind {
         case .send: return "paperplane.fill"
         case .attachmentRef: return "paperclip"
         }
+    }
+}
+
+private struct VaultItemDetailView: View {
+    @Bindable var session: AppSessionModel
+    let route: VaultItemRoute
+    @State private var revealsSensitiveFields = false
+
+    var body: some View {
+        AndroidParityScreen {
+            AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6), cornerRadius: 22) {
+                HStack(spacing: 14) {
+                    AndroidParityIconTile(systemImage: route.kind.systemImage, fill: AndroidParityPalette.primaryContainer)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(route.kind.displayName)
+                            .font(.caption.weight(.heavy))
+                            .foregroundStyle(AndroidParityPalette.primary)
+                        Text(title)
+                            .font(.title3.weight(.heavy))
+                            .foregroundStyle(AndroidParityPalette.textPrimary)
+                    }
+                    Spacer()
+                    Button {
+                        session.editPresentedDetail()
+                    } label: {
+                        Image(systemName: "square.and.pencil")
+                            .font(.headline.weight(.bold))
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.primary)
+                    .disabled(route.kind == .attachmentRef)
+                }
+                Toggle("显示敏感字段", isOn: $revealsSensitiveFields)
+                    .font(.subheadline.weight(.semibold))
+                    .tint(AndroidParityPalette.primary)
+            }
+
+            AndroidParitySection(title: "详情") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    ForEach(rows) { row in
+                        AndroidParityInfoRow(title: row.title, value: row.value)
+                        if row.id != rows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private var title: String {
+        rows.first(where: { $0.id == "title" })?.value ?? route.kind.displayName
+    }
+
+    private var rows: [AppExtensionCapabilityRow] {
+        switch route.kind {
+        case .login:
+            guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [
+                row("title", "标题", entry.title),
+                row("username", "账号", entry.username),
+                row("url", "网址", redactedURL(entry.url)),
+                row("password", "密码", sensitive(entry.password)),
+                row("favorite", "收藏", entry.favorite ? "是" : "否")
+            ]
+        case .note:
+            guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("body", "正文", sensitive(entry.body)), row("favorite", "收藏", entry.favorite ? "是" : "否")]
+        case .totp:
+            guard let entry = session.totpEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("issuer", "签发方", entry.issuer), row("account", "账号", entry.accountName), row("secret", "密钥", sensitive(entry.secret)), row("period", "周期", "\(entry.period)s")]
+        case .card:
+            guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("holder", "持卡人", entry.cardholderName), row("number", "卡号", sensitive(entry.number)), row("expiry", "有效期", "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv)), row("issuer", "银行", entry.issuer)]
+        case .identity:
+            guard let entry = session.identityEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("type", "类型", entry.documentType), row("name", "姓名", entry.fullName), row("number", "证件号", sensitive(entry.documentNumber)), row("issuer", "签发方", entry.issuer), row("country", "国家/地区", entry.country)]
+        case .passkey:
+            guard let entry = session.passkeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("rp", "RP ID", entry.relyingPartyID), row("username", "账号", entry.username), row("credential", "Credential ID", sensitive(entry.credentialID)), row("private", "私钥引用", sensitive(entry.privateKeyReference))]
+        case .sshKey:
+            guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("user", "用户名", entry.username), row("host", "主机", entry.host), row("public", "公钥", revealsSensitiveFields ? entry.publicKey : "••••••"), row("private", "私钥引用", sensitive(entry.privateKeyReference)), row("hint", "口令提示", entry.passphraseHint)]
+        case .apiToken:
+            guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("issuer", "签发方", entry.issuer), row("account", "账号", entry.accountName), row("token", "Token", sensitive(entry.token)), row("scopes", "范围", entry.scopes), row("expires", "过期", entry.expiresAt)]
+        case .wifi:
+            guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("ssid", "SSID", entry.ssid), row("security", "安全类型", entry.securityType), row("password", "密码", sensitive(entry.password)), row("hidden", "隐藏网络", entry.hidden ? "是" : "否")]
+        case .send:
+            guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "标题", entry.title), row("body", "内容", sensitive(entry.body)), row("expires", "过期", entry.expiresAt), row("views", "最多查看", "\(entry.maxViews)")]
+        case .attachmentRef:
+            guard let entry = session.attachmentEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [row("title", "文件名", entry.fileName), row("state", "状态", entry.downloadState), row("mode", "存储", entry.storageMode), row("size", "大小", "\(entry.storedSize)/\(entry.originalSize) 字节")]
+        }
+    }
+
+    private var missingRows: [AppExtensionCapabilityRow] {
+        [row("missing", "状态", "条目不可用")]
+    }
+
+    private func sensitive(_ value: String) -> String {
+        guard !value.isEmpty else { return "空" }
+        return revealsSensitiveFields ? value : "••••••"
+    }
+
+    private func redactedURL(_ value: String) -> String {
+        guard !value.isEmpty else { return "空" }
+        guard let host = URL(string: value)?.host() else { return value }
+        return host
+    }
+
+    private func row(_ id: String, _ title: String, _ value: String) -> AppExtensionCapabilityRow {
+        AppExtensionCapabilityRow(
+            id: id,
+            title: title,
+            value: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "空" : value,
+            detail: "",
+            systemImage: ""
+        )
     }
 }
