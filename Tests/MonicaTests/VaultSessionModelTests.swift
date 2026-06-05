@@ -9194,6 +9194,83 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("bw-state-revision-secret"))
     }
 
+    func testBitwardenPushRestoresLocallyRecoveredRemoteDeletedCipherWithoutLeakingSecrets() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let itemStateStore = MemoryAppBitwardenItemSyncStateStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "bw-restore-revision-secret",
+            items: [
+                BitwardenSyncItem(
+                    remoteID: "remote-restore-login-secret-id",
+                    kind: .login,
+                    title: "Recovered Login",
+                    username: "alice",
+                    url: "https://example.com/session?token=query-secret",
+                    password: "restored-password-secret",
+                    notes: "restored-note-secret",
+                    updatedAt: Date(timeIntervalSince1970: 1_804_020_080),
+                    favorite: true,
+                    deletedAt: Date(timeIntervalSince1970: 1_804_020_090)
+                )
+            ]
+        )
+        bitwarden.pushResult = BitwardenSyncPushResult(
+            acceptedMutationCount: 1,
+            revision: "restore-push-revision-secret"
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenItemSyncStateStore: itemStateStore
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        _ = try await model.syncBitwardenVaultData(projectTitle: "Bitwarden")
+        let deletedLogin = try XCTUnwrap(model.deletedLoginEntries.first)
+        try model.restoreLoginEntry(deletedLogin)
+
+        let pushResult = try await model.pushLocalBitwardenChanges()
+
+        XCTAssertEqual(pushResult.acceptedMutationCount, 1)
+        XCTAssertEqual(bitwarden.pushedMutations.map(\.redactedSummary), [
+            "restore login Recovered Login"
+        ])
+        guard case .restoreCipher(let localID, let remoteID, let kind, let title) = bitwarden.pushedMutations.first else {
+            XCTFail("Expected locally restored Bitwarden login to push a remote restore mutation")
+            return
+        }
+        XCTAssertEqual(localID, "entry-1")
+        XCTAssertEqual(remoteID, "remote-restore-login-secret-id")
+        XCTAssertEqual(kind, .login)
+        XCTAssertEqual(title, "Recovered Login")
+        let states = try itemStateStore.loadStates(vaultID: "created-vault")
+        XCTAssertEqual(states.first { $0.localID == "entry-1" }?.remoteID, "remote-restore-login-secret-id")
+        XCTAssertEqual(states.first { $0.localID == "entry-1" }?.isDeleted, false)
+
+        let visibleText = [
+            model.bitwardenSyncState.label,
+            bitwarden.pushedMutations.map(\.redactedSummary).joined(separator: " "),
+            states.map(\.redactedSummary).joined(separator: " ")
+        ].joined(separator: " ")
+        XCTAssertFalse(visibleText.contains("remote-restore-login-secret-id"))
+        XCTAssertFalse(visibleText.contains("query-secret"))
+        XCTAssertFalse(visibleText.contains("restored-password-secret"))
+        XCTAssertFalse(visibleText.contains("restored-note-secret"))
+        XCTAssertFalse(visibleText.contains("bw-restore-revision-secret"))
+        XCTAssertFalse(visibleText.contains("restore-push-revision-secret"))
+    }
+
     func testBitwardenPushUsesPersistedItemRemoteStateForCipherUpdateAndDeletePlan() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()

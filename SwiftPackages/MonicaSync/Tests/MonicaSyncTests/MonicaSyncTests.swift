@@ -408,6 +408,19 @@ import Foundation
             kind: .identity,
             lastSyncedFingerprint: "missing-fingerprint",
             lastRemoteRevision: "missing-revision-secret"
+        ),
+        BitwardenItemSyncState(
+            localID: "local-restore-secret-id",
+            remoteID: "remote-restore-secret-id",
+            kind: .secureNote,
+            lastSyncedFingerprint: BitwardenLocalItemSyncItem(
+                localID: "local-restore-secret-id",
+                kind: .secureNote,
+                title: "Recovered Note",
+                notes: "restored-note-secret"
+            ).syncFingerprint,
+            lastRemoteRevision: "restore-revision-secret",
+            isDeleted: true
         )
     ]
     let localItems = [
@@ -433,6 +446,12 @@ import Foundation
             kind: .identity,
             title: "Passport",
             notes: "locally-edited-secret"
+        ),
+        BitwardenLocalItemSyncItem(
+            localID: "local-restore-secret-id",
+            kind: .secureNote,
+            title: "Recovered Note",
+            notes: "restored-note-secret"
         )
     ]
     let deletedLocalItems = [
@@ -450,6 +469,14 @@ import Foundation
             title: "GitHub",
             username: "alice",
             updatedAt: Date(timeIntervalSince1970: 1_804_020_001)
+        ),
+        BitwardenSyncItem(
+            remoteID: "remote-restore-secret-id",
+            kind: .secureNote,
+            title: "Recovered Note",
+            notes: "old-restored-note-secret",
+            updatedAt: Date(timeIntervalSince1970: 1_804_020_002),
+            deletedAt: Date(timeIntervalSince1970: 1_804_020_003)
         )
     ]
 
@@ -463,6 +490,7 @@ import Foundation
     #expect(plan.mutations.map(\.redactedSummary) == [
         "upsert login GitHub alice",
         "upsert note Recovery",
+        "restore note Recovered Note",
         "delete card Everyday Visa"
     ])
     #expect(plan.conflicts.map(\.redactedSummary) == [
@@ -471,6 +499,7 @@ import Foundation
     #expect(plan.updatedStates["local-login-secret-id"]?.remoteID == "remote-login-secret-id")
     #expect(plan.updatedStates["local-delete-secret-id"]?.isDeleted == true)
     #expect(plan.updatedStates["local-remote-deleted-secret-id"]?.remoteID == "remote-missing-secret-id")
+    #expect(plan.updatedStates["local-restore-secret-id"]?.isDeleted == false)
 
     let visibleText = (
         plan.mutations.map(\.redactedSummary)
@@ -1981,6 +2010,10 @@ import Foundation
         statusCode: 200,
         body: #"{"Id":"updated-cipher-secret-id","RevisionDate":"2026-06-04T10:05:00Z"}"#
     )
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: #"{"Id":"restored-cipher-secret-id","RevisionDate":"2026-06-04T10:06:00Z"}"#
+    )
     vaultTransport.enqueue(statusCode: 204, body: "")
     let provider = BitwardenVaultSyncProvider(
         sessionStore: sessionStore,
@@ -2022,6 +2055,12 @@ import Foundation
             ),
             remoteID: "remote-update-secret-id"
         ),
+        .restoreCipher(
+            localID: "local-restore-secret-id",
+            remoteID: "remote-restore-secret-id",
+            kind: .secureNote,
+            title: "Recovered Note"
+        ),
         .deleteCipher(
             localID: "local-delete-secret-id",
             remoteID: "remote-delete-secret-id",
@@ -2030,13 +2069,14 @@ import Foundation
         )
     ])
 
-    #expect(result.acceptedMutationCount == 3)
-    #expect(result.revision == "2026-06-04T10:05:00Z")
+    #expect(result.acceptedMutationCount == 4)
+    #expect(result.revision == "2026-06-04T10:06:00Z")
     #expect(result.assignedRemoteIDs == ["local-create-secret-id": "created-cipher-secret-id"])
-    #expect(vaultTransport.requests.map(\.method) == ["POST", "PUT", "DELETE"])
+    #expect(vaultTransport.requests.map(\.method) == ["POST", "PUT", "PUT", "DELETE"])
     #expect(vaultTransport.requests.map { $0.url.absoluteString } == [
         "https://api.bitwarden.com/ciphers",
         "https://api.bitwarden.com/ciphers/remote-update-secret-id",
+        "https://api.bitwarden.com/ciphers/remote-restore-secret-id/restore",
         "https://api.bitwarden.com/ciphers/remote-delete-secret-id"
     ])
     vaultTransport.requests.forEach { request in

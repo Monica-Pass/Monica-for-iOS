@@ -310,6 +310,7 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
     case upsertFolder(localID: String, remoteID: String?, name: String)
     case deleteFolder(localID: String, remoteID: String?, name: String)
     case upsertCipher(item: BitwardenLocalItemSyncItem, remoteID: String?)
+    case restoreCipher(localID: String, remoteID: String?, kind: BitwardenSyncItemKind, title: String)
     case deleteCipher(localID: String, remoteID: String?, kind: BitwardenSyncItemKind, title: String)
     case upsertSend(
         localID: String,
@@ -354,6 +355,8 @@ public enum BitwardenSyncMutation: Sendable, Equatable {
             "delete Folder \(sanitizedBitwardenTitle(name))"
         case .upsertCipher(let item, _):
             "upsert \(item.redactedSummary)"
+        case .restoreCipher(_, _, let kind, let title):
+            "restore \(kind.displayName) \(sanitizedBitwardenTitle(title))"
         case .deleteCipher(_, _, let kind, let title):
             "delete \(kind.displayName) \(sanitizedBitwardenTitle(title))"
         case .upsertSend(_, _, let title, _, _, _, let maxViews):
@@ -1593,6 +1596,7 @@ public struct BitwardenItemSyncPlanner: Sendable {
         for item in localItems {
             let state = statesByLocalID[item.localID]
             let fingerprint = item.syncFingerprint
+            let remoteItem = remoteByID[state?.remoteID ?? ""]
             if let remoteID = state?.remoteID,
                remoteByID[remoteID] == nil,
                fingerprint != state?.lastSyncedFingerprint {
@@ -1607,6 +1611,30 @@ public struct BitwardenItemSyncPlanner: Sendable {
                 continue
             }
 
+            if state?.isDeleted == true,
+               remoteItem?.deletedAt != nil {
+                mutations.append(
+                    .restoreCipher(
+                        localID: item.localID,
+                        remoteID: state?.remoteID,
+                        kind: state?.kind ?? item.kind,
+                        title: item.title
+                    )
+                )
+                if fingerprint != state?.lastSyncedFingerprint {
+                    mutations.append(.upsertCipher(item: item, remoteID: state?.remoteID))
+                }
+                updatedStates[item.localID] = BitwardenItemSyncState(
+                    localID: item.localID,
+                    remoteID: state?.remoteID,
+                    kind: item.kind,
+                    lastSyncedFingerprint: fingerprint,
+                    lastRemoteRevision: remoteItem?.updatedAt.map { String($0.timeIntervalSince1970) } ?? state?.lastRemoteRevision,
+                    isDeleted: false
+                )
+                continue
+            }
+
             if state?.isDeleted == true || fingerprint != state?.lastSyncedFingerprint {
                 mutations.append(.upsertCipher(item: item, remoteID: state?.remoteID))
                 updatedStates[item.localID] = BitwardenItemSyncState(
@@ -1614,7 +1642,7 @@ public struct BitwardenItemSyncPlanner: Sendable {
                     remoteID: state?.remoteID,
                     kind: item.kind,
                     lastSyncedFingerprint: fingerprint,
-                    lastRemoteRevision: remoteByID[state?.remoteID ?? ""]?.updatedAt.map { String($0.timeIntervalSince1970) } ?? state?.lastRemoteRevision,
+                    lastRemoteRevision: remoteItem?.updatedAt.map { String($0.timeIntervalSince1970) } ?? state?.lastRemoteRevision,
                     isDeleted: false
                 )
             }
@@ -1956,6 +1984,11 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 acceptedMutationCount += 1
                 continue
             }
+            if case .restoreCipher = mutation,
+               response.statusCode == 400 || response.statusCode == 404 {
+                acceptedMutationCount += 1
+                continue
+            }
             if case .deleteFolder = mutation, response.statusCode == 404 {
                 acceptedMutationCount += 1
                 continue
@@ -2140,6 +2173,18 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
                 url: cipherURL(apiURL: apiURL, remoteID: remoteID),
                 headers: jsonHeaders(accessToken: accessToken),
                 body: body
+            )
+        case .restoreCipher(_, let remoteID, _, _):
+            guard let remoteID, !remoteID.isEmpty else {
+                throw BitwardenSyncProviderError.unsupportedOperation
+            }
+            return BitwardenVaultSyncRequest(
+                method: "PUT",
+                url: cipherRestoreURL(apiURL: apiURL, remoteID: remoteID),
+                headers: [
+                    "Authorization": "Bearer \(accessToken)",
+                    "Accept": "application/json"
+                ]
             )
         case .deleteCipher(_, let remoteID, _, _):
             guard let remoteID, !remoteID.isEmpty else {
@@ -2404,6 +2449,16 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         return components?.url ?? apiURL
     }
 
+    private static func cipherRestoreURL(apiURL: URL, remoteID: String) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + [basePath, "ciphers", remoteID, "restore"]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
     private static func attachmentPlanURL(apiURL: URL, cipherRemoteID: String) -> URL {
         var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
         let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
@@ -2596,7 +2651,7 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             remoteID == nil ? localID : nil
         case .upsertFileSend(let localID, let remoteID, _, _, _, _, _, _, _, _, _):
             remoteID == nil ? localID : nil
-        case .deleteFolder, .deleteCipher, .deleteSend:
+        case .deleteFolder, .restoreCipher, .deleteCipher, .deleteSend:
             nil
         }
     }
