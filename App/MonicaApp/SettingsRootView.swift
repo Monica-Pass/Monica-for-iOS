@@ -812,6 +812,48 @@ struct SettingsRootView: View {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "账号", value: session.bitwardenAuthenticationState.label)
                     AndroidParityInfoRow(title: "同步", value: session.bitwardenSyncState.label)
+                    if let preview = session.bitwardenSyncPreview {
+                        AndroidParityInfoRow(title: "远端", value: "\(preview.remoteItemCount) 个条目，\(preview.remoteSendCount) 个 Send")
+                        AndroidParityInfoRow(title: "文件夹", value: "\(preview.remoteFolderCount) 个")
+                        AndroidParityInfoRow(title: "Premium", value: preview.premiumSummary)
+                        AndroidParityInfoRow(title: "类型", value: preview.kindSummary)
+                        AndroidParityInfoRow(title: "附件", value: preview.attachmentSummary)
+                    }
+                    if !session.bitwardenPendingMutationBatches.isEmpty {
+                        AndroidParityDivider()
+                        ForEach(Array(session.bitwardenPendingMutationBatches.prefix(3))) { batch in
+                            AndroidParityInfoRow(title: "待重试", value: batch.redactedSummary)
+                            AndroidParityInfoRow(title: "最近错误", value: batch.lastErrorSummary)
+                            ForEach(Array(batch.redactedSummaries.prefix(3)).indices, id: \.self) { index in
+                                AndroidParityInfoRow(
+                                    title: "变更 \(index + 1)",
+                                    value: batch.redactedSummaries[index]
+                                )
+                            }
+                        }
+                        Button {
+                            Task {
+                                try? await session.retryBitwardenPendingMutationQueue()
+                            }
+                        } label: {
+                            Label("重试队列", systemImage: "arrow.clockwise")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(
+                            !session.bitwardenAuthenticationState.isConnected
+                                || session.vaultState != .unlocked
+                                || session.bitwardenSyncState.isRunning
+                        )
+                        Button(role: .destructive) {
+                            try? session.clearBitwardenPendingMutationQueue()
+                        } label: {
+                            Label("清空队列", systemImage: "trash")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+                        .disabled(session.vaultState != .unlocked || session.bitwardenSyncState.isRunning)
+                    }
                     if session.bitwardenAuthenticationState.isConnected {
                         Button(role: .destructive) {
                             try? session.signOutFromBitwarden()
@@ -821,6 +863,47 @@ struct SettingsRootView: View {
                         }
                         .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
                         .disabled(session.bitwardenSyncState.isRunning)
+                    } else if session.bitwardenAuthenticationState.isTwoFactorRequired {
+                        if !session.bitwardenTwoFactorProviders.isEmpty {
+                            Picker("验证方式", selection: $session.bitwardenTwoFactorProviderID) {
+                                ForEach(session.bitwardenTwoFactorProviders) { provider in
+                                    Text(provider.displayName).tag(provider.providerID)
+                                }
+                            }
+                            .pickerStyle(.segmented)
+                        }
+                        TextField("验证码", text: $session.bitwardenTwoFactorCode)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .keyboardType(.numberPad)
+                            .textFieldStyle(AndroidParityTextFieldStyle())
+                        Toggle("记住此设备", isOn: $session.bitwardenRememberTwoFactorDevice)
+                            .tint(AndroidParityPalette.primary)
+                        if session.canRequestBitwardenEmailTwoFactorCode {
+                            Button {
+                                Task {
+                                    try? await session.requestBitwardenEmailTwoFactorCode()
+                                }
+                            } label: {
+                                Label("发送邮件验证码", systemImage: "envelope.badge")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                            .disabled(session.bitwardenSyncState.isRunning)
+                        }
+                        Button {
+                            Task {
+                                try? await session.completeBitwardenTwoFactorSignIn()
+                            }
+                        } label: {
+                            Label("验证并登录", systemImage: "checkmark.shield")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                        .disabled(
+                            session.bitwardenSyncState.isRunning
+                                || session.bitwardenTwoFactorCode.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
                     } else {
                         TextField("服务器 URL", text: $session.bitwardenServerURL)
                             .textInputAutocapitalization(.never)
@@ -889,7 +972,7 @@ struct SettingsRootView: View {
                             try? await session.pushLocalBitwardenChanges()
                         }
                     } label: {
-                        Label("推送 Send", systemImage: "arrow.up.circle")
+                        Label("推送本地变更", systemImage: "arrow.up.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
