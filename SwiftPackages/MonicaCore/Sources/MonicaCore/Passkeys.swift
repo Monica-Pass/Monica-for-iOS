@@ -16,6 +16,73 @@ public enum PasskeyCredentialError: Error, Sendable, Equatable {
     case keychainUnexpectedStatus(OSStatus)
 }
 
+public enum PasskeyRelyingPartyIDNormalizer {
+    public static func normalize(_ relyingPartyID: String?) -> String? {
+        guard var value = relyingPartyID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !value.isEmpty
+        else {
+            return nil
+        }
+        while value.hasSuffix(".") {
+            value.removeLast()
+        }
+        guard !value.isEmpty,
+              value.rangeOfCharacter(from: .whitespacesAndNewlines) == nil
+        else {
+            return nil
+        }
+
+        let lowercased = value.lowercased()
+        let disallowedCharacters = CharacterSet(charactersIn: ":/?#[]@\\%")
+        guard lowercased.rangeOfCharacter(from: disallowedCharacters) == nil,
+              let host = URL(string: "https://\(lowercased)")?.host?.lowercased()
+        else {
+            return nil
+        }
+
+        let normalized = host.trimmingCharacters(in: CharacterSet(charactersIn: "."))
+        guard normalized.count <= 253,
+              normalized.isValidPasskeyRelyingPartyHost
+        else {
+            return nil
+        }
+        return normalized
+    }
+
+    public static func host(_ host: String, isAllowedFor relyingPartyID: String) -> Bool {
+        guard let normalizedHost = normalize(host),
+              let normalizedRelyingPartyID = normalize(relyingPartyID)
+        else {
+            return false
+        }
+        return normalizedHost == normalizedRelyingPartyID
+            || normalizedHost.hasSuffix(".\(normalizedRelyingPartyID)")
+    }
+}
+
+private extension String {
+    var isValidPasskeyRelyingPartyHost: Bool {
+        let labels = split(separator: ".", omittingEmptySubsequences: false)
+        guard !labels.isEmpty else {
+            return false
+        }
+        return labels.allSatisfy { label in
+            guard !label.isEmpty,
+                  label.count <= 63,
+                  label.first != "-",
+                  label.last != "-"
+            else {
+                return false
+            }
+            return label.unicodeScalars.allSatisfy { scalar in
+                (scalar.value >= 0x61 && scalar.value <= 0x7A)
+                    || (scalar.value >= 0x30 && scalar.value <= 0x39)
+                    || scalar.value == 0x2D
+            }
+        }
+    }
+}
+
 public protocol PasskeyPrivateKeyStore: Sendable {
     func savePrivateKey(_ privateKey: Data, credentialID: Data) throws -> String
     func loadPrivateKey(credentialID: Data) throws -> Data?
@@ -160,7 +227,9 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         userHandle: Data,
         clientDataHash: Data
     ) throws -> MonicaPasskeyRegistrationResult {
-        let normalizedRelyingPartyID = try normalizeRequired(relyingPartyID, error: .invalidRelyingPartyID)
+        guard let normalizedRelyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(relyingPartyID) else {
+            throw PasskeyCredentialError.invalidRelyingPartyID
+        }
         let normalizedUsername = try normalizeRequired(username, error: .invalidUsername)
         guard !userHandle.isEmpty else {
             throw PasskeyCredentialError.invalidUserHandle
@@ -201,7 +270,9 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         userHandle: Data,
         clientDataHash: Data
     ) throws -> MonicaPasskeyAssertionResult {
-        let normalizedRelyingPartyID = try normalizeRequired(relyingPartyID, error: .invalidRelyingPartyID)
+        guard let normalizedRelyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(relyingPartyID) else {
+            throw PasskeyCredentialError.invalidRelyingPartyID
+        }
         guard !credentialID.isEmpty else {
             throw PasskeyCredentialError.invalidCredentialID
         }

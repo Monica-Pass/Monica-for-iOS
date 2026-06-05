@@ -115,6 +115,65 @@ import MonicaCore
     #expect(!String(decoding: registration.attestationObject, as: UTF8.self).contains("github-user-handle"))
 }
 
+@Test func passkeyRelyingPartyIDsAreNormalizedBeforeUse() throws {
+    let store = MemoryPasskeyPrivateKeyStore()
+    let manager = MonicaPasskeyCredentialManager(
+        privateKeyStore: store,
+        randomBytes: { count in Array(repeating: 0x3C, count: count) }
+    )
+
+    let registration = try manager.createRegistration(
+        relyingPartyID: "  Bücher.Example.  ",
+        username: "joyin@example.com",
+        userHandle: Data("unicode-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCA, count: 32)
+    )
+
+    #expect(registration.relyingPartyID == "xn--bcher-kva.example")
+
+    let assertion = try manager.createAssertion(
+        relyingPartyID: "BÜCHER.EXAMPLE.",
+        credentialID: registration.credentialID,
+        userHandle: Data("unicode-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCB, count: 32)
+    )
+
+    #expect(assertion.relyingPartyID == "xn--bcher-kva.example")
+    #expect(
+        try manager.verifyAssertion(
+            assertion,
+            publicKeyCOSE: registration.publicKeyCOSE
+        )
+    )
+}
+
+@Test func passkeyRelyingPartyIDsRejectNonHostInput() throws {
+    let manager = MonicaPasskeyCredentialManager(
+        privateKeyStore: MemoryPasskeyPrivateKeyStore(),
+        randomBytes: { count in Array(repeating: 0x4D, count: count) }
+    )
+    let userHandle = Data("github-user-handle".utf8)
+    let clientDataHash = Data(repeating: 0xCA, count: 32)
+
+    for invalidRelyingPartyID in [
+        "",
+        "https://example.com",
+        "bad_host.example",
+        "-example.com",
+        "example..com",
+        "example.com/path"
+    ] {
+        #expect(throws: PasskeyCredentialError.invalidRelyingPartyID) {
+            try manager.createRegistration(
+                relyingPartyID: invalidRelyingPartyID,
+                username: "joyin@example.com",
+                userHandle: userHandle,
+                clientDataHash: clientDataHash
+            )
+        }
+    }
+}
+
 @Test func passkeyAssertionSignsAuthenticatorDataAndClientDataHash() throws {
     let store = MemoryPasskeyPrivateKeyStore()
     let manager = MonicaPasskeyCredentialManager(
