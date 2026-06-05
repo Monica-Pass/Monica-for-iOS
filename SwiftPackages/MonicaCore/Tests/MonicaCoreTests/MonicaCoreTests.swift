@@ -251,6 +251,36 @@ import MonicaCore
     }
 }
 
+@Test func steamAuthenticatorImportParserBuildsTotpDraftWithoutLeakingSecrets() throws {
+    let sharedSecret = Data("steam-shared-secret".utf8).base64EncodedString()
+    let data = Data(
+        """
+        {
+          "account_name": "alice",
+          "device_id": "android-device-id-secret",
+          "revocation_code": "revocation-code-secret",
+          "identity_secret": "identity-secret",
+          "shared_secret": "\(sharedSecret)"
+        }
+        """.utf8
+    )
+
+    let draft = try SteamAuthenticatorImportParser.parse(data)
+
+    #expect(draft.title == "Steam")
+    #expect(draft.issuer == "Steam")
+    #expect(draft.accountName == "alice")
+    #expect(draft.secret == "ON2GKYLNFVZWQYLSMVSC243FMNZGK5A")
+    #expect(draft.period == 30)
+    #expect(draft.digits == 6)
+    #expect(draft.algorithm == .sha1)
+    #expect(draft.redactedSummary == "Steam alice")
+    #expect(!draft.redactedSummary.contains(sharedSecret))
+    #expect(!draft.redactedSummary.contains("identity-secret"))
+    #expect(!draft.redactedSummary.contains("android-device-id-secret"))
+    #expect(!draft.redactedSummary.contains("revocation-code-secret"))
+}
+
 @Test func passwordGeneratorCreatesPolicyCompliantPassword() throws {
     var byteCursor = 0
     let password = try PasswordGenerator.generate(

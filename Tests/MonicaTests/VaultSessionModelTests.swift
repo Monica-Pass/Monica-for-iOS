@@ -7563,6 +7563,54 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(engine.createdTotpEntries.isEmpty)
     }
 
+    func testSteamAuthenticatorImportPopulatesTotpDraftWithoutSavingOrLeakingSecrets() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+        let sharedSecret = Data("steam-shared-secret".utf8).base64EncodedString()
+
+        try model.importSteamAuthenticator(
+            Data(
+                """
+                {
+                  "account_name": "alice",
+                  "shared_secret": "\(sharedSecret)",
+                  "identity_secret": "identity-secret",
+                  "device_id": "android-device-id-secret",
+                  "revocation_code": "revocation-code-secret"
+                }
+                """.utf8
+            )
+        )
+
+        XCTAssertEqual(model.totpTitle, "Steam")
+        XCTAssertEqual(model.totpSecret, "ON2GKYLNFVZWQYLSMVSC243FMNZGK5A")
+        XCTAssertEqual(model.totpIssuer, "Steam")
+        XCTAssertEqual(model.totpAccountName, "alice")
+        XCTAssertEqual(model.totpPeriod, 30)
+        XCTAssertEqual(model.totpDigits, 6)
+        XCTAssertEqual(model.totpAlgorithm, "SHA1")
+        XCTAssertEqual(model.entryOperationState, .succeeded("已导入 Steam alice"))
+        XCTAssertTrue(model.totpEntries.isEmpty)
+        XCTAssertTrue(engine.createdTotpEntries.isEmpty)
+        XCTAssertFalse(model.entryOperationState.label.contains(sharedSecret))
+        XCTAssertFalse(model.entryOperationState.label.contains("identity-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("android-device-id-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("revocation-code-secret"))
+    }
+
+    func testSettingsExposeSteamImportAndAutoFillPolicyManagement() throws {
+        let sourceURL = try repositoryFileURL("App/MonicaApp/SettingsRootView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("导入 Steam maFile"))
+        XCTAssertTrue(source.contains("importSteamAuthenticator(from: fileURL)"))
+        XCTAssertTrue(source.contains("Blocked field"))
+        XCTAssertTrue(source.contains("Save blocked target"))
+        XCTAssertTrue(source.contains("clearAutoFillPolicy()"))
+    }
+
     func testScannedTotpQRCodeFailureUsesReadableMessageWithoutChangingDraft() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
@@ -8342,6 +8390,48 @@ final class VaultSessionModelTests: XCTestCase {
             .joined(separator: " ")
         XCTAssertFalse(userVisibleText.contains("new-autofill-secret"))
         XCTAssertFalse(userVisibleText.contains("alice@example.com"))
+    }
+
+    func testAutoFillPolicyPersistsAndBlocksConfiguredSaveTargetsWithoutLeakingRequestSecrets() throws {
+        let policyStore = MemoryAppAutoFillPolicyStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            autoFillPolicyStore: policyStore
+        )
+        try unlockNewVault(model)
+
+        model.updateAutoFillPolicy(
+            blockedFields: ["password-confirmation", " password-confirmation "],
+            blockedSaveTargets: ["https://blocked.example.com/login?token=target-secret"]
+        )
+
+        XCTAssertEqual(model.autoFillPolicy.blockedFields, ["password-confirmation"])
+        XCTAssertEqual(model.autoFillPolicy.blockedSaveTargets, ["https://blocked.example.com/login?token=target-secret"])
+        XCTAssertEqual(model.autoFillPolicyRows.map(\.value), ["1", "1"])
+
+        let restored = AppSessionModel(autoFillPolicyStore: policyStore)
+        XCTAssertEqual(restored.autoFillPolicy.blockedFields, ["password-confirmation"])
+
+        XCTAssertThrowsError(
+            try model.saveAutoFillCredential(
+                AppAutoFillCredentialSaveRequest(
+                    serviceIdentifier: "https://blocked.example.com/session?token=request-secret",
+                    username: "blocked-user@example.com",
+                    password: "blocked-password-secret",
+                    title: "Blocked"
+                ),
+                projectTitle: "Personal"
+            )
+        ) { error in
+            XCTAssertEqual(error as? AppAutoFillPolicyError, .saveTargetBlocked)
+        }
+
+        XCTAssertTrue(model.loginEntries.isEmpty)
+        XCTAssertEqual(model.entryOperationState, .failed("AutoFill 保存目标已被拦截。"))
+        XCTAssertFalse(model.entryOperationState.label.contains("blocked-user@example.com"))
+        XCTAssertFalse(model.entryOperationState.label.contains("blocked-password-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("request-secret"))
+        XCTAssertFalse(model.entryOperationState.label.contains("target-secret"))
     }
 
     func testWebDAVBackupUploadsActiveVaultFileAndStoresReceiptState() async throws {
