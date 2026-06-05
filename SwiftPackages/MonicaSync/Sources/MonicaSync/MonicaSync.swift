@@ -3787,6 +3787,20 @@ public struct CloudFileWriteReceipt: Sendable, Equatable {
     }
 }
 
+public struct CloudFileDeleteReceipt: Sendable, Equatable {
+    public let provider: CloudFileProviderKind
+    public let itemID: String
+
+    public init(provider: CloudFileProviderKind, itemID: String) {
+        self.provider = provider
+        self.itemID = itemID
+    }
+
+    public var redactedSummary: String {
+        "\(provider.displayName) 已删除远端文件"
+    }
+}
+
 public protocol CloudFileProvider: Sendable {
     var kind: CloudFileProviderKind { get }
 
@@ -3795,11 +3809,21 @@ public protocol CloudFileProvider: Sendable {
     func downloadFile(id: String) async throws -> CloudFileDownload
     func uploadFile(named fileName: String, data: Data) async throws -> CloudFileWriteReceipt
     func overwriteFile(id: String, data: Data, fileName: String, expectedRevision: String?) async throws -> CloudFileWriteReceipt
+    func deleteFile(id: String) async throws -> CloudFileDeleteReceipt
+    func renameFile(id: String, newName: String) async throws -> CloudFileWriteReceipt
 }
 
 public extension CloudFileProvider {
     func overwriteFile(id: String, data: Data, fileName: String) async throws -> CloudFileWriteReceipt {
         try await overwriteFile(id: id, data: data, fileName: fileName, expectedRevision: nil)
+    }
+
+    func deleteFile(id: String) async throws -> CloudFileDeleteReceipt {
+        throw CloudFileProviderError.unsupportedOperation(provider: kind)
+    }
+
+    func renameFile(id: String, newName: String) async throws -> CloudFileWriteReceipt {
+        throw CloudFileProviderError.unsupportedOperation(provider: kind)
     }
 }
 
@@ -3968,6 +3992,29 @@ public struct OneDriveCloudFileProvider: CloudFileProvider {
         try validateSuccess(response, allowedStatusCodes: [200, 201])
         let item = try OneDriveDriveItem(response.body)
         return writeReceipt(from: item, data: data, fallbackFileName: fileName)
+    }
+
+    public func deleteFile(id: String) async throws -> CloudFileDeleteReceipt {
+        let response = try await sendGraphRequest(
+            method: "DELETE",
+            path: "/me/drive/items/\(Self.percentEncodePathComponent(id))"
+        )
+        try validateSuccess(response, allowedStatusCodes: [200, 202, 204])
+        return CloudFileDeleteReceipt(provider: kind, itemID: id)
+    }
+
+    public func renameFile(id: String, newName: String) async throws -> CloudFileWriteReceipt {
+        let body = try JSONSerialization.data(withJSONObject: ["name": sanitizedCloudFileName(newName)])
+        let response = try await sendGraphRequest(
+            method: "PATCH",
+            path: "/me/drive/items/\(Self.percentEncodePathComponent(id))",
+            headers: ["Content-Type": "application/json"],
+            accept: "application/json",
+            body: body
+        )
+        try validateSuccess(response, allowedStatusCodes: [200])
+        let item = try OneDriveDriveItem(response.body)
+        return writeReceipt(from: item, data: Data(repeating: 0, count: item.byteCount), fallbackFileName: newName)
     }
 
     private func loadDriveItem(id: String) async throws -> OneDriveDriveItem {
@@ -4280,6 +4327,34 @@ public struct WebDAVDownloadedBackup: Sendable, Equatable {
     }
 }
 
+public struct WebDAVBackupItem: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let fileName: String
+    public let byteCount: Int
+    public let modifiedAt: Date?
+
+    public init(
+        fileName: String,
+        byteCount: Int,
+        modifiedAt: Date? = nil
+    ) {
+        let sanitized = sanitizedCloudFileName(fileName)
+        self.id = sanitized
+        self.fileName = sanitized
+        self.byteCount = max(0, byteCount)
+        self.modifiedAt = modifiedAt
+    }
+
+    public var isPermanent: Bool {
+        let base = fileName.replacingOccurrences(of: ".mdbx", with: "")
+        return base.hasSuffix("_permanent")
+    }
+
+    public var redactedSummary: String {
+        "\(fileName) \(byteCount) 字节"
+    }
+}
+
 public struct WebDAVRestorePreview: Sendable, Equatable {
     public let fileName: String
     public let byteCount: Int
@@ -4421,6 +4496,90 @@ public struct WebDAVClient {
         )
     }
 
+    public func listBackups() async throws -> [WebDAVBackupItem] {
+        let response = try await transport.send(
+            WebDAVTransportRequest(
+                method: "PROPFIND",
+                url: endpoint.baseURL,
+                headers: [
+                    "Authorization": endpoint.authorizationHeader,
+                    "Depth": "1",
+                    "Accept": "application/xml,text/xml"
+                ]
+            )
+        )
+        guard response.statusCode == 207 || response.statusCode == 200 else {
+            throw WebDAVError.unexpectedStatus(operation: "list", statusCode: response.statusCode)
+        }
+        return Self.parseBackupItems(from: response.body)
+            .filter { !$0.fileName.hasSuffix(".sha256") }
+            .filter { $0.fileName.lowercased().hasSuffix(".mdbx") }
+            .sorted(by: { lhs, rhs in
+                switch (lhs.modifiedAt, rhs.modifiedAt) {
+                case let (lhsDate?, rhsDate?):
+                    if lhsDate == rhsDate { return lhs.fileName < rhs.fileName }
+                    return lhsDate > rhsDate
+                case (_?, nil):
+                    return true
+                case (nil, _?):
+                    return false
+                case (nil, nil):
+                    return lhs.fileName < rhs.fileName
+                }
+            })
+    }
+
+    public func deleteBackup(fileName: String) async throws {
+        try await deleteFile(fileName: sanitizedCloudFileName(fileName), operation: "delete")
+        do {
+            try await deleteFile(
+                fileName: WebDAVBackupPackage.sidecarFileName(for: sanitizedCloudFileName(fileName)),
+                operation: "delete checksum"
+            )
+        } catch WebDAVError.unexpectedStatus(let operation, let statusCode)
+            where operation == "delete checksum" && statusCode == 404 {
+            return
+        }
+    }
+
+    public func setBackupPermanent(fileName: String, isPermanent: Bool) async throws -> WebDAVBackupItem {
+        let currentName = sanitizedCloudFileName(fileName)
+        let nextName = permanentFileName(for: currentName, isPermanent: isPermanent)
+        guard currentName != nextName else {
+            return WebDAVBackupItem(fileName: currentName, byteCount: 0)
+        }
+        let response = try await transport.send(
+            WebDAVTransportRequest(
+                method: "MOVE",
+                url: endpoint.url(for: currentName),
+                headers: [
+                    "Authorization": endpoint.authorizationHeader,
+                    "Destination": endpoint.url(for: nextName).absoluteString,
+                    "Overwrite": "F"
+                ]
+            )
+        )
+        guard [200, 201, 204].contains(response.statusCode) else {
+            throw WebDAVError.unexpectedStatus(operation: "mark permanent", statusCode: response.statusCode)
+        }
+        return WebDAVBackupItem(fileName: nextName, byteCount: 0)
+    }
+
+    public func cleanupBackups(
+        _ backups: [WebDAVBackupItem],
+        olderThan cutoff: Date
+    ) async throws -> [WebDAVBackupItem] {
+        var deleted: [WebDAVBackupItem] = []
+        for backup in backups where !backup.isPermanent {
+            guard let modifiedAt = backup.modifiedAt, modifiedAt < cutoff else {
+                continue
+            }
+            try await deleteBackup(fileName: backup.fileName)
+            deleted.append(backup)
+        }
+        return deleted
+    }
+
     private func downloadSidecarChecksum(fileName: String) async throws -> String {
         let response = try await transport.send(
             WebDAVTransportRequest(
@@ -4448,6 +4607,67 @@ public struct WebDAVClient {
         }
 
         return checksum
+    }
+
+    private func deleteFile(fileName: String, operation: String) async throws {
+        let response = try await transport.send(
+            WebDAVTransportRequest(
+                method: "DELETE",
+                url: endpoint.url(for: fileName),
+                headers: ["Authorization": endpoint.authorizationHeader]
+            )
+        )
+        guard [200, 202, 204].contains(response.statusCode) else {
+            throw WebDAVError.unexpectedStatus(operation: operation, statusCode: response.statusCode)
+        }
+    }
+
+    private func permanentFileName(for fileName: String, isPermanent: Bool) -> String {
+        let suffix = "_permanent"
+        let extensionText = ".mdbx"
+        guard fileName.lowercased().hasSuffix(extensionText) else {
+            return isPermanent && !fileName.hasSuffix(suffix) ? fileName + suffix : fileName.replacingOccurrences(of: suffix, with: "")
+        }
+        let base = String(fileName.dropLast(extensionText.count))
+        if isPermanent {
+            return base.hasSuffix(suffix) ? fileName : "\(base)\(suffix)\(extensionText)"
+        }
+        return "\(base.replacingOccurrences(of: suffix, with: ""))\(extensionText)"
+    }
+
+    private static func parseBackupItems(from data: Data) -> [WebDAVBackupItem] {
+        guard let xml = String(data: data, encoding: .utf8) else {
+            return []
+        }
+        return xml
+            .components(separatedBy: "</")
+            .joined(separator: "</")
+            .matches(pattern: #"<[^:>]*:?response\b[\s\S]*?</[^:>]*:?response>"#)
+            .compactMap { response in
+                guard let href = response.firstMatch(pattern: #"<[^:>]*:?href[^>]*>([\s\S]*?)</[^:>]*:?href>"#),
+                      !response.contains("<d:collection") && !response.contains("<collection")
+                else {
+                    return nil
+                }
+                let fileName = href
+                    .removingPercentEncoding?
+                    .split(separator: "/")
+                    .last
+                    .map(String.init) ?? href
+                let byteCount = response.firstMatch(pattern: #"<[^:>]*:?getcontentlength[^>]*>([\s\S]*?)</[^:>]*:?getcontentlength>"#)
+                    .flatMap { Int($0.trimmingCharacters(in: .whitespacesAndNewlines)) } ?? 0
+                let modifiedAt = response.firstMatch(pattern: #"<[^:>]*:?getlastmodified[^>]*>([\s\S]*?)</[^:>]*:?getlastmodified>"#)
+                    .flatMap(Self.httpDate)
+                return WebDAVBackupItem(fileName: fileName, byteCount: byteCount, modifiedAt: modifiedAt)
+            }
+    }
+
+    private static func httpDate(_ value: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss zzz"
+        return formatter.date(from: value.trimmingCharacters(in: .whitespacesAndNewlines))
     }
 }
 
@@ -4530,6 +4750,35 @@ private func sanitizedCloudFileName(_ value: String) -> String {
         .map(String.init) ?? value
     let sanitized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
     return sanitized.isEmpty ? "未命名文件" : sanitized
+}
+
+private extension String {
+    func matches(pattern: String) -> [String] {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return []
+        }
+        let range = NSRange(startIndex..<endIndex, in: self)
+        return regex.matches(in: self, range: range).compactMap { result in
+            guard let matchRange = Range(result.range, in: self) else {
+                return nil
+            }
+            return String(self[matchRange])
+        }
+    }
+
+    func firstMatch(pattern: String) -> String? {
+        guard let regex = try? NSRegularExpression(pattern: pattern) else {
+            return nil
+        }
+        let range = NSRange(startIndex..<endIndex, in: self)
+        guard let result = regex.firstMatch(in: self, range: range),
+              result.numberOfRanges > 1,
+              let matchRange = Range(result.range(at: 1), in: self)
+        else {
+            return nil
+        }
+        return String(self[matchRange])
+    }
 }
 
 private extension Data {

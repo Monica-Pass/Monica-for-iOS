@@ -10785,6 +10785,10 @@ private final class RecordingBiometricUnlockAuthorizer: BiometricUnlockAuthorize
 private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @unchecked Sendable {
     private(set) var uploads: [(endpoint: WebDAVEndpoint, package: WebDAVBackupPackage)] = []
     private(set) var downloads: [(endpoint: WebDAVEndpoint, fileName: String)] = []
+    private(set) var listRequests: [WebDAVEndpoint] = []
+    private(set) var deleteRequests: [(endpoint: WebDAVEndpoint, fileName: String)] = []
+    private(set) var permanentRequests: [(endpoint: WebDAVEndpoint, fileName: String, isPermanent: Bool)] = []
+    private(set) var cleanupRequests: [(endpoint: WebDAVEndpoint, backups: [WebDAVBackupItem], cutoff: Date)] = []
     var uploadReceipt = WebDAVBackupReceipt(
         remoteURL: URL(string: "https://dav.example.com/backups/mobile.mdbx")!,
         byteCount: 11,
@@ -10798,6 +10802,13 @@ private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @un
         sha256: "remote-sha"
     )
     var downloadError: Error?
+    var backups: [WebDAVBackupItem] = [
+        WebDAVBackupItem(fileName: "mobile.mdbx", byteCount: 11)
+    ]
+    var listError: Error?
+    var deleteError: Error?
+    var permanentError: Error?
+    var cleanupError: Error?
 
     func upload(endpoint: WebDAVEndpoint, package: WebDAVBackupPackage) async throws -> WebDAVBackupReceipt {
         uploads.append((endpoint, package))
@@ -10813,6 +10824,60 @@ private final class RecordingAppWebDAVBackupService: AppWebDAVBackupService, @un
             throw downloadError
         }
         return downloadedBackup
+    }
+
+    func listBackups(endpoint: WebDAVEndpoint) async throws -> [WebDAVBackupItem] {
+        listRequests.append(endpoint)
+        if let listError {
+            throw listError
+        }
+        return backups
+    }
+
+    func deleteBackup(endpoint: WebDAVEndpoint, fileName: String) async throws {
+        deleteRequests.append((endpoint, fileName))
+        if let deleteError {
+            throw deleteError
+        }
+        backups.removeAll { $0.fileName == fileName }
+    }
+
+    func setBackupPermanent(
+        endpoint: WebDAVEndpoint,
+        fileName: String,
+        isPermanent: Bool
+    ) async throws -> WebDAVBackupItem {
+        permanentRequests.append((endpoint, fileName, isPermanent))
+        if let permanentError {
+            throw permanentError
+        }
+        let baseName = fileName.replacingOccurrences(of: ".mdbx", with: "")
+        let nextName = isPermanent
+            ? "\(baseName)_permanent.mdbx"
+            : baseName.replacingOccurrences(of: "_permanent", with: "") + ".mdbx"
+        let item = WebDAVBackupItem(fileName: nextName, byteCount: backups.first { $0.fileName == fileName }?.byteCount ?? 0)
+        backups.removeAll { $0.fileName == fileName }
+        backups.append(item)
+        return item
+    }
+
+    func cleanupBackups(
+        endpoint: WebDAVEndpoint,
+        backups: [WebDAVBackupItem],
+        olderThan cutoff: Date
+    ) async throws -> [WebDAVBackupItem] {
+        cleanupRequests.append((endpoint, backups, cutoff))
+        if let cleanupError {
+            throw cleanupError
+        }
+        let deleted = backups.filter { item in
+            guard !item.isPermanent, let modifiedAt = item.modifiedAt else {
+                return false
+            }
+            return modifiedAt < cutoff
+        }
+        self.backups.removeAll { item in deleted.contains(item) }
+        return deleted
     }
 }
 

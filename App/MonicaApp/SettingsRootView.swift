@@ -200,6 +200,21 @@ struct SettingsRootView: View {
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                     .disabled(!session.canUnlockRememberedVaultWithKeychain || session.vaultKeychainState.isRunning)
+                    AndroidParityDivider()
+                    Button {
+                        session.presentQuickSetup()
+                    } label: {
+                        Label("Quick Setup", systemImage: "wand.and.stars")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    Button {
+                        session.presentExtensions()
+                    } label: {
+                        Label("Extensions", systemImage: "square.grid.2x2")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
             }
 
@@ -320,6 +335,12 @@ struct SettingsRootView: View {
                     AndroidParityInfoRow(title: "App Group", value: environment.appGroupIdentifier)
                     ForEach(session.autoFillPolicyRows, id: \.title) { row in
                         AndroidParityInfoRow(title: row.title, value: row.value)
+                    }
+                    ForEach(session.autoFillSystemDiagnosticRows) { row in
+                        AndroidParityInfoRow(title: row.title, value: row.value)
+                        Text(row.detail)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
                     TextField("Blocked field", text: $autoFillBlockedFieldInput)
                         .textInputAutocapitalization(.never)
@@ -443,6 +464,42 @@ struct SettingsRootView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                }
+            }
+
+            AndroidParitySection(title: "Timeline") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    Picker("类型", selection: Binding(
+                        get: { session.operationTimelineFilterKind?.rawValue ?? "all" },
+                        set: { value in
+                            session.operationTimelineFilterKind = value == "all" ? nil : UnifiedVaultItemKind(rawValue: value)
+                        }
+                    )) {
+                        Text("全部").tag("all")
+                        ForEach(UnifiedVaultItemKind.allCases, id: \.rawValue) { kind in
+                            Text(kind.displayName).tag(kind.rawValue)
+                        }
+                    }
+                    Picker("动作", selection: Binding(
+                        get: { session.operationTimelineFilterAction?.rawValue ?? "all" },
+                        set: { value in
+                            session.operationTimelineFilterAction = value == "all" ? nil : AppOperationTimelineAction(rawValue: value)
+                        }
+                    )) {
+                        Text("全部").tag("all")
+                        ForEach(AppOperationTimelineAction.allCasesForSettings, id: \.rawValue) { action in
+                            Text(action.title).tag(action.rawValue)
+                        }
+                    }
+                    ForEach(session.filteredOperationTimelineEvents.prefix(20)) { event in
+                        AndroidParityOperationTimelineRow(event: event)
+                        if event.id != session.filteredOperationTimelineEvents.prefix(20).last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                    if session.filteredOperationTimelineEvents.isEmpty {
+                        AndroidParityInfoRow(title: "记录", value: "暂无")
+                    }
                 }
             }
 
@@ -845,18 +902,42 @@ struct SettingsRootView: View {
                         AndroidParityDivider()
                         ForEach(items.prefix(3)) { item in
                             AndroidParityInfoRow(title: item.name, value: item.redactedSummary)
-                            Button {
-                                Task {
-                                    try? await session.downloadCloudFileRestorePreview(
-                                        itemID: item.id,
-                                        provider: .oneDrive
-                                    )
+                            HStack(spacing: 10) {
+                                Button {
+                                    Task {
+                                        try? await session.downloadCloudFileRestorePreview(
+                                            itemID: item.id,
+                                            provider: .oneDrive
+                                        )
+                                    }
+                                } label: {
+                                    Label("预览", systemImage: "arrow.down.doc")
+                                        .frame(maxWidth: .infinity)
                                 }
-                            } label: {
-                                Label("下载预览", systemImage: "arrow.down.doc")
-                                    .frame(maxWidth: .infinity)
+                                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                Button {
+                                    Task {
+                                        try? await session.setCloudFileBackupItemPermanent(
+                                            provider: .oneDrive,
+                                            item: item,
+                                            isPermanent: !item.name.contains("_permanent")
+                                        )
+                                    }
+                                } label: {
+                                    Label(item.name.contains("_permanent") ? "取消永久" : "永久", systemImage: "pin")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                Button(role: .destructive) {
+                                    Task {
+                                        try? await session.deleteCloudFileBackupItem(provider: .oneDrive, item: item)
+                                    }
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .frame(width: 42, height: 42)
+                                }
+                                .buttonStyle(.plain)
                             }
-                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                             .disabled(session.vaultState != .unlocked || session.cloudFileState.isRunning)
                         }
                     }
@@ -1057,6 +1138,19 @@ struct SettingsRootView: View {
                         .autocorrectionDisabled()
                         .textFieldStyle(AndroidParityTextFieldStyle())
                     AndroidParityInfoRow(title: "状态", value: session.webDAVBackupState.label)
+                    AndroidParityInfoRow(title: "后台备份", value: session.webDAVBackgroundBackupSchedulerState.label)
+                    Toggle("后台自动备份", isOn: Binding(
+                        get: { session.webDAVBackgroundBackupEnabled },
+                        set: { enabled in
+                            if enabled {
+                                Task { await session.scheduleBackgroundWebDAVBackup() }
+                            } else {
+                                session.disableBackgroundWebDAVBackup()
+                            }
+                        }
+                    ))
+                    .font(.headline.weight(.heavy))
+                    .tint(AndroidParityPalette.primary)
                     Button {
                         Task {
                             try? await session.uploadActiveVaultBackup()
@@ -1077,6 +1171,66 @@ struct SettingsRootView: View {
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                     .disabled(session.vaultState != .unlocked || session.webDAVBackupState.isRunning)
+                    Button {
+                        Task {
+                            try? await session.refreshWebDAVBackupItems()
+                        }
+                    } label: {
+                        Label("刷新备份列表", systemImage: "list.bullet.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(session.vaultState != .unlocked || session.webDAVBackupState.isRunning)
+                    Stepper(value: $session.webDAVBackupRetentionDays, in: 1...365) {
+                        Text("保留 \(session.webDAVBackupRetentionDays) 天")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    Button(role: .destructive) {
+                        Task {
+                            try? await session.cleanupExpiredWebDAVBackups()
+                        }
+                    } label: {
+                        Label("清理过期备份", systemImage: "sparkles")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
+                    .disabled(session.webDAVBackupItems.isEmpty || session.webDAVBackupState.isRunning)
+                    if !session.webDAVBackupItems.isEmpty {
+                        AndroidParityDivider()
+                        ForEach(session.webDAVBackupItems.prefix(8)) { item in
+                            AndroidParityInfoRow(
+                                title: item.fileName,
+                                value: item.isPermanent ? "永久 · \(item.byteCount) 字节" : "\(item.byteCount) 字节"
+                            )
+                            HStack(spacing: 10) {
+                                Button {
+                                    session.webDAVRemoteFileName = item.fileName
+                                    Task { try? await session.downloadWebDAVRestorePreview() }
+                                } label: {
+                                    Label("预览", systemImage: "arrow.down.doc")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                Button {
+                                    Task {
+                                        try? await session.setWebDAVBackupItemPermanent(item, isPermanent: !item.isPermanent)
+                                    }
+                                } label: {
+                                    Label(item.isPermanent ? "取消永久" : "永久", systemImage: "pin")
+                                        .frame(maxWidth: .infinity)
+                                }
+                                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                Button(role: .destructive) {
+                                    Task { try? await session.deleteWebDAVBackupItem(item) }
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .frame(width: 42, height: 42)
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            .disabled(session.webDAVBackupState.isRunning)
+                        }
+                    }
                     if let preview = session.webDAVRestorePreview {
                         AndroidParityDivider()
                         AndroidParityInfoRow(title: "恢复文件", value: preview.fileName)
@@ -1411,6 +1565,93 @@ private struct AndroidParityOperationTimelineRow: View {
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
+private extension AppOperationTimelineAction {
+    static let allCasesForSettings: [AppOperationTimelineAction] = [
+        .created,
+        .updated,
+        .deleted,
+        .restored,
+        .moved,
+        .viewed,
+        .backedUp,
+        .restoredBackup,
+        .cleanedUp,
+        .synced,
+        .blocked
+    ]
+}
+
+struct AppQuickSetupView: View {
+    @Bindable var session: AppSessionModel
+
+    var body: some View {
+        AndroidParityScreen {
+            AndroidParitySection(title: "Quick Setup") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
+                    ForEach(session.quickSetupRows) { row in
+                        AppCapabilityRowView(row: row)
+                        if row.id != session.quickSetupRows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                    Button {
+                        session.completeQuickSetup()
+                    } label: {
+                        Label("完成 Quick Setup", systemImage: "checkmark.circle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                }
+            }
+        }
+    }
+}
+
+struct AppExtensionsView: View {
+    @Bindable var session: AppSessionModel
+
+    var body: some View {
+        AndroidParityScreen {
+            AndroidParitySection(title: "Extensions") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
+                    ForEach(session.extensionCapabilityRows) { row in
+                        AppCapabilityRowView(row: row)
+                        if row.id != session.extensionCapabilityRows.last?.id {
+                            AndroidParityDivider()
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct AppCapabilityRowView: View {
+    let row: AppExtensionCapabilityRow
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: row.systemImage)
+                .font(.headline.weight(.bold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(row.title)
+                        .font(.subheadline.weight(.heavy))
+                    Spacer(minLength: 8)
+                    Text(row.value)
+                        .font(.caption.weight(.heavy))
+                        .foregroundStyle(AndroidParityPalette.primary)
+                }
+                Text(row.detail)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+        }
     }
 }
 
