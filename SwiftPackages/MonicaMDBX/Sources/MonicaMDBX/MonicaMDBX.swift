@@ -30,7 +30,7 @@ public enum MonicaMDBXError: Error, Sendable, Equatable, LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .unavailableOnCurrentPlatform:
-            return "MDBX UniFFI 桥接只在 iOS 构建中可用。"
+            return "当前环境无法使用 MDBX。"
         case .verificationFailed(let message):
             return message
         }
@@ -828,7 +828,7 @@ fileprivate enum MDBXBusinessPayload {
     static func object(from json: String) throws -> [String: Any] {
         guard let data = json.data(using: .utf8),
               let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw MonicaMDBXError.verificationFailed("MDBX payload 必须是 JSON object。")
+            throw MonicaMDBXError.verificationFailed("MDBX 数据必须是有效对象。")
         }
         return object
     }

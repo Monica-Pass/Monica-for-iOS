@@ -152,7 +152,7 @@ struct AutoFillStatusView: View {
             AndroidParitySection(title: "自动填充") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "索引", value: "已加密")
-                    AndroidParityInfoRow(title: "App Group", value: appGroupIdentifier)
+                    AndroidParityInfoRow(title: "共享数据", value: appGroupIdentifier.isEmpty ? "待配置" : "已配置")
                 }
             }
         }
