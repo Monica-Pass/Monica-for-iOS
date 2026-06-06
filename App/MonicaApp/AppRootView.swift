@@ -124,14 +124,6 @@ struct AppPermissionStatusRow: Sendable, Equatable, Identifiable {
     }
 }
 
-struct AppDeveloperDiagnosticRow: Sendable, Equatable, Identifiable {
-    let id: String
-    let title: String
-    let value: String
-    let detail: String
-    let systemImage: String
-}
-
 struct AppSecurityCenterRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -1712,97 +1704,6 @@ private extension String {
     var nonBlankValue: String? {
         let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
-    }
-}
-
-enum AppDeveloperDiagnostics {
-    @MainActor
-    static func rows(
-        environment: MonicaAppEnvironment,
-        session: AppSessionModel,
-        storageStrategy: String,
-        mdbxBridge: String
-    ) -> [AppDeveloperDiagnosticRow] {
-        [
-            AppDeveloperDiagnosticRow(
-                id: "storage",
-                title: "主存储",
-                value: storageStrategy,
-                detail: "当前 iOS 本地 vault 主格式。",
-                systemImage: "externaldrive"
-            ),
-            AppDeveloperDiagnosticRow(
-                id: "mdbx-bridge",
-                title: "MDBX 桥接",
-                value: mdbxBridge,
-                detail: "Swift 到 Rust MDBX 的桥接层。",
-                systemImage: "point.3.connected.trianglepath.dotted"
-            ),
-            AppDeveloperDiagnosticRow(
-                id: "app-group",
-                title: "App Group",
-                value: environment.appGroupIdentifier,
-                detail: "主 App 与扩展共享加密索引的位置。",
-                systemImage: "rectangle.connected.to.line.below"
-            ),
-            AppDeveloperDiagnosticRow(
-                id: "device-id",
-                title: "本机标识",
-                value: redactedIdentifier(environment.localDeviceIdentifier),
-                detail: "仅显示脱敏值，用于排查本地 vault/device 绑定。",
-                systemImage: "iphone"
-            ),
-            AppDeveloperDiagnosticRow(
-                id: "autofill-index",
-                title: "AutoFill 索引",
-                value: autoFillDiagnosticValue(session.autoFillIndexState),
-                detail: "最近一次 AutoFill 加密索引生成状态。",
-                systemImage: "key.viewfinder"
-            ),
-            AppDeveloperDiagnosticRow(
-                id: "sync-log",
-                title: "同步日志",
-                value: syncDiagnosticValue(session.webDAVBackupState),
-                detail: "当前 WebDAV 备份/恢复状态摘要，不包含 URL、用户名或密码。",
-                systemImage: "arrow.triangle.2.circlepath"
-            ),
-            AppDeveloperDiagnosticRow(
-                id: "bitwarden-sync",
-                title: "Bitwarden",
-                value: session.bitwardenSyncState.label,
-                detail: "当前 Bitwarden 同步状态摘要，不包含 token、远端 ID、密码、TOTP 或 Send 内容。",
-                systemImage: "lock.icloud"
-            )
-        ]
-    }
-
-    private static func redactedIdentifier(_ identifier: String) -> String {
-        let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
-            return "未设置"
-        }
-        guard trimmed.count > 8 else {
-            return "已设置"
-        }
-        return "\(trimmed.prefix(3))…\(trimmed.suffix(3))"
-    }
-
-    private static func autoFillDiagnosticValue(_ state: AutoFillIndexState) -> String {
-        switch state {
-        case .idle:
-            return "未生成"
-        case .running, .succeeded, .failed:
-            return state.label
-        }
-    }
-
-    private static func syncDiagnosticValue(_ state: WebDAVBackupState) -> String {
-        switch state {
-        case .idle:
-            return "空闲"
-        case .running, .listed, .backupSucceeded, .restorePreviewReady, .restoreSucceeded, .deleted, .permanentUpdated, .cleanupSucceeded, .failed:
-            return state.label
-        }
     }
 }
 
@@ -4225,7 +4126,7 @@ final class AppSessionModel {
             AppPlusFeatureRow(
                 id: "bitwarden_sync",
                 title: "Bitwarden 同步",
-                detail: "对齐 Android Plus 中的 Bitwarden 同步能力开关。",
+                detail: "解锁 Bitwarden 同步能力。",
                 systemImage: "cloud",
                 isUnlocked: isPlusActive
             )
@@ -4293,7 +4194,7 @@ final class AppSessionModel {
                 title: "通知",
                 systemImage: "bell",
                 state: notificationPermissionState,
-                detail: "TOTP 快捷查看会使用 iOS 安全通知替代常驻验证码。",
+                detail: "TOTP 快捷查看会使用系统安全通知。",
                 settingsURL: URL(string: UIApplication.openSettingsURLString)
             ),
             AppPermissionStatusRow(
@@ -4338,7 +4239,7 @@ final class AppSessionModel {
                 id: "autofill",
                 title: "AutoFill",
                 value: autoFillIndexStore == nil ? "待配置" : autoFillIndexState.label,
-                detail: "使用 iOS Credential Provider 替代 Android AutoFill/Accessibility。",
+                detail: "使用系统凭据提供器、加密索引和安全策略完成填充。",
                 systemImage: "key.viewfinder"
             ),
             AppExtensionCapabilityRow(
@@ -4359,7 +4260,7 @@ final class AppSessionModel {
                 id: "plus",
                 title: "Monica Plus",
                 value: isPlusActive ? "已解锁" : "可一键解锁",
-                detail: "本地资源解锁，不接入支付、订单、价格或外部支付链接。",
+                detail: "使用本地授权资源解锁可用能力。",
                 systemImage: "checkmark.seal"
             )
         ]
@@ -4385,40 +4286,26 @@ final class AppSessionModel {
                 id: "widget",
                 title: "Widget",
                 value: widgetSnapshotStore == nil ? "待配置" : "已接入",
-                detail: "替代 Android TOTP 常驻通知，只读取脱敏快照。",
+                detail: "只读取脱敏快照，锁定态不展示敏感内容。",
                 systemImage: "rectangle.inset.filled"
             ),
             AppExtensionCapabilityRow(
                 id: "share",
                 title: "Share Extension",
                 value: "iOS 原生",
-                detail: "替代 Android 分享面板导入路径，锁定态只进入安全收件箱。",
+                detail: "从系统分享入口导入内容，锁定态只进入安全收件箱。",
                 systemImage: "square.and.arrow.down"
-            ),
-            AppExtensionCapabilityRow(
-                id: "ime",
-                title: "Android IME",
-                value: "不做",
-                detail: "iOS 使用 AutoFill、Shortcuts、Widget 和 Share Extension 替代。",
-                systemImage: "keyboard"
-            ),
-            AppExtensionCapabilityRow(
-                id: "accessibility",
-                title: "Android Accessibility",
-                value: "不做",
-                detail: "iOS 不复制 overlay 自动化，只展示原生权限与诊断。",
-                systemImage: "hand.raised"
             )
         ]
     }
 
-    var autoFillSystemDiagnosticRows: [AppExtensionCapabilityRow] {
+    var autoFillSystemStatusRows: [AppExtensionCapabilityRow] {
         [
             AppExtensionCapabilityRow(
                 id: "match",
                 title: "匹配规则",
                 value: "Domain / RP ID",
-                detail: "不使用 Android package name；URL host、Associated Domains 和 service identifier 归一后匹配。",
+                detail: "URL host、Associated Domains 和 service identifier 归一后匹配。",
                 systemImage: "link"
             ),
             AppExtensionCapabilityRow(
@@ -4463,7 +4350,7 @@ final class AppSessionModel {
             action: .updated,
             itemKind: .login,
             itemID: "quick-setup",
-            itemTitle: "Quick Setup"
+            itemTitle: "快速设置"
         )
     }
 
@@ -4751,7 +4638,7 @@ final class AppSessionModel {
         case .none:
             return "点击资源激活按钮即可解锁 Monica Plus。"
         case .resourceUnlock:
-            return "已通过 Android 同口径资源按钮解锁 Monica Plus。"
+            return "已通过本地授权资源解锁 Monica Plus。"
         }
     }
 
@@ -9202,7 +9089,7 @@ final class AppSessionModel {
         clearPendingAndroidEncryptedBackup()
         let trashText = report.deletedItems.isEmpty ? "" : "，\(report.deletedItems.count) 项回收站"
         let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
-        entryOperationState = .succeeded("Android 备份预览：\(report.items.count) 项可导入\(trashText)\(attachmentText)，\(report.issues.count) 个问题")
+        entryOperationState = .succeeded("移动端备份预览：\(report.items.count) 项可导入\(trashText)\(attachmentText)，\(report.issues.count) 个问题")
         return preview
     }
 
@@ -9233,7 +9120,7 @@ final class AppSessionModel {
             pendingAndroidEncryptedBackupData = data
             pendingAndroidEncryptedBackupFileName = fileURL.lastPathComponent
             androidBackupDecryptPassword = ""
-            entryOperationState = .failed("请输入 Android 加密备份密码。")
+            entryOperationState = .failed("请输入移动端加密备份密码。")
             return nil
         } catch {
             clearPendingAndroidEncryptedBackup()
@@ -9360,7 +9247,7 @@ final class AppSessionModel {
                 attachmentText = "；\(preview.attachments.count) 个附件元数据待恢复"
             }
             let trashText = deletedItemCount == 0 ? "" : "；\(deletedItemCount) 项进入回收站"
-            entryOperationState = .succeeded("Android 备份已导入 \(preview.items.count) 项\(attachmentText)\(trashText)")
+            entryOperationState = .succeeded("移动端备份已导入 \(preview.items.count) 项\(attachmentText)\(trashText)")
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -9379,7 +9266,7 @@ final class AppSessionModel {
             _ = try requireActiveVaultSession()
             let drafts = csvExportDrafts()
             let data = try AndroidBackupCodec.exportItems(drafts)
-            entryOperationState = .succeeded("Android 备份已导出 \(drafts.count) 项")
+            entryOperationState = .succeeded("移动端备份已导出 \(drafts.count) 项")
             return data
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -13693,7 +13580,7 @@ enum AppAndroidBackupImportError: Error, Sendable, Equatable, LocalizedError {
              .encryptedBackupDecryptionFailed(let message):
             return message
         case .encryptedBackupUnavailable:
-            return "请先选择 Android 加密备份文件。"
+            return "请先选择移动端加密备份文件。"
         }
     }
 }
@@ -13925,10 +13812,7 @@ struct AppRootView: View {
                 SettingsRootView(
                     environment: environment,
                     session: session,
-                    storageStrategy: coreInfo.storageStrategy,
-                    mdbxBridge: mdbxInfo.bridge,
-                    refreshAutoFillIndex: refreshAutoFillIndex,
-                    runVerification: session.runMDBXVerification
+                    refreshAutoFillIndex: refreshAutoFillIndex
                 )
             } else if tab == .generator {
                 GeneratorRootView()

@@ -11,7 +11,7 @@ import MonicaStorage
     #expect(VaultSource.mdbx.displayName == "MDBX")
     #expect(VaultSource.keepass.displayName == "KeePass")
     #expect(VaultSource.bitwarden.displayName == "Bitwarden")
-    #expect(VaultSource.androidBackup.displayName == "Android 备份")
+    #expect(VaultSource.androidBackup.displayName == "移动端备份")
     #expect(VaultSource.csvImport.displayName == "CSV 导入")
     #expect(VaultSource.phaseOneSources == [.mdbx])
     #expect(VaultSource.longTermSources == [.mdbx, .keepass, .bitwarden, .androidBackup, .csvImport])
@@ -3904,7 +3904,7 @@ import MonicaStorage
         AndroidBackupImportIssue(
             entryPath: "backup",
             code: .encryptedBackupUnsupported,
-            message: "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
+            message: "移动端加密备份暂未支持解密，请先导出未加密 .zip 后再导入。"
         )
     ])
 
@@ -3917,7 +3917,7 @@ import MonicaStorage
         AndroidBackupImportIssue(
             entryPath: "monica_backup.enc.zip",
             code: .encryptedBackupUnsupported,
-            message: "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
+            message: "移动端加密备份暂未支持解密，请先导出未加密 .zip 后再导入。"
         )
     ])
 }
@@ -3955,7 +3955,7 @@ import MonicaStorage
         AndroidBackupImportIssue(
             entryPath: "monica_backup.enc.zip",
             code: .encryptedBackupDecryptionFailed,
-            message: "Android 加密备份解密失败，请检查密码或文件是否损坏。"
+            message: "移动端加密备份解密失败，请检查密码或文件是否损坏。"
         )
     ])
 }
@@ -3964,7 +3964,7 @@ import MonicaStorage
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])
     #expect(ParityFeatureFlag.autofill.isEnabledInPhaseTwo)
-    #expect(ParityFeatureFlag.backup.disabledReason == "第三阶段接入 Android 备份兼容。")
+    #expect(ParityFeatureFlag.backup.disabledReason == "后续阶段接入移动端备份兼容。")
     #expect(!ParityFeatureFlag.bitwarden.isEnabledInPhaseOne)
     #expect(!ParityFeatureFlag.passkeys.isEnabledInPhaseOne)
     #expect(ParityFeatureFlag.passkeys.disabledReason == "后续阶段接入 iOS AuthenticationServices。")

@@ -153,7 +153,6 @@ struct AutoFillStatusView: View {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "索引", value: "已加密")
                     AndroidParityInfoRow(title: "App Group", value: appGroupIdentifier)
-                    AndroidParityInfoRow(title: "设备重点", value: MonicaUIBaseline.deviceFocus)
                 }
             }
         }

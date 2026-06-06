@@ -8,10 +8,7 @@ import UniformTypeIdentifiers
 struct SettingsRootView: View {
     let environment: MonicaAppEnvironment
     @Bindable var session: AppSessionModel
-    let storageStrategy: String
-    let mdbxBridge: String
     let refreshAutoFillIndex: () -> Void
-    let runVerification: () -> Void
 
     @State private var isCSVImporterPresented = false
     @State private var isCSVExporterPresented = false
@@ -204,14 +201,14 @@ struct SettingsRootView: View {
                     Button {
                         session.presentQuickSetup()
                     } label: {
-                        Label("Quick Setup", systemImage: "wand.and.stars")
+                        Label("快速设置", systemImage: "wand.and.stars")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                     Button {
                         session.presentExtensions()
                     } label: {
-                        Label("Extensions", systemImage: "square.grid.2x2")
+                        Label("扩展功能", systemImage: "square.grid.2x2")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -327,16 +324,12 @@ struct SettingsRootView: View {
 
             AndroidParitySection(title: "自动填充") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(
-                        title: "阶段",
-                        value: ParityFeatureFlag.autofill.isEnabledInPhaseTwo ? "P2 已启用" : "未启用"
-                    )
                     AndroidParityInfoRow(title: "索引", value: session.autoFillIndexState.label)
                     AndroidParityInfoRow(title: "App Group", value: environment.appGroupIdentifier)
                     ForEach(session.autoFillPolicyRows, id: \.title) { row in
                         AndroidParityInfoRow(title: row.title, value: row.value)
                     }
-                    ForEach(session.autoFillSystemDiagnosticRows) { row in
+                    ForEach(session.autoFillSystemStatusRows) { row in
                         AndroidParityInfoRow(title: row.title, value: row.value)
                         Text(row.detail)
                             .font(.caption.weight(.semibold))
@@ -767,7 +760,7 @@ struct SettingsRootView: View {
                     }
 
                     AndroidParityDivider()
-                    AndroidParityInfoRow(title: "Android 备份", value: session.entryOperationState.label)
+                    AndroidParityInfoRow(title: "移动端备份（Android ZIP）", value: session.entryOperationState.label)
                     if let encryptedFileName = session.pendingAndroidEncryptedBackupFileName {
                         AndroidParityInfoRow(title: "加密备份", value: encryptedFileName)
                     }
@@ -802,7 +795,7 @@ struct SettingsRootView: View {
                         AndroidParityInfoRow(title: "备份问题", value: "\(preview.issues.count)")
                         Button {
                             do {
-                                try session.confirmAndroidBackupImport(projectTitle: "Android 备份")
+                                try session.confirmAndroidBackupImport(projectTitle: "移动端备份")
                             } catch {
                                 // AppSessionModel owns user-visible failure state.
                             }
@@ -812,37 +805,6 @@ struct SettingsRootView: View {
                         }
                         .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                         .disabled(preview.items.isEmpty)
-                    }
-                }
-            }
-
-            AndroidParitySection(title: "技术检查") {
-                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "主存储", value: storageStrategy)
-                    AndroidParityInfoRow(title: "桥接", value: mdbxBridge)
-                    AndroidParityInfoRow(title: "检查", value: session.mdbxVerificationState.label)
-                    Button(action: runVerification) {
-                        Label("运行 MDBX 检查", systemImage: "play.circle")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-                    .disabled(session.mdbxVerificationState.isRunning)
-                }
-            }
-
-            AndroidParitySection(title: "开发者设置") {
-                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    let rows = AppDeveloperDiagnostics.rows(
-                        environment: environment,
-                        session: session,
-                        storageStrategy: storageStrategy,
-                        mdbxBridge: mdbxBridge
-                    )
-                    ForEach(rows) { row in
-                        AndroidParityDeveloperDiagnosticRow(row: row)
-                        if row.id != rows.last?.id {
-                            AndroidParityDivider()
-                        }
                     }
                 }
             }
@@ -1307,7 +1269,7 @@ struct SettingsRootView: View {
             isPresented: $isAndroidBackupExporterPresented,
             document: androidBackupExportDocument,
             contentType: .zip,
-            defaultFilename: "monica-android-backup.zip"
+            defaultFilename: "monica-mobile-backup.zip"
         ) { result in
             if case .failure(let error) = result {
                 session.entryOperationState = .failed(error.localizedDescription)
@@ -1403,7 +1365,7 @@ struct SettingsRootView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
-        .alert("Android 加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
+        .alert("移动端加密备份", isPresented: $isAndroidBackupPasswordPromptPresented) {
             SecureField("备份密码", text: $session.androidBackupDecryptPassword)
             Button("取消", role: .cancel) {
                 session.cancelPendingAndroidEncryptedBackupImport()
@@ -1418,7 +1380,7 @@ struct SettingsRootView: View {
             }
             .disabled(session.androidBackupDecryptPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         } message: {
-            Text("请输入从 Android 导出该备份时设置的密码。密码只在本次解密中使用。")
+            Text("请输入导出该移动端备份时设置的密码。密码只在本次解密中使用。")
         }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
@@ -1589,7 +1551,7 @@ struct AppQuickSetupView: View {
 
     var body: some View {
         AndroidParityScreen {
-            AndroidParitySection(title: "Quick Setup") {
+            AndroidParitySection(title: "快速设置") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
                     ForEach(session.quickSetupRows) { row in
                         AppCapabilityRowView(row: row)
@@ -1600,7 +1562,7 @@ struct AppQuickSetupView: View {
                     Button {
                         session.completeQuickSetup()
                     } label: {
-                        Label("完成 Quick Setup", systemImage: "checkmark.circle")
+                        Label("完成快速设置", systemImage: "checkmark.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .filled))
@@ -1615,7 +1577,7 @@ struct AppExtensionsView: View {
 
     var body: some View {
         AndroidParityScreen {
-            AndroidParitySection(title: "Extensions") {
+            AndroidParitySection(title: "扩展功能") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
                     ForEach(session.extensionCapabilityRows) { row in
                         AppCapabilityRowView(row: row)
@@ -1810,38 +1772,5 @@ private struct AndroidParityPermissionRow: View {
         case .notDetermined, .notConfigured, .checkable:
             AndroidParityPalette.textSecondary
         }
-    }
-}
-
-private struct AndroidParityDeveloperDiagnosticRow: View {
-    let row: AppDeveloperDiagnosticRow
-
-    var body: some View {
-        HStack(alignment: .top, spacing: 12) {
-            Image(systemName: row.systemImage)
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundStyle(AndroidParityPalette.primary)
-                .frame(width: 28, height: 28)
-                .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 8) {
-                    Text(row.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.textPrimary)
-                    Spacer(minLength: 8)
-                    Text(row.value)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.textSecondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
-                }
-                Text(row.detail)
-                    .font(.caption)
-                    .foregroundStyle(AndroidParityPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
