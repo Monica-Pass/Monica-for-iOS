@@ -74,7 +74,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(
             model.vaultOperationState,
-            .failed("主密码无法找回。可尝试 Keychain 生物识别解锁、打开可记得密码的备份，或新建保险库。")
+            .failed("主密码无法找回。可尝试钥匙串生物识别解锁、打开可记得密码的备份，或新建保险库。")
         )
     }
 
@@ -387,7 +387,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(engine.createdAttachmentMetadata.first?.source, "ios-share-extension")
         XCTAssertEqual(engine.createdAttachmentMetadata.first?.downloadState, "downloaded")
         XCTAssertEqual(blobStore.savedBlobs.first?.data, Data("shared-file-secret".utf8))
-        XCTAssertEqual(model.entryOperationState, .succeeded("Share Extension 已导入 3 项"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("分享导入已导入 3 项"))
 
         let userVisibleText = ([model.entryOperationState.label] + model.operationTimelineEvents.map(\.detail))
             .joined(separator: " ")
@@ -930,7 +930,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(
             model.permissionStatusRows.map(\.title),
-            ["相机", "AutoFill", "通知", "App Group", "Keychain"]
+            ["相机", "自动填充", "通知", "共享数据", "钥匙串"]
         )
         XCTAssertEqual(model.permissionStatusRows[0].value, "可检查")
         XCTAssertEqual(model.permissionStatusRows[1].value, "待配置")
@@ -1344,7 +1344,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(source.contains("performWithoutUserInteractionIfPossible(savePasswordRequest"))
         XCTAssertTrue(source.contains("AppAutoFillCredentialSaveInboxStore"))
         XCTAssertTrue(source.contains("saveIncomingRequest"))
-        XCTAssertFalse(source.contains("AutoFill 保存需要主 App 手动录入"))
+        XCTAssertFalse(source.contains("需要主 App 手动录入"))
     }
 
     func testAutoFillSaveInboxPersistsPendingRequestWithoutManifestSecrets() throws {
@@ -1448,7 +1448,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(created.credentialID, "Y3JlZGVudGlhbC1pZC1zZWNyZXQ=")
         XCTAssertEqual(created.publicKeyCOSE, "pQECAw==")
         XCTAssertEqual(created.privateKeyReference, "secure-enclave://passkeys/github/credential-id-secret")
-        XCTAssertTrue(created.notes.contains("iOS system passkey registration"))
+        XCTAssertTrue(created.notes.contains("由系统通行密钥注册创建"))
         XCTAssertFalse(created.notes.contains("attestation-secret"))
         XCTAssertFalse(created.notes.contains("client-data-hash-secret"))
         XCTAssertEqual(model.entryOperationState, .succeeded("Passkey 已保存：GitHub Passkey"))
@@ -7577,8 +7577,8 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertTrue(source.contains("导入 Steam maFile"))
         XCTAssertTrue(source.contains("importSteamAuthenticator(from: fileURL)"))
-        XCTAssertTrue(source.contains("Blocked field"))
-        XCTAssertTrue(source.contains("Save blocked target"))
+        XCTAssertTrue(source.contains("忽略字段"))
+        XCTAssertTrue(source.contains("忽略保存目标"))
         XCTAssertTrue(source.contains("clearAutoFillPolicy()"))
     }
 
@@ -8273,7 +8273,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(entry.username, "saved-user@example.com")
         XCTAssertEqual(entry.password, "autofill-generated-secret")
         XCTAssertEqual(entry.url, "https://accounts.example.com/login?token=secret-query")
-        XCTAssertEqual(model.entryOperationState, .succeeded("AutoFill 已保存 Example Accounts"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("自动填充已保存 Example Accounts"))
         XCTAssertEqual(model.operationTimelineEvents.first?.action, .created)
 
         let storageKey = try AutoFillIndexEncryptionKey(rawValue: keyMaterial.keyMaterial)
@@ -8351,7 +8351,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(entry.url, "https://github.com/login")
         XCTAssertEqual(engine.createdLoginEntries.count, 1)
         XCTAssertEqual(engine.updatedLoginEntries.last?.entryID, "entry-1")
-        XCTAssertEqual(model.entryOperationState, .succeeded("AutoFill 已更新 GitHub"))
+        XCTAssertEqual(model.entryOperationState, .succeeded("自动填充已更新 GitHub"))
         XCTAssertEqual(model.operationTimelineEvents.first?.action, .updated)
         XCTAssertEqual(model.autoFillIndexState, .succeeded(1))
         XCTAssertEqual(indexStore.savedIndexes.last?.records.count, 1)
@@ -8398,7 +8398,7 @@ final class VaultSessionModelTests: XCTestCase {
         }
 
         XCTAssertTrue(model.loginEntries.isEmpty)
-        XCTAssertEqual(model.entryOperationState, .failed("AutoFill 保存目标已被拦截。"))
+        XCTAssertEqual(model.entryOperationState, .failed("自动填充保存目标已被忽略。"))
         XCTAssertFalse(model.entryOperationState.label.contains("blocked-user@example.com"))
         XCTAssertFalse(model.entryOperationState.label.contains("blocked-password-secret"))
         XCTAssertFalse(model.entryOperationState.label.contains("request-secret"))

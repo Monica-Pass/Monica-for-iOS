@@ -92,7 +92,7 @@ final class ShareViewController: UIViewController {
         guard let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
         ) else {
-            cancelRequest("App Group 容器不可用。")
+            cancelRequest("无法访问共享数据，请重新打开 Monica 后再试。")
             return
         }
 
