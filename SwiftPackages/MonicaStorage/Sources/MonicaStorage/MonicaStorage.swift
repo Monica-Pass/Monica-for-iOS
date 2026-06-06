@@ -5801,7 +5801,7 @@ public enum VaultSource: String, Sendable, Equatable, CaseIterable {
         case .bitwarden:
             return "Bitwarden"
         case .androidBackup:
-            return "Android 备份"
+            return "移动端备份"
         case .csvImport:
             return "CSV 导入"
         }
@@ -6089,8 +6089,8 @@ public enum AndroidBackupCodec {
     private static let encryptedBackupPBKDF2Iterations = 100_000
     private static let encryptedBackupKeyLength = 32
     private static let aesGCMTagLength = 16
-    public static let encryptedBackupUnsupportedMessage = "Android 加密备份暂未支持解密，请先从 Android 导出未加密 .zip 后再导入。"
-    public static let encryptedBackupDecryptionFailedMessage = "Android 加密备份解密失败，请检查密码或文件是否损坏。"
+    public static let encryptedBackupUnsupportedMessage = "移动端加密备份暂未支持解密，请先导出未加密 .zip 后再导入。"
+    public static let encryptedBackupDecryptionFailedMessage = "移动端加密备份解密失败，请检查密码或文件是否损坏。"
 
     public static func importItems(
         from zipData: Data,
@@ -6897,7 +6897,7 @@ public enum AndroidBackupCodec {
             }
             return AndroidBackupImportedItem(sourceID: sourceID, draft: draft)
         } catch {
-            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 备份 JSON 无法解析"))
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "移动端备份 JSON 无法解析"))
             return nil
         }
     }
@@ -7753,7 +7753,7 @@ public enum ParityFeatureFlag: String, Sendable, Equatable, CaseIterable {
         }
         switch self {
         case .backup:
-            return "第三阶段接入 Android 备份兼容。"
+            return "后续阶段接入移动端备份兼容。"
         case .keepass:
             return "第四阶段接入 KDBX 兼容。"
         case .bitwarden:
