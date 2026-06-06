@@ -400,7 +400,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             try inboxStore.saveIncomingRequest(request)
             configureStatusView(
                 title: "Monica",
-                status: "AutoFill 保存请求已交给 Monica"
+                status: "自动填充保存请求已交给 Monica"
             )
             if allowsCompletion {
                 extensionContext.completeSavePasswordRequest(completionHandler: nil)
@@ -408,7 +408,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         } catch {
             configureStatusView(
                 title: "Monica",
-                status: "AutoFill 保存失败，请稍后在 Monica 中重试"
+                status: "自动填充保存失败，请稍后在 Monica 中重试"
             )
             cancelRequest(code: ASExtensionError.Code.failed)
         }
@@ -548,7 +548,7 @@ private enum AutoFillExtensionError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .appGroupUnavailable:
-            return "App Group 容器不可用。"
+            return "无法访问共享数据，请重新打开 Monica 后再试。"
         case .indexUnavailable:
             return "自动填充索引不可用。"
         case .credentialSecretsUnavailable:
