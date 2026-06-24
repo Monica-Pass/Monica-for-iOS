@@ -33,7 +33,7 @@ public enum MonicaSecurityError: Error, Sendable, Equatable, LocalizedError {
         case .localAuthenticationFailed:
             return "本地认证失败。"
         case .keychainUnexpectedStatus(let status):
-            return "Keychain 返回了异常状态 \(status)。"
+            return "钥匙串返回了异常状态 \(status)。"
         }
     }
 }

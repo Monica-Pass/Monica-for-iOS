@@ -3964,10 +3964,10 @@ import MonicaStorage
     #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
     #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])
     #expect(ParityFeatureFlag.autofill.isEnabledInPhaseTwo)
-    #expect(ParityFeatureFlag.backup.disabledReason == "后续阶段接入移动端备份兼容。")
+    #expect(ParityFeatureFlag.backup.disabledReason == "移动端备份当前不可用。")
     #expect(!ParityFeatureFlag.bitwarden.isEnabledInPhaseOne)
     #expect(!ParityFeatureFlag.passkeys.isEnabledInPhaseOne)
-    #expect(ParityFeatureFlag.passkeys.disabledReason == "后续阶段接入 iOS AuthenticationServices。")
+    #expect(ParityFeatureFlag.passkeys.disabledReason == "通行密钥当前不可用。")
 }
 
 @Test func createVaultBuildsMDBXDescriptorAndDelegatesToEngine() throws {

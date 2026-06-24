@@ -111,11 +111,11 @@ struct SettingsRootView: View {
         AndroidParityScreen {
             AndroidParitySection(title: "应用") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "最低 iOS", value: environment.minimumIOSVersion)
+                    AndroidParityInfoRow(title: "系统要求", value: environment.minimumIOSVersion)
                     AndroidParityDivider()
                     AndroidParityInfoRow(title: "备份", value: MonicaSyncBaseline.firstBackupProvider)
                     AndroidParityInfoRow(title: "密钥策略", value: MonicaSecurityBaseline.biometricPolicy)
-                    AndroidParityInfoRow(title: "保险库 Keychain", value: session.vaultKeychainState.label)
+                    AndroidParityInfoRow(title: "保险库钥匙串", value: session.vaultKeychainState.label)
                     AndroidParityInfoRow(
                         title: session.biometricUnlockSettingsTitle,
                         value: session.isBiometricUnlockEnabled ? "已启用" : biometricStatusText
@@ -192,7 +192,7 @@ struct SettingsRootView: View {
                             )
                         }
                     } label: {
-                        Label("使用 Keychain 解锁", systemImage: "lock.open")
+                        Label("使用钥匙串解锁", systemImage: "lock.open")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -325,7 +325,7 @@ struct SettingsRootView: View {
             AndroidParitySection(title: "自动填充") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "索引", value: session.autoFillIndexState.label)
-                    AndroidParityInfoRow(title: "App Group", value: environment.appGroupIdentifier)
+                    AndroidParityInfoRow(title: "共享数据", value: environment.appGroupIdentifier.isEmpty ? "待配置" : "已配置")
                     ForEach(session.autoFillPolicyRows, id: \.title) { row in
                         AndroidParityInfoRow(title: row.title, value: row.value)
                     }
@@ -335,7 +335,7 @@ struct SettingsRootView: View {
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
-                    TextField("Blocked field", text: $autoFillBlockedFieldInput)
+                    TextField("忽略字段", text: $autoFillBlockedFieldInput)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .textFieldStyle(AndroidParityTextFieldStyle())
@@ -347,14 +347,14 @@ struct SettingsRootView: View {
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                     .disabled(autoFillBlockedFieldInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                    TextField("Save blocked target", text: $autoFillBlockedSaveTargetInput)
+                    TextField("忽略保存目标", text: $autoFillBlockedSaveTargetInput)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .textFieldStyle(AndroidParityTextFieldStyle())
                     Button {
                         addAutoFillBlockedSaveTarget()
                     } label: {
-                        Label("添加保存阻止目标", systemImage: "link.badge.plus")
+                        Label("添加忽略目标", systemImage: "link.badge.plus")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -362,7 +362,7 @@ struct SettingsRootView: View {
                     Button {
                         clearAutoFillPolicy()
                     } label: {
-                        Label("清空阻止策略", systemImage: "xmark.circle")
+                        Label("清空忽略规则", systemImage: "xmark.circle")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -558,7 +558,7 @@ struct SettingsRootView: View {
                     Button {
                         isKeePassImporterPresented = true
                     } label: {
-                        Label("检查 KDBX", systemImage: "key.radiowaves.forward")
+                        Label("选择 KDBX", systemImage: "key.radiowaves.forward")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -760,7 +760,7 @@ struct SettingsRootView: View {
                     }
 
                     AndroidParityDivider()
-                    AndroidParityInfoRow(title: "移动端备份（Android ZIP）", value: session.entryOperationState.label)
+                    AndroidParityInfoRow(title: "移动端备份", value: session.entryOperationState.label)
                     if let encryptedFileName = session.pendingAndroidEncryptedBackupFileName {
                         AndroidParityInfoRow(title: "加密备份", value: encryptedFileName)
                     }
@@ -1479,7 +1479,7 @@ struct SettingsRootView: View {
         case .readyToUnlock:
             return "等待解锁"
         case .unsupported:
-            return "暂不支持"
+            return "无法导入"
         case .unknown:
             return "无法识别"
         }

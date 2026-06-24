@@ -1947,11 +1947,11 @@ struct AddEditVaultItemView: View {
     private var passkeyFields: some View {
         VStack(spacing: 18) {
             field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.passkeyTitle : $session.editingPasskeyTitle)
-            field(icon: "globe", title: "RP ID", text: mode.isAdding ? $session.passkeyRelyingPartyID : $session.editingPasskeyRelyingPartyID)
+            field(icon: "globe", title: "网站标识", text: mode.isAdding ? $session.passkeyRelyingPartyID : $session.editingPasskeyRelyingPartyID)
             field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.passkeyUsername : $session.editingPasskeyUsername)
-            field(icon: "key.horizontal.fill", title: "Credential ID", text: mode.isAdding ? $session.passkeyCredentialID : $session.editingPasskeyCredentialID)
-            field(icon: "curlybraces", title: "Public Key COSE", text: mode.isAdding ? $session.passkeyPublicKeyCOSE : $session.editingPasskeyPublicKeyCOSE)
-            secureField(icon: "lock.shield.fill", title: "Keychain 引用", text: mode.isAdding ? $session.passkeyPrivateKeyReference : $session.editingPasskeyPrivateKeyReference)
+            field(icon: "key.horizontal.fill", title: "通行密钥标识", text: mode.isAdding ? $session.passkeyCredentialID : $session.editingPasskeyCredentialID)
+            field(icon: "curlybraces", title: "公钥数据", text: mode.isAdding ? $session.passkeyPublicKeyCOSE : $session.editingPasskeyPublicKeyCOSE)
+            secureField(icon: "lock.shield.fill", title: "钥匙串引用", text: mode.isAdding ? $session.passkeyPrivateKeyReference : $session.editingPasskeyPrivateKeyReference)
         }
     }
 
@@ -2208,7 +2208,7 @@ private struct VaultItemDetailView: View {
             return [row("title", "标题", entry.title), row("type", "类型", entry.documentType), row("name", "姓名", entry.fullName), row("number", "证件号", sensitive(entry.documentNumber)), row("issuer", "签发方", entry.issuer), row("country", "国家/地区", entry.country)]
         case .passkey:
             guard let entry = session.passkeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("rp", "RP ID", entry.relyingPartyID), row("username", "账号", entry.username), row("credential", "Credential ID", sensitive(entry.credentialID)), row("private", "私钥引用", sensitive(entry.privateKeyReference))]
+            return [row("title", "标题", entry.title), row("rp", "网站标识", entry.relyingPartyID), row("username", "账号", entry.username), row("credential", "通行密钥标识", sensitive(entry.credentialID)), row("private", "私钥引用", sensitive(entry.privateKeyReference))]
         case .sshKey:
             guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", "标题", entry.title), row("user", "用户名", entry.username), row("host", "主机", entry.host), row("public", "公钥", revealsSensitiveFields ? entry.publicKey : "••••••"), row("private", "私钥引用", sensitive(entry.privateKeyReference)), row("hint", "口令提示", entry.passphraseHint)]

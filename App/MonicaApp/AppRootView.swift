@@ -4184,10 +4184,10 @@ final class AppSessionModel {
             ),
             AppPermissionStatusRow(
                 id: "autofill",
-                title: "AutoFill",
+                title: "自动填充",
                 systemImage: "key.viewfinder",
                 state: autoFillIndexStore == nil || autoFillCredentialIdentityStore == nil ? .notConfigured : .configured,
-                detail: "Credential Provider、QuickType identity 和加密索引。"
+                detail: "系统自动填充、建议列表和加密索引。"
             ),
             AppPermissionStatusRow(
                 id: "notifications",
@@ -4199,14 +4199,14 @@ final class AppSessionModel {
             ),
             AppPermissionStatusRow(
                 id: "app-group",
-                title: "App Group",
+                title: "共享数据",
                 systemImage: "rectangle.connected.to.line.below",
                 state: autoFillIndexStore == nil || autoFillCredentialSecretStore == nil ? .notConfigured : .configured,
-                detail: "主 App 与 AutoFill Extension 共享加密索引和 secret snapshot。"
+                detail: "主 App 与扩展共享加密后的自动填充数据。"
             ),
             AppPermissionStatusRow(
                 id: "keychain",
-                title: "Keychain",
+                title: "钥匙串",
                 systemImage: "lock.shield",
                 state: vaultKeychainService == nil ? .notConfigured : .configured,
                 detail: "保存受系统保护的本地解锁材料，不保存主密码。"
@@ -4232,12 +4232,12 @@ final class AppSessionModel {
                 id: "security",
                 title: "安全",
                 value: areSecurityQuestionsSetForActiveVault ? "已配置" : "待配置",
-                detail: "主密码、密保问题、Keychain 与生物识别解锁。",
+                detail: "主密码、密保问题、钥匙串与生物识别解锁。",
                 systemImage: "lock.shield"
             ),
             AppExtensionCapabilityRow(
                 id: "autofill",
-                title: "AutoFill",
+                title: "自动填充",
                 value: autoFillIndexStore == nil ? "待配置" : autoFillIndexState.label,
                 detail: "使用系统凭据提供器、加密索引和安全策略完成填充。",
                 systemImage: "key.viewfinder"
@@ -4253,7 +4253,7 @@ final class AppSessionModel {
                 id: "backup",
                 title: "备份",
                 value: "WebDAV / OneDrive",
-                detail: "手动备份、恢复、远端管理和 iOS 后台调度状态。",
+                detail: "手动备份、恢复、远端管理和自动备份状态。",
                 systemImage: "externaldrive.badge.icloud"
             ),
             AppExtensionCapabilityRow(
@@ -4270,29 +4270,29 @@ final class AppSessionModel {
         [
             AppExtensionCapabilityRow(
                 id: "credential-provider",
-                title: "Credential Provider",
-                value: autoFillIndexStore == nil ? "待配置" : "iOS 原生",
-                detail: "域名/RP ID 匹配、blocked fields、save blocked targets 和加密索引。",
+                title: "系统自动填充",
+                value: autoFillIndexStore == nil ? "待配置" : "已接入",
+                detail: "按网站和通行密钥服务匹配，并使用加密索引保护数据。",
                 systemImage: "key.viewfinder"
             ),
             AppExtensionCapabilityRow(
                 id: "shortcuts",
-                title: "Shortcuts / AppIntents",
+                title: "快捷指令",
                 value: shortcutSnapshotStore == nil ? "待配置" : "已接入",
                 detail: "搜索条目、打开 URL、复制安全摘要；锁定态不泄密。",
                 systemImage: "sparkles.rectangle.stack"
             ),
             AppExtensionCapabilityRow(
                 id: "widget",
-                title: "Widget",
+                title: "小组件",
                 value: widgetSnapshotStore == nil ? "待配置" : "已接入",
                 detail: "只读取脱敏快照，锁定态不展示敏感内容。",
                 systemImage: "rectangle.inset.filled"
             ),
             AppExtensionCapabilityRow(
                 id: "share",
-                title: "Share Extension",
-                value: "iOS 原生",
+                title: "分享导入",
+                value: "已接入",
                 detail: "从系统分享入口导入内容，锁定态只进入安全收件箱。",
                 systemImage: "square.and.arrow.down"
             )
@@ -4304,29 +4304,29 @@ final class AppSessionModel {
             AppExtensionCapabilityRow(
                 id: "match",
                 title: "匹配规则",
-                value: "Domain / RP ID",
-                detail: "URL host、Associated Domains 和 service identifier 归一后匹配。",
+                value: "网站与通行密钥",
+                detail: "按网站域名和通行密钥服务标识匹配。",
                 systemImage: "link"
             ),
             AppExtensionCapabilityRow(
                 id: "blocked-fields",
-                title: "Blocked fields",
+                title: "忽略字段",
                 value: "\(autoFillPolicy.blockedFields.count)",
-                detail: "命中后仅记录 blocked 分类，不输出字段原文之外的上下文。",
+                detail: "这些输入字段不会触发自动填充建议。",
                 systemImage: "text.badge.xmark"
             ),
             AppExtensionCapabilityRow(
                 id: "blocked-save",
-                title: "Save blocked targets",
+                title: "忽略保存目标",
                 value: "\(autoFillPolicy.blockedSaveTargets.count)",
-                detail: "系统保存收件箱会先检查目标策略，再写入本地草稿。",
+                detail: "这些网站或应用不会自动创建保存草稿。",
                 systemImage: "link.badge.plus"
             ),
             AppExtensionCapabilityRow(
                 id: "identity-sync",
-                title: "Credential identity",
+                title: "系统凭据",
                 value: autoFillCredentialIdentityStore == nil ? "待配置" : "已配置",
-                detail: "同步 QuickType identity 时只使用脱敏服务标识。",
+                detail: "自动填充建议会与系统凭据列表保持同步。",
                 systemImage: "person.text.rectangle"
             )
         ]
@@ -4364,8 +4364,8 @@ final class AppSessionModel {
 
     var autoFillPolicyRows: [(title: String, value: String)] {
         [
-            (title: "Blocked fields", value: "\(autoFillPolicy.blockedFields.count)"),
-            (title: "Save blocked targets", value: "\(autoFillPolicy.blockedSaveTargets.count)")
+            (title: "忽略字段", value: "\(autoFillPolicy.blockedFields.count)"),
+            (title: "忽略保存目标", value: "\(autoFillPolicy.blockedSaveTargets.count)")
         ]
     }
 
@@ -4376,7 +4376,7 @@ final class AppSessionModel {
         )
         autoFillPolicy = policy
         autoFillPolicyStore.savePolicy(policy)
-        entryOperationState = .succeeded("AutoFill 策略已更新")
+        entryOperationState = .succeeded("自动填充规则已更新")
     }
 
     var securityCenterRows: [AppSecurityCenterRow] {
@@ -5267,7 +5267,7 @@ final class AppSessionModel {
             guard let rememberedVaultID,
                   let setup = try securityQuestionStore.load(vaultID: rememberedVaultID) else {
                 vaultOperationState = .failed(
-                    "主密码无法找回。可尝试 Keychain 生物识别解锁、打开可记得密码的备份，或新建保险库。"
+                    "主密码无法找回。可尝试钥匙串生物识别解锁、打开可记得密码的备份，或新建保险库。"
                 )
                 return
             }
@@ -5857,7 +5857,7 @@ final class AppSessionModel {
                 importedCounts: importedCounts,
                 importedTitles: importedTitles
             )
-            entryOperationState = .succeeded("Share Extension 已导入 \(result.totalCount) 项")
+            entryOperationState = .succeeded("分享导入已导入 \(result.totalCount) 项")
             return result
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -5909,7 +5909,7 @@ final class AppSessionModel {
                     itemID: updated.id,
                     itemTitle: updated.title
                 )
-                entryOperationState = .succeeded("AutoFill 已更新 \(updated.title)")
+                entryOperationState = .succeeded("自动填充已更新 \(updated.title)")
             } else {
                 let title = autoFillSaveTitle(for: normalizedRequest)
                 let entry = try entryRepository.createLoginEntry(
@@ -5930,7 +5930,7 @@ final class AppSessionModel {
                     itemID: entry.id,
                     itemTitle: entry.title
                 )
-                entryOperationState = .succeeded("AutoFill 已保存 \(entry.title)")
+                entryOperationState = .succeeded("自动填充已保存 \(entry.title)")
             }
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -5952,7 +5952,7 @@ final class AppSessionModel {
             try saveAutoFillCredential(request, projectTitle: projectTitle)
         }
         try inboxStore.clearPendingSaveRequests()
-        entryOperationState = .succeeded("AutoFill 已导入 \(requests.count) 个保存请求")
+        entryOperationState = .succeeded("自动填充已导入 \(requests.count) 个保存请求")
         return requests.count
     }
 
@@ -6439,11 +6439,11 @@ final class AppSessionModel {
 
         switch totpError {
         case .invalidSecret:
-            return "Steam 验证器文件缺少有效 shared_secret。"
+            return "Steam 验证器文件缺少有效密钥。"
         case .invalidURI:
             return "请输入有效的 Steam maFile/JSON 验证器文件。"
         case .invalidDigits, .invalidPeriod, .invalidAlgorithm:
-            return "Steam 验证器参数暂不支持。"
+            return "无法导入该 Steam 验证器文件。"
         }
     }
 
@@ -8578,7 +8578,7 @@ final class AppSessionModel {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX 版本写回尚未接入。"
+                message: "无法写回未知版本的 KDBX 文件。"
             )
         }
     }
@@ -9714,7 +9714,7 @@ final class AppSessionModel {
             action: .updated,
             itemKind: .attachmentRef,
             itemID: "webdav-background",
-            itemTitle: "iOS BackgroundTasks"
+            itemTitle: "自动备份"
         )
     }
 
@@ -9725,7 +9725,7 @@ final class AppSessionModel {
             action: .updated,
             itemKind: .attachmentRef,
             itemID: "webdav-background",
-            itemTitle: "iOS BackgroundTasks"
+            itemTitle: "自动备份"
         )
     }
 
@@ -10532,7 +10532,7 @@ final class AppSessionModel {
             case .unexpectedStatus("download", 404):
                 return "未找到远端备份文件。"
             case .unexpectedStatus(_, let statusCode) where (500...599).contains(statusCode):
-                return "WebDAV 服务器暂不可用，请稍后再试。"
+                return "WebDAV 服务器当前不可用，请稍后再试。"
             case .unexpectedStatus:
                 return "WebDAV 请求失败，请检查服务器设置后重试。"
             case .integrityCheckFailed:
@@ -12691,7 +12691,7 @@ final class AppSessionModel {
         if !request.title.isEmpty {
             return request.title
         }
-        return serviceIdentifiers(for: request.serviceIdentifier).first ?? "AutoFill 登录"
+        return serviceIdentifiers(for: request.serviceIdentifier).first ?? "自动填充登录"
     }
 
     private func matchingLoginEntry(
@@ -13275,7 +13275,7 @@ enum AppAutoFillPolicyError: Error, LocalizedError, Sendable, Equatable {
     var errorDescription: String? {
         switch self {
         case .saveTargetBlocked:
-            return "AutoFill 保存目标已被拦截。"
+            return "自动填充保存目标已被忽略。"
         }
     }
 }
@@ -13335,15 +13335,15 @@ enum AppVaultKeychainError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .vaultLocked:
-            return "请先解锁保险库，再启用 Keychain 解锁。"
+            return "请先解锁保险库，再启用钥匙串解锁。"
         case .vaultAlreadyUnlocked:
             return "保险库已经解锁。"
         case .keychainUnavailable:
-            return "Keychain 解锁不可用。"
+            return "钥匙串解锁不可用。"
         case .wrappedKeyProviderUnavailable:
             return "保险库安全密钥提供器不可用。"
         case .rememberedVaultUnavailable:
-            return "没有可通过 Keychain 解锁的已记住保险库。"
+            return "没有可通过钥匙串解锁的已记住保险库。"
         case .vaultMismatch:
             return "已保存的保险库密钥与当前保险库不匹配。"
         }

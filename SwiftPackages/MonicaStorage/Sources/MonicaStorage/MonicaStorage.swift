@@ -496,7 +496,7 @@ public extension KeePassKdbxPayloadCipher {
     ) throws -> Data {
         throw KeePassOperationError(
             code: .formatUnsupported,
-            message: "KDBX payload 加密尚未接入"
+            message: "当前无法加密该 KDBX 内容"
         )
     }
 }
@@ -543,7 +543,7 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX cipher 尚未接入"
+                message: "无法打开使用未知加密方式的 KDBX 文件"
             )
         }
     }
@@ -587,7 +587,7 @@ public struct DefaultKeePassKdbxPayloadCipher: KeePassKdbxPayloadCipher {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX cipher 写回尚未接入"
+                message: "无法写回使用未知加密方式的 KDBX 文件"
             )
         }
     }
@@ -661,7 +661,7 @@ public struct DefaultKeePassKdbx4HeaderWriter: KeePassKdbx4HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX cipher header 写回尚未接入"
+                message: "无法写回未知加密方式的 KDBX 文件头"
             )
         }
     }
@@ -677,7 +677,7 @@ public struct DefaultKeePassKdbx4HeaderWriter: KeePassKdbx4HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX cipher header 写回尚未接入"
+                message: "无法写回未知加密方式的 KDBX 文件头"
             )
         }
     }
@@ -691,7 +691,7 @@ public struct DefaultKeePassKdbx4HeaderWriter: KeePassKdbx4HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX compression header 写回尚未接入"
+                message: "无法写回未知压缩方式的 KDBX 文件头"
             )
         }
     }
@@ -734,7 +734,7 @@ public struct DefaultKeePassKdbx4HeaderWriter: KeePassKdbx4HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX KDF header 写回尚未接入"
+                message: "无法写回未知密钥派生方式的 KDBX 文件头"
             )
         }
 
@@ -905,7 +905,7 @@ public struct DefaultKeePassKdbx3HeaderWriter: KeePassKdbx3HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX3 cipher header 写回尚未接入"
+                message: "无法写回未知加密方式的 KDBX3 文件头"
             )
         }
     }
@@ -921,7 +921,7 @@ public struct DefaultKeePassKdbx3HeaderWriter: KeePassKdbx3HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX3 cipher header 写回尚未接入"
+                message: "无法写回未知加密方式的 KDBX3 文件头"
             )
         }
     }
@@ -935,7 +935,7 @@ public struct DefaultKeePassKdbx3HeaderWriter: KeePassKdbx3HeaderWriter {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX3 compression header 写回尚未接入"
+                message: "无法写回未知压缩方式的 KDBX3 文件头"
             )
         }
     }
@@ -994,7 +994,7 @@ public struct DefaultKeePassKdbxBlockStreamEncoder: KeePassKdbxBlockStreamEncode
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX block stream 写回尚未接入"
+                message: "无法写回未知数据块格式的 KDBX 文件"
             )
         }
     }
@@ -1184,7 +1184,7 @@ public struct DefaultKeePassKdbxBlockStreamDecoder: KeePassKdbxBlockStreamDecode
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX block stream 尚未接入"
+                message: "无法读取未知数据块格式的 KDBX 文件"
             )
         }
     }
@@ -1586,7 +1586,7 @@ public struct DefaultKeePassKdbxKeyDeriver: KeePassKdbxKeyDeriver {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX KDF 尚未接入"
+                message: "无法打开使用未知密钥派生方式的 KDBX 文件"
             )
         }
     }
@@ -3359,7 +3359,7 @@ public struct DefaultKeePassDatabaseReader: KeePassDatabaseReader {
         }
         throw KeePassOperationError(
             code: .formatUnsupported,
-            message: "KDBX 解码器尚未接入"
+            message: "当前无法解码该 KDBX 文件"
         )
     }
 
@@ -3823,7 +3823,7 @@ public struct DefaultKeePassKdbx3WritebackCoordinator: KeePassKdbx3WritebackCoor
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX3 compression writeback 尚未接入"
+                message: "无法写回未知压缩方式的 KDBX3 文件"
             )
         }
     }
@@ -3999,7 +3999,7 @@ public struct DefaultKeePassKdbx4WritebackCoordinator: KeePassKdbx4WritebackCoor
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KDBX compression writeback 尚未接入"
+                message: "无法写回未知压缩方式的 KDBX 文件"
             )
         }
     }
@@ -4054,7 +4054,7 @@ public struct UnsupportedKeePassDatabaseReader: KeePassDatabaseReader {
     ) throws -> KeePassReadOnlySnapshot {
         throw KeePassOperationError(
             code: .formatUnsupported,
-            message: "KDBX 解码器尚未接入"
+            message: "当前无法解码该 KDBX 文件"
         )
     }
 }
@@ -4154,7 +4154,7 @@ private final class KeePassProtectedValueStreamDecoder {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KeePass protected value stream 尚未接入"
+                message: "无法读取未知保护流的 KeePass 数据"
             )
         }
     }
@@ -4219,7 +4219,7 @@ private final class KeePassProtectedValueStreamEncoder {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "未知 KeePass protected value stream 写回尚未接入"
+                message: "无法写回未知保护流的 KeePass 数据"
             )
         }
     }
@@ -5562,7 +5562,7 @@ public enum LocalAttachmentContentCryptoError: Error, Sendable, Equatable, Local
         case .authenticationFailed:
             return "附件解密认证失败。"
         case .unsupportedWrappedContentEncryptionKey:
-            return "附件内容密钥包裹格式暂不支持。"
+            return "无法打开该附件内容。"
         }
     }
 }
@@ -6462,7 +6462,7 @@ public enum AndroidBackupCodec {
         do {
             let decoded = try JSONDecoder().decode(AttachmentManifest.self, from: manifest.data)
             guard decoded.version == 1 else {
-                issues.append(issue(entryPath: manifest.path, code: .unsupportedEntry, detail: "不支持的附件 manifest 版本"))
+                issues.append(issue(entryPath: manifest.path, code: .unsupportedEntry, detail: "不支持的附件清单版本"))
                 return []
             }
             return decoded.entries.enumerated().map { offset, entry in
@@ -6483,7 +6483,7 @@ public enum AndroidBackupCodec {
                 )
             }
         } catch {
-            issues.append(issue(entryPath: manifest.path, code: .malformedJSON, detail: "Android 附件 manifest 无法解析"))
+            issues.append(issue(entryPath: manifest.path, code: .malformedJSON, detail: "移动端备份附件清单无法解析"))
             return []
         }
     }
@@ -6536,7 +6536,7 @@ public enum AndroidBackupCodec {
                 )
             }
         } catch {
-            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 回收站密码 JSON 无法解析"))
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "移动端备份回收站密码数据无法解析"))
             return []
         }
     }
@@ -6567,7 +6567,7 @@ public enum AndroidBackupCodec {
                 )
             }
         } catch {
-            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "Android 回收站安全条目 JSON 无法解析"))
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "移动端备份回收站安全条目数据无法解析"))
             return []
         }
     }
@@ -6897,7 +6897,7 @@ public enum AndroidBackupCodec {
             }
             return AndroidBackupImportedItem(sourceID: sourceID, draft: draft)
         } catch {
-            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "移动端备份 JSON 无法解析"))
+            issues.append(issue(entryPath: path, code: .malformedJSON, detail: "移动端备份数据无法解析"))
             return nil
         }
     }
@@ -7465,7 +7465,7 @@ public enum VaultCSVCodec {
                 notes: record.value("notes")
             ))
         case .attachmentRef:
-            issues.append(issue(row: rowNumber, code: .unsupportedKind, field: "kind", detail: "CSV 暂不导入附件内容"))
+            issues.append(issue(row: rowNumber, code: .unsupportedKind, field: "kind", detail: "CSV 未包含可导入的附件内容"))
             return nil
         }
     }
@@ -7753,15 +7753,15 @@ public enum ParityFeatureFlag: String, Sendable, Equatable, CaseIterable {
         }
         switch self {
         case .backup:
-            return "后续阶段接入移动端备份兼容。"
+            return "移动端备份当前不可用。"
         case .keepass:
-            return "第四阶段接入 KDBX 兼容。"
+            return "KDBX 导入当前不可用。"
         case .bitwarden:
-            return "后续阶段接入 Bitwarden 多真源。"
+            return "Bitwarden 同步当前不可用。"
         case .passkeys:
-            return "后续阶段接入 iOS AuthenticationServices。"
+            return "通行密钥当前不可用。"
         case .attachments:
-            return "后续阶段接入附件。"
+            return "附件当前不可用。"
         case .passwords, .totp, .notes, .wallet, .identities, .autofill, .settings:
             return nil
         }
