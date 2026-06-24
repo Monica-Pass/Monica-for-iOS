@@ -195,7 +195,7 @@ public struct MonicaPasskeyRegistrationResult: Sendable, Equatable {
             credentialID: credentialID.base64EncodedString(),
             publicKeyCOSE: publicKeyCOSE.base64EncodedString(),
             privateKeyReference: privateKeyReference,
-            notes: "iOS system passkey registration."
+            notes: "由系统通行密钥注册创建。"
         )
     }
 }

@@ -3147,11 +3147,11 @@ public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedErr
         case .authenticationRequired:
             "Bitwarden 需要先登录。"
         case .unsupportedOperation:
-            "Bitwarden 同步当前操作尚未接入。"
+            "Bitwarden 同步暂时无法执行该操作。"
         case .unsupportedKDF(let rawValue):
-            "Bitwarden KDF \(rawValue) 当前尚未接入。"
+            "Bitwarden KDF \(rawValue) 暂时无法使用。"
         case .twoFactorRequired:
-            "Bitwarden 需要两步验证，当前 iOS 登录入口尚未接入验证码。"
+            "Bitwarden 需要两步验证，请完成验证后重试。"
         case .serverRejected(let statusCode):
             "Bitwarden 同步失败：服务器返回 \(statusCode)。"
         case .invalidServerURL:
@@ -4257,7 +4257,7 @@ public enum CloudFileProviderError: Error, Sendable, Equatable, LocalizedError {
         case .itemNotFound(let provider):
             "\(provider.displayName) 未找到远端文件。"
         case .unsupportedOperation(let provider):
-            "\(provider.displayName) 当前操作尚未接入。"
+            "\(provider.displayName) 暂时无法执行该操作。"
         case .conflict(let provider):
             "\(provider.displayName) 远端文件已变化，请重新下载后再写回。"
         }
