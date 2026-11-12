@@ -4,7 +4,19 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$IOS_DIR/.." && pwd)"
-MDBX_DIR="$REPO_ROOT/mdbx"
+# 上游 MDBX workspace 定位：
+#   1. MONICA_MDBX_DIR 环境变量（CI 用；checkout 到任意位置）
+#   2. 同级目录 $REPO_ROOT/mdbx（本地开发的默认布局）
+#   3. 仓库内子目录 $IOS_DIR/mdbx（CI 单次 checkout 的默认布局）
+if [ -n "${MONICA_MDBX_DIR:-}" ]; then
+  MDBX_DIR="$MONICA_MDBX_DIR"
+elif [ -d "$REPO_ROOT/mdbx/crates/mdbx-ffi" ]; then
+  MDBX_DIR="$REPO_ROOT/mdbx"
+elif [ -d "$IOS_DIR/mdbx/crates/mdbx-ffi" ]; then
+  MDBX_DIR="$IOS_DIR/mdbx"
+else
+  MDBX_DIR="$REPO_ROOT/mdbx"
+fi
 OUT_DIR="$IOS_DIR/Generated/MDBXUniFFI"
 LIB_PATH="$MDBX_DIR/target/debug/libmdbx_ffi.dylib"
 

@@ -48,7 +48,11 @@ jobs:
           if ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
             echo "Skipping diff check: no comparable base commit."
           else
-            if ! git diff --check "$base" HEAD -- . ':(exclude)Artifacts/**'; then
+            # Artifacts/ 是 vendored 二进制；Generated/ 是 UniFFI 生成产物（自带尾随空格），
+            # 两者都不应受格式检查约束。
+            if ! git diff --check "$base" HEAD -- . \
+                 ':(exclude)Artifacts/**' \
+                 ':(exclude)SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated/**'; then
               echo "::error::Trailing whitespace found in changed lines."
               exit 1
             fi
@@ -192,6 +196,9 @@ jobs:
 
       - name: Build XCFramework
         if: steps.artifact-cache.outputs.cache-hit != 'true'
+        env:
+          # checkout 到仓库内子目录，显式告知脚本，不依赖目录布局推断。
+          MONICA_MDBX_DIR: ${{ github.workspace }}/mdbx
         run: Scripts/build-mdbx-xcframework.sh
 
       - name: Verify artifact
