@@ -339,6 +339,22 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertNotEqual(model.vaultOperationState, .failed("github-password-secret"))
     }
 
+    /// 深链回归：`openShortcutURL` 已实现，但如果 `monica` scheme 没在 Info.plist 注册，
+    /// App Intents / 快捷指令生成的 `monica://...` 永远不会被系统交给本 App。
+    func testAppBundleRegistersMonicaURLSchemeForShortcutDeepLinks() throws {
+        let urlTypes = try XCTUnwrap(
+            Bundle.main.object(forInfoDictionaryKey: "CFBundleURLTypes") as? [[String: Any]]
+        )
+        let registeredSchemes = urlTypes
+            .compactMap { $0["CFBundleURLSchemes"] as? [String] }
+            .flatMap { $0 }
+
+        XCTAssertTrue(
+            registeredSchemes.contains("monica"),
+            "Info.plist 必须注册 monica scheme，否则快捷指令深链无法拉起 App；当前已注册：\(registeredSchemes)"
+        )
+    }
+
     func testShareActionImportCreatesEntriesAndAttachmentWithoutLeakingSecrets() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()

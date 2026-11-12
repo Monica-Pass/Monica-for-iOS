@@ -97,14 +97,18 @@ Rust 侧桥接 crate 位于上游 MDBX workspace：
 mdbx/crates/mdbx-ffi
 ```
 
-> **首次克隆必读**：`Artifacts/MDBX/` 与 `Generated/MDBXUniFFI/` 都是 `.gitignore` 排除的构建产物。
-> 缺少 `Artifacts/MDBX/MonicaMDBXGenerated.xcframework` 时，Xcode 会在解析包依赖阶段直接失败：
-> `local binary target 'mdbx_ffiFFI' ... does not contain a binary artifact`。
-> 这不是代码问题，执行下面两个脚本即可恢复。
+`Artifacts/MDBX/`（约 70MB）与 `Generated/MDBXUniFFI/` 都是 `.gitignore` 排除的构建产物，不入库。
 
-前置条件：
+#### 一键准备（推荐）
 
-1. 上游 MDBX workspace 与本仓库同级检出（脚本硬编码 `REPO_ROOT/mdbx`）：
+```bash
+Scripts/bootstrap.sh
+```
+
+脚本会自动检查前置条件、安装缺失的 Rust target 与 UniFFI CLI，并生成 xcframework。
+产物已存在时直接跳过；强制重生成用 `Scripts/bootstrap.sh --force`。
+
+前置条件——上游 MDBX workspace 必须与本仓库同级：
 
 ```text
 <workspace>/
@@ -112,28 +116,37 @@ mdbx/crates/mdbx-ffi
 └── mdbx/            ← 上游 MDBX workspace
 ```
 
-2. Rust 工具链含三个 iOS target：
+若还没有：
+
+```bash
+cd .. && git clone https://github.com/Monica-Pass/Mdbx.git mdbx
+```
+
+#### 产物缺失时的行为
+
+**不再导致包解析失败。** `SwiftPackages/MonicaMDBX/Package.swift` 仅在产物存在时才声明
+`binaryTarget`，源码用 `#if canImport(mdbx_ffiFFI)` 守卫：
+
+| 状态 | `xcodebuild -list` | `xcodebuild build` | 运行时 |
+| --- | --- | --- | --- |
+| 产物存在 | ✅ | ✅ | MDBX 正常 |
+| 产物缺失 | ✅ | ✅ | 抛 `unavailableOnCurrentPlatform` |
+
+也就是说缺产物时工程仍可在 IDE 中打开、编译、跑非保险库相关的测试，只是无法解锁保险库。
+这避免了以前「连工程都解析不了」的死局。
+
+#### 手动分步构建
+
+```bash
+Scripts/generate-mdbx-swift-bindings.sh   # 生成 Swift binding
+Scripts/build-mdbx-xcframework.sh        # 打包 xcframework（约 1–2 分钟）
+```
+
+需要的 Rust target 与 UniFFI CLI 版本：
 
 ```bash
 rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
-```
-
-3. UniFFI CLI：
-
-```bash
 cargo install uniffi --version 0.31.1 --locked --features cli
-```
-
-生成 Swift binding：
-
-```bash
-Scripts/generate-mdbx-swift-bindings.sh
-```
-
-生成 iOS XCFramework（约 1–2 分钟，需先完成上一步）：
-
-```bash
-Scripts/build-mdbx-xcframework.sh
 ```
 
 注意：不要把 `Scripts/build-mdbx-xcframework.sh` 和 Xcode build 并行运行。脚本会替换 `MonicaMDBXGenerated.xcframework`，Xcode 在替换期间读取产物可能失败。

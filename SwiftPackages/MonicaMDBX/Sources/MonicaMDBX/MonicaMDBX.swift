@@ -128,7 +128,7 @@ public struct MonicaMDBXSmokeTestResult: Sendable, Equatable {
     public let entryTitle: String
 }
 
-#if os(iOS)
+#if canImport(mdbx_ffiFFI)
 public final class MonicaMDBXVault: @unchecked Sendable {
     private let rawVault: MdbxVault
 
@@ -1847,7 +1847,7 @@ public enum MonicaMDBXRuntime {
         password: String,
         deviceID: String
     ) throws -> MonicaMDBXVault {
-        #if os(iOS)
+        #if canImport(mdbx_ffiFFI)
         try MonicaMDBXVault(
             rawVault: MonicaMDBX.createVault(
                 path: fileURL.path,
@@ -1865,7 +1865,7 @@ public enum MonicaMDBXRuntime {
         password: String,
         deviceID: String
     ) throws -> MonicaMDBXVault {
-        #if os(iOS)
+        #if canImport(mdbx_ffiFFI)
         try MonicaMDBXVault(
             rawVault: MonicaMDBX.openVault(
                 path: fileURL.path,
@@ -1883,7 +1883,7 @@ public enum MonicaMDBXRuntime {
         securityKeyMaterial: Data,
         deviceID: String
     ) throws -> MonicaMDBXVault {
-        #if os(iOS)
+        #if canImport(mdbx_ffiFFI)
         try MonicaMDBXVault(
             rawVault: MonicaMDBX.openVaultWithSecurityKey(
                 path: fileURL.path,
@@ -1903,7 +1903,7 @@ public enum MonicaMDBXTechnicalVerifier {
         password: String = "中文 password 12345!",
         deviceID: String = "ios-technical-verifier"
     ) throws -> MonicaMDBXSmokeTestResult {
-        #if os(iOS)
+        #if canImport(mdbx_ffiFFI)
         let vaultURL = directoryURL.appendingPathComponent(
             "monica-ios-\(UUID().uuidString).mdbx",
             isDirectory: false
