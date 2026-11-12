@@ -7,10 +7,13 @@ xcuserdata/
 **/xcuserdata/
 SwiftPackages/**/.swiftpm/xcode/xcuserdata/
 
-# 本地临时文档草稿（README / LICENSE / PR_*.md / .parity-reports 需纳入版本库）
+# 本地临时文档草稿
 *.local.md
 *.scratch.md
 .DS_Store
+
+# 历史审计报告（已移出仓库，见 README 的“功能差异跟踪”一节）
+.parity-reports/
 
 Generated/MDBXUniFFI/*
 

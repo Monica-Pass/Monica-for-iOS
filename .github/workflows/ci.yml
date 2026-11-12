@@ -1,0 +1,333 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # 单一来源：所有 job 共用同一个 Xcode 与 MDBX ref，避免漂移。
+  MONICA_XCODE_APP: /Applications/Xcode_26.5.app
+  MONICA_MDBX_REPOSITORY: Monica-Pass/Mdbx
+  MONICA_MDBX_REF: ${{ github.event.inputs.mdbx_ref || 'master' }}
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Linux：秒级完成。所有不需要 macOS 的静态检查都在这里，不占稀缺 runner。
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Whitespace and conflict markers
+        run: |
+          set -euo pipefail
+          # 只检查本次改动引入的行，避免历史遗留问题误报。
+          # Artifacts/ 是 vendored 二进制（MSAL 头文件自带大量尾随空格），排除。
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+          # 首次 push / force push / 新分支时 before 可能全为 0 或不可达。
+          if ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            base="HEAD~1"
+          fi
+          if ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            echo "Skipping diff check: no comparable base commit."
+          else
+            if ! git diff --check "$base" HEAD -- . ':(exclude)Artifacts/**'; then
+              echo "::error::Trailing whitespace found in changed lines."
+              exit 1
+            fi
+          fi
+          if git grep -nE '^(<<<<<<<|=======$|>>>>>>>)' -- . ':(exclude)Artifacts/**'; then
+            echo "::error::Merge conflict marker found."
+            exit 1
+          fi
+
+      - name: Lint property lists
+        run: |
+          set -euo pipefail
+          if ! command -v plutil >/dev/null 2>&1; then
+            # ubuntu runner 没有 plutil，用 python plistlib 做等价校验
+            python3 - <<'PY'
+          import glob, plistlib, sys
+          files = glob.glob('App/**/*.plist', recursive=True) \
+                + glob.glob('App/**/*.entitlements', recursive=True) \
+                + glob.glob('Extensions/**/*.plist', recursive=True) \
+                + glob.glob('Extensions/**/*.entitlements', recursive=True)
+          failed = []
+          for path in files:
+              try:
+                  with open(path, 'rb') as handle:
+                      plistlib.load(handle)
+              except Exception as error:
+                  failed.append(f'{path}: {error}')
+          for line in failed:
+              print(f'::error::{line}')
+          print(f'checked {len(files)} property lists, {len(failed)} failed')
+          sys.exit(1 if failed else 0)
+          PY
+          else
+            find App Extensions -type f \( -name '*.plist' -o -name '*.entitlements' \) -print0 \
+              | xargs -0 plutil -lint
+          fi
+
+      - name: Validate workflow YAML
+        run: |
+          set -euo pipefail
+          python3 -c "import yaml, glob, sys; [yaml.safe_load(open(f)) for f in glob.glob('.github/workflows/*.yml')]; print('workflow YAML OK')"
+
+      - name: Check required files and executable bits
+        run: |
+          set -euo pipefail
+          for path in \
+            Scripts/bootstrap.sh \
+            Scripts/build-mdbx-xcframework.sh \
+            Scripts/generate-mdbx-swift-bindings.sh
+          do
+            [ -x "$path" ] || { echo "::error::$path must be executable"; exit 1; }
+          done
+          for path in \
+            Artifacts/MSAL/MSAL.xcframework \
+            Monica.xcodeproj/xcshareddata/xcschemes/Monica.xcscheme \
+            README.md \
+            LICENSE
+          do
+            [ -e "$path" ] || { echo "::error::$path is missing"; exit 1; }
+          done
+
+      - name: Reject tracked build artifacts
+        run: |
+          set -euo pipefail
+          # Artifacts/MDBX 与 Generated 是构建产物，不应入库。
+          if git ls-files --error-unmatch Artifacts/MDBX >/dev/null 2>&1; then
+            echo "::error::Artifacts/MDBX must not be tracked"
+            exit 1
+          fi
+          if git ls-files --error-unmatch Generated/MDBXUniFFI >/dev/null 2>&1; then
+            echo "::error::Generated/MDBXUniFFI must not be tracked"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 唯一产出 MDBX 产物的 job。其余 macOS job 全部复用它的 artifact，
+  # 避免重复编译 Rust（此前两个 workflow 各构建一次）。
+  # ---------------------------------------------------------------------------
+  mdbx-artifact:
+    name: MDBX artifact
+    runs-on: macos-26
+    timeout-minutes: 40
+    outputs:
+      cache-key: ${{ steps.key.outputs.cache-key }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.MONICA_MDBX_REPOSITORY }}
+          ref: ${{ env.MONICA_MDBX_REF }}
+          path: mdbx
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s "$MONICA_XCODE_APP/Contents/Developer"
+          xcodebuild -version
+
+      - name: Compute cache key
+        id: key
+        run: |
+          set -euo pipefail
+          tooling="$({
+            shasum Scripts/build-mdbx-xcframework.sh
+            shasum Scripts/generate-mdbx-swift-bindings.sh
+            shasum SwiftPackages/MonicaMDBX/Package.swift
+            xcodebuild -version
+            rustc -Vv
+          } | shasum | cut -d' ' -f1)"
+          echo "cache-key=mdbx-$(git -C mdbx rev-parse --short HEAD)-$tooling" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ~/.cargo/bin/uniffi-bindgen-swift
+            mdbx/target
+          key: cargo-${{ runner.os }}-${{ steps.key.outputs.cache-key }}
+          restore-keys: cargo-${{ runner.os }}-
+
+      - name: Install UniFFI CLI
+        run: |
+          set -euo pipefail
+          if ! command -v uniffi-bindgen-swift >/dev/null 2>&1; then
+            cargo install uniffi --version 0.31.1 --locked --features cli
+          fi
+
+      - uses: actions/cache@v4
+        id: artifact-cache
+        with:
+          path: |
+            Artifacts/MDBX/MonicaMDBXGenerated.xcframework
+            SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated
+          key: mdbx-artifact-${{ steps.key.outputs.cache-key }}
+
+      - name: Build XCFramework
+        if: steps.artifact-cache.outputs.cache-hit != 'true'
+        run: Scripts/build-mdbx-xcframework.sh
+
+      - name: Verify artifact
+        run: |
+          set -euo pipefail
+          test -d Artifacts/MDBX/MonicaMDBXGenerated.xcframework
+          test -f SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated/mdbx_ffi.swift
+          plutil -lint Artifacts/MDBX/MonicaMDBXGenerated.xcframework/Info.plist
+
+      - name: Pack
+        run: |
+          set -euo pipefail
+          tar -czf mdbx-ios.tgz \
+            Artifacts/MDBX/MonicaMDBXGenerated.xcframework \
+            SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mdbx-ios
+          path: mdbx-ios.tgz
+          retention-days: 7
+          if-no-files-found: error
+
+  # ---------------------------------------------------------------------------
+  # 纯 Swift 包：一个 matrix job，4 个包并行。无需 MDBX 产物。
+  # ---------------------------------------------------------------------------
+  swift-packages:
+    name: SwiftPM ${{ matrix.package }}
+    runs-on: macos-26
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        package: [MonicaCore, MonicaSecurity, MonicaSync, MonicaUI]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s "$MONICA_XCODE_APP/Contents/Developer"
+
+      - uses: actions/cache@v4
+        with:
+          path: SwiftPackages/${{ matrix.package }}/.build
+          key: spm-${{ runner.os }}-${{ matrix.package }}-${{ hashFiles('SwiftPackages/**/Package.swift', 'SwiftPackages/**/Package.resolved') }}
+          restore-keys: spm-${{ runner.os }}-${{ matrix.package }}-
+
+      - name: Test
+        run: swift test --package-path "SwiftPackages/${{ matrix.package }}"
+
+  # ---------------------------------------------------------------------------
+  # MDBX 依赖包的测试 + 整个 App 的构建 + XCTest，合并为一个 job。
+  #
+  # 合并理由：
+  #   - Monica scheme 已通过 target dependency 包含 3 个扩展，单独 build
+  #     各扩展 scheme 属重复劳动（此前是 4 scheme × 2 config = 8 个 job）。
+  #   - Debug/Release 只保留 Release：Release 会做完整优化与链接，
+  #     能暴露 Debug 暴露不了的问题；Debug 的增量价值不足以占一个 macOS job。
+  # ---------------------------------------------------------------------------
+  app:
+    name: App build and tests
+    runs-on: macos-26
+    timeout-minutes: 60
+    needs: mdbx-artifact
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: |
+          set -euo pipefail
+          sudo xcode-select -s "$MONICA_XCODE_APP/Contents/Developer"
+          xcodebuild -version
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: mdbx-ios
+
+      - name: Unpack MDBX artifact
+        run: tar -xzf mdbx-ios.tgz
+
+      - uses: actions/cache@v4
+        with:
+          path: SwiftPackages/MonicaMDBX/.build
+          key: spm-mdbx-${{ runner.os }}-${{ needs.mdbx-artifact.outputs.cache-key }}
+          restore-keys: spm-mdbx-${{ runner.os }}-
+
+      - name: Test MonicaMDBX
+        run: swift test --package-path SwiftPackages/MonicaMDBX
+
+      - name: Test MonicaStorage
+        run: swift test --package-path SwiftPackages/MonicaStorage
+
+      - uses: actions/cache@v4
+        with:
+          path: DerivedData
+          key: xcode-${{ runner.os }}-${{ needs.mdbx-artifact.outputs.cache-key }}-${{ hashFiles('Monica.xcodeproj/project.pbxproj', 'Monica.xcodeproj/xcshareddata/xcschemes/*.xcscheme', 'SwiftPackages/**/Package.swift', 'SwiftPackages/**/Package.resolved') }}
+          restore-keys: xcode-${{ runner.os }}-
+
+      - name: Select simulator
+        run: |
+          set -euo pipefail
+          udid="$(xcrun simctl list devices available --json \
+            | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next((x['udid'] for v in d.values() for x in v if 'iPhone' in x['name']), ''))")"
+          [ -n "$udid" ] || { echo "::error::No iPhone simulator available"; exit 1; }
+          echo "IOS_DESTINATION=platform=iOS Simulator,id=$udid" >> "$GITHUB_ENV"
+          echo "Using simulator $udid"
+
+      # 一次 build 覆盖 App + 三个扩展（scheme 内含 target dependency）。
+      - name: Build (Release)
+        run: |
+          set -euo pipefail
+          xcodebuild build \
+            -project Monica.xcodeproj \
+            -scheme Monica \
+            -configuration Release \
+            -destination "generic/platform=iOS Simulator" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+
+      - name: Test
+        run: |
+          set -euo pipefail
+          xcodebuild test \
+            -project Monica.xcodeproj \
+            -scheme Monica \
+            -destination "$IOS_DESTINATION" \
+            -derivedDataPath DerivedData \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            -resultBundlePath TestResults.xcresult
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: TestResults.xcresult
+          retention-days: 7
+          if-no-files-found: ignore
