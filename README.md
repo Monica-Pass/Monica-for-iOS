@@ -198,6 +198,37 @@ xcodebuild test \
   CODE_SIGNING_ALLOWED=NO
 ```
 
+### CI
+
+`.github/workflows/ci.yml` 是唯一的构建入口，只开 **3 个 macOS job**：
+
+| Job | Runner | 内容 |
+| --- | --- | --- |
+| `lint` | ubuntu | plist/entitlements 解析、workflow YAML、可执行位、禁止入库产物、空白与冲突标记 |
+| `mdbx-artifact` | macos | 构建 MDBX xcframework，上传为 artifact |
+| `swift-packages` | macos | MonicaCore / MonicaSecurity / MonicaSync / MonicaUI 并行 `swift test` |
+| `app` | macos | 复用 MDBX artifact，跑 MDBX/Storage 包测试 + Release 构建 + XCTest |
+
+设计要点：
+
+- **只构建一次 MDBX**。此前两个 workflow 各自编译 Rust，同一产物造了两遍。
+- **只构建一次 App**。`Monica` scheme 已通过 target dependency 包含三个扩展，
+  再单独 build 各扩展 scheme 属重复劳动（旧设计是 4 scheme × 2 configuration = 8 个 job）。
+- **Debug 构建已删除**。Release 做完整优化与链接，Debug 的增量价值不足以占一个 macOS job。
+- **静态检查全部下沉到 ubuntu**。macOS runner 在公共仓库排队很慢，
+  曾因容量不足导致 job 直接 cancelled（`The job was not acquired by Runner of type hosted`）。
+- 同一 ref 的旧运行会被自动取消（`concurrency`），避免堆积。
+
+### 功能差异跟踪
+
+Android/iOS 的功能差异以 **GitHub issue** 为唯一事实源，仓库内不再保留审计报告副本。
+
+历史背景：`.parity-reports/` 曾收录两份逐条盘点（`android-features.md`、`ios-features.md`），
+但它们是某一次代码快照（`e49c83c`）的产物，随代码演进迅速失真，
+反而误导后续判断。现在差异项由 issue 直接跟踪，每条附 `file:line` 取证。
+
+已移出仓库，本地目录名保留在 `.gitignore` 中，避免误提交。
+
 ---
 
 ## 路线
