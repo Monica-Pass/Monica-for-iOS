@@ -13684,7 +13684,7 @@ struct AppRootView: View {
                                 deviceID: environment.localDeviceIdentifier,
                                 fallbackDirectory: vaultDirectory
                             )
-                            importPendingAutoFillSaveRequests()
+                            importPendingExtensionInboxItems()
                             session.maybePresentQuickSetupAfterUnlock()
                         }
                     },
@@ -13720,8 +13720,7 @@ struct AppRootView: View {
             if phase == .active {
                 restoreOneDriveAuthenticationSessionIfAvailable()
                 restoreBitwardenAuthenticationSessionIfAvailable()
-                importPendingAutoFillSaveRequests()
-                importPendingSystemPasskeyRegistrations()
+                importPendingExtensionInboxItems()
             }
         }
         .onOpenURL { url in
@@ -13732,8 +13731,7 @@ struct AppRootView: View {
         .task {
             restoreOneDriveAuthenticationSessionIfAvailable()
             restoreBitwardenAuthenticationSessionIfAvailable()
-            importPendingAutoFillSaveRequests()
-            importPendingSystemPasskeyRegistrations()
+            importPendingExtensionInboxItems()
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(
@@ -13791,6 +13789,30 @@ struct AppRootView: View {
         } catch {
             // AppSessionModel owns user-visible failure state.
         }
+    }
+
+    private func importPendingShareExtensionItems() {
+        guard session.vaultState == .unlocked,
+              let inboxStore = AppShareExtensionInboxStore()
+        else {
+            return
+        }
+        do {
+            try session.importPendingShareExtensionItems(
+                inboxStore: inboxStore,
+                projectTitle: session.activeVaultName ?? "个人"
+            )
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    /// 统一排空所有 App Group 收件箱（AutoFill 保存 / 分享扩展 / 系统通行密钥注册）。
+    /// 所有解锁与前台激活路径都应调用本方法，避免新增收件箱时漏接。
+    private func importPendingExtensionInboxItems() {
+        importPendingAutoFillSaveRequests()
+        importPendingShareExtensionItems()
+        importPendingSystemPasskeyRegistrations()
     }
 
     private func importPendingSystemPasskeyRegistrations() {
@@ -13889,7 +13911,7 @@ struct AppRootView: View {
                 in: vaultDirectory,
                 deviceID: environment.localDeviceIdentifier
             )
-            importPendingAutoFillSaveRequests()
+            importPendingExtensionInboxItems()
             session.maybePresentQuickSetupAfterUnlock()
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -13907,7 +13929,7 @@ struct AppRootView: View {
                         in: vaultDirectory,
                         deviceID: environment.localDeviceIdentifier
                     )
-                    importPendingAutoFillSaveRequests()
+                    importPendingExtensionInboxItems()
                     session.maybePresentQuickSetupAfterUnlock()
                 }
             } else {
@@ -13915,7 +13937,7 @@ struct AppRootView: View {
                     deviceID: environment.localDeviceIdentifier,
                     fallbackDirectory: vaultDirectory
                 )
-                importPendingAutoFillSaveRequests()
+                importPendingExtensionInboxItems()
                 session.maybePresentQuickSetupAfterUnlock()
             }
         } catch {
@@ -13936,7 +13958,7 @@ struct AppRootView: View {
                 at: fileURL,
                 deviceID: environment.localDeviceIdentifier
             )
-            importPendingAutoFillSaveRequests()
+            importPendingExtensionInboxItems()
             session.maybePresentQuickSetupAfterUnlock()
         } catch {
             // AppSessionModel owns user-visible failure state.

@@ -143,9 +143,10 @@ echo "Swift binding source: $GENERATED_DIR/mdbx_ffi.swift"
 
 mkdir -p "$SWIFTPM_BINDINGS_DIR"
 {
-  echo "#if os(iOS)"
+  # 用 canImport 守卫而非 os(iOS)：缺产物时整个生成文件不参与编译，
+  # 由 MonicaMDBX.swift 的 stub 实现回落，保证工程仍可构建。
+  echo "#if os(iOS) && canImport(mdbx_ffiFFI)"
   cat "$GENERATED_DIR/mdbx_ffi.swift"
   printf "\n#endif\n"
 } > "$SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"
-rm -f "$SWIFTPM_BINDINGS_DIR/mdbx_ios_ffi.swift"
 echo "Synced SwiftPM binding source: $SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"
