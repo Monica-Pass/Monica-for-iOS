@@ -15,7 +15,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 REPO_ROOT="$(cd "$IOS_DIR/.." && pwd)"
 
-MDBX_DIR="$REPO_ROOT/mdbx"
+if [ -n "${MONICA_MDBX_DIR:-}" ]; then
+  MDBX_DIR="$MONICA_MDBX_DIR"
+elif [ -d "$REPO_ROOT/mdbx/crates/mdbx-ffi" ]; then
+  MDBX_DIR="$REPO_ROOT/mdbx"
+elif [ -d "$IOS_DIR/mdbx/crates/mdbx-ffi" ]; then
+  MDBX_DIR="$IOS_DIR/mdbx"
+else
+  MDBX_DIR="$REPO_ROOT/mdbx"
+fi
 XCFRAMEWORK_PATH="$IOS_DIR/Artifacts/MDBX/MonicaMDBXGenerated.xcframework"
 UNIFFI_VERSION="0.31.1"
 IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios)
