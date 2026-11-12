@@ -94,7 +94,34 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 Rust 侧桥接 crate 位于上游 MDBX workspace：
 
 ```text
-mdbx/crates/mdbx-ios-ffi
+mdbx/crates/mdbx-ffi
+```
+
+> **首次克隆必读**：`Artifacts/MDBX/` 与 `Generated/MDBXUniFFI/` 都是 `.gitignore` 排除的构建产物。
+> 缺少 `Artifacts/MDBX/MonicaMDBXGenerated.xcframework` 时，Xcode 会在解析包依赖阶段直接失败：
+> `local binary target 'mdbx_ffiFFI' ... does not contain a binary artifact`。
+> 这不是代码问题，执行下面两个脚本即可恢复。
+
+前置条件：
+
+1. 上游 MDBX workspace 与本仓库同级检出（脚本硬编码 `REPO_ROOT/mdbx`）：
+
+```text
+<workspace>/
+├── Monica-for-iOS/   ← 本仓库
+└── mdbx/            ← 上游 MDBX workspace
+```
+
+2. Rust 工具链含三个 iOS target：
+
+```bash
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
+```
+
+3. UniFFI CLI：
+
+```bash
+cargo install uniffi --version 0.31.1 --locked --features cli
 ```
 
 生成 Swift binding：
@@ -103,32 +130,33 @@ mdbx/crates/mdbx-ios-ffi
 Scripts/generate-mdbx-swift-bindings.sh
 ```
 
-生成 iOS XCFramework：
+生成 iOS XCFramework（约 1–2 分钟，需先完成上一步）：
 
 ```bash
 Scripts/build-mdbx-xcframework.sh
-```
-
-如果缺少 UniFFI CLI：
-
-```bash
-cargo install uniffi --version 0.31.1 --locked --features cli
 ```
 
 注意：不要把 `Scripts/build-mdbx-xcframework.sh` 和 Xcode build 并行运行。脚本会替换 `MonicaMDBXGenerated.xcframework`，Xcode 在替换期间读取产物可能失败。
 
 ### 验证命令
 
-Swift package 测试：
+Swift package 测试（纯 Swift 包，可在 macOS 上直接跑）：
 
 ```bash
 cd SwiftPackages/MonicaCore && swift test
-cd ../MonicaMDBX && swift test
-cd ../MonicaStorage && swift test
 cd ../MonicaSecurity && swift test
 cd ../MonicaSync && swift test
 cd ../MonicaUI && swift test
 ```
+
+`MonicaMDBX` 与 `MonicaStorage` **不能用 `swift test`**：它们依赖 `MonicaMDBXGenerated.xcframework`，
+而该 xcframework 只包含 iOS slice，在 macOS 上会报：
+
+```text
+While building for macOS, no library for this platform was found in '.../MonicaMDBXGenerated.xcframework'
+```
+
+这两个包的验证请走 iOS simulator XCTest（下面的 `xcodebuild test`），它们被 `MonicaTests` target 覆盖。
 
 iOS simulator build：
 
