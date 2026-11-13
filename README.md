@@ -76,8 +76,7 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
     ├── MonicaMDBX/
     ├── MonicaSecurity/
     ├── MonicaStorage/
-    ├── MonicaSync/
-    └── MonicaUI/
+    └── MonicaSync/
 ```
 
 ### 技术栈
@@ -159,7 +158,6 @@ Swift package 测试（纯 Swift 包，可在 macOS 上直接跑）：
 cd SwiftPackages/MonicaCore && swift test
 cd ../MonicaSecurity && swift test
 cd ../MonicaSync && swift test
-cd ../MonicaUI && swift test
 ```
 
 `MonicaMDBX` 与 `MonicaStorage` **不能用 `swift test`**：它们依赖 `MonicaMDBXGenerated.xcframework`，
@@ -206,7 +204,7 @@ xcodebuild test \
 | --- | --- | --- |
 | `lint` | ubuntu | plist/entitlements 解析、workflow YAML、可执行位、禁止入库产物、空白与冲突标记 |
 | `mdbx-artifact` | macos | 构建 MDBX xcframework，上传为 artifact |
-| `swift-packages` | macos | MonicaCore / MonicaSecurity / MonicaSync / MonicaUI 并行 `swift test` |
+| `swift-packages` | macos | MonicaCore / MonicaSecurity / MonicaSync 并行 `swift test` |
 | `app` | macos | 复用 MDBX artifact，跑 MDBX/Storage 包测试 + Release 构建 + XCTest |
 
 设计要点：
@@ -221,13 +219,27 @@ xcodebuild test \
 
 ### 功能差异跟踪
 
-Android/iOS 的功能差异以 **GitHub issue** 为唯一事实源，仓库内不再保留审计报告副本。
+Android/iOS 的功能差异**只以 GitHub issue 为事实源**，仓库内不保留审计报告副本。
 
-历史背景：`.parity-reports/` 曾收录两份逐条盘点（`android-features.md`、`ios-features.md`），
-但它们是某一次代码快照（`e49c83c`）的产物，随代码演进迅速失真，
-反而误导后续判断。现在差异项由 issue 直接跟踪，每条附 `file:line` 取证。
+| 项目 | 位置 |
+| --- | --- |
+| 总览（含分类索引与基线说明） | issue [#67](https://github.com/Monica-Pass/Monica-for-iOS/issues/67) |
+| 单项差异 | issue #10–#66，每条附 `file:line` 取证 |
+| 工程债 | issue #68–#75（标签 `工程债`） |
 
-已移出仓库，本地目录名保留在 `.gitignore` 中，避免误提交。
+#### 已归档：`.parity-reports/`
+
+两份逐条盘点（`android-features.md` 326 行、`ios-features.md` 273 行）曾作为 57 条差异 issue 的依据，现已移出仓库。
+
+- **基线**：Android `main@e63d0ce` × iOS `e49c83c`，成文于 2026-11-12
+- **为何归档**：成文后 `main` 已前进 45 个提交，其中 `6507321`、`59773ad` 两个提交专门补齐了大批差异项。
+  报告中的「Bitwarden ✕ / Passkey ○ / 自动填充保存 ✕ / 无 CI / 无 README」等结论均已失效。
+  逐条复核后：**关闭 10 条**（#18 #19 #20 #21 #38 #43 #51 #54 #57 #64）、**改写 9 条**（#13 #17 #23 #34 #35 #40 #52 #56 #59）、
+  **修正 2 条平台判定**（#38 #40 从 `iOS 不可能` 改为 `iOS 可实现`）。
+- **为何不再维护**：平行文档必然随代码漂移，本次失真正是这么产生的。改为 issue 逐条跟踪，每条可独立关闭。
+- `.gitignore` 保留 `.parity-reports/`，防止本地副本被误提交。
+
+若需重新盘点，**产出物应是新的 issue**，而非仓库内的 Markdown 快照。
 
 ---
 

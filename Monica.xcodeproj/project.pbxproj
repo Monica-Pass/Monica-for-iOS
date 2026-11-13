@@ -17,7 +17,6 @@
 		A10000000000000000000008 /* MonicaSecurity in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D3 /* MonicaSecurity */; };
 		A10000000000000000000009 /* MonicaStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D4 /* MonicaStorage */; };
 		A1000000000000000000000A /* MonicaSync in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D5 /* MonicaSync */; };
-		A1000000000000000000000B /* MonicaUI in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D6 /* MonicaUI */; };
 		A1000000000000000000000C /* MonicaCore in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D7 /* MonicaCore */; };
 		A1000000000000000000000D /* MonicaSecurity in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D8 /* MonicaSecurity */; };
 		A1000000000000000000000E /* MonicaStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000D9 /* MonicaStorage */; };
@@ -140,7 +139,6 @@
 				A10000000000000000000008 /* MonicaSecurity in Frameworks */,
 				A10000000000000000000009 /* MonicaStorage in Frameworks */,
 				A1000000000000000000000A /* MonicaSync in Frameworks */,
-				A1000000000000000000000B /* MonicaUI in Frameworks */,
 				A50000000000000000000002 /* MSAL in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -318,7 +316,6 @@
 				A100000000000000000000D3 /* MonicaSecurity */,
 				A100000000000000000000D4 /* MonicaStorage */,
 				A100000000000000000000D5 /* MonicaSync */,
-				A100000000000000000000D6 /* MonicaUI */,
 				A500000000000000000000D1 /* MSAL */,
 			);
 			productName = Monica;
@@ -447,7 +444,6 @@
 				A100000000000000000000E3 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaSecurity" */,
 				A100000000000000000000E4 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaStorage" */,
 				A100000000000000000000E5 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaSync" */,
-				A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaUI" */,
 				A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */,
 			);
 			productRefGroup = A10000000000000000000077 /* Products */;
@@ -1024,10 +1020,6 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = SwiftPackages/MonicaSync;
 		};
-		A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaUI" */ = {
-			isa = XCLocalSwiftPackageReference;
-			relativePath = SwiftPackages/MonicaUI;
-		};
 		A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */ = {
 			isa = XCLocalSwiftPackageReference;
 			relativePath = SwiftPackages/MSAL;
@@ -1059,11 +1051,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A100000000000000000000E5 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaSync" */;
 			productName = MonicaSync;
-		};
-		A100000000000000000000D6 /* MonicaUI */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaUI" */;
-			productName = MonicaUI;
 		};
 		A100000000000000000000D7 /* MonicaCore */ = {
 			isa = XCSwiftPackageProductDependency;

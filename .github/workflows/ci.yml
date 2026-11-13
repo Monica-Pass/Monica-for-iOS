@@ -232,7 +232,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [MonicaCore, MonicaSecurity, MonicaSync, MonicaUI]
+        package: [MonicaCore, MonicaSecurity, MonicaSync]
     steps:
       - uses: actions/checkout@v4
 
