@@ -2245,6 +2245,160 @@ public struct BitwardenAttachmentDownloadResult: Sendable, Equatable {
     }
 }
 
+// MARK: - Bitwarden Send 链接与接收
+
+/// Bitwarden Send 的可分享链接。
+///
+/// 链接形式：`<serverBaseURL>/#/send/<accessID>/<base64url(keyMaterial)>`
+/// key material 是发送端随机生成、只存在于链接片段（#）里的解密密钥，
+/// 因此绝不能出现在日志或 UI 摘要中；`redactedSummary` 只保留 accessID 的短前缀。
+public struct BitwardenSendLink: Sendable, Equatable {
+    public let accessID: String
+    public let keyMaterial: Data
+
+    public init(accessID: String, keyMaterial: Data) {
+        self.accessID = accessID
+        self.keyMaterial = keyMaterial
+    }
+
+    /// 拼出可直接发给对方的完整链接。
+    /// `serverBaseURL` 用 web vault 地址（如 `https://vault.bitwarden.com`），
+    /// 不是 API 地址（`https://api.bitwarden.com`）——两者域名不同。
+    public func url(serverBaseURL: URL) -> URL? {
+        // 手工拼接而不是用 URLComponents.fragment：后者会生成 `host#/send/...`，
+        // 丢掉 Bitwarden web vault 要求的斜杠（`host/#/send/...`）。
+        var base = serverBaseURL.absoluteString
+        while base.hasSuffix("/") { base.removeLast() }
+        let key = keyMaterial.base64URLEncodedString()
+        return URL(string: "\(base)/#/send/\(accessID)/\(key)")
+    }
+
+    /// 从用户粘贴的链接里还原 accessID 与 key material。
+    public static func parse(urlString: String, serverBaseURL: URL) -> BitwardenSendLink? {
+        let trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let url = URL(string: trimmed) else { return nil }
+        // 支持完整链接，也支持只粘贴 fragment 内容（#/send/xxx/key 里的后两段）
+        let fragment = url.fragment ?? trimmed
+        let segments = fragment
+            .split(separator: "/", omittingEmptySubsequences: true)
+            .map(String.init)
+        guard segments.count >= 2 else { return nil }
+        let keySegment = segments[segments.count - 1]
+        let accessIDSegment = segments[segments.count - 2]
+        // 必须形如 .../send/<accessID>/<key>，避免误吞任意 URL
+        guard segments.count >= 3, segments[segments.count - 3] == "send" else { return nil }
+        guard let keyMaterial = Data(bitwardenBase64Encoded: keySegment), keyMaterial.count == 16 else {
+            return nil
+        }
+        guard !accessIDSegment.isEmpty else { return nil }
+        _ = serverBaseURL // 保留参数以便未来校验 host 一致
+        return BitwardenSendLink(accessID: accessIDSegment, keyMaterial: keyMaterial)
+    }
+
+    public var redactedSummary: String {
+        let prefix = String(accessID.prefix(6))
+        return "Bitwarden Send 链接 \(prefix)…"
+    }
+}
+
+/// 从远端取回的 Send 内容（已解密）。
+public struct BitwardenReceivedSend: Sendable, Equatable {
+    public let title: String
+    public let text: String
+    public let notes: String?
+    public let expiresAt: String
+    public let maxViews: Int
+    public let remainingViews: Int?
+    public let requiresPassword: Bool
+
+    public init(
+        title: String,
+        text: String,
+        notes: String? = nil,
+        expiresAt: String = "",
+        maxViews: Int = 1,
+        remainingViews: Int? = nil,
+        requiresPassword: Bool = false
+    ) {
+        self.title = title
+        self.text = text
+        self.notes = notes
+        self.expiresAt = expiresAt
+        self.maxViews = maxViews
+        self.remainingViews = remainingViews
+        self.requiresPassword = requiresPassword
+    }
+
+    public var redactedSummary: String {
+        "Bitwarden Send \(sanitizedBitwardenTitle(title)) \(maxViews) 次"
+    }
+}
+
+/// 匿名接收 Send 所需的请求参数。
+public struct BitwardenSendFetchRequest: Sendable, Equatable {
+    public let link: BitwardenSendLink
+    /// 访问密码；nil 表示该 Send 没有密码保护。
+    public let password: String?
+    /// 服务端 API 地址（用于拼接 `/sends/access/<accessID>`）。
+    public let apiURL: URL
+
+    public init(link: BitwardenSendLink, password: String? = nil, apiURL: URL) {
+        self.link = link
+        self.password = password
+        self.apiURL = apiURL
+    }
+}
+
+/// 创建文本型 Send 的请求参数。
+public struct BitwardenTextSendCreateRequest: Sendable, Equatable {
+    public let title: String
+    public let text: String
+    public let notes: String?
+    /// 过期时间（ISO8601）；空字符串表示永不过期。
+    public let expiresAt: String
+    /// 最大查看次数；0 或负数表示不限制。
+    public let maxViews: Int
+    /// 访问密码；nil 表示无密码保护。
+    public let password: String?
+    public let hideEmail: Bool
+
+    public init(
+        title: String,
+        text: String,
+        notes: String? = nil,
+        expiresAt: String = "",
+        maxViews: Int = 1,
+        password: String? = nil,
+        hideEmail: Bool = false
+    ) {
+        self.title = title
+        self.text = text
+        self.notes = notes
+        self.expiresAt = expiresAt
+        self.maxViews = maxViews
+        self.password = password
+        self.hideEmail = hideEmail
+    }
+}
+
+/// 创建结果。`link` 是唯一一次能拿到分享链接的机会——
+/// key material 只在这里返回，之后服务端与本地都不再持有它。
+public struct BitwardenTextSendCreateResult: Sendable, Equatable {
+    public let remoteID: String
+    public let link: BitwardenSendLink?
+    public let revision: String
+
+    public init(remoteID: String, link: BitwardenSendLink?, revision: String = "") {
+        self.remoteID = remoteID
+        self.link = link
+        self.revision = revision
+    }
+
+    public var redactedSummary: String {
+        "Bitwarden Send 已创建，链接\(link == nil ? "不可用" : "可分享")"
+    }
+}
+
 public protocol BitwardenVaultSyncTransport: Sendable {
     func send(_ request: BitwardenVaultSyncRequest) async throws -> BitwardenVaultSyncResponse
 }
@@ -2730,6 +2884,178 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         return BitwardenAttachmentDownloadResult(encryptedContent: response.body)
     }
 
+    /// 创建文本型 Send。与通用 `.upsertSend` 路径的区别是：
+    /// 这里保留 key material 并返回链接，通用路径会在加密后丢弃它。
+    public func createTextSend(_ request: BitwardenTextSendCreateRequest) async throws -> BitwardenTextSendCreateResult {
+        guard let session = try sessionStore.loadSession() else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        guard let vaultKey = try vaultKeyStore?.loadVaultKey(accountLabel: session.accountLabel) else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        let accessToken = try await accessTokenProvider.accessToken()
+
+        let keyMaterial = try BitwardenCrypto.makeSendKeyMaterial()
+        let sendKey = try BitwardenCrypto.deriveSendKey(keyMaterial)
+        let normalizedExpiration = Self.normalizedBitwardenSendDate(request.expiresAt)
+        let payload: [String: Any] = [
+            "key": try BitwardenCrypto.encrypt(keyMaterial, key: vaultKey),
+            "type": 0,
+            "name": try BitwardenCrypto.encryptString(request.title, key: sendKey),
+            "notes": try request.notes.flatMap { value -> String? in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return nil }
+                return try BitwardenCrypto.encryptString(value, key: sendKey)
+            } ?? NSNull(),
+            "password": try request.password.flatMap { value -> String? in
+                let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !trimmed.isEmpty else { return nil }
+                return try BitwardenCrypto.hashSendPassword(value, keyMaterial: keyMaterial)
+            } ?? NSNull(),
+            "disabled": false,
+            "hideEmail": request.hideEmail,
+            "deletionDate": normalizedExpiration ?? "9999-12-31T00:00:00Z",
+            "expirationDate": normalizedExpiration.map { $0 as Any } ?? NSNull(),
+            "maxAccessCount": request.maxViews > 0 ? request.maxViews as Any : NSNull(),
+            "text": [
+                "text": try BitwardenCrypto.encryptString(request.text, key: sendKey),
+                "hidden": false
+            ]
+        ]
+        let response = try await vaultTransport.send(
+            BitwardenVaultSyncRequest(
+                method: "POST",
+                url: Self.sendURL(apiURL: session.apiURL, remoteID: nil),
+                headers: Self.jsonHeaders(accessToken: accessToken),
+                body: try JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys])
+            )
+        )
+        if response.statusCode == 401 || response.statusCode == 403 {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        guard (200...299).contains(response.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: response.statusCode)
+        }
+        guard let root = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any],
+              let remoteID = Self.jsonString(root, "id", "Id"),
+              !remoteID.isEmpty
+        else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        let accessID = Self.jsonString(root, "accessId", "AccessId") ?? ""
+        let link = accessID.isEmpty
+            ? nil
+            : BitwardenSendLink(accessID: accessID, keyMaterial: keyMaterial)
+        return BitwardenTextSendCreateResult(
+            remoteID: remoteID,
+            link: link,
+            revision: Self.revision(from: response) ?? ""
+        )
+    }
+
+    /// 匿名接收 Send：不携带 Bearer token，走 public access 端点。
+    public func fetchSend(_ request: BitwardenSendFetchRequest) async throws -> BitwardenReceivedSend {
+        var headers = ["Accept": "application/json"]
+        // 有密码时必须先交换 access token，服务端返回的 send 才会带解密后的 payload。
+        if let password = request.password?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !password.isEmpty {
+            let passwordHash = try BitwardenCrypto.hashSendPassword(
+                password,
+                keyMaterial: request.link.keyMaterial
+            )
+            let passwordBody = try JSONSerialization.data(
+                withJSONObject: ["password": passwordHash],
+                options: [.sortedKeys]
+            )
+            let tokenResponse = try await vaultTransport.send(
+                BitwardenVaultSyncRequest(
+                    method: "POST",
+                    url: Self.sendAccessPasswordURL(apiURL: request.apiURL, accessID: request.link.accessID),
+                    headers: [
+                        "Accept": "application/json",
+                        "Content-Type": "application/json"
+                    ],
+                    body: passwordBody
+                )
+            )
+            guard (200...299).contains(tokenResponse.statusCode) else {
+                throw BitwardenSyncProviderError.serverRejected(statusCode: tokenResponse.statusCode)
+            }
+            guard let tokenRoot = try? JSONSerialization.jsonObject(with: tokenResponse.body) as? [String: Any],
+                  let accessToken = Self.jsonString(tokenRoot, "token", "Token"),
+                  !accessToken.isEmpty
+            else {
+                throw BitwardenSyncProviderError.invalidResponse
+            }
+            headers["Authorization"] = "Bearer \(accessToken)"
+        }
+
+        let response = try await vaultTransport.send(
+            BitwardenVaultSyncRequest(
+                method: "GET",
+                url: Self.sendAccessURL(apiURL: request.apiURL, accessID: request.link.accessID),
+                headers: headers
+            )
+        )
+        if response.statusCode == 401 || response.statusCode == 403 {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        if response.statusCode == 404 {
+            throw BitwardenSyncProviderError.sendUnavailable
+        }
+        guard (200...299).contains(response.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: response.statusCode)
+        }
+        guard let root = try? JSONSerialization.jsonObject(with: response.body) as? [String: Any] else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+
+        // key material 来自链接，直接派生 send key，不需服务端参与。
+        let sendKey = try BitwardenCrypto.deriveSendKey(request.link.keyMaterial)
+        let text = (root["text"] as? [String: Any]) ?? (root["Text"] as? [String: Any]) ?? [:]
+        let name = Self.jsonString(root, "name", "Name")
+        let notes = Self.jsonString(root, "notes", "Notes")
+
+        let title = Self.decryptOptional(name, key: sendKey) ?? ""
+        let body = try Self.decryptRequired(
+            Self.jsonString(text, "text", "Text"),
+            key: sendKey
+        )
+
+        return BitwardenReceivedSend(
+            title: title,
+            text: body,
+            notes: Self.decryptOptional(notes, key: sendKey),
+            expiresAt: Self.jsonString(root, "expirationDate", "ExpirationDate") ?? "",
+            maxViews: Self.jsonInt(root, "maxAccessCount", "MaxAccessCount") ?? 1,
+            remainingViews: Self.jsonInt(root, "accessCount", "AccessCount").map { accessed in
+                let limit = Self.jsonInt(root, "maxAccessCount", "MaxAccessCount") ?? 1
+                return Swift.max(0, limit - accessed)
+            },
+            requiresPassword: request.password?.isEmpty == false
+        )
+    }
+
+    private static func decryptRequired(_ value: String?, key: BitwardenVaultKey) throws -> String {
+        guard let value, !value.isEmpty else {
+            throw BitwardenSyncProviderError.invalidResponse
+        }
+        return try BitwardenCrypto.decryptString(value, key: key)
+    }
+
+    private static func decryptOptional(_ value: String?, key: BitwardenVaultKey) -> String? {
+        guard let value, !value.isEmpty else { return nil }
+        return try? BitwardenCrypto.decryptString(value, key: key)
+    }
+
+    private static func sendAccessURL(apiURL: URL, accessID: String) -> URL {
+        apiURL.appendingBitwardenPath("sends/access/\(accessID)")
+    }
+
+    private static func sendAccessPasswordURL(apiURL: URL, accessID: String) -> URL {
+        apiURL.appendingBitwardenPath("sends/access/\(accessID)/password")
+    }
+
     private static func sendURL(apiURL: URL, remoteID: String?) -> URL {
         var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
         let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
@@ -3109,6 +3435,10 @@ public protocol BitwardenSyncProvider: Sendable {
     func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult
     func uploadAttachment(_ request: BitwardenAttachmentUploadRequest) async throws -> BitwardenAttachmentUploadResult
     func downloadAttachment(_ request: BitwardenAttachmentDownloadRequest) async throws -> BitwardenAttachmentDownloadResult
+    /// 匿名接收一个 Send（不需要登录），用于「打开别人发来的链接」。
+    func fetchSend(_ request: BitwardenSendFetchRequest) async throws -> BitwardenReceivedSend
+    /// 创建文本型 Send，并返回可分享链接（链接里携带 key material）。
+    func createTextSend(_ request: BitwardenTextSendCreateRequest) async throws -> BitwardenTextSendCreateResult
 }
 
 public extension BitwardenSyncProvider {
@@ -3117,6 +3447,14 @@ public extension BitwardenSyncProvider {
     }
 
     func downloadAttachment(_ request: BitwardenAttachmentDownloadRequest) async throws -> BitwardenAttachmentDownloadResult {
+        throw BitwardenSyncProviderError.unsupportedOperation
+    }
+
+    func fetchSend(_ request: BitwardenSendFetchRequest) async throws -> BitwardenReceivedSend {
+        throw BitwardenSyncProviderError.unsupportedOperation
+    }
+
+    func createTextSend(_ request: BitwardenTextSendCreateRequest) async throws -> BitwardenTextSendCreateResult {
         throw BitwardenSyncProviderError.unsupportedOperation
     }
 }
@@ -3141,6 +3479,8 @@ public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedErr
     case serverRejected(statusCode: Int)
     case invalidServerURL
     case invalidResponse
+    /// Send 链接无效、已过期或已被查看次数耗尽。
+    case sendUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -3154,6 +3494,8 @@ public enum BitwardenSyncProviderError: Error, Sendable, Equatable, LocalizedErr
             "Bitwarden 需要两步验证，请完成验证后重试。"
         case .serverRejected(let statusCode):
             "Bitwarden 同步失败：服务器返回 \(statusCode)。"
+        case .sendUnavailable:
+            "Send 链接无效、已过期或已达最大查看次数。"
         case .invalidServerURL:
             "Bitwarden 服务器 URL 无效，仅支持 http/https。"
         case .invalidResponse:

@@ -1082,6 +1082,67 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "接收 Bitwarden Send") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    Text("粘贴别人发来的 Send 链接即可查看内容，无需登录。")
+                        .font(.footnote)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    TextField("Send 链接", text: $session.bitwardenReceiveLinkInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .keyboardType(.URL)
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    SecureField("访问密码（如无则留空）", text: $session.bitwardenReceivePassword)
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    AndroidParityInfoRow(title: "状态", value: session.bitwardenReceiveState.label)
+                    Button {
+                        Task {
+                            try? await session.receiveBitwardenSend(
+                                linkInput: session.bitwardenReceiveLinkInput,
+                                password: session.bitwardenReceivePassword
+                            )
+                        }
+                    } label: {
+                        Label("获取内容", systemImage: "tray.and.arrow.down")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    .disabled(
+                        session.bitwardenReceiveState.isRunning
+                            || session.bitwardenReceiveLinkInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                    )
+                    if let received = session.bitwardenReceivedSend {
+                        AndroidParityDivider()
+                        AndroidParityInfoRow(title: "标题", value: received.title.isEmpty ? "（无标题）" : received.title)
+                        if !received.expiresAt.isEmpty {
+                            AndroidParityInfoRow(title: "过期时间", value: received.expiresAt)
+                        }
+                        AndroidParityInfoRow(title: "最大查看", value: "\(received.maxViews) 次")
+                        if let remaining = received.remainingViews {
+                            AndroidParityInfoRow(title: "剩余查看", value: "\(remaining) 次")
+                        }
+                        Text(received.text)
+                            .font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        if let notes = received.notes, !notes.isEmpty {
+                            Text(notes)
+                                .font(.caption)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                        Button {
+                            session.clearBitwardenReceiveResult()
+                        } label: {
+                            Label("清除", systemImage: "xmark.circle")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    }
+                }
+            }
+
             AndroidParitySection(title: "WebDAV") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     TextField("服务器 URL", text: $session.webDAVBaseURL)

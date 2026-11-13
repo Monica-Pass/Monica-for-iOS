@@ -8874,6 +8874,121 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("google-drive-access-token-secret"))
     }
 
+    func testBitwardenTextSendCreationPushesToProviderAndExposesShareLink() async throws {
+        let engine = RecordingVaultEngine()
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let syncStateStore = MemoryAppBitwardenSendSyncStateStore()
+        bitwarden.snapshot = BitwardenSyncSnapshot(
+            accountLabel: "alice@example.com",
+            revision: "text-send-snapshot-revision"
+        )
+        bitwarden.textSendResult = BitwardenTextSendCreateResult(
+            remoteID: "remote-text-send-id",
+            link: BitwardenSendLink(
+                accessID: "access-id-xyz",
+                keyMaterial: Data(repeating: 3, count: 16)
+            ),
+            revision: "text-send-revision"
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            bitwardenSyncProvider: bitwarden,
+            bitwardenSendSyncStateStore: syncStateStore,
+            bitwardenTextSendLocalIDProvider: { "text-send-local-id" }
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        let result = try await model.createBitwardenTextSend(
+            title: "Deploy secret",
+            text: "text-send-body-secret",
+            notes: "text-send-note-secret",
+            expiresAt: "2026-12-31T00:00:00Z",
+            maxViews: 3,
+            password: "text-send-password-secret",
+            hideEmail: true
+        )
+
+        // ① 文本 Send 创建：确实推到了 provider
+        XCTAssertEqual(bitwarden.pullCallCount, 1)
+        XCTAssertEqual(result.remoteID, "remote-text-send-id")
+        let request = try XCTUnwrap(bitwarden.textSendRequests.first)
+        XCTAssertEqual(request.title, "Deploy secret")
+        XCTAssertEqual(request.text, "text-send-body-secret")
+        XCTAssertEqual(request.maxViews, 3)
+        XCTAssertEqual(request.expiresAt, "2026-12-31T00:00:00Z")
+        XCTAssertEqual(request.password, "text-send-password-secret")
+        XCTAssertTrue(request.hideEmail)
+
+        // ③ 链接复制：链接已生成且包含 accessID + key
+        let shareLink = try XCTUnwrap(model.bitwardenSendShareLink)
+        XCTAssertTrue(shareLink.contains("#/send/access-id-xyz/"))
+        XCTAssertFalse(shareLink.contains("text-send-body-secret"))
+        XCTAssertFalse(shareLink.contains("text-send-password-secret"))
+
+        // 同步状态已记录，避免后续重复上传
+        let states = try syncStateStore.loadStates(vaultID: "created-vault")
+        XCTAssertEqual(states.first?.localID, "text-send-local-id")
+        XCTAssertEqual(states.first?.remoteID, "remote-text-send-id")
+
+        // 输入被清空，避免重复提交
+        XCTAssertEqual(model.sendTitle, "")
+        XCTAssertEqual(model.sendBody, "")
+    }
+
+    func testBitwardenReceiveSendFetchesAnonymousContentWithoutLogin() async throws {
+        let bitwarden = RecordingBitwardenSyncProvider()
+        bitwarden.receivedSend = BitwardenReceivedSend(
+            title: "Received title",
+            text: "received-body-secret",
+            notes: "received-note",
+            expiresAt: "2026-12-31T00:00:00Z",
+            maxViews: 5,
+            remainingViews: 3
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            bitwardenSyncProvider: bitwarden
+        )
+
+        // ② 接收端：不需要解锁保险库、不需要登录
+        let linkString = "https://vault.bitwarden.com/#/send/access-id-xyz/AAAAAAAAAAAAAAAAAAAAAA"
+        let received = try await model.receiveBitwardenSend(linkInput: linkString, password: "")
+
+        XCTAssertEqual(received.text, "received-body-secret")
+        XCTAssertEqual(model.bitwardenReceivedSend?.notes, "received-note")
+        XCTAssertEqual(bitwarden.fetchSendRequests.count, 1)
+        let request = try XCTUnwrap(bitwarden.fetchSendRequests.first)
+        XCTAssertEqual(request.link.accessID, "access-id-xyz")
+        XCTAssertNil(request.password)
+
+        model.clearBitwardenReceiveResult()
+        XCTAssertNil(model.bitwardenReceivedSend)
+        XCTAssertEqual(model.bitwardenReceiveState, .idle)
+    }
+
+    func testBitwardenReceiveSendRejectsMalformedLinkWithoutCallingProvider() async throws {
+        let bitwarden = RecordingBitwardenSyncProvider()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            bitwardenSyncProvider: bitwarden
+        )
+
+        do {
+            _ = try await model.receiveBitwardenSend(linkInput: "https://example.com/not-a-send", password: "")
+            XCTFail("Expected invalidSendLink")
+        } catch AppBitwardenSyncError.invalidSendLink {
+            // expected
+        }
+
+        XCTAssertTrue(bitwarden.fetchSendRequests.isEmpty)
+        XCTAssertEqual(model.bitwardenReceiveState, .failed(AppBitwardenSyncError.invalidSendLink.localizedDescription))
+    }
+
     func testBitwardenFileSendCreationUploadsNativeFileWithoutLeakingSecrets() async throws {
         let engine = RecordingVaultEngine()
         let bitwarden = RecordingBitwardenSyncProvider()
@@ -10958,6 +11073,15 @@ private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unch
     private(set) var pullCallCount = 0
     private(set) var pushedMutations: [BitwardenSyncMutation] = []
     private(set) var downloadAttachmentRequests: [BitwardenAttachmentDownloadRequest] = []
+    var textSendResult = BitwardenTextSendCreateResult(
+        remoteID: "text-send-remote-id",
+        link: BitwardenSendLink(accessID: "text-send-access-id", keyMaterial: Data(repeating: 7, count: 16))
+    )
+    var receivedSend = BitwardenReceivedSend(title: "Received", text: "received-body")
+    var textSendError: Error?
+    var fetchSendError: Error?
+    private(set) var textSendRequests: [BitwardenTextSendCreateRequest] = []
+    private(set) var fetchSendRequests: [BitwardenSendFetchRequest] = []
 
     func pullSnapshot() async throws -> BitwardenSyncSnapshot {
         pullCallCount += 1
@@ -10981,6 +11105,22 @@ private final class RecordingBitwardenSyncProvider: BitwardenSyncProvider, @unch
             throw downloadAttachmentError
         }
         return downloadAttachmentResult
+    }
+
+    func createTextSend(_ request: BitwardenTextSendCreateRequest) async throws -> BitwardenTextSendCreateResult {
+        textSendRequests.append(request)
+        if let textSendError {
+            throw textSendError
+        }
+        return textSendResult
+    }
+
+    func fetchSend(_ request: BitwardenSendFetchRequest) async throws -> BitwardenReceivedSend {
+        fetchSendRequests.append(request)
+        if let fetchSendError {
+            throw fetchSendError
+        }
+        return receivedSend
     }
 }
 
