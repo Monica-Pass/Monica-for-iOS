@@ -27,7 +27,11 @@ SWIFTPM_BINDINGS_DIR="$IOS_DIR/SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Gener
 DEVICE_TARGET="aarch64-apple-ios"
 SIM_ARM64_TARGET="aarch64-apple-ios-sim"
 SIM_X86_64_TARGET="x86_64-apple-ios"
+MACOS_ARM64_TARGET="aarch64-apple-darwin"
 MIN_IOS_VERSION="17.0"
+# macOS slice 让 MonicaStorage / MonicaMDBX 能在 macOS 上直接 swift test。
+# 缺它时新版 SwiftPM 会因 binaryTarget 无此平台而在解析/构建阶段报错。
+MACOS_DEPLOYMENT_VERSION="13.0"
 
 find_tool() {
   local name="$1"
@@ -71,7 +75,7 @@ target_has_std() {
 }
 
 missing_targets=()
-for target in "$DEVICE_TARGET" "$SIM_ARM64_TARGET" "$SIM_X86_64_TARGET"; do
+for target in "$DEVICE_TARGET" "$SIM_ARM64_TARGET" "$SIM_X86_64_TARGET" "$MACOS_ARM64_TARGET"; do
   if ! target_has_std "$target"; then
     missing_targets+=("$target")
   fi
@@ -137,6 +141,11 @@ env \
   RUSTFLAGS="-C link-arg=-isysroot -C link-arg=$SIMULATOR_SDK -C link-arg=-mios-simulator-version-min=$MIN_IOS_VERSION" \
   "$CARGO" build -p mdbx-ffi --target "$SIM_X86_64_TARGET" --release
 
+# macOS slice：纯 Swift 包在 macOS 上 swift test 时需要它。
+env \
+  MACOSX_DEPLOYMENT_TARGET="$MACOS_DEPLOYMENT_VERSION" \
+  "$CARGO" build -p mdbx-ffi --target "$MACOS_ARM64_TARGET" --release
+
 mkdir -p "$BUILD_DIR/Simulator"
 lipo -create \
   "$MDBX_DIR/target/$SIM_ARM64_TARGET/release/libmdbx_ffi.a" \
@@ -148,6 +157,8 @@ xcodebuild -create-xcframework \
   -headers "$HEADERS_DIR" \
   -library "$BUILD_DIR/Simulator/libmdbx_ffi.a" \
   -headers "$HEADERS_DIR" \
+  -library "$MDBX_DIR/target/$MACOS_ARM64_TARGET/release/libmdbx_ffi.a" \
+  -headers "$HEADERS_DIR" \
   -output "$XCFRAMEWORK_PATH"
 
 echo "Created XCFramework: $XCFRAMEWORK_PATH"
@@ -155,9 +166,10 @@ echo "Swift binding source: $GENERATED_DIR/mdbx_ffi.swift"
 
 mkdir -p "$SWIFTPM_BINDINGS_DIR"
 {
-  # 用 canImport 守卫而非 os(iOS)：缺产物时整个生成文件不参与编译，
-  # 由 MonicaMDBX.swift 的 stub 实现回落，保证工程仍可构建。
-  echo "#if os(iOS) && canImport(mdbx_ffiFFI)"
+  # 用 canImport 守卫而非 os(iOS)：守卫条件必须与 MonicaMDBX.swift 一致，
+  # 否则 iOS 之外（如 macOS slice 存在时）会出现类型不可见的编译错误。
+  # 缺产物时整个文件不参与编译，由 MonicaMDBX.swift 的 stub 回落。
+  echo "#if canImport(mdbx_ffiFFI)"
   cat "$GENERATED_DIR/mdbx_ffi.swift"
   printf "\n#endif\n"
 } > "$SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"

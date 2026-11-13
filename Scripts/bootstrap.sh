@@ -26,7 +26,7 @@ else
 fi
 XCFRAMEWORK_PATH="$IOS_DIR/Artifacts/MDBX/MonicaMDBXGenerated.xcframework"
 UNIFFI_VERSION="0.31.1"
-IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios)
+IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin)
 
 FORCE=0
 [ "${1:-}" = "--force" ] && FORCE=1
