@@ -745,11 +745,34 @@ struct AppExtensionCapabilityRow: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+/// 接收 Bitwarden Send 的 UI 状态。
+enum AppBitwardenReceiveState: Sendable, Equatable {
+    case idle
+    case running
+    case succeeded(String)
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .idle: "未开始"
+        case .running: "正在获取"
+        case .succeeded(let title): "已获取 \(title)"
+        case .failed(let message): message
+        }
+    }
+
+    var isRunning: Bool {
+        if case .running = self { return true }
+        return false
+    }
+}
+
 enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable
     case invalidServerURL
     case attachmentUnavailable
     case fileSendUnavailable
+    case invalidSendLink
     case emptyRemoteVault(localCount: Int)
 
     var errorDescription: String? {
@@ -762,6 +785,8 @@ enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
             "Bitwarden 附件不可用，请重新同步后再试。"
         case .fileSendUnavailable:
             "请选择要上传的 Bitwarden Send 文件。"
+        case .invalidSendLink:
+            "Send 链接格式不正确，应形如 https://vault.bitwarden.com/#/send/<id>/<key>。"
         case .emptyRemoteVault(let localCount):
             "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 \(localCount) 个已同步条目。请确认账号或稍后重试。"
         }
@@ -2521,6 +2546,14 @@ final class AppSessionModel {
     var sendHideEmail = false
     var sendSearchQuery = ""
     var showFavoriteSendEntriesOnly = false
+    /// 刚创建的 Bitwarden 文本 Send 链接（只在创建成功后短暂保留，供复制）。
+    var bitwardenSendShareLink: String?
+    /// 接收端：用户粘贴的 Send 链接与访问密码。
+    var bitwardenReceiveLinkInput = ""
+    var bitwardenReceivePassword = ""
+    var bitwardenReceiveState: AppBitwardenReceiveState = .idle
+    /// 接收成功后解密出的内容。
+    var bitwardenReceivedSend: BitwardenReceivedSend?
     var editingSendEntryID: String?
     var editingSendTitle = ""
     var editingSendBody = ""
@@ -2659,6 +2692,7 @@ final class AppSessionModel {
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
     private let bitwardenFileSendLocalIDProvider: () -> String
+    private let bitwardenTextSendLocalIDProvider: () -> String
     private var activeVaultSession: LocalVaultSession?
     private var activeEntryRepository: LocalVaultEntryRepository?
     private var activeProject: LocalVaultProject?
@@ -2728,6 +2762,9 @@ final class AppSessionModel {
         bitwardenFileSendLocalIDProvider: @escaping () -> String = {
             "bitwarden-file-send-\(UUID().uuidString)"
         },
+        bitwardenTextSendLocalIDProvider: @escaping () -> String = {
+            "bitwarden-text-send-\(UUID().uuidString)"
+        },
         autoLockPolicy: AppAutoLockPolicy = .default
     ) {
         self.vaultRepository = vaultRepository
@@ -2774,6 +2811,7 @@ final class AppSessionModel {
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
         self.bitwardenFileSendLocalIDProvider = bitwardenFileSendLocalIDProvider
+        self.bitwardenTextSendLocalIDProvider = bitwardenTextSendLocalIDProvider
         self.autoLockPolicy = autoLockPolicy
         self.quickSetupState = quickSetupStateStore.loadState()
         let loadedTimelineEvents = operationTimelineStore.loadEvents()
@@ -5571,15 +5609,31 @@ final class AppSessionModel {
         self.presentedEditorMode = nil
     }
 
+    /// Send 编辑器的统一保存入口：按类型分流到 Bitwarden 文件型 / 文本型，其余走本地。
     func savePresentedEditorWithBitwardenFileSend(projectTitle: String) async throws {
         guard let presentedEditorMode else {
             return
         }
-        if case .add(.send) = presentedEditorMode,
-           sendCreateType == .file {
-            try await createSelectedBitwardenFileSend()
-            self.presentedEditorMode = nil
-            return
+        if case .add(.send) = presentedEditorMode {
+            switch sendCreateType {
+            case .file:
+                try await createSelectedBitwardenFileSend()
+                self.presentedEditorMode = nil
+                return
+            case .text:
+                // 文本型同样推到 Bitwarden，这样才拿得到可分享链接。
+                try await createBitwardenTextSend(
+                    title: sendTitle,
+                    text: sendBody,
+                    notes: sendNotes,
+                    expiresAt: sendExpiresAt,
+                    maxViews: sendMaxViews,
+                    password: sendPassword,
+                    hideEmail: sendHideEmail
+                )
+                self.presentedEditorMode = nil
+                return
+            }
         }
         try savePresentedEditor(projectTitle: projectTitle)
     }
@@ -7850,7 +7904,177 @@ final class AppSessionModel {
         }
     }
 
+    /// 创建文本型 Bitwarden Send 并保留分享链接。
+    /// 与文件型相同，先 pull 一次做安全检查，再推送到远端。
     @discardableResult
+    func createBitwardenTextSend(
+        title: String,
+        text: String,
+        notes: String,
+        expiresAt: String,
+        maxViews: Int,
+        password: String?,
+        hideEmail: Bool
+    ) async throws -> BitwardenTextSendCreateResult {
+        recordUserActivity()
+        bitwardenSyncState = .running
+        entryOperationState = .running
+
+        do {
+            let session = try requireActiveVaultSession()
+            let provider = try requireBitwardenSyncProvider()
+            let snapshot = try await provider.pullSnapshot()
+            let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            try validateBitwardenRemoteSnapshotIsSafe(
+                snapshot,
+                previousItemStates: previousItemStates,
+                previousSendStates: previousSendStates
+            )
+
+            let result = try await provider.createTextSend(
+                BitwardenTextSendCreateRequest(
+                    title: title,
+                    text: text,
+                    notes: notes.nonBlankValue,
+                    expiresAt: expiresAt,
+                    maxViews: maxViews,
+                    password: password?.nonBlankValue,
+                    hideEmail: hideEmail
+                )
+            )
+
+            // 记录同步状态，让后续同步不会把它当成新条目重复上传。
+            let localID = bitwardenTextSendLocalIDProvider()
+            var statesByLocalID = Dictionary(uniqueKeysWithValues: previousSendStates.map { ($0.localID, $0) })
+            statesByLocalID[localID] = BitwardenSendSyncState(
+                localID: localID,
+                remoteID: result.remoteID,
+                lastSyncedFingerprint: bitwardenTextSendFingerprint(
+                    title: title,
+                    body: text,
+                    notes: notes.nonBlankValue,
+                    expiresAt: expiresAt,
+                    maxViews: maxViews
+                ),
+                lastRemoteRevision: result.revision.isEmpty ? nil : result.revision
+            )
+            try bitwardenSendSyncStateStore.saveStates(
+                Array(statesByLocalID.values),
+                vaultID: session.handle.vaultID
+            )
+
+            // 链接只在创建时可得；顺带把内容也落成本地 Send 条目，方便在列表里回看。
+            if let entryRepository = activeEntryRepository,
+               let projectID = activeProject?.id {
+                _ = try? entryRepository.createSendEntry(
+                    projectID: projectID,
+                    draft: LocalSendEntryDraft(
+                        title: title,
+                        body: text,
+                        expiresAt: expiresAt,
+                        maxViews: maxViews,
+                        notes: notes
+                    )
+                )
+                sendEntries = (try? entryRepository.listSendEntries(projectID: projectID)) ?? sendEntries
+            }
+
+            bitwardenSendShareLink = result.link.flatMap { link in
+                bitwardenSendLinkURL(link)
+            }
+            bitwardenSyncState = .idle
+            entryOperationState = .succeeded(result.redactedSummary)
+            sendTitle = ""
+            sendBody = ""
+            sendNotes = ""
+            sendPassword = ""
+            sendMaxViews = 1
+            return result
+        } catch {
+            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    /// 用 web vault 地址拼出完整链接；API 地址与 web 域名不同，需从 session 推导。
+    private func bitwardenSendLinkURL(_ link: BitwardenSendLink) -> String? {
+        // Bitwarden 约定：api.bitwarden.com ↔ vault.bitwarden.com。
+        // 自托管时 serverURL 与 apiURL 通常同源，直接用 serverURL。
+        guard let serverURL = bitwardenSendWebVaultURL() else { return nil }
+        return link.url(serverBaseURL: serverURL)?.absoluteString
+    }
+
+    /// web vault 地址：Bitwarden 官方约定 api.bitwarden.com ↔ vault.bitwarden.com；
+    /// 自托管时 serverURL 与 apiURL 同源，直接用 serverURL。
+    private func bitwardenSendWebVaultURL() -> URL? {
+        guard let session = try? bitwardenAuthenticationSessionStore.loadSession() else {
+            return URL(string: "https://vault.bitwarden.com")
+        }
+        let serverURL = session.serverURL
+        if let host = serverURL.host(), !host.isEmpty {
+            if host.hasPrefix("api.") {
+                return URL(string: "https://vault." + host.dropFirst("api.".count))
+            }
+            return serverURL
+        }
+        return URL(string: "https://vault.bitwarden.com")
+    }
+
+    /// 匿名接收 Send：不需要登录，只需要链接（和可能的访问密码）。
+    @discardableResult
+    func receiveBitwardenSend(linkInput: String, password: String) async throws -> BitwardenReceivedSend {
+        recordUserActivity()
+        bitwardenReceiveState = .running
+
+        do {
+            let trimmed = linkInput.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else {
+                throw AppBitwardenSyncError.invalidSendLink
+            }
+            guard let serverURL = bitwardenSendWebVaultURL(),
+                  let apiURL = bitwardenSendAPIURL()
+            else {
+                throw AppBitwardenSyncError.invalidSendLink
+            }
+            guard let link = BitwardenSendLink.parse(urlString: trimmed, serverBaseURL: serverURL) else {
+                throw AppBitwardenSyncError.invalidSendLink
+            }
+            // 接收端不依赖登录态；provider 若未装配就用默认实现（仍可匿名 GET）。
+            let provider = bitwardenSyncProvider ?? DefaultBitwardenSyncProvider()
+            let received = try await provider.fetchSend(
+                BitwardenSendFetchRequest(
+                    link: link,
+                    password: password.nonBlankValue,
+                    apiURL: apiURL
+                )
+            )
+            bitwardenReceivedSend = received
+            bitwardenReceiveState = .succeeded(received.title)
+            bitwardenReceivePassword = ""
+            return received
+        } catch {
+            bitwardenReceivedSend = nil
+            bitwardenReceiveState = .failed(readableBitwardenSyncErrorMessage(for: error))
+            throw error
+        }
+    }
+
+    private func bitwardenSendAPIURL() -> URL? {
+        if let session = try? bitwardenAuthenticationSessionStore.loadSession() {
+            return session.apiURL
+        }
+        return URL(string: "https://api.bitwarden.com")
+    }
+
+    func clearBitwardenReceiveResult() {
+        bitwardenReceivedSend = nil
+        bitwardenReceiveState = .idle
+        bitwardenReceiveLinkInput = ""
+        bitwardenReceivePassword = ""
+    }
+
     func createSelectedBitwardenFileSend() async throws -> BitwardenSyncPushResult {
         guard let fileContent = sendFileContent,
               !sendFileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -11251,6 +11475,23 @@ final class AppSessionModel {
                 isDeleted: false
             )
         }
+    }
+
+    private func bitwardenTextSendFingerprint(
+        title: String,
+        body: String,
+        notes: String?,
+        expiresAt: String,
+        maxViews: Int
+    ) -> String {
+        [
+            "text",
+            title,
+            body,
+            notes ?? "",
+            expiresAt,
+            String(maxViews)
+        ].joined(separator: "\u{1F}")
     }
 
     private func bitwardenFileSendFingerprint(

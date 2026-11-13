@@ -2043,6 +2043,31 @@ struct AddEditVaultItemView: View {
             }
             .tint(AndroidParityPalette.primary)
             field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.sendNotes : $session.editingSendNotes)
+            if mode.isAdding, session.bitwardenAuthenticationState.isConnected {
+                Text("将推送到 Bitwarden 并在创建后给出可分享链接")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+            if let shareLink = session.bitwardenSendShareLink, !shareLink.isEmpty {
+                AndroidParityDivider()
+                Text("分享链接")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.primary)
+                Text(shareLink)
+                    .font(.caption.monospaced())
+                    .textSelection(.enabled)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                Button {
+                    UIPasteboard.general.string = shareLink
+                } label: {
+                    Label("复制链接", systemImage: "doc.on.doc")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                Text("链接包含解密密钥，只能通过安全渠道发送，且只显示这一次。")
+                    .font(.caption2)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
         }
     }
 

@@ -3050,3 +3050,207 @@ private final class RecordingOneDriveGraphTransport: OneDriveGraphTransport, @un
         return responses.removeFirst()
     }
 }
+
+// MARK: - Bitwarden Send 链接与接收（issue #35）
+
+@Test func bitwardenSendLinkBuildsAndParsesShareableURLWithoutLeakingKey() throws {
+    let keyMaterial = Data((1...16).map(UInt8.init))
+    let link = BitwardenSendLink(accessID: "access-abc-123-secret", keyMaterial: keyMaterial)
+    let serverURL = URL(string: "https://vault.bitwarden.com")!
+
+    let url = try #require(link.url(serverBaseURL: serverURL))
+    #expect(url.absoluteString.hasPrefix("https://vault.bitwarden.com/#/send/access-abc-123-secret/"))
+
+    // 往返：解析回来必须拿到同样的 accessID 与 key material
+    let parsed = try #require(
+        BitwardenSendLink.parse(urlString: url.absoluteString, serverBaseURL: serverURL)
+    )
+    #expect(parsed.accessID == "access-abc-123-secret")
+    #expect(parsed.keyMaterial == keyMaterial)
+
+    // 摘要里不能出现明文 key material
+    #expect(!link.redactedSummary.contains(keyMaterial.base64EncodedString()))
+    #expect(link.redactedSummary.contains("access"))
+}
+
+@Test func bitwardenSendLinkRejectsMalformedInput() {
+    let serverURL = URL(string: "https://vault.bitwarden.com")!
+    // 缺少 /send/ 段
+    #expect(BitwardenSendLink.parse(urlString: "https://vault.bitwarden.com/#/other/abc/AAAAAAAAAAAAAAAAAAAAAA", serverBaseURL: serverURL) == nil)
+    // key 长度不对（必须 16 字节）
+    #expect(BitwardenSendLink.parse(urlString: "https://vault.bitwarden.com/#/send/abc/c2hvcnQ", serverBaseURL: serverURL) == nil)
+    // 完全不是 URL
+    #expect(BitwardenSendLink.parse(urlString: "not a link", serverBaseURL: serverURL) == nil)
+    // 空串
+    #expect(BitwardenSendLink.parse(urlString: "", serverBaseURL: serverURL) == nil)
+}
+
+@Test func bitwardenCreateTextSendPostsEncryptedPayloadAndReturnsShareLink() async throws {
+    let sessionStore = MemoryBitwardenAuthenticationSessionStore(
+        session: BitwardenAuthenticationSession(
+            accountLabel: "alice@example.com",
+            serverURL: URL(string: "https://vault.bitwarden.com")!,
+            identityURL: URL(string: "https://identity.bitwarden.com")!,
+            apiURL: URL(string: "https://api.bitwarden.com")!,
+            accessToken: "bitwarden-access-token-secret",
+            refreshToken: "bitwarden-refresh-token-secret",
+            expiresAt: Date(timeIntervalSince1970: 1_804_010_000)
+        )
+    )
+    let keyStore = MemoryBitwardenVaultKeyStore()
+    try keyStore.saveVaultKey(
+        BitwardenVaultKey(
+            encryptionKey: Data((1...32).map(UInt8.init)),
+            macKey: Data((33...64).map(UInt8.init))
+        ),
+        accountLabel: "alice@example.com"
+    )
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: #"{"id":"remote-send-id","accessId":"access-id-xyz"}"#
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: sessionStore,
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: keyStore
+    )
+
+    let result = try await provider.createTextSend(
+        BitwardenTextSendCreateRequest(
+            title: "Deploy secret",
+            text: "super-secret-body",
+            notes: "note-secret",
+            expiresAt: "2026-12-31T00:00:00Z",
+            maxViews: 3,
+            password: "send-password",
+            hideEmail: true
+        )
+    )
+
+    #expect(result.remoteID == "remote-send-id")
+    let link = try #require(result.link)
+    #expect(link.accessID == "access-id-xyz")
+    #expect(link.keyMaterial.count == 16)
+
+    // 请求本身：POST /sends，type=0，且明文不得出现在 body 里
+    let request = try #require(vaultTransport.requests.first)
+    #expect(request.method == "POST")
+    #expect(request.url.absoluteString == "https://api.bitwarden.com/sends")
+    let requestBody = try #require(request.body)
+    let payload = try #require(
+        try JSONSerialization.jsonObject(with: requestBody) as? [String: Any]
+    )
+    #expect(payload["type"] as? Int == 0)
+    #expect(payload["hideEmail"] as? Bool == true)
+    #expect(payload["maxAccessCount"] as? Int == 3)
+    #expect(payload["expirationDate"] as? String == "2026-12-31T00:00:00Z")
+    #expect(payload["password"] != nil)
+
+    let rawBody = String(decoding: try #require(request.body), as: UTF8.self)
+    #expect(!rawBody.contains("super-secret-body"))
+    #expect(!rawBody.contains("Deploy secret"))
+    #expect(!rawBody.contains("note-secret"))
+    #expect(!rawBody.contains("send-password"))
+
+    // 用返回的链接能重新派生 send key 并解回原文
+    let sendKey = try BitwardenCrypto.deriveSendKey(link.keyMaterial)
+    let text = try #require(payload["text"] as? [String: Any])
+    let encryptedText = try #require(text["text"] as? String)
+    #expect(try BitwardenCrypto.decryptString(encryptedText, key: sendKey) == "super-secret-body")
+}
+
+@Test func bitwardenFetchSendDecryptsAnonymousAccessWithoutAuthentication() async throws {
+    // 构造一份服务端会返回的加密 Send，并把 key material 放进「链接」
+    let keyMaterial = Data((1...16).map(UInt8.init))
+    let sendKey = try BitwardenCrypto.deriveSendKey(keyMaterial)
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "name": "\(try BitwardenCrypto.encryptString("Deploy secret", key: sendKey))",
+          "notes": "\(try BitwardenCrypto.encryptString("note-secret", key: sendKey))",
+          "text": { "text": "\(try BitwardenCrypto.encryptString("super-secret-body", key: sendKey))" },
+          "expirationDate": "2026-12-31T00:00:00Z",
+          "maxAccessCount": 5,
+          "accessCount": 2
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: MemoryBitwardenAuthenticationSessionStore(session: nil),
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: nil
+    )
+
+    let received = try await provider.fetchSend(
+        BitwardenSendFetchRequest(
+            link: BitwardenSendLink(accessID: "access-id-xyz", keyMaterial: keyMaterial),
+            password: nil,
+            apiURL: URL(string: "https://api.bitwarden.com")!
+        )
+    )
+
+    #expect(received.title == "Deploy secret")
+    #expect(received.text == "super-secret-body")
+    #expect(received.notes == "note-secret")
+    #expect(received.maxViews == 5)
+    #expect(received.remainingViews == 3)
+    #expect(received.expiresAt == "2026-12-31T00:00:00Z")
+
+    // 匿名接收：必须不带 Authorization
+    let request = try #require(vaultTransport.requests.first)
+    #expect(request.method == "GET")
+    #expect(request.url.absoluteString == "https://api.bitwarden.com/sends/access/access-id-xyz")
+    #expect(request.headers["Authorization"] == nil)
+}
+
+@Test func bitwardenFetchSendExchangesPasswordBeforeReadingProtectedSend() async throws {
+    let keyMaterial = Data((1...16).map(UInt8.init))
+    let sendKey = try BitwardenCrypto.deriveSendKey(keyMaterial)
+    let vaultTransport = RecordingBitwardenVaultSyncTransport()
+    // 第一次：密码换 token
+    vaultTransport.enqueue(statusCode: 200, body: #"{"token":"scoped-access-token"}"#)
+    // 第二次：拿内容
+    vaultTransport.enqueue(
+        statusCode: 200,
+        body: """
+        {
+          "name": "\(try BitwardenCrypto.encryptString("Protected", key: sendKey))",
+          "text": { "text": "\(try BitwardenCrypto.encryptString("protected-body", key: sendKey))" },
+          "maxAccessCount": 1
+        }
+        """
+    )
+    let provider = BitwardenVaultSyncProvider(
+        sessionStore: MemoryBitwardenAuthenticationSessionStore(session: nil),
+        identityTransport: RecordingBitwardenIdentityTransport(),
+        vaultTransport: vaultTransport,
+        vaultKeyStore: nil
+    )
+
+    let received = try await provider.fetchSend(
+        BitwardenSendFetchRequest(
+            link: BitwardenSendLink(accessID: "protected-id", keyMaterial: keyMaterial),
+            password: "send-password",
+            apiURL: URL(string: "https://api.bitwarden.com")!
+        )
+    )
+
+    #expect(received.text == "protected-body")
+    #expect(received.requiresPassword)
+
+    #expect(vaultTransport.requests.count == 2)
+    let passwordRequest = vaultTransport.requests[0]
+    #expect(passwordRequest.method == "POST")
+    #expect(passwordRequest.url.absoluteString == "https://api.bitwarden.com/sends/access/protected-id/password")
+    // 提交的是 PBKDF2 哈希，不是明文密码
+    let rawBody = String(decoding: try #require(passwordRequest.body), as: UTF8.self)
+    #expect(!rawBody.contains("send-password"))
+
+    let contentRequest = vaultTransport.requests[1]
+    #expect(contentRequest.headers["Authorization"] == "Bearer scoped-access-token")
+}
