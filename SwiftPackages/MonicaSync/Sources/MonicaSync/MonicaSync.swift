@@ -4218,32 +4218,6 @@ private extension URL {
     }
 }
 
-public struct GoogleDriveCloudFileProvider: CloudFileProvider {
-    public let kind: CloudFileProviderKind = .googleDrive
-
-    public init() {}
-
-    public func connectionState() async throws -> CloudFileConnectionState {
-        .disconnected
-    }
-
-    public func listFiles() async throws -> [CloudFileItem] {
-        throw CloudFileProviderError.unsupportedOperation(provider: kind)
-    }
-
-    public func downloadFile(id: String) async throws -> CloudFileDownload {
-        throw CloudFileProviderError.unsupportedOperation(provider: kind)
-    }
-
-    public func uploadFile(named fileName: String, data: Data) async throws -> CloudFileWriteReceipt {
-        throw CloudFileProviderError.unsupportedOperation(provider: kind)
-    }
-
-    public func overwriteFile(id: String, data: Data, fileName: String, expectedRevision: String? = nil) async throws -> CloudFileWriteReceipt {
-        throw CloudFileProviderError.unsupportedOperation(provider: kind)
-    }
-}
-
 public enum CloudFileProviderError: Error, Sendable, Equatable, LocalizedError {
     case authenticationRequired(provider: CloudFileProviderKind)
     case itemNotFound(provider: CloudFileProviderKind)

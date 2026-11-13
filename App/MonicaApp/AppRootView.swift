@@ -3,7 +3,6 @@ import MonicaMDBX
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
-import MonicaUI
 import AVFoundation
 import CoreImage
 import CoreImage.CIFilterBuiltins
@@ -831,10 +830,6 @@ struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable, Codable {
         try container.encode(title, forKey: .title)
         try container.encode(subtitle, forKey: .subtitle)
         try container.encode(searchableText, forKey: .searchableText)
-    }
-
-    var route: VaultItemRoute {
-        VaultItemRoute(kind: kind, entryID: id)
     }
 }
 

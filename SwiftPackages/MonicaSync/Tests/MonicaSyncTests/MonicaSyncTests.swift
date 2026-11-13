@@ -25,13 +25,11 @@ import Foundation
     #expect(!configuration.redactedSummary.contains("://auth"))
 }
 
-@Test func googleDriveProviderIsDeferredUntilExplicitlyEnabled() async throws {
-    let provider = GoogleDriveCloudFileProvider()
-
-    #expect(try await provider.connectionState() == .disconnected)
-    await #expect(throws: CloudFileProviderError.unsupportedOperation(provider: .googleDrive)) {
-        _ = try await provider.listFiles()
-    }
+@Test func googleDriveKindIsDeclaredButHasNoProviderImplementation() {
+    // Google Drive 目前只有种类声明（用于展示名与默认文件名），没有 provider 实现。
+    // 真实接入见 issue #33；App 侧未装配该 provider，调用时会报 providerUnavailable。
+    #expect(CloudFileProviderKind.googleDrive.displayName == "Google Drive")
+    #expect(CloudFileProviderKind.googleDrive.defaultBackupFileName == "monica-google-drive.mdbx")
 }
 
 @Test func oneDriveGraphProviderListsDownloadsUploadsAndConditionallyOverwritesAppFolderFilesWithoutLeakingSecrets() async throws {

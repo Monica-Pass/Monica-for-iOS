@@ -7712,62 +7712,6 @@ public protocol ItemRepository {
     func setFavorite(_ favorite: Bool, for item: UnifiedVaultItem) throws -> UnifiedVaultItem
 }
 
-public enum ParityFeatureFlag: String, Sendable, Equatable, CaseIterable {
-    case passwords
-    case totp
-    case notes
-    case wallet
-    case identities
-    case autofill
-    case backup
-    case keepass
-    case bitwarden
-    case passkeys
-    case attachments
-    case settings
-
-    public static let phaseOneEnabled: [ParityFeatureFlag] = [
-        .passwords,
-        .totp,
-        .notes,
-        .wallet,
-        .identities,
-        .settings
-    ]
-
-    public static let phaseTwoEnabled: [ParityFeatureFlag] = phaseOneEnabled + [
-        .autofill
-    ]
-
-    public var isEnabledInPhaseOne: Bool {
-        Self.phaseOneEnabled.contains(self)
-    }
-
-    public var isEnabledInPhaseTwo: Bool {
-        Self.phaseTwoEnabled.contains(self)
-    }
-
-    public var disabledReason: String? {
-        guard !isEnabledInPhaseTwo else {
-            return nil
-        }
-        switch self {
-        case .backup:
-            return "移动端备份当前不可用。"
-        case .keepass:
-            return "KDBX 导入当前不可用。"
-        case .bitwarden:
-            return "Bitwarden 同步当前不可用。"
-        case .passkeys:
-            return "通行密钥当前不可用。"
-        case .attachments:
-            return "附件当前不可用。"
-        case .passwords, .totp, .notes, .wallet, .identities, .autofill, .settings:
-            return nil
-        }
-    }
-}
-
 public enum LocalVaultState: Sendable, Equatable {
     case unlocked
     case locked

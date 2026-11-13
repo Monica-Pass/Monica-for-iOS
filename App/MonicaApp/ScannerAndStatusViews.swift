@@ -1,5 +1,4 @@
 import AVFoundation
-import MonicaUI
 import Observation
 import SwiftUI
 import UIKit
@@ -141,22 +140,5 @@ private final class QRCodeScannerViewController: UIViewController, @preconcurren
             didScanCode = false
             captureSession.startRunning()
         }
-    }
-}
-
-struct AutoFillStatusView: View {
-    let appGroupIdentifier: String
-
-    var body: some View {
-        AndroidParityScreen {
-            AndroidParitySection(title: "自动填充") {
-                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "索引", value: "已加密")
-                    AndroidParityInfoRow(title: "共享数据", value: appGroupIdentifier.isEmpty ? "待配置" : "已配置")
-                }
-            }
-        }
-        .navigationTitle("自动填充")
-        .navigationBarTitleDisplayMode(.inline)
     }
 }

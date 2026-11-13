@@ -8,7 +8,6 @@ import Security
 struct MonicaAppEnvironment: Sendable {
     let appGroupIdentifier: String
     let minimumIOSVersion: String
-    let firstBackupProvider: String
     let localDeviceIdentifier: String
     let oneDriveConfiguration: OneDriveCloudFileConfiguration
     let oneDriveAuthenticationService: any AppOneDriveAuthenticationService
@@ -18,7 +17,6 @@ struct MonicaAppEnvironment: Sendable {
     init(
         appGroupIdentifier: String = "group.monica-pass.monica",
         minimumIOSVersion: String = "17.0",
-        firstBackupProvider: String = "WebDAV",
         localDeviceIdentifier: String = "ios-local-device",
         oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction,
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
@@ -27,7 +25,6 @@ struct MonicaAppEnvironment: Sendable {
     ) {
         self.appGroupIdentifier = appGroupIdentifier
         self.minimumIOSVersion = minimumIOSVersion
-        self.firstBackupProvider = firstBackupProvider
         self.localDeviceIdentifier = localDeviceIdentifier
         self.oneDriveConfiguration = oneDriveConfiguration
         self.oneDriveAuthenticationService = oneDriveAuthenticationService ?? DefaultAppOneDriveMSALAuthenticationService(

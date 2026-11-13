@@ -3960,16 +3960,6 @@ import MonicaStorage
     ])
 }
 
-@Test func parityFeatureFlagsKeepUnsupportedAndroidModulesVisibleButDisabled() {
-    #expect(ParityFeatureFlag.phaseOneEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings])
-    #expect(ParityFeatureFlag.phaseTwoEnabled == [.passwords, .totp, .notes, .wallet, .identities, .settings, .autofill])
-    #expect(ParityFeatureFlag.autofill.isEnabledInPhaseTwo)
-    #expect(ParityFeatureFlag.backup.disabledReason == "移动端备份当前不可用。")
-    #expect(!ParityFeatureFlag.bitwarden.isEnabledInPhaseOne)
-    #expect(!ParityFeatureFlag.passkeys.isEnabledInPhaseOne)
-    #expect(ParityFeatureFlag.passkeys.disabledReason == "通行密钥当前不可用。")
-}
-
 @Test func createVaultBuildsMDBXDescriptorAndDelegatesToEngine() throws {
     let engine = RecordingVaultEngine()
     let repository = LocalVaultRepository(engine: engine)
