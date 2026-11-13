@@ -6,6 +6,15 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      mdbx_ref:
+        description: Monica-Pass/Mdbx ref
+        required: false
+        default: master
+      xcode_version:
+        description: 指定 Xcode 版本（留空=自动取 runner 上最新正式版）
+        required: false
+        default: ""
 
 permissions:
   contents: read
@@ -15,8 +24,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  # 单一来源：所有 job 共用同一个 Xcode 与 MDBX ref，避免漂移。
-  MONICA_XCODE_APP: /Applications/Xcode_26.5.app
+  # Xcode 不硬编码：由 Scripts/select-xcode.sh 在运行时选 runner 上已安装的最新正式版。
+  # 想钉死版本时：workflow_dispatch 传 xcode_version，或改这里的 MONICA_XCODE_PIN。
+  MONICA_XCODE_VERSION: ${{ github.event.inputs.xcode_version || '' }}
   MONICA_MDBX_REPOSITORY: Monica-Pass/Mdbx
   MONICA_MDBX_REF: ${{ github.event.inputs.mdbx_ref || 'master' }}
 
@@ -148,13 +158,10 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
 
       - name: Select Xcode
-        run: |
-          set -euo pipefail
-          sudo xcode-select -s "$MONICA_XCODE_APP/Contents/Developer"
-          xcodebuild -version
+        run: Scripts/select-xcode.sh
 
       - name: Compute cache key
         id: key
@@ -164,6 +171,7 @@ jobs:
             shasum Scripts/build-mdbx-xcframework.sh
             shasum Scripts/generate-mdbx-swift-bindings.sh
             shasum SwiftPackages/MonicaMDBX/Package.swift
+            shasum Scripts/select-xcode.sh
             xcodebuild -version
             rustc -Vv
           } | shasum | cut -d' ' -f1)"
@@ -237,7 +245,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: sudo xcode-select -s "$MONICA_XCODE_APP/Contents/Developer"
+        run: Scripts/select-xcode.sh
 
       - uses: actions/cache@v4
         with:
@@ -266,10 +274,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Select Xcode
-        run: |
-          set -euo pipefail
-          sudo xcode-select -s "$MONICA_XCODE_APP/Contents/Developer"
-          xcodebuild -version
+        run: Scripts/select-xcode.sh
 
       - uses: actions/download-artifact@v4
         with:

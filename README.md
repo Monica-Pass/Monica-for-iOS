@@ -152,22 +152,22 @@ cargo install uniffi --version 0.31.1 --locked --features cli
 
 ### 验证命令
 
-Swift package 测试（纯 Swift 包，可在 macOS 上直接跑）：
+全部 Swift package 都可以在 macOS 上直接跑：
 
 ```bash
 cd SwiftPackages/MonicaCore && swift test
 cd ../MonicaSecurity && swift test
 cd ../MonicaSync && swift test
+cd ../MonicaMDBX && swift test
+cd ../MonicaStorage && swift test
 ```
 
-`MonicaMDBX` 与 `MonicaStorage` **不能用 `swift test`**：它们依赖 `MonicaMDBXGenerated.xcframework`，
-而该 xcframework 只包含 iOS slice，在 macOS 上会报：
+> `MonicaMDBXGenerated.xcframework` 同时携带 iOS 与 **macOS** slice，
+> 所以依赖 MDBX 的两个包在 macOS 上走的是真实 FFI 路径，而不是降级 stub。
+> 早先版本缺 macOS slice，会让这两个包在新版 SwiftPM 下直接构建失败——
+> 补上 slice 后该问题消失（见 `Scripts/build-mdbx-xcframework.sh` 的 `MACOS_ARM64_TARGET`）。
 
-```text
-While building for macOS, no library for this platform was found in '.../MonicaMDBXGenerated.xcframework'
-```
-
-这两个包的验证请走 iOS simulator XCTest（下面的 `xcodebuild test`），它们被 `MonicaTests` target 覆盖。
+如果 xcframework 缺失或只有旧 slice，`swift test` 仍可能报平台缺失，重跑 `Scripts/bootstrap.sh` 即可。
 
 iOS simulator build：
 
