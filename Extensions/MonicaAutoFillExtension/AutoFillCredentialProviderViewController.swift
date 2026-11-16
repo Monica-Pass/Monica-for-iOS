@@ -6,6 +6,14 @@ import MonicaStorage
 import UIKit
 
 final class AutoFillCredentialProviderViewController: ASCredentialProviderViewController, UISearchBarDelegate {
+    /// iOS rejects provider passkeys whose authenticator data never declares the backup flags,
+    /// so the credential advertises multi-device capability. Keep this in sync with how the
+    /// passkey key material is stored.
+    private enum PasskeyBackupDeclaration {
+        static let isEligible = true
+        static let isBackedUp = true
+    }
+
     private let appGroupIdentifier = "group.com.monicapass.monica"
     private var loadTask: Task<Void, Never>?
     private var passkeyListTask: Task<Void, Never>?
@@ -120,16 +128,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             return
         }
 
-        // Every open-source provider (KeePassium, Keyguard, Bitwarden, AliasVault) completes a
-        // registration only after an explicit tap in its own UI. Completing from the system
-        // callback makes Safari/WebKit treat the ceremony as unconfirmed.
-        configurePasskeyRegistrationView(
-            relyingPartyID: relyingPartyID,
-            username: (passkeyRequest.credentialIdentity as? ASPasskeyCredentialIdentity)?.userName ?? "",
-            onConfirm: { [weak self] in
-                self?.beginPasskeyRegistration(passkeyRequest, relyingPartyID: relyingPartyID)
-            }
-        )
+        beginPasskeyRegistration(passkeyRequest, relyingPartyID: relyingPartyID)
     }
 
     private func beginPasskeyRegistration(
@@ -167,63 +166,6 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 userVerified: verification == .verified
             )
         }
-    }
-
-    private func configurePasskeyRegistrationView(
-        relyingPartyID: String,
-        username: String,
-        onConfirm: @escaping () -> Void
-    ) {
-        view.backgroundColor = .systemBackground
-
-        let titleLabel = UILabel()
-        titleLabel.text = "Monica Passkey · \(relyingPartyID)"
-        titleLabel.font = .preferredFont(forTextStyle: .title2)
-        titleLabel.adjustsFontForContentSizeCategory = true
-        titleLabel.numberOfLines = 0
-        titleLabel.textAlignment = .center
-
-        let detailLabel = UILabel()
-        detailLabel.text = username.isEmpty
-            ? "为此站点创建通行密钥"
-            : "为 \(username) 创建通行密钥"
-        detailLabel.font = .preferredFont(forTextStyle: .body)
-        detailLabel.textColor = .secondaryLabel
-        detailLabel.adjustsFontForContentSizeCategory = true
-        detailLabel.numberOfLines = 0
-        detailLabel.textAlignment = .center
-
-        var configuration = UIButton.Configuration.filled()
-        configuration.title = "创建通行密钥"
-        configuration.cornerStyle = .large
-        configuration.buttonSize = .large
-        let button = UIButton(configuration: configuration)
-        button.addAction(UIAction { _ in onConfirm() }, for: .touchUpInside)
-
-        let cancelButton = UIButton(type: .system)
-        cancelButton.setTitle("取消", for: .normal)
-        cancelButton.addAction(
-            UIAction { [weak self] _ in
-                Self.logPasskeyDiagnostic("registration cancelled by user")
-                self?.cancelRequest(code: ASExtensionError.Code.userCanceled)
-            },
-            for: .touchUpInside
-        )
-
-        let stack = UIStackView(arrangedSubviews: [titleLabel, detailLabel, button, cancelButton])
-        stack.translatesAutoresizingMaskIntoConstraints = false
-        stack.axis = .vertical
-        stack.alignment = .fill
-        stack.spacing = 16
-
-        view.subviews.forEach { $0.removeFromSuperview() }
-        view.addSubview(stack)
-
-        NSLayoutConstraint.activate([
-            stack.leadingAnchor.constraint(equalTo: view.layoutMarginsGuide.leadingAnchor),
-            stack.trailingAnchor.constraint(equalTo: view.layoutMarginsGuide.trailingAnchor),
-            stack.centerYAnchor.constraint(equalTo: view.centerYAnchor)
-        ])
     }
 
     @available(iOS 26.2, *)
@@ -465,7 +407,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 username: identity.userName,
                 userHandle: identity.userHandle,
                 clientDataHash: request.clientDataHash,
-                userVerified: userVerified
+                userVerified: userVerified,
+                backupEligible: PasskeyBackupDeclaration.isEligible,
+                backupState: PasskeyBackupDeclaration.isBackedUp
             )
             let credential = ASPasskeyRegistrationCredential(
                 relyingParty: registration.relyingPartyID,
@@ -695,7 +639,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 credentialID: identity.credentialID,
                 userHandle: identity.userHandle,
                 clientDataHash: clientDataHash,
-                userVerified: userVerified
+                userVerified: userVerified,
+                backupEligible: PasskeyBackupDeclaration.isEligible,
+                backupState: PasskeyBackupDeclaration.isBackedUp
             )
             let credential = ASPasskeyAssertionCredential(
                 userHandle: assertion.userHandle,

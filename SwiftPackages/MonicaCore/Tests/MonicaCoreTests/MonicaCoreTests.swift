@@ -241,6 +241,77 @@ import MonicaCore
     #expect(counters == [Data([0, 0, 0, 0]), Data([0, 0, 0, 0]), Data([0, 0, 0, 0])])
 }
 
+@Test func passkeyRegistrationFlagsReflectUserVerificationAndBackupState() throws {
+    let manager = MonicaPasskeyCredentialManager(privateKeyStore: MemoryPasskeyPrivateKeyStore())
+
+    let plain = try manager.createRegistration(
+        relyingPartyID: "webauthn.io",
+        username: "flags",
+        userHandle: Data("user-handle".utf8),
+        clientDataHash: Data(repeating: 0x11, count: 32),
+        userVerified: true
+    )
+    // UP | UV | AT
+    #expect(MonicaPasskeyCredentialManager.authenticatorDataFlags(fromAttestationObject: plain.attestationObject) == 0x45)
+
+    let backedUp = try manager.createRegistration(
+        relyingPartyID: "webauthn.io",
+        username: "flags",
+        userHandle: Data("user-handle".utf8),
+        clientDataHash: Data(repeating: 0x12, count: 32),
+        userVerified: true,
+        backupEligible: true,
+        backupState: true
+    )
+    // UP | UV | BE | BS | AT
+    #expect(MonicaPasskeyCredentialManager.authenticatorDataFlags(fromAttestationObject: backedUp.attestationObject) == 0x5D)
+
+    // BS may only be claimed together with BE.
+    let inconsistent = try manager.createRegistration(
+        relyingPartyID: "webauthn.io",
+        username: "flags",
+        userHandle: Data("user-handle".utf8),
+        clientDataHash: Data(repeating: 0x13, count: 32),
+        userVerified: true,
+        backupEligible: false,
+        backupState: true
+    )
+    #expect(MonicaPasskeyCredentialManager.authenticatorDataFlags(fromAttestationObject: inconsistent.attestationObject) == 0x45)
+}
+
+@Test func passkeyBackupFlagsAreCarriedIntoAssertions() throws {
+    let store = MemoryPasskeyPrivateKeyStore()
+    let manager = MonicaPasskeyCredentialManager(privateKeyStore: store)
+    let registration = try manager.createRegistration(
+        relyingPartyID: "webauthn.io",
+        username: "flags",
+        userHandle: Data("user-handle".utf8),
+        clientDataHash: Data(repeating: 0x21, count: 32),
+        userVerified: true,
+        backupEligible: true,
+        backupState: true
+    )
+    let assertion = try manager.createAssertion(
+        relyingPartyID: "webauthn.io",
+        credentialID: registration.credentialID,
+        userHandle: Data("user-handle".utf8),
+        clientDataHash: Data(repeating: 0x22, count: 32),
+        userVerified: true,
+        backupEligible: true,
+        backupState: true
+    )
+
+    // UP | UV | BE | BS
+    #expect(assertion.authenticatorData[32] == 0x1D)
+    #expect(assertion.authenticatorData[33..<37] == Data([0, 0, 0, 0]))
+    #expect(
+        try manager.verifyAssertion(
+            assertion,
+            publicKeyCOSE: registration.publicKeyCOSE
+        )
+    )
+}
+
 @Test func passkeyFlagsDropUserVerificationWhenTheOwnerWasNotVerified() throws {
     let manager = MonicaPasskeyCredentialManager(privateKeyStore: MemoryPasskeyPrivateKeyStore())
     let registration = try manager.createRegistration(

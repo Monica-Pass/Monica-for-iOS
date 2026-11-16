@@ -72,3 +72,29 @@
 已对齐的部分：`counter = 0`、`flags = UP|UV`、`derRepresentation` 签名、`fmt: none` + 16 字节 AAGUID、
 `rpIDHash = sha256(rpId)`、注册/断言完成调用、`provideCredentialWithoutUserInteraction` 一律回
 `userInteractionRequired`。
+
+## 7. 根因复盘：BE/BS 标志位（真机验收定位）
+
+真机上注册流程全部正常（`registration-completed expired=false`、身份写入成功、attestation 通过
+python-fido2 与 `webauthn` 库的服务端校验），但 Safari / Edge 均返回 `NotAllowedError`
+"not allowed by the user agent or the platform"。把 UV 与生物识别全部绕过后仍然失败。
+
+最终定位：**`authData` 缺少 BE（`0x08`，backup eligible）与 BS（`0x10`，backup state）**。
+iOS 会把这类注册凭据判为不可用，浏览器侧只看到通用的 `NotAllowedError`。
+
+| 场景 | 修复前 | 修复后 |
+|---|---|---|
+| 注册（UP+UV+AT） | `0x45` | `0x5D`（+BE+BS） |
+| 断言（UP+UV） | `0x05` | `0x1D`（+BE+BS） |
+
+业界印证：KeePassium 的 passkey 默认值就是 `defaultBEFlagSet = true` /
+`defaultBSFlagSet = true`（`KeePassiumLib/db/passkey/Passkey.swift`），即密码管理器把
+自身可备份/同步的凭据声明为 BE=1、BS=1。
+
+为了不让该声明落空，`KeychainPasskeyPrivateKeyStore` 现在默认以
+`kSecAttrSynchronizable = true` + `kSecAttrAccessibleAfterFirstUnlock` 存放私钥（可随 iCloud
+钥匙串备份恢复）；读取时用 `kSecAttrSynchronizableAny`，因此旧的非同步条目仍可用。
+`BS` 只允许与 `BE` 同时置位。
+
+遗留：保险库条目（RP、用户名、credentialID 等元数据）仍是设备本地的，跨设备恢复需要同步
+保险库本身；这一条记录在 `PR_ANDROID_PARITY.md` 的待验项里。

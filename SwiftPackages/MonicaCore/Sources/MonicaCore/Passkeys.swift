@@ -111,21 +111,37 @@ public final class MemoryPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unchec
 public final class KeychainPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unchecked Sendable {
     private let service: String
     private let accessGroup: String?
+    private let synchronizable: Bool
 
+    /// - Parameter synchronizable: Store the key in iCloud Keychain so the credential can be
+    ///   restored on another device. This is what makes the WebAuthn `BE`/`BS` backup flags
+    ///   truthful; `ThisDeviceOnly` accessibility is incompatible with synchronizing, so the
+    ///   protection class downgrades to `AfterFirstUnlock` when synchronizing.
     public init(
         service: String = "com.monicapass.monica.passkeys",
-        accessGroup: String? = nil
+        accessGroup: String? = nil,
+        synchronizable: Bool = true
     ) {
         self.service = service
         self.accessGroup = accessGroup
+        self.synchronizable = synchronizable
     }
 
     public func savePrivateKey(_ privateKey: Data, credentialID: Data) throws -> String {
         var query = baseQuery(credentialID: credentialID)
+        // Remove both the syncing and the device-local variant so an upgrade does not leave a
+        // stale key behind.
+        query[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
         SecItemDelete(query as CFDictionary)
 
+        query = baseQuery(credentialID: credentialID)
         query[kSecValueData as String] = privateKey
-        query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        if synchronizable {
+            query[kSecAttrSynchronizable as String] = kCFBooleanTrue
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        } else {
+            query[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+        }
 
         let status = SecItemAdd(query as CFDictionary, nil)
         guard status == errSecSuccess else {
@@ -136,6 +152,7 @@ public final class KeychainPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unch
 
     public func loadPrivateKey(credentialID: Data) throws -> Data? {
         var query = baseQuery(credentialID: credentialID)
+        query[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
         query[kSecReturnData as String] = kCFBooleanTrue
         query[kSecMatchLimit as String] = kSecMatchLimitOne
 
@@ -229,7 +246,9 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         username: String,
         userHandle: Data,
         clientDataHash: Data,
-        userVerified: Bool = true
+        userVerified: Bool = true,
+        backupEligible: Bool = false,
+        backupState: Bool = false
     ) throws -> MonicaPasskeyRegistrationResult {
         guard let normalizedRelyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(relyingPartyID) else {
             throw PasskeyCredentialError.invalidRelyingPartyID
@@ -255,7 +274,9 @@ public struct MonicaPasskeyCredentialManager: Sendable {
             relyingPartyID: normalizedRelyingPartyID,
             credentialID: credentialID,
             publicKeyCOSE: publicKeyCOSE,
-            userVerified: userVerified
+            userVerified: userVerified,
+            backupEligible: backupEligible,
+            backupState: backupState
         )
 
         return MonicaPasskeyRegistrationResult(
@@ -274,7 +295,9 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         credentialID: Data,
         userHandle: Data,
         clientDataHash: Data,
-        userVerified: Bool = true
+        userVerified: Bool = true,
+        backupEligible: Bool = false,
+        backupState: Bool = false
     ) throws -> MonicaPasskeyAssertionResult {
         guard let normalizedRelyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(relyingPartyID) else {
             throw PasskeyCredentialError.invalidRelyingPartyID
@@ -302,7 +325,11 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         // therefore always report a zero counter, which every conforming RP accepts.
         let authenticatorData = Self.authenticatorData(
             relyingPartyID: normalizedRelyingPartyID,
-            flags: 0x01 | (userVerified ? 0x04 : 0x00),
+            flags: Self.flags(
+                userVerified: userVerified,
+                backupEligible: backupEligible,
+                backupState: backupState
+            ),
             counter: 0
         )
         let signedData = authenticatorData + clientDataHash
@@ -382,7 +409,9 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         relyingPartyID: String,
         credentialID: Data,
         publicKeyCOSE: Data,
-        userVerified: Bool
+        userVerified: Bool,
+        backupEligible: Bool,
+        backupState: Bool
     ) throws -> Data {
         var attestedCredentialData = Data(repeating: 0, count: 16)
         attestedCredentialData.append(UInt8((credentialID.count >> 8) & 0xff))
@@ -392,7 +421,11 @@ public struct MonicaPasskeyCredentialManager: Sendable {
 
         var authData = authenticatorData(
             relyingPartyID: relyingPartyID,
-            flags: 0x41 | (userVerified ? 0x04 : 0x00),
+            flags: flags(
+                userVerified: userVerified,
+                backupEligible: backupEligible,
+                backupState: backupState
+            ) | 0x40, // AT: attested credential data follows
             counter: 0
         )
         authData.append(attestedCredentialData)
@@ -402,6 +435,32 @@ public struct MonicaPasskeyCredentialManager: Sendable {
             (.text("attStmt"), .map([])),
             (.text("authData"), .bytes(authData))
         ])
+    }
+
+    /// UP is always set because a user action triggered the ceremony. UV, BE and BS follow
+    /// what the caller actually performed: BS may only be claimed together with BE.
+    static func flags(
+        userVerified: Bool,
+        backupEligible: Bool,
+        backupState: Bool
+    ) -> UInt8 {
+        var flags: UInt8 = 0x01
+        if userVerified {
+            flags |= 0x04
+        }
+        if backupEligible {
+            flags |= 0x08
+        }
+        if backupEligible && backupState {
+            flags |= 0x10
+        }
+        return flags
+    }
+
+    /// Reads the authenticator data flags back out of an attestation object. Used by tests and
+    /// by the extension when it needs to verify what it is about to hand to the platform.
+    public static func authenticatorDataFlags(fromAttestationObject attestationObject: Data) -> UInt8? {
+        CBOR.authenticatorDataFlags(attestationObject)
     }
 
     private static func authenticatorData(
@@ -484,6 +543,108 @@ private indirect enum CBOR {
             return nil
         }
         return (x, y)
+    }
+
+    static func authenticatorDataFlags(_ attestationObject: Data) -> UInt8? {
+        var cursor = attestationObject.startIndex
+        guard readByte(attestationObject, &cursor) == 0xA3 else {
+            return nil
+        }
+        for _ in 0..<3 {
+            guard let key = readText(attestationObject, &cursor) else {
+                return nil
+            }
+            if key == "authData" {
+                guard let bytes = readByteString(attestationObject, &cursor),
+                      bytes.count > 32
+                else {
+                    return nil
+                }
+                return bytes[bytes.startIndex + 32]
+            }
+            guard skipValue(attestationObject, &cursor) else {
+                return nil
+            }
+        }
+        return nil
+    }
+
+    private static func readByteString(_ data: Data, _ cursor: inout Data.Index) -> Data? {
+        guard cursor < data.endIndex else {
+            return nil
+        }
+        let initial = data[cursor]
+        guard initial >> 5 == 2 else {
+            return nil
+        }
+        cursor = data.index(after: cursor)
+        guard let length = readLength(additionalInfo: initial & 0x1f, data, &cursor),
+              cursor + length <= data.endIndex
+        else {
+            return nil
+        }
+        let value = Data(data[cursor..<cursor + length])
+        cursor += length
+        return value
+    }
+
+    private static func skipValue(_ data: Data, _ cursor: inout Data.Index) -> Bool {
+        guard cursor < data.endIndex else {
+            return false
+        }
+        let initial = data[cursor]
+        let majorType = initial >> 5
+        if majorType == 7 {
+            cursor = data.index(after: cursor)
+            return true
+        }
+        cursor = data.index(after: cursor)
+        guard let length = readLength(additionalInfo: initial & 0x1f, data, &cursor) else {
+            return false
+        }
+        switch majorType {
+        case 0, 1:
+            return true
+        case 2, 3:
+            guard cursor + length <= data.endIndex else {
+                return false
+            }
+            cursor += length
+            return true
+        case 4:
+            for _ in 0..<length where !skipValue(data, &cursor) {
+                return false
+            }
+            return true
+        case 5:
+            for _ in 0..<length {
+                guard skipValue(data, &cursor), skipValue(data, &cursor) else {
+                    return false
+                }
+            }
+            return true
+        default:
+            return false
+        }
+    }
+
+    private static func readText(_ data: Data, _ cursor: inout Data.Index) -> String? {
+        guard cursor < data.endIndex else {
+            return nil
+        }
+        let initial = data[cursor]
+        guard initial >> 5 == 3 else {
+            return nil
+        }
+        cursor = data.index(after: cursor)
+        guard let length = readLength(additionalInfo: initial & 0x1f, data, &cursor),
+              cursor + length <= data.endIndex
+        else {
+            return nil
+        }
+        let value = String(decoding: data[cursor..<cursor + length], as: UTF8.self)
+        cursor += length
+        return value
     }
 
     private static func encode(_ value: CBOR) -> Data {
