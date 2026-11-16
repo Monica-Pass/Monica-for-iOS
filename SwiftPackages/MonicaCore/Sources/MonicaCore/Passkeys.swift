@@ -221,11 +221,15 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         self.randomBytes = randomBytes
     }
 
+    /// - Parameter userVerified: Whether the caller actually performed user verification
+    ///   (biometrics or device passcode). The authenticator data must not claim the UV flag
+    ///   when the device owner was not verified.
     public func createRegistration(
         relyingPartyID: String,
         username: String,
         userHandle: Data,
-        clientDataHash: Data
+        clientDataHash: Data,
+        userVerified: Bool = true
     ) throws -> MonicaPasskeyRegistrationResult {
         guard let normalizedRelyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(relyingPartyID) else {
             throw PasskeyCredentialError.invalidRelyingPartyID
@@ -250,7 +254,8 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         let attestationObject = try Self.attestationObject(
             relyingPartyID: normalizedRelyingPartyID,
             credentialID: credentialID,
-            publicKeyCOSE: publicKeyCOSE
+            publicKeyCOSE: publicKeyCOSE,
+            userVerified: userVerified
         )
 
         return MonicaPasskeyRegistrationResult(
@@ -268,7 +273,8 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         relyingPartyID: String,
         credentialID: Data,
         userHandle: Data,
-        clientDataHash: Data
+        clientDataHash: Data,
+        userVerified: Bool = true
     ) throws -> MonicaPasskeyAssertionResult {
         guard let normalizedRelyingPartyID = PasskeyRelyingPartyIDNormalizer.normalize(relyingPartyID) else {
             throw PasskeyCredentialError.invalidRelyingPartyID
@@ -291,10 +297,13 @@ public struct MonicaPasskeyCredentialManager: Sendable {
             throw PasskeyCredentialError.invalidPrivateKey
         }
 
+        // WebAuthn L2 §7.2: relying parties that observe a non-zero signature counter
+        // MUST reject assertions that do not strictly increase it. Platform passkeys
+        // therefore always report a zero counter, which every conforming RP accepts.
         let authenticatorData = Self.authenticatorData(
             relyingPartyID: normalizedRelyingPartyID,
-            flags: 0x05,
-            counter: 1
+            flags: 0x01 | (userVerified ? 0x04 : 0x00),
+            counter: 0
         )
         let signedData = authenticatorData + clientDataHash
         let signature = try privateKey.signature(for: signedData).derRepresentation
@@ -372,7 +381,8 @@ public struct MonicaPasskeyCredentialManager: Sendable {
     private static func attestationObject(
         relyingPartyID: String,
         credentialID: Data,
-        publicKeyCOSE: Data
+        publicKeyCOSE: Data,
+        userVerified: Bool
     ) throws -> Data {
         var attestedCredentialData = Data(repeating: 0, count: 16)
         attestedCredentialData.append(UInt8((credentialID.count >> 8) & 0xff))
@@ -382,7 +392,7 @@ public struct MonicaPasskeyCredentialManager: Sendable {
 
         var authData = authenticatorData(
             relyingPartyID: relyingPartyID,
-            flags: 0x45,
+            flags: 0x41 | (userVerified ? 0x04 : 0x00),
             counter: 0
         )
         authData.append(attestedCredentialData)

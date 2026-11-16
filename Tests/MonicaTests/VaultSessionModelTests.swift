@@ -1340,6 +1340,14 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(capabilities["ProvidesPasswords"] as? Bool, true)
         XCTAssertEqual(capabilities["ProvidesPasskeys"] as? Bool, true)
         XCTAssertEqual(capabilities["SupportsSavePasswordCredentials"] as? Bool, true)
+
+        // iOS 17+ (ExtensionKit) only publishes the `-ui` extension point; the legacy
+        // `com.apple.authentication-services-credential-provider` identifier registers
+        // nothing, so the provider never shows up in AutoFill settings.
+        XCTAssertEqual(
+            extensionConfig["NSExtensionPointIdentifier"] as? String,
+            "com.apple.authentication-services-credential-provider-ui"
+        )
     }
 
     func testAutoFillExtensionCompletesPasskeyRegistrationAndAssertionRequests() throws {
@@ -1350,6 +1358,91 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(source.contains("completeAssertionRequest"))
         XCTAssertTrue(source.contains("saveCredentialIdentities"))
         XCTAssertFalse(source.contains("Passkey 认证需要 Monica 完成签名能力后提供"))
+    }
+
+    func testAutoFillPasskeyAssertionVerifiesDeviceOwnerBeforeSigning() throws {
+        let sourceURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        // The UV flag is claimed in the authenticator data, so a biometric/passcode
+        // check must gate both the assertion and the registration paths.
+        XCTAssertTrue(source.contains("verifyDeviceOwner("))
+        XCTAssertTrue(source.contains("context.canEvaluatePolicy(.deviceOwnerAuthentication"))
+        XCTAssertTrue(source.contains("authenticateAndCompletePasskeyAssertion"))
+        XCTAssertFalse(source.contains("completePasskeyAssertion(for: passkeyRequest)"))
+
+        // Face ID inside an app extension needs the key in the extension's own Info.plist,
+        // otherwise `canEvaluatePolicy` fails and every registration dead-ends.
+        let extensionInfo = try propertyListDictionary(
+            at: try repositoryFileURL("Extensions/MonicaAutoFillExtension/Info.plist")
+        )
+        let usageDescription = extensionInfo["NSFaceIDUsageDescription"] as? String ?? ""
+        XCTAssertFalse(usageDescription.isEmpty)
+
+        let silentPath = try XCTUnwrap(
+            source.range(of: "override func provideCredentialWithoutUserInteraction(for credentialRequest: any ASCredentialRequest)")
+        )
+        let silentBody = source[silentPath.upperBound...].prefix(700)
+        XCTAssertTrue(silentBody.contains("userInteractionRequired"))
+        XCTAssertFalse(silentBody.contains("completeAssertionRequest"))
+    }
+
+    func testAutoFillPasskeyRegistrationPublishesIncrementallyAndValidatesRequest() throws {
+        let source = try String(
+            contentsOf: try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift"),
+            encoding: .utf8
+        )
+
+        // A full `replaceCredentialIdentities` during an in-flight ceremony can make the
+        // platform abort the request, so the extension must publish a single credential.
+        XCTAssertTrue(source.contains("identity-save success="))
+        XCTAssertTrue(source.contains("ASCredentialIdentityStore.shared.saveCredentialIdentities(identities)"))
+        XCTAssertFalse(source.contains("replaceCredentialIdentities"))
+
+        // Parity with Keyguard/Bitwarden: reject unsupported algorithms and duplicates.
+        XCTAssertTrue(source.contains("supportedAlgorithms.contains(.ES256)"))
+        XCTAssertTrue(source.contains("matchesExcludedCredential("))
+        XCTAssertTrue(source.contains("excludedCredentials"))
+    }
+
+    func testAutoFillPasskeyListFallbackKeepsRelyingPartyCredentialsUsable() throws {
+        let source = try String(
+            contentsOf: try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift"),
+            encoding: .utf8
+        )
+
+        // AliasVault-style fallback: allowedCredentials may be stale, so still offer the
+        // relying party's passkeys instead of dead-ending with an empty list.
+        XCTAssertTrue(source.contains("allowedMatches"))
+        XCTAssertTrue(source.contains("let candidates = allowedMatches.isEmpty ? relyingPartyMatches : allowedMatches"))
+        XCTAssertTrue(source.contains("网站请求的凭据不在 Monica 中"))
+        XCTAssertTrue(source.contains("此站点的通行密钥不在 Monica 中"))
+    }
+
+    func testAutoFillPasskeyListFiltersIdentitiesByRelyingPartyAndAllowedCredentials() throws {
+        let sourceURL = try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains("credentialIdentityTypes: .passkey"))
+        XCTAssertTrue(source.contains("PasskeyRelyingPartyIDNormalizer.host("))
+        XCTAssertTrue(source.contains("allowedCredentialIDs.contains(identity.credentialID)"))
+        XCTAssertTrue(source.contains("configurePasskeyCredentialList("))
+        XCTAssertTrue(source.contains("let clientDataHash = requestParameters.clientDataHash"))
+        XCTAssertFalse(source.contains("Passkey 认证需要在 Monica 中解锁并选择凭据"))
+    }
+
+    func testAppSurfacesSystemAutoFillProviderStateInSettings() throws {
+        let source = try String(
+            contentsOf: try repositoryFileURL("App/MonicaApp/AppRootView.swift"),
+            encoding: .utf8
+        )
+
+        // Without this readout the vault cannot explain why AutoFill/passkeys never appear,
+        // which is exactly the failure mode seen when the provider extension is not enabled.
+        XCTAssertTrue(source.contains("ASCredentialIdentityStore.shared.getState"))
+        XCTAssertTrue(source.contains("refreshSystemAutoFillProviderStatus()"))
+        XCTAssertTrue(source.contains("id: \"autofill-provider\""))
+        XCTAssertTrue(source.contains("系统自动填充扩展"))
     }
 
     func testAutoFillExtensionPersistsSystemSavePasswordRequestsForAppImport() throws {

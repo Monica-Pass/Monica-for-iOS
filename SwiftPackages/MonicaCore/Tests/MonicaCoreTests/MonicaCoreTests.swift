@@ -198,12 +198,95 @@ import MonicaCore
     #expect(assertion.userHandle == Data("github-user-handle".utf8))
     #expect(assertion.authenticatorData.count == 37)
     #expect(assertion.signature.count > 60)
+    // WebAuthn L2 §7.2: a non-zero signature counter must strictly increase, so a
+    // credential provider must report zero (like platform passkeys) to stay usable.
+    #expect(assertion.authenticatorData[32] == 0x05)
+    #expect(assertion.authenticatorData[33..<37] == Data([0, 0, 0, 0]))
     #expect(
         try manager.verifyAssertion(
             assertion,
             publicKeyCOSE: registration.publicKeyCOSE
         )
     )
+}
+
+@Test func passkeyAssertionsStayVerifiableAcrossRepeatedRequests() throws {
+    let manager = MonicaPasskeyCredentialManager(privateKeyStore: MemoryPasskeyPrivateKeyStore())
+    let registration = try manager.createRegistration(
+        relyingPartyID: "github.com",
+        username: "joyin@example.com",
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCA, count: 32)
+    )
+
+    var counters: [Data] = []
+    for attempt in 1...3 {
+        let assertion = try manager.createAssertion(
+            relyingPartyID: "github.com",
+            credentialID: registration.credentialID,
+            userHandle: Data("github-user-handle".utf8),
+            clientDataHash: Data(repeating: UInt8(0xCA &+ attempt), count: 32)
+        )
+        counters.append(assertion.authenticatorData[33..<37])
+        #expect(
+            try manager.verifyAssertion(
+                assertion,
+                publicKeyCOSE: registration.publicKeyCOSE
+            )
+        )
+    }
+
+    // A relying party that enforces `signCount == 0 || signCount > storedSignCount`
+    // must accept every assertion this authenticator produces.
+    #expect(counters == [Data([0, 0, 0, 0]), Data([0, 0, 0, 0]), Data([0, 0, 0, 0])])
+}
+
+@Test func passkeyFlagsDropUserVerificationWhenTheOwnerWasNotVerified() throws {
+    let manager = MonicaPasskeyCredentialManager(privateKeyStore: MemoryPasskeyPrivateKeyStore())
+    let registration = try manager.createRegistration(
+        relyingPartyID: "github.com",
+        username: "joyin@example.com",
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCA, count: 32),
+        userVerified: false
+    )
+    let assertion = try manager.createAssertion(
+        relyingPartyID: "github.com",
+        credentialID: registration.credentialID,
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCB, count: 32),
+        userVerified: false
+    )
+
+    // UP only: bit 0 set, UV (bit 2) cleared, and no backup flags.
+    #expect(assertion.authenticatorData[32] == 0x01)
+    #expect(assertion.authenticatorData[33..<37] == Data([0, 0, 0, 0]))
+    #expect(
+        try manager.verifyAssertion(
+            assertion,
+            publicKeyCOSE: registration.publicKeyCOSE
+        )
+    )
+}
+
+@Test func passkeyFlagsIncludeUserVerificationWhenVerified() throws {
+    let manager = MonicaPasskeyCredentialManager(privateKeyStore: MemoryPasskeyPrivateKeyStore())
+    let registration = try manager.createRegistration(
+        relyingPartyID: "github.com",
+        username: "joyin@example.com",
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCA, count: 32),
+        userVerified: true
+    )
+    let assertion = try manager.createAssertion(
+        relyingPartyID: "github.com",
+        credentialID: registration.credentialID,
+        userHandle: Data("github-user-handle".utf8),
+        clientDataHash: Data(repeating: 0xCB, count: 32),
+        userVerified: true
+    )
+
+    #expect(assertion.authenticatorData[32] == 0x05)
 }
 
 @Test func totpURIParserImportsStandardOtpauthTotpURI() throws {

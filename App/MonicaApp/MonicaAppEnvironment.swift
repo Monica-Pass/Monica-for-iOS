@@ -250,8 +250,16 @@ final class SystemAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentity
         }
         let credentialIdentities: [any ASCredentialIdentity] = passwordIdentities + systemPasskeyIdentities
 
-        store.replaceCredentialIdentities(credentialIdentities) { _, _ in
-            // AutoFill identity sync is best-effort; signed-device validation covers entitlement errors.
+        // Keep the authoritative full sync, but never write while the provider is disabled:
+        // the store rejects writes then and the failure is silent.
+        let identityStore = store
+        identityStore.getState { state in
+            guard state.isEnabled else {
+                return
+            }
+            identityStore.replaceCredentialIdentities(credentialIdentities) { _, _ in
+                // AutoFill identity sync is best-effort; signed-device validation covers entitlement errors.
+            }
         }
     }
 

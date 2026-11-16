@@ -4,6 +4,7 @@ import MonicaSecurity
 import MonicaStorage
 import MonicaSync
 import AVFoundation
+import AuthenticationServices
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import CryptoKit
@@ -2576,6 +2577,7 @@ final class AppSessionModel {
     var autoLockPolicy: AppAutoLockPolicy
     var autoFillIndexState: AutoFillIndexState = .idle
     var notificationPermissionState: AppPermissionStatusRow.State = .checkable
+    var systemAutoFillProviderState: AppPermissionStatusRow.State = .checkable
     var autoFillPolicy: AppAutoFillPolicy
     var vaultKeychainState: VaultKeychainState = .idle
     private var plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
@@ -4243,6 +4245,13 @@ final class AppSessionModel {
                 systemImage: "lock.shield",
                 state: vaultKeychainService == nil ? .notConfigured : .configured,
                 detail: "保存受系统保护的本地解锁材料，不保存主密码。"
+            ),
+            AppPermissionStatusRow(
+                id: "autofill-provider",
+                title: "系统自动填充扩展",
+                systemImage: "key.viewfinder",
+                state: systemAutoFillProviderState,
+                detail: "在“设置 › 通用 › 自动填充与密码”中启用 Monica 后，系统才能提供填充和通行密钥。"
             )
         ]
     }
@@ -4796,6 +4805,20 @@ final class AppSessionModel {
             notificationPermissionState = Self.notificationPermissionState(
                 for: settings.authorizationStatus
             )
+        }
+    }
+
+    /// Reflects whether iOS has registered and enabled the AutoFill credential provider
+    /// extension, so the vault can explain why AutoFill/passkey items never appear.
+    func refreshSystemAutoFillProviderStatus() {
+        ASCredentialIdentityStore.shared.getState { [weak self] state in
+            let isEnabled = state.isEnabled
+            #if DEBUG
+            print("[Monica] autofill-provider enabled=\(isEnabled) incremental=\(state.supportsIncrementalUpdates)")
+            #endif
+            Task { @MainActor in
+                self?.systemAutoFillProviderState = isEnabled ? .granted : .denied
+            }
         }
     }
 
@@ -12729,6 +12752,7 @@ final class AppSessionModel {
         case .active:
             isPrivacyShieldVisible = false
             refreshNotificationPermissionStatus()
+            refreshSystemAutoFillProviderStatus()
             lockIfIdle()
         case .inactive:
             isPrivacyShieldVisible = vaultState == .unlocked
