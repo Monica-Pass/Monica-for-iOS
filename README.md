@@ -217,6 +217,69 @@ xcodebuild test \
   曾因容量不足导致 job 直接 cancelled（`The job was not acquired by Runner of type hosted`）。
 - 同一 ref 的旧运行会被自动取消（`concurrency`），避免堆积。
 
+### 签名与分发
+
+> iOS 应用**不需要公证（notarization）**——公证是 macOS 分发的要求。
+> iOS 的链路是：**签名 → archive → 导出 .ipa → 上传 App Store Connect**。
+
+#### 账号与 Team
+
+| 项目 | 值 |
+| --- | --- |
+| Team ID | `X84WC7J5JH`（Apple Developer Program，含订阅） |
+| 主 App | `com.monica-pass.monica` |
+| AutoFill 扩展 | `com.monica-pass.monica.autofill` |
+| Share 扩展 | `com.monica-pass.monica.share` |
+| Widget 扩展 | `com.monica-pass.monica.widget` |
+| App Group | `group.monica-pass.monica` |
+
+所有 target 的 `DEVELOPMENT_TEAM` 必须一致，否则 archive 会失败（App 与扩展必须同一 team 签名）。
+
+#### 门户侧一次性配置（需账号持有人操作）
+
+在 developer.apple.com 与 App Store Connect 中为 Team `X84WC7J5JH` 完成：
+
+1. 注册上述 4 个 App ID（显式 Bundle ID）
+2. 创建 App Group `group.monica-pass.monica`，并勾选到全部 4 个 App ID
+3. 为各 App ID 开启 Capability：
+   - 主 App：App Groups、Keychain Sharing、**AutoFill Credential Provider**、Passkeys
+   - AutoFill 扩展：App Groups、Keychain Sharing、AutoFill Credential Provider
+   - Share / Widget 扩展：App Groups
+4. 在 App Store Connect 创建 App，Bundle ID 选 `com.monica-pass.monica`
+
+> 若沿用旧 team 的标识，Xcode 会报
+> `An Application Group with Identifier 'group.monica-pass.monica' is not available`——
+> 这不是代码问题，是门户里还没创建。
+
+#### 归档与上传
+
+```bash
+Scripts/archive.sh                                    # 归档 + 导出 ipa
+Scripts/archive.sh --version 0.2.0 --build 12         # 指定版本号
+Scripts/archive.sh --upload                           # 归档 + 导出 + 上传
+```
+
+上传需要 App Store Connect API Key：
+
+```bash
+export APP_STORE_CONNECT_API_KEY_PATH=/path/AuthKey_XXX.p8
+export APP_STORE_CONNECT_API_KEY_ID=XXXXXXXXXX
+export APP_STORE_CONNECT_API_ISSUER_ID=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+Scripts/archive.sh --upload
+```
+
+不走脚本时，也可以 `xcodebuild archive` 后在 Xcode Organizer 里手动分发。
+
+#### 证书
+
+```bash
+security find-identity -v -p codesigning   # 查看本机可用签名身份
+```
+
+Team `X84WC7J5JH` 对应证书：`Apple Development: xia li (X5M4TRM8J7)`。
+CI 签名需要把证书与描述文件导出为 secrets，或在 workflow 中使用
+`xcodebuild -allowProvisioningUpdates` + App Store Connect API Key 走云签名。
+
 ### 功能差异跟踪
 
 Android/iOS 的功能差异**只以 GitHub issue 为事实源**，仓库内不保留审计报告副本。
