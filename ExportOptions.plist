@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  App Store Connect 导出配置。
+
+  用法：
+    xcodebuild -exportArchive \
+      -archivePath Build/Monica.xcarchive \
+      -exportPath Build/export \
+      -exportOptionsPlist ExportOptions.plist
+
+  teamID 与 bundle id 需与 Monica.xcodeproj 保持一致。
+  上传用 Xcode 15+ 的 `xcrun altool --upload-app` 或 `xcrun notarytool`（macOS 才用公证）。
+-->
+<plist version="1.0">
+<dict>
+	<key>method</key>
+	<string>app-store-connect</string>
+	<key>teamID</key>
+	<string>X84WC7J5JH</string>
+	<key>signingStyle</key>
+	<string>automatic</string>
+	<key>uploadSymbols</key>
+	<true/>
+	<key>destination</key>
+	<string>upload</string>
+	<key>manageAppVersionAndBuildNumber</key>
+	<false/>
+	<key>stripSwiftSymbols</key>
+	<true/>
+</dict>
+</plist>
