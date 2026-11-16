@@ -2,7 +2,7 @@ import UIKit
 import UniformTypeIdentifiers
 
 final class ShareViewController: UIViewController {
-    private let appGroupIdentifier = "group.monica-pass.monica"
+    private let appGroupIdentifier = "group.com.monicapass.monica"
     private let statusLabel = UILabel()
 
     override func viewDidLoad() {

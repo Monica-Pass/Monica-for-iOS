@@ -4,7 +4,7 @@ import MSAL
 import UIKit
 
 final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticationService, @unchecked Sendable {
-    static let keychainSharingGroup = "com.monica-pass.monica"
+    static let keychainSharingGroup = "com.monicapass.monica"
 
     private let configuration: OneDriveCloudFileConfiguration
     private let userDefaults: UserDefaults

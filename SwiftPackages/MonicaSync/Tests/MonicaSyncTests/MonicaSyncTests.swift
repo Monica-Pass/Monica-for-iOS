@@ -17,9 +17,9 @@ import Foundation
     let configuration = OneDriveCloudFileConfiguration.monicaProduction
 
     #expect(configuration.clientID == "2aaf8c2c-b817-4085-9517-586a4a113dfc")
-    #expect(configuration.redirectURI == URL(string: "msauth.com.monica-pass.monica://auth"))
-    #expect(configuration.redirectScheme == "msauth.com.monica-pass.monica")
-    #expect(configuration.redactedSummary == "OneDrive MSAL msauth.com.monica-pass.monica")
+    #expect(configuration.redirectURI == URL(string: "msauth.com.monicapass.monica://auth"))
+    #expect(configuration.redirectScheme == "msauth.com.monicapass.monica")
+    #expect(configuration.redactedSummary == "OneDrive MSAL msauth.com.monicapass.monica")
     #expect(!configuration.redactedSummary.contains(configuration.clientID))
     #expect(!configuration.redactedSummary.contains(configuration.redirectURI.absoluteString))
     #expect(!configuration.redactedSummary.contains("://auth"))

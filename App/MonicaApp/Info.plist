@@ -4,7 +4,7 @@
 <dict>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.monica-pass.monica.backup.refresh</string>
+		<string>com.monicapass.monica.backup.refresh</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
@@ -28,17 +28,17 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 			<key>CFBundleURLName</key>
-			<string>com.monica-pass.monica</string>
+			<string>com.monicapass.monica</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>msauth.com.monica-pass.monica</string>
+				<string>msauth.com.monicapass.monica</string>
 			</array>
 		</dict>
 		<dict>
 			<key>CFBundleTypeRole</key>
 			<string>Viewer</string>
 			<key>CFBundleURLName</key>
-			<string>com.monica-pass.monica.shortcut</string>
+			<string>com.monicapass.monica.shortcut</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>monica</string>

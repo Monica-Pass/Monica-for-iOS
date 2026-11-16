@@ -9,11 +9,11 @@
 #   1. Apple Developer Program 有效（team ID 见 $MONICA_TEAM_ID）
 #   2. Xcode 已登录该账号（Settings → Accounts），或设置 App Store Connect API Key
 #   3. 门户中已为该 team 创建下列 App ID 与 App Group：
-#        com.monica-pass.monica
-#        com.monica-pass.monica.autofill
-#        com.monica-pass.monica.share
-#        com.monica-pass.monica.widget
-#        App Group: group.monica-pass.monica
+#        com.monicapass.monica
+#        com.monicapass.monica.autofill
+#        com.monicapass.monica.share
+#        com.monicapass.monica.widget
+#        App Group: group.com.monicapass.monica
 #      且已为 App ID 开启对应 Capability（App Groups / Keychain Sharing /
 #      AutoFill Credential Provider）。
 #

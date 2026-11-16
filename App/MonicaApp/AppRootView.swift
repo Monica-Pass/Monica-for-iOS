@@ -721,7 +721,7 @@ protocol AppBackgroundBackupScheduler: Sendable {
 struct SystemAppBackgroundBackupScheduler: AppBackgroundBackupScheduler {
     let refreshIdentifier: String
 
-    init(refreshIdentifier: String = "com.monica-pass.monica.backup.refresh") {
+    init(refreshIdentifier: String = "com.monicapass.monica.backup.refresh") {
         self.refreshIdentifier = refreshIdentifier
     }
 

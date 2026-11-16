@@ -26,7 +26,7 @@ struct AppShareExtensionInboxStore: Sendable {
         let relativeContentPath: String
     }
 
-    static let defaultAppGroupIdentifier = "group.monica-pass.monica"
+    static let defaultAppGroupIdentifier = "group.com.monicapass.monica"
 
     let manifestURL: URL
 

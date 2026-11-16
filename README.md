@@ -227,29 +227,36 @@ xcodebuild test \
 | 项目 | 值 |
 | --- | --- |
 | Team ID | `X84WC7J5JH`（Apple Developer Program，含订阅） |
-| 主 App | `com.monica-pass.monica` |
-| AutoFill 扩展 | `com.monica-pass.monica.autofill` |
-| Share 扩展 | `com.monica-pass.monica.share` |
-| Widget 扩展 | `com.monica-pass.monica.widget` |
-| App Group | `group.monica-pass.monica` |
+| 主 App | `com.monicapass.monica` |
+| AutoFill 扩展 | `com.monicapass.monica.autofill` |
+| Share 扩展 | `com.monicapass.monica.share` |
+| Widget 扩展 | `com.monicapass.monica.widget` |
+| App Group | `group.com.monicapass.monica` |
 
 所有 target 的 `DEVELOPMENT_TEAM` 必须一致，否则 archive 会失败（App 与扩展必须同一 team 签名）。
+
+> **为什么换掉了 `com.monica-pass.monica`**：旧团队 `4884UYF643`（WENXI ZHAN）的会员资格已过期，
+> 它名下仍保留着 `com.monica-pass.monica*` 与 `group.monica-pass.monica`。
+> App Group 与 Bundle ID 都是**全局唯一**的，新团队无法复用同名，
+> 所以整体迁移到 `com.monicapass.monica` 前缀（去掉连字符）。
+> 过期团队的标识符既无法删除也无法续用，这条路是唯一的。
 
 #### 门户侧一次性配置（需账号持有人操作）
 
 在 developer.apple.com 与 App Store Connect 中为 Team `X84WC7J5JH` 完成：
 
 1. 注册上述 4 个 App ID（显式 Bundle ID）
-2. 创建 App Group `group.monica-pass.monica`，并勾选到全部 4 个 App ID
+2. 创建 App Group `group.com.monicapass.monica`，并勾选到全部 4 个 App ID
 3. 为各 App ID 开启 Capability：
    - 主 App：App Groups、Keychain Sharing、**AutoFill Credential Provider**、Passkeys
    - AutoFill 扩展：App Groups、Keychain Sharing、AutoFill Credential Provider
    - Share / Widget 扩展：App Groups
-4. 在 App Store Connect 创建 App，Bundle ID 选 `com.monica-pass.monica`
+4. 在 App Store Connect 创建 App，Bundle ID 选 `com.monicapass.monica`
 
-> 若沿用旧 team 的标识，Xcode 会报
-> `An Application Group with Identifier 'group.monica-pass.monica' is not available`——
-> 这不是代码问题，是门户里还没创建。
+> 门户尚未创建上述标识符时，Xcode 会报
+> `An Application Group with Identifier 'group.com.monicapass.monica' is not available`——
+> 这不是代码问题。注意这句报错也可能是「同名已被其他 team 占用」，
+> 若确认新名字从未注册过，才是「还没创建」。
 
 #### 归档与上传
 
