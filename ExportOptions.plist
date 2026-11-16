@@ -10,7 +10,20 @@
       -exportOptionsPlist ExportOptions.plist
 
   teamID 与 bundle id 需与 Monica.xcodeproj 保持一致。
-  上传用 Xcode 15+ 的 `xcrun altool --upload-app` 或 `xcrun notarytool`（macOS 才用公证）。
+
+  uploadSymbols 为什么是 false：
+  macOS 26 起 /usr/bin/rsync 换成了 openrsync，不再支持 -E（extended
+  attributes）。而 Xcode 的 IDEDistributionCreateIPAStep 硬编码调用
+  /usr/bin/rsync -E 去拷贝 dSYM（Symbols）目录，必然失败：
+
+      rsync: on remote machine: extended-attributes: unknown option
+      error: exportArchive Copy failed
+
+  这不是签名问题（签名此时已完成），而是打包 IPA 的最后一步崩了。
+  /usr/bin 受 SIP 保护无法替换，Xcode 也不读 PATH，所以只能关掉符号上传。
+
+  dSYM 仍在 .xcarchive/Products/dSYMs 里，需要时可用 App Store Connect API
+  或 Xcode Organizer 单独上传，崩溃日志照样能符号化。
 -->
 <plist version="1.0">
 <dict>
@@ -20,13 +33,13 @@
 	<string>X84WC7J5JH</string>
 	<key>signingStyle</key>
 	<string>automatic</string>
-	<key>uploadSymbols</key>
-	<true/>
 	<key>destination</key>
 	<string>upload</string>
 	<key>manageAppVersionAndBuildNumber</key>
 	<false/>
 	<key>stripSwiftSymbols</key>
 	<true/>
+	<key>uploadSymbols</key>
+	<false/>
 </dict>
 </plist>
