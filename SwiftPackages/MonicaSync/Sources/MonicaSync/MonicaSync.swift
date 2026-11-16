@@ -4189,7 +4189,7 @@ public struct OneDriveCloudFileConfiguration: Sendable, Equatable {
 
     public static let monicaProduction = OneDriveCloudFileConfiguration(
         clientID: "2aaf8c2c-b817-4085-9517-586a4a113dfc",
-        redirectURI: URL(string: "msauth.com.monica-pass.monica://auth")!
+        redirectURI: URL(string: "msauth.com.monicapass.monica://auth")!
     )
 
     public var redirectScheme: String {

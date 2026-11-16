@@ -1084,7 +1084,7 @@ final class VaultSessionModelTests: XCTestCase {
         let environment = MonicaAppEnvironment()
 
         XCTAssertEqual(environment.oneDriveConfiguration.clientID, "2aaf8c2c-b817-4085-9517-586a4a113dfc")
-        XCTAssertEqual(environment.oneDriveConfiguration.redirectURI.absoluteString, "msauth.com.monica-pass.monica://auth")
+        XCTAssertEqual(environment.oneDriveConfiguration.redirectURI.absoluteString, "msauth.com.monicapass.monica://auth")
         XCTAssertEqual(environment.productionCloudFileProviders.keys.sorted(by: { $0.rawValue < $1.rawValue }), [.oneDrive])
         XCTAssertNil(environment.productionCloudFileProviders[.googleDrive])
         XCTAssertFalse(environment.oneDriveConfiguration.redactedSummary.contains(environment.oneDriveConfiguration.clientID))
@@ -1157,7 +1157,7 @@ final class VaultSessionModelTests: XCTestCase {
         _ = try await model.signInToOneDrive()
 
         let handled = model.handleOneDriveRedirectURL(
-            URL(string: "msauth.com.monica-pass.monica://auth?code=auth-code-secret&state=state-secret")!
+            URL(string: "msauth.com.monicapass.monica://auth?code=auth-code-secret&state=state-secret")!
         )
         try await model.signOutFromOneDrive()
 
@@ -1314,7 +1314,7 @@ final class VaultSessionModelTests: XCTestCase {
             .compactMap { $0["CFBundleURLSchemes"] as? [String] }
             .flatMap { $0 }
 
-        XCTAssertTrue(schemes.contains("msauth.com.monica-pass.monica"))
+        XCTAssertTrue(schemes.contains("msauth.com.monicapass.monica"))
 
         let querySchemes = plist["LSApplicationQueriesSchemes"] as? [String] ?? []
         XCTAssertTrue(querySchemes.contains("msauthv2"))
@@ -1536,7 +1536,7 @@ final class VaultSessionModelTests: XCTestCase {
         let appEntitlements = try propertyListDictionary(at: appEntitlementsURL)
         let extensionEntitlements = try propertyListDictionary(at: extensionEntitlementsURL)
         let extensionInfo = try propertyListDictionary(at: extensionInfoURL)
-        let sharedKeychainGroup = "$(AppIdentifierPrefix)com.monica-pass.monica"
+        let sharedKeychainGroup = "$(AppIdentifierPrefix)com.monicapass.monica"
 
         XCTAssertTrue((appEntitlements["keychain-access-groups"] as? [String] ?? []).contains(sharedKeychainGroup))
         XCTAssertTrue((extensionEntitlements["keychain-access-groups"] as? [String] ?? []).contains(sharedKeychainGroup))
@@ -1559,7 +1559,7 @@ final class VaultSessionModelTests: XCTestCase {
     func testOneDriveMSALUsesRegisteredAppPrivateKeychainGroup() throws {
         XCTAssertEqual(
             DefaultAppOneDriveMSALAuthenticationService.keychainSharingGroup,
-            "com.monica-pass.monica"
+            "com.monicapass.monica"
         )
 
         let entitlementsURL = try repositoryFileURL("App/MonicaApp/MonicaApp.entitlements")
@@ -1574,7 +1574,7 @@ final class VaultSessionModelTests: XCTestCase {
         }
 
         let accessGroups = entitlements["keychain-access-groups"] as? [String] ?? []
-        XCTAssertTrue(accessGroups.contains("$(AppIdentifierPrefix)com.monica-pass.monica"))
+        XCTAssertTrue(accessGroups.contains("$(AppIdentifierPrefix)com.monicapass.monica"))
     }
 
     func testOneDriveGraphAcceptanceHarnessIsLaunchArgumentGated() {
@@ -13497,7 +13497,7 @@ private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthen
     }
 
     func handleRedirectURL(_ url: URL) -> Bool {
-        guard url.scheme == "msauth.com.monica-pass.monica" else {
+        guard url.scheme == "msauth.com.monicapass.monica" else {
             return false
         }
         handledRedirects.append(url)

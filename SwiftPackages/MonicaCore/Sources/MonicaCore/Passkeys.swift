@@ -113,7 +113,7 @@ public final class KeychainPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unch
     private let accessGroup: String?
 
     public init(
-        service: String = "com.monica-pass.monica.passkeys",
+        service: String = "com.monicapass.monica.passkeys",
         accessGroup: String? = nil
     ) {
         self.service = service

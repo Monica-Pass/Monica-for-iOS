@@ -15,7 +15,7 @@ struct MonicaAppEnvironment: Sendable {
     let plusEntitlementStore: any AppPlusEntitlementStore
 
     init(
-        appGroupIdentifier: String = "group.monica-pass.monica",
+        appGroupIdentifier: String = "group.com.monicapass.monica",
         minimumIOSVersion: String = "17.0",
         localDeviceIdentifier: String = "ios-local-device",
         oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction,

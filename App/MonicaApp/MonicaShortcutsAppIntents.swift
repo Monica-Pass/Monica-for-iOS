@@ -1,7 +1,7 @@
 import AppIntents
 import Foundation
 
-private let monicaShortcutsAppGroupIdentifier = "group.monica-pass.monica"
+private let monicaShortcutsAppGroupIdentifier = "group.com.monicapass.monica"
 private let monicaShortcutsSnapshotFileName = "shortcuts-snapshot-v1.json"
 
 private struct MonicaShortcutSnapshot: Decodable, Sendable {
