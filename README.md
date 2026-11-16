@@ -245,6 +245,11 @@ xcodebuild test \
 
 在 developer.apple.com 与 App Store Connect 中为 Team `X84WC7J5JH` 完成：
 
+0. **至少注册一台设备**（Certificates, Identifiers & Profiles → Devices）。
+   自动签名在 archive 阶段会先生成开发描述文件，而开发描述文件必须包含设备；
+   团队里 0 台设备会报 `Your team has no devices from which to generate a
+   provisioning profile`。App Store 描述文件本身不含设备，但 Xcode 的自动签名
+   流程绕不开这一步。
 1. 注册上述 4 个 App ID（显式 Bundle ID）
 2. 创建 App Group `group.com.monicapass.monica`，并勾选到全部 4 个 App ID
 3. 为各 App ID 开启 Capability：
@@ -257,6 +262,23 @@ xcodebuild test \
 > `An Application Group with Identifier 'group.com.monicapass.monica' is not available`——
 > 这不是代码问题。注意这句报错也可能是「同名已被其他 team 占用」，
 > 若确认新名字从未注册过，才是「还没创建」。
+
+#### 已知问题：`exportArchive Copy failed`
+
+macOS 26 起 `/usr/bin/rsync` 换成了 **openrsync**，不再支持 `-E`（extended attributes）。
+Xcode 打包 IPA 时会用它拷贝 dSYM 目录，于是必然失败：
+
+```text
+rsync: on remote machine: extended-attributes: unknown option
+rsync error: syntax or usage error (code 1)
+error: exportArchive Copy failed
+```
+
+**这不是签名问题**——此时签名已完成，IPA 只差最后一步打包。
+`/usr/bin` 受 SIP 保护无法替换，Xcode 也不读 `PATH`，因此 `ExportOptions.plist`
+里设了 `uploadSymbols = false` 跳过该步。dSYM 仍在
+`Build/Monica.xcarchive/Products/dSYMs`，需要时用 App Store Connect API 或
+Xcode Organizer 单独上传，崩溃日志照样能符号化。
 
 #### 归档与上传
 

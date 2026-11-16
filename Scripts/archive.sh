@@ -5,6 +5,12 @@
 # 注意：iOS 应用不涉及「公证」（notarization）——那是 macOS 分发的要求。
 # iOS 的分发链路是：签名 → archive → 导出 .ipa → 上传 App Store Connect。
 #
+# 关于 uploadSymbols=false：
+# macOS 26 的 /usr/bin/rsync 是 openrsync，不支持 -E；Xcode 打包 IPA 时会用
+# 它拷 dSYM 目录，必然报 "rsync: unknown option" → "Copy failed"。
+# 因此 ExportOptions.plist 里关掉了符号上传，dSYM 仍留在
+# $ARCHIVE_PATH/Products/dSYMs，需要时可单独上传。
+#
 # 前置条件：
 #   1. Apple Developer Program 有效（team ID 见 $MONICA_TEAM_ID）
 #   2. Xcode 已登录该账号（Settings → Accounts），或设置 App Store Connect API Key
@@ -78,18 +84,29 @@ xcodebuild archive \
   ${VERSION_ARGS[@]+"${VERSION_ARGS[@]}"} \
   | tail -20
 
-[ -d "$ARCHIVE_PATH" ] || fail "归档产物不存在"
+[ -d "$ARCHIVE_PATH" ] || fail "归档产物不存在（自动签名失败？检查是否已注册至少一台设备）"
 
 info "导出 ipa"
+# ExportOptions.plist 里 destination 是 upload；不打算上传时改成 export，
+# 否则 -exportArchive 会直接尝试连 App Store Connect 并因缺 App 记录而失败。
+EXPORT_OPTS="$BUILD_DIR/ExportOptions.effective.plist"
+cp ExportOptions.plist "$EXPORT_OPTS"
+if [ "$DO_UPLOAD" = "1" ]; then
+  plutil -replace destination -string upload "$EXPORT_OPTS"
+else
+  plutil -replace destination -string export "$EXPORT_OPTS"
+fi
+
 xcodebuild -exportArchive \
   -archivePath "$ARCHIVE_PATH" \
   -exportPath "$EXPORT_PATH" \
-  -exportOptionsPlist ExportOptions.plist \
+  -exportOptionsPlist "$EXPORT_OPTS" \
   -allowProvisioningUpdates \
   | tail -15
 
 info "产物：$EXPORT_PATH"
 ls -la "$EXPORT_PATH"
+info "dSYM（未随包上传）：$ARCHIVE_PATH/Products/dSYMs"
 
 if [ "$DO_UPLOAD" = "1" ]; then
   IPA="$(find "$EXPORT_PATH" -name '*.ipa' | head -1)"
