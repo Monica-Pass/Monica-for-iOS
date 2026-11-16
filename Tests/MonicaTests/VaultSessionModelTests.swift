@@ -1405,6 +1405,26 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(source.contains("excludedCredentials"))
     }
 
+    func testAutoFillPasskeyAuthenticatorDataDeclaresBackupFlags() throws {
+        let coreSource = try String(
+            contentsOf: try repositoryFileURL("SwiftPackages/MonicaCore/Sources/MonicaCore/Passkeys.swift"),
+            encoding: .utf8
+        )
+        let extensionSource = try String(
+            contentsOf: try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift"),
+            encoding: .utf8
+        )
+
+        // iOS rejects provider passkeys whose authenticator data never declares BE/BS, which
+        // surfaced as NotAllowedError in every browser. The flags must stay wired end to end.
+        XCTAssertTrue(coreSource.contains("if backupEligible {"))
+        XCTAssertTrue(coreSource.contains("flags |= 0x08"))
+        XCTAssertTrue(coreSource.contains("if backupEligible && backupState {"))
+        XCTAssertTrue(coreSource.contains("flags |= 0x10"))
+        XCTAssertTrue(extensionSource.contains("PasskeyBackupDeclaration.isEligible"))
+        XCTAssertTrue(extensionSource.contains("PasskeyBackupDeclaration.isBackedUp"))
+    }
+
     func testAutoFillPasskeyListFallbackKeepsRelyingPartyCredentialsUsable() throws {
         let source = try String(
             contentsOf: try repositoryFileURL("Extensions/MonicaAutoFillExtension/AutoFillCredentialProviderViewController.swift"),

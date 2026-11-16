@@ -42,6 +42,8 @@ This PR aligns the iOS app with the current Android parity surface while keeping
 - Passkey associated domains and relying-party real registration/assertion.
   - Re-run the same relying party three times to confirm `signCount = 0` is accepted.
   - Confirm a biometric/passcode prompt appears before both registration and assertion.
+  - Confirm the registration succeeds in Safari: authenticator data must declare
+    `BE`/`BS` (flags `0x5D`/`0x1D`), otherwise iOS fails the ceremony with `NotAllowedError`.
 - App Group sharing across app, AutoFill extension, widget, and share extension.
 - Widget refresh timing on a physical device.
 - OneDrive real account sign-in and app-folder read/write.
