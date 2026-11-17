@@ -16,7 +16,7 @@ struct MonicaAppEnvironment: Sendable {
 
     init(
         appGroupIdentifier: String = "group.com.monicapass.monica",
-        minimumIOSVersion: String = "17.0",
+        minimumIOSVersion: String = "18.0",
         localDeviceIdentifier: String = "ios-local-device",
         oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction,
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
