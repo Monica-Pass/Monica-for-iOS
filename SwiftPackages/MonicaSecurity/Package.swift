@@ -4,7 +4,7 @@ import PackageDescription
 
 let package = Package(
     name: "MonicaSecurity",
-    platforms: [.iOS(.v17)],
+    platforms: [.iOS(.v17), .macOS(.v13)],
     products: [
         .library(name: "MonicaSecurity", targets: ["MonicaSecurity"])
     ],
