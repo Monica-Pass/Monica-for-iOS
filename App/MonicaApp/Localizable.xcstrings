@@ -12397,6 +12397,150 @@
           }
         }
       }
+    },
+    "界面密度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Interface Density"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "界面密度"
+          }
+        }
+      }
+    },
+    "默认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认"
+          }
+        }
+      }
+    },
+    "宽松": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loose"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "宽松"
+          }
+        }
+      }
+    },
+    "标准间距与行高。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Standard spacing and line height."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "标准间距与行高。"
+          }
+        }
+      }
+    },
+    "收紧间距与行高，一屏显示更多内容。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tighter spacing and line height to fit more content on screen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收紧间距与行高，一屏显示更多内容。"
+          }
+        }
+      }
+    },
+    "放宽间距与行高，内容更疏朗易读。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Looser spacing and line height for more comfortable reading."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "放宽间距与行高，内容更疏朗易读。"
+          }
+        }
+      }
+    },
+    "恢复默认界面密度": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Default Interface Density"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复默认界面密度"
+          }
+        }
+      }
+    },
+    "字号始终跟随系统动态字体与辅助功能设置；三档密度只调整间距与行高，不改变字号、图标或可触控区域（不小于 44pt）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fonts always follow the system Dynamic Type and accessibility settings; the three density levels only adjust spacing and line height, never font sizes, icons, or touch targets (minimum 44pt)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字号始终跟随系统动态字体与辅助功能设置；三档密度只调整间距与行高，不改变字号、图标或可触控区域（不小于 44pt）。"
+          }
+        }
+      }
+    },
+    "调整间距与行高；字号始终跟随系统动态字体，触控区域不小于 44pt。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adjusts spacing and line height; fonts always follow system Dynamic Type and touch targets stay at least 44pt."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "调整间距与行高；字号始终跟随系统动态字体，触控区域不小于 44pt。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
