@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "Monica";
+"NSCameraUsageDescription" = "用于扫描 TOTP 设置二维码。";
+"NSFaceIDUsageDescription" = "用于解锁保险库，不会上传或存储生物识别数据。";
+"NSLocalNetworkUsageDescription" = "Monica 使用本地网络连接你的自托管同步服务器。";

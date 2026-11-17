@@ -1,4 +1,79 @@
+import MonicaStorage
 import SwiftUI
+
+extension KeePassContainerFormat {
+    var localizedDisplayName: String {
+        switch self {
+        case .kdbx:
+            return "KDBX"
+        case .legacyKdb:
+            return "KDB"
+        case .unknown:
+            return String(localized: "未知格式")
+        }
+    }
+}
+
+extension KeePassCredentialSummary {
+    var localizedDisplayName: String {
+        switch (hasPassword, hasKeyFile) {
+        case (true, true):
+            let suffix = keyFileCandidateCount > 0
+                ? String(localized: "（\(keyFileCandidateCount) 种 key 解析）")
+                : ""
+            return String(localized: "密码 + 密钥文件") + suffix
+        case (true, false):
+            return String(localized: "仅密码")
+        case (false, true):
+            let suffix = keyFileCandidateCount > 0
+                ? String(localized: "（\(keyFileCandidateCount) 种 key 解析）")
+                : ""
+            return String(localized: "仅密钥文件") + suffix
+        case (false, false):
+            return String(localized: "未提供凭据")
+        }
+    }
+}
+
+extension KeePassReadOnlyImportSkipReason {
+    var localizedDisplayName: String {
+        switch self {
+        case .deletedEntry:
+            return String(localized: "回收站条目")
+        }
+    }
+}
+
+extension UnifiedVaultItemKind {
+    /// The package exposes Chinese display names for storage diagnostics; keep
+    /// those stable as data while localizing the copy shown in the app.
+    var localizedDisplayName: String {
+        switch self {
+        case .login:
+            return String(localized: "密码")
+        case .totp:
+            return String(localized: "验证器")
+        case .note:
+            return String(localized: "笔记")
+        case .card:
+            return String(localized: "银行卡")
+        case .identity:
+            return String(localized: "证件")
+        case .passkey:
+            return String(localized: "通行密钥")
+        case .sshKey:
+            return String(localized: "SSH 密钥")
+        case .apiToken:
+            return String(localized: "API Token")
+        case .wifi:
+            return String(localized: "Wi-Fi")
+        case .send:
+            return String(localized: "安全发送")
+        case .attachmentRef:
+            return String(localized: "附件")
+        }
+    }
+}
 
 enum AndroidParityPalette {
     static let background = Color(red: 0.06, green: 0.06, blue: 0.06)
@@ -208,7 +283,7 @@ struct AndroidParityEntryCard<Trailing: View>: View {
             AndroidParityIconTile(systemImage: icon, fill: iconFill, tint: iconTint)
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
-                    Text(title.isEmpty ? "未命名" : title)
+                    Text(title.isEmpty ? String(localized: "未命名") : title)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
                     if isFavorite {
