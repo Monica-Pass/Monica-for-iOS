@@ -107,6 +107,16 @@ struct SettingsRootView: View {
         }
     }
 
+    private var interfaceDensitySelection: Binding<AppInterfaceDensity> {
+        Binding {
+            session.appearancePreferences.interfaceDensity
+        } set: { density in
+            var preferences = session.appearancePreferences
+            preferences.interfaceDensity = density
+            session.updateAppearancePreferences(preferences)
+        }
+    }
+
     private func moveLayoutModule(_ module: PasswordLayoutModule, offset: Int) {
         var preferences = session.vaultLayoutPreferences
         var modules = preferences.orderedModules
@@ -237,6 +247,30 @@ struct SettingsRootView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                }
+            }
+
+            AndroidParitySection(title: String(localized: "界面密度")) {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    Text(String(localized: "字号始终跟随系统动态字体与辅助功能设置；三档密度只调整间距与行高，不改变字号、图标或可触控区域（不小于 44pt）。"))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    Picker("界面密度", selection: interfaceDensitySelection) {
+                        ForEach(AppInterfaceDensity.allCases) { density in
+                            Text(density.label).tag(density)
+                        }
+                    }
+                    Text(session.appearancePreferences.interfaceDensity.detail)
+                        .font(.footnote)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    Button {
+                        session.restoreDefaultInterfaceDensity()
+                    } label: {
+                        Label(String(localized: "恢复默认界面密度"), systemImage: "arrow.counterclockwise")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    .disabled(session.appearancePreferences.interfaceDensity == .default)
                 }
             }
 
@@ -1652,7 +1686,7 @@ private struct AndroidParityOperationTimelineRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: event.systemImage)
-                .font(.system(size: 18, weight: .semibold))
+                .font(AndroidParityTypography.smallIcon(weight: .semibold))
                 .foregroundStyle(AndroidParityPalette.primary)
                 .frame(width: 28, height: 28)
                 .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -1770,7 +1804,7 @@ private struct AndroidParitySecurityCenterRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: row.systemImage)
-                .font(.system(size: 18, weight: .semibold))
+                .font(AndroidParityTypography.smallIcon(weight: .semibold))
                 .foregroundStyle(AndroidParityPalette.primary)
                 .frame(width: 28, height: 28)
                 .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -1801,7 +1835,7 @@ private struct AndroidParitySecurityRepairSuggestionRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: suggestion.systemImage)
-                .font(.system(size: 18, weight: .semibold))
+                .font(AndroidParityTypography.smallIcon(weight: .semibold))
                 .foregroundStyle(AndroidParityPalette.primary)
                 .frame(width: 28, height: 28)
                 .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -1828,7 +1862,7 @@ private struct AndroidParityDuplicateLoginPreviewRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: "arrow.triangle.merge")
-                .font(.system(size: 18, weight: .semibold))
+                .font(AndroidParityTypography.smallIcon(weight: .semibold))
                 .foregroundStyle(AndroidParityPalette.primary)
                 .frame(width: 28, height: 28)
                 .background(AndroidParityPalette.primary.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -1877,7 +1911,7 @@ private struct AndroidParityPermissionRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: row.systemImage)
-                .font(.system(size: 18, weight: .semibold))
+                .font(AndroidParityTypography.smallIcon(weight: .semibold))
                 .foregroundStyle(statusColor)
                 .frame(width: 28, height: 28)
                 .background(statusColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
