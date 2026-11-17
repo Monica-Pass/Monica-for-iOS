@@ -334,6 +334,7 @@ extension AppSessionModel {
             return AppSessionModel(
                 vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
                 appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
+                vaultLayoutPreferenceStore: UserDefaultsVaultLayoutPreferenceStore(),
                 operationTimelineStore: UserDefaultsAppOperationTimelineStore(),
                 quickSetupStateStore: UserDefaultsAppQuickSetupStateStore(),
                 cloudFileProviders: environment.productionCloudFileProviders,
@@ -371,6 +372,7 @@ extension AppSessionModel {
             biometricUnlockPreferenceStore: UserDefaultsBiometricUnlockPreferenceStore(),
             vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
             appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
+            vaultLayoutPreferenceStore: UserDefaultsVaultLayoutPreferenceStore(),
             biometricUnlockAuthorizer: DeviceBiometricUnlockAuthorizer(),
             biometricCapabilityProvider: deviceBiometricUnlockCapability,
             operationTimelineStore: UserDefaultsAppOperationTimelineStore(defaults: appGroupDefaults),

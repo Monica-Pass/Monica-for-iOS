@@ -114,7 +114,17 @@ struct AndroidParityVaultHomeView: View {
             onAddKind: { kind in session.presentAddEditor(forItemKind: kind) },
             addMenuKinds: addMenuKinds,
             showsMoreMenu: isPasswordRoot,
-            onOpenGenerator: { isGeneratorPresented = true },
+            moreMenuModules: session.moreMenuLayoutModules,
+            onSelectMoreModule: { module in
+                switch module {
+                case .generator:
+                    isGeneratorPresented = true
+                default:
+                    if let listModule = module.passwordModule {
+                        session.passwordModule = listModule
+                    }
+                }
+            },
             batchBar: { batchActionBar }
         ) {
             if session.vaultState == .unlocked {
@@ -626,12 +636,35 @@ struct AndroidParityVaultHomeView: View {
         if isPasswordRoot {
             VStack(alignment: .leading, spacing: 10) {
                 Picker("密码模块", selection: $session.passwordModule) {
-                    ForEach(PasswordModule.allModules) { module in
+                    ForEach(session.passwordModuleBarModules) { module in
                         Text(module.title).tag(module)
                     }
                 }
                 .pickerStyle(.segmented)
                 .accessibilityLabel("密码模块")
+
+                // 生成器作为可见的二级模块时，以胶囊入口出现在模块栏（#63）；
+                // 默认隐藏，此时 UI 与 #77 的分段控件完全一致。
+                if !session.vaultLayoutPreferences.isHidden(.generator) {
+                    Button {
+                        isGeneratorPresented = true
+                    } label: {
+                        Label(
+                            PasswordLayoutModule.generator.title,
+                            systemImage: PasswordLayoutModule.generator.systemImage
+                        )
+                        .font(.subheadline.weight(.heavy))
+                        .padding(.horizontal, 14)
+                        .frame(height: 44)
+                        .background(
+                            AndroidParityPalette.primaryContainer,
+                            in: Capsule(style: .continuous)
+                        )
+                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(PasswordLayoutModule.generator.title)
+                }
 
                 if session.passwordModule == .other {
                     ScrollView(.horizontal, showsIndicators: false) {
@@ -1087,7 +1120,8 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
     let onAddKind: (UnifiedVaultItemKind) -> Void
     let addMenuKinds: [UnifiedVaultItemKind]
     let showsMoreMenu: Bool
-    let onOpenGenerator: () -> Void
+    let moreMenuModules: [PasswordLayoutModule]
+    let onSelectMoreModule: (PasswordLayoutModule) -> Void
     @ViewBuilder var batchBar: BatchBar
     @ViewBuilder var content: Content
 
@@ -1153,10 +1187,14 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             HStack(spacing: 22) {
                 toolbarButton(.folder, icon: "folder.fill", action: onOpenVault)
                 toolbarButton(.search, icon: "magnifyingglass")
-                if showsMoreMenu {
+                if showsMoreMenu, !moreMenuModules.isEmpty {
                     Menu {
-                        Button(action: onOpenGenerator) {
-                            Label("生成器", systemImage: "sparkles")
+                        ForEach(moreMenuModules) { module in
+                            Button {
+                                onSelectMoreModule(module)
+                            } label: {
+                                Label(module.title, systemImage: module.systemImage)
+                            }
                         }
                     } label: {
                         Image(systemName: "ellipsis")
