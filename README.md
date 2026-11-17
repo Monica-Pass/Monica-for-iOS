@@ -3,7 +3,7 @@
 <div align="center">
 
 <p><strong>Monica 的本地优先 iOS 密码库客户端</strong></p>
-<p>iOS 17+ · SwiftUI · MDBX Vault · AutoFill · TOTP · WebDAV</p>
+<p>iOS 18+ · SwiftUI · MDBX Vault · AutoFill · TOTP · WebDAV</p>
 
 [![Release](https://img.shields.io/github/v/release/Monica-Pass/Monica-for-iOS?style=flat-square)](https://github.com/Monica-Pass/Monica-for-iOS/releases)
 [![Downloads](https://img.shields.io/github/downloads/Monica-Pass/Monica-for-iOS/total?style=flat-square)](https://github.com/Monica-Pass/Monica-for-iOS/releases)
@@ -14,7 +14,7 @@
 
 Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地优先为核心，优先落地 MDBX 加密保险库、iOS 原生 AutoFill、TOTP、WebDAV 备份恢复，以及与 Android / MDBX 数据模型兼容的多类型条目管理。
 
-当前开发路线锁定为 **MDBX 优先、iOS 17+、iPhone 优先、Rust/Swift UniFFI 桥接**。首个公开版本聚焦本地 Vault、核心条目、WebDAV 和较完整 AutoFill；Passkey、Bitwarden、附件和更多云能力会在后续阶段继续完善。
+当前开发路线锁定为 **MDBX 优先、iOS 18+、iPhone 优先、Rust/Swift UniFFI 桥接**。首个公开版本聚焦本地 Vault、核心条目、WebDAV 和较完整 AutoFill；Passkey、Bitwarden、附件和更多云能力会在后续阶段继续完善。
 
 ---
 

@@ -2344,6 +2344,8 @@ final class AppSessionModel {
     ]
 
     var selectedTab: MonicaAppTab = .passwords
+    var passwordModule: PasswordModule = .login
+    var passwordOtherKind: UnifiedVaultItemKind = .sshKey
     var vaultState: VaultState = .locked
     var vaultOperationState: VaultOperationState = .idle
     var vaultName = ""
@@ -2628,7 +2630,6 @@ final class AppSessionModel {
     var isQuickSetupPresented = false
     var isExtensionsPresented = false
     var expandedToolbarAction: AndroidParityToolbarAction?
-    var isFabMenuPresented = false
     var securityQuestion1ID = AppSessionModel.securityQuestionOptions[0].id
     var securityQuestion2ID = AppSessionModel.securityQuestionOptions[1].id
     var securityAnswer1 = ""
@@ -3156,60 +3157,45 @@ final class AppSessionModel {
 
     func openShortcutEntry(_ summary: AppShortcutEntrySummary) throws {
         recordUserActivity()
-        selectedTab = tab(forShortcutEntryKind: summary.kind)
+        guard shortcutEntryExists(summary) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+
+        let destination = destination(forShortcutEntryKind: summary.kind)
+        selectedTab = destination.tab
+        if let passwordModule = destination.passwordModule {
+            self.passwordModule = passwordModule
+        }
+        if let otherKind = destination.otherKind {
+            passwordOtherKind = otherKind
+        }
+        presentedDetailRoute = VaultItemRoute(kind: summary.kind, entryID: summary.id)
+    }
+
+    private func shortcutEntryExists(_ summary: AppShortcutEntrySummary) -> Bool {
         switch summary.kind {
         case .login:
-            guard let entry = loginEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return loginEntries.contains { $0.id == summary.id }
         case .note:
-            guard let entry = noteEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return noteEntries.contains { $0.id == summary.id }
         case .totp:
-            guard let entry = totpEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return totpEntries.contains { $0.id == summary.id }
         case .card:
-            guard let entry = cardEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return cardEntries.contains { $0.id == summary.id }
         case .identity:
-            guard let entry = identityEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return identityEntries.contains { $0.id == summary.id }
         case .passkey:
-            guard let entry = passkeyEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return passkeyEntries.contains { $0.id == summary.id }
         case .sshKey:
-            guard let entry = sshKeyEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return sshKeyEntries.contains { $0.id == summary.id }
         case .apiToken:
-            guard let entry = apiTokenEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return apiTokenEntries.contains { $0.id == summary.id }
         case .wifi:
-            guard let entry = wifiEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return wifiEntries.contains { $0.id == summary.id }
         case .send:
-            guard let entry = sendEntries.first(where: { $0.id == summary.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            presentEditEditor(for: entry)
+            return sendEntries.contains { $0.id == summary.id }
         case .attachmentRef:
-            throw LocalVaultRepositoryError.unsupportedEntryType(.attachmentRef)
+            return false
         }
     }
 
@@ -3381,18 +3367,20 @@ final class AppSessionModel {
         .joined(separator: " ")
     }
 
-    private func tab(forShortcutEntryKind kind: UnifiedVaultItemKind) -> MonicaAppTab {
+    private func destination(forShortcutEntryKind kind: UnifiedVaultItemKind) -> VaultShortcutDestination {
         switch kind {
-        case .login, .sshKey, .apiToken, .wifi, .send, .attachmentRef:
-            return .passwords
+        case .login:
+            return VaultShortcutDestination(tab: .passwords, passwordModule: .login, otherKind: nil)
         case .note:
-            return .notes
-        case .totp:
-            return .totp
-        case .card, .identity:
-            return .wallet
+            return VaultShortcutDestination(tab: .passwords, passwordModule: .note, otherKind: nil)
         case .passkey:
-            return .passkeys
+            return VaultShortcutDestination(tab: .passwords, passwordModule: .passkey, otherKind: nil)
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+            return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
+        case .totp:
+            return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
+        case .card, .identity:
+            return VaultShortcutDestination(tab: .wallet, passwordModule: nil, otherKind: nil)
         }
     }
 
@@ -5476,20 +5464,8 @@ final class AppSessionModel {
             .joined()
     }
 
-    func presentAddEditor(for tab: MonicaAppTab) {
-        guard let itemKind = tab.coreItemKind else {
-            presentedEditorMode = nil
-            isFabMenuPresented = false
-            return
-        }
-
-        presentedEditorMode = .add(itemKind)
-        isFabMenuPresented = false
-    }
-
     func presentAddEditor(forItemKind itemKind: UnifiedVaultItemKind) {
         presentedEditorMode = .add(itemKind)
-        isFabMenuPresented = false
     }
 
     func presentEditEditor(for entry: LocalLoginEntry) {
@@ -13074,20 +13050,15 @@ final class AppSessionModel {
 
 enum MonicaAppTab: Hashable {
     case passwords
-    case wallet
     case totp
-    case passkeys
-    case notes
-    case generator
+    case wallet
     case settings
 
-    static let phaseOneAndroidParityTabs: [MonicaAppTab] = [
+    /// 顶层 Tab 的唯一顺序来源：密码 → 验证 → 卡包 → 设置。
+    static let rootTabs: [MonicaAppTab] = [
         .passwords,
-        .wallet,
         .totp,
-        .passkeys,
-        .notes,
-        .generator,
+        .wallet,
         .settings
     ]
 
@@ -13097,14 +13068,8 @@ enum MonicaAppTab: Hashable {
             return "密码"
         case .totp:
             return "验证"
-        case .notes:
-            return "笔记"
         case .wallet:
             return "卡包"
-        case .passkeys:
-            return "通行"
-        case .generator:
-            return "生成"
         case .settings:
             return "设置"
         }
@@ -13116,41 +13081,95 @@ enum MonicaAppTab: Hashable {
             return "key.fill"
         case .totp:
             return "timer"
-        case .notes:
-            return "note.text"
         case .wallet:
             return "creditcard"
-        case .passkeys:
-            return "key.horizontal.fill"
-        case .generator:
-            return "sparkles"
         case .settings:
             return "gearshape"
         }
     }
+}
 
-    var coreItemKind: UnifiedVaultItemKind? {
+/// 密码页的二级模块。
+///
+/// `rawValue` 是 #63 布局自定义使用的稳定 ID：不能用中文标题或数组下标表达含义。
+enum PasswordModule: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case login
+    case passkey
+    case note
+    case other
+
+    var id: String { rawValue }
+
+    /// 三个主模块，#63 只排序这三项。
+    static let primaryModules: [PasswordModule] = [.login, .passkey, .note]
+
+    /// 加上「其他」后的完整顺序；「其他」固定置后，不参与 #63 排序。
+    static let allModules: [PasswordModule] = [.login, .passkey, .note, .other]
+
+    /// 「其他」页的二级类型，固定顺序。
+    static let otherKinds: [UnifiedVaultItemKind] = [
+        .sshKey,
+        .apiToken,
+        .wifi,
+        .send,
+        .attachmentRef
+    ]
+
+    var title: String {
         switch self {
-        case .passwords:
+        case .login:
+            return "登录"
+        case .passkey:
+            return "通行密钥"
+        case .note:
+            return "笔记"
+        case .other:
+            return "其他"
+        }
+    }
+
+    var itemKind: UnifiedVaultItemKind? {
+        switch self {
+        case .login:
             return .login
-        case .totp:
-            return .totp
-        case .notes:
-            return .note
-        case .wallet:
-            return .card
-        case .passkeys:
+        case .passkey:
             return .passkey
-        case .generator, .settings:
+        case .note:
+            return .note
+        case .other:
             return nil
         }
     }
 }
 
+extension UnifiedVaultItemKind {
+    /// 该条目类型在密码页归入哪个二级模块；TOTP/卡包不是密码页模块。
+    var passwordModule: PasswordModule? {
+        switch self {
+        case .login:
+            return .login
+        case .passkey:
+            return .passkey
+        case .note:
+            return .note
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+            return .other
+        case .totp, .card, .identity:
+            return nil
+        }
+    }
+}
+
+/// 快捷指令 / 深链打开条目时的完整落点。
+struct VaultShortcutDestination: Equatable, Sendable {
+    let tab: MonicaAppTab
+    let passwordModule: PasswordModule?
+    let otherKind: UnifiedVaultItemKind?
+}
+
 enum AndroidParityToolbarAction: Hashable, Sendable {
     case folder
     case search
-    case more
 }
 
 struct VaultItemRoute: Hashable, Sendable {
@@ -13953,13 +13972,18 @@ struct AppRootView: View {
                     forgotPassword: session.showForgotPasswordGuidance
                 )
             } else {
-                VStack(spacing: 0) {
-                    tabContent(for: session.selectedTab)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    AndroidParityBottomNavigation(
-                        tabs: MonicaAppTab.phaseOneAndroidParityTabs,
-                        selectedTab: $session.selectedTab
-                    )
+                TabView(selection: $session.selectedTab) {
+                    ForEach(MonicaAppTab.rootTabs, id: \.self) { tab in
+                        tabContent(for: tab)
+                            .tabItem {
+                                if session.vaultDisplayPreferences.showsTabLabels {
+                                    Label(tab.title, systemImage: tab.systemImage)
+                                } else {
+                                    Image(systemName: tab.systemImage)
+                                }
+                            }
+                            .tag(tab)
+                    }
                 }
                 .background(AndroidParityPalette.background.ignoresSafeArea())
             }
@@ -14089,80 +14113,94 @@ struct AppRootView: View {
 
     @ViewBuilder
     private func tabContent(for tab: MonicaAppTab) -> some View {
-        NavigationStack {
-            if tab == .settings {
-                SettingsRootView(
-                    environment: environment,
-                    session: session,
-                    refreshAutoFillIndex: refreshAutoFillIndex
-                )
-            } else if tab == .generator {
-                GeneratorRootView()
-            } else if let itemKind = tab.coreItemKind {
-                AndroidParityVaultHomeView(
-                    session: session,
-                    tab: tab,
-                    moduleTitle: tab.title,
-                    itemKind: itemKind,
-                    storageStrategy: coreInfo.storageStrategy,
-                    mdbxBridge: mdbxInfo.bridge,
-                    createVault: createLocalVault,
-                    openVault: openLocalVault,
-                    lockVault: session.lockLocalVault,
-                    createLoginEntry: createLoginEntry,
-                    generateLoginPassword: generateLoginPassword,
-                    updateLoginEntry: updateLoginEntry,
-                    generateSelectedLoginPassword: generateSelectedLoginPassword,
-                    setSelectedLoginFavorite: setSelectedLoginFavorite,
-                    deleteLoginEntry: deleteLoginEntry,
-                    restoreLoginEntry: restoreLoginEntry,
-                    createNoteEntry: createNoteEntry,
-                    updateNoteEntry: updateNoteEntry,
-                    setSelectedNoteFavorite: setSelectedNoteFavorite,
-                    deleteNoteEntry: deleteNoteEntry,
-                    restoreNoteEntry: restoreNoteEntry,
-                    createTotpEntry: createTotpEntry,
-                    importTotpURI: importTotpURI,
-                    scanTotpQRCode: scanTotpQRCode,
-                    updateTotpEntry: updateTotpEntry,
-                    setSelectedTotpFavorite: setSelectedTotpFavorite,
-                    deleteTotpEntry: deleteTotpEntry,
-                    restoreTotpEntry: restoreTotpEntry,
-                    createCardEntry: createCardEntry,
-                    updateCardEntry: updateCardEntry,
-                    setSelectedCardFavorite: setSelectedCardFavorite,
-                    deleteCardEntry: deleteCardEntry,
-                    restoreCardEntry: restoreCardEntry,
-                    createIdentityEntry: createIdentityEntry,
-                    updateIdentityEntry: updateIdentityEntry,
-                    setSelectedIdentityFavorite: setSelectedIdentityFavorite,
-                    deleteIdentityEntry: deleteIdentityEntry,
-                    restoreIdentityEntry: restoreIdentityEntry,
-                    createPasskeyEntry: createPasskeyEntry,
-                    updatePasskeyEntry: updatePasskeyEntry,
-                    setSelectedPasskeyFavorite: setSelectedPasskeyFavorite,
-                    deletePasskeyEntry: deletePasskeyEntry,
-                    restorePasskeyEntry: restorePasskeyEntry,
-                    setSelectedSshKeyFavorite: setSelectedSshKeyFavorite,
-                    deleteSshKeyEntry: deleteSshKeyEntry,
-                    restoreSshKeyEntry: restoreSshKeyEntry,
-                    setSelectedApiTokenFavorite: setSelectedApiTokenFavorite,
-                    deleteApiTokenEntry: deleteApiTokenEntry,
-                    restoreApiTokenEntry: restoreApiTokenEntry,
-                    setSelectedWifiFavorite: setSelectedWifiFavorite,
-                    deleteWifiEntry: deleteWifiEntry,
-                    restoreWifiEntry: restoreWifiEntry,
-                    setSelectedSendFavorite: setSelectedSendFavorite,
-                    deleteSendEntry: deleteSendEntry,
-                    restoreSendEntry: restoreSendEntry,
-                    deleteAttachmentEntry: deleteAttachmentEntry,
-                    restoreAttachmentEntry: restoreAttachmentEntry,
-                    refreshExtendedParityEntries: refreshExtendedParityEntries
-                )
+        Group {
+            switch tab {
+            case .passwords:
+                NavigationStack {
+                    vaultHomeView(isPasswordRoot: true, baseItemKind: nil)
+                }
+            case .totp:
+                NavigationStack {
+                    vaultHomeView(isPasswordRoot: false, baseItemKind: .totp)
+                }
+            case .wallet:
+                NavigationStack {
+                    vaultHomeView(isPasswordRoot: false, baseItemKind: .card)
+                }
+            case .settings:
+                NavigationStack {
+                    SettingsRootView(
+                        environment: environment,
+                        session: session,
+                        refreshAutoFillIndex: refreshAutoFillIndex
+                    )
+                }
             }
         }
         .toolbarBackground(AndroidParityPalette.surface, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+    }
+
+    private func vaultHomeView(isPasswordRoot: Bool, baseItemKind: UnifiedVaultItemKind?) -> some View {
+        AndroidParityVaultHomeView(
+            session: session,
+            isPasswordRoot: isPasswordRoot,
+            baseItemKind: baseItemKind,
+            storageStrategy: coreInfo.storageStrategy,
+            mdbxBridge: mdbxInfo.bridge,
+            createVault: createLocalVault,
+            openVault: openLocalVault,
+            lockVault: session.lockLocalVault,
+            createLoginEntry: createLoginEntry,
+            generateLoginPassword: generateLoginPassword,
+            updateLoginEntry: updateLoginEntry,
+            generateSelectedLoginPassword: generateSelectedLoginPassword,
+            setSelectedLoginFavorite: setSelectedLoginFavorite,
+            deleteLoginEntry: deleteLoginEntry,
+            restoreLoginEntry: restoreLoginEntry,
+            createNoteEntry: createNoteEntry,
+            updateNoteEntry: updateNoteEntry,
+            setSelectedNoteFavorite: setSelectedNoteFavorite,
+            deleteNoteEntry: deleteNoteEntry,
+            restoreNoteEntry: restoreNoteEntry,
+            createTotpEntry: createTotpEntry,
+            importTotpURI: importTotpURI,
+            scanTotpQRCode: scanTotpQRCode,
+            updateTotpEntry: updateTotpEntry,
+            setSelectedTotpFavorite: setSelectedTotpFavorite,
+            deleteTotpEntry: deleteTotpEntry,
+            restoreTotpEntry: restoreTotpEntry,
+            createCardEntry: createCardEntry,
+            updateCardEntry: updateCardEntry,
+            setSelectedCardFavorite: setSelectedCardFavorite,
+            deleteCardEntry: deleteCardEntry,
+            restoreCardEntry: restoreCardEntry,
+            createIdentityEntry: createIdentityEntry,
+            updateIdentityEntry: updateIdentityEntry,
+            setSelectedIdentityFavorite: setSelectedIdentityFavorite,
+            deleteIdentityEntry: deleteIdentityEntry,
+            restoreIdentityEntry: restoreIdentityEntry,
+            createPasskeyEntry: createPasskeyEntry,
+            updatePasskeyEntry: updatePasskeyEntry,
+            setSelectedPasskeyFavorite: setSelectedPasskeyFavorite,
+            deletePasskeyEntry: deletePasskeyEntry,
+            restorePasskeyEntry: restorePasskeyEntry,
+            setSelectedSshKeyFavorite: setSelectedSshKeyFavorite,
+            deleteSshKeyEntry: deleteSshKeyEntry,
+            restoreSshKeyEntry: restoreSshKeyEntry,
+            setSelectedApiTokenFavorite: setSelectedApiTokenFavorite,
+            deleteApiTokenEntry: deleteApiTokenEntry,
+            restoreApiTokenEntry: restoreApiTokenEntry,
+            setSelectedWifiFavorite: setSelectedWifiFavorite,
+            deleteWifiEntry: deleteWifiEntry,
+            restoreWifiEntry: restoreWifiEntry,
+            setSelectedSendFavorite: setSelectedSendFavorite,
+            deleteSendEntry: deleteSendEntry,
+            restoreSendEntry: restoreSendEntry,
+            deleteAttachmentEntry: deleteAttachmentEntry,
+            restoreAttachmentEntry: restoreAttachmentEntry,
+            refreshExtendedParityEntries: refreshExtendedParityEntries
+        )
     }
 
     private func createLocalVault() {

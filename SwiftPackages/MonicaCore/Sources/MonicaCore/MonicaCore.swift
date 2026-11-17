@@ -7,7 +7,7 @@ public struct MonicaCoreInfo: Sendable, Equatable {
     public let storageStrategy: String
 
     public init(
-        minimumIOSVersion: String = "17.0",
+        minimumIOSVersion: String = "18.0",
         storageStrategy: String = "MDBX 优先"
     ) {
         self.minimumIOSVersion = minimumIOSVersion

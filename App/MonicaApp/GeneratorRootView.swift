@@ -3,6 +3,7 @@ import SwiftUI
 import UIKit
 
 struct GeneratorRootView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var length = 128.0
     @State private var includeUppercase = true
     @State private var includeLowercase = true
@@ -23,6 +24,7 @@ struct GeneratorRootView: View {
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar(.hidden, for: .navigationBar)
         .onAppear {
             if generatedPassword.isEmpty {
                 generate()
@@ -36,6 +38,14 @@ struct GeneratorRootView: View {
 
     private var generatorHeader: some View {
         HStack(alignment: .center) {
+            Button(action: { dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                    .frame(width: 44, height: 56)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("返回")
             Text("生成器")
                 .font(.system(size: AndroidParityTypography.generatorTitleSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
