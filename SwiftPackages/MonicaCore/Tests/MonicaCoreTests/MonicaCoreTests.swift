@@ -2,10 +2,10 @@ import Foundation
 import Testing
 import MonicaCore
 
-@Test func monicaCoreInfoDocumentsMdbxFirstIOS17Baseline() {
+@Test func monicaCoreInfoDocumentsMdbxFirstIOS18Baseline() {
     let info = MonicaCoreInfo()
 
-    #expect(info.minimumIOSVersion == "17.0")
+    #expect(info.minimumIOSVersion == "18.0")
     #expect(info.storageStrategy == "MDBX 优先")
 }
 

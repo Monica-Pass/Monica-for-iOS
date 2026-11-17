@@ -82,7 +82,6 @@ struct MonicaShortcutEntryQuery: EntityQuery, Sendable {
     }
 }
 
-@available(iOS 18.0, *)
 struct OpenMonicaShortcutEntryIntent: AppIntent, Sendable {
     static let title: LocalizedStringResource = "Open Monica Entry"
     static let description = IntentDescription("Open a redacted Monica entry shortcut.")
@@ -102,7 +101,6 @@ struct OpenMonicaShortcutEntryIntent: AppIntent, Sendable {
     }
 }
 
-@available(iOS 18.0, *)
 struct MonicaShortcutsProvider: AppShortcutsProvider {
     static let shortcutTileColor: ShortcutTileColor = .blue
 

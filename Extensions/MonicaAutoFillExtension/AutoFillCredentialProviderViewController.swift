@@ -380,9 +380,6 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
     /// True when the relying party's `excludedCredentials` already covers one of our passkeys.
     private func matchesExcludedCredential(_ request: ASPasskeyCredentialRequest) async -> Bool {
-        guard #available(iOS 18.0, *) else {
-            return false
-        }
         let excluded = Set((request.excludedCredentials ?? []).map(\.credentialID))
         guard !excluded.isEmpty else {
             return false
@@ -458,11 +455,6 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             relyingPartyID: relyingPartyID,
             status: "正在读取通行密钥"
         )
-
-        guard #available(iOS 17.4, *) else {
-            loadMatchingCredentialIndexRecords(for: fallbackServiceIdentifiers)
-            return
-        }
 
         let allowedCredentialIDs = Set(requestParameters.allowedCredentials)
         let clientDataHash = requestParameters.clientDataHash

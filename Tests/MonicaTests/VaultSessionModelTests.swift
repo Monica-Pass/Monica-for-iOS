@@ -46,17 +46,44 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
-    func testAndroidParityCoreTabsAreFirstClassDestinations() {
+    func testRootTabsAreFixedFourInOrder() {
         XCTAssertEqual(
-            MonicaAppTab.phaseOneAndroidParityTabs,
-            [.passwords, .wallet, .totp, .passkeys, .notes, .generator, .settings]
+            MonicaAppTab.rootTabs,
+            [.passwords, .totp, .wallet, .settings]
         )
         XCTAssertEqual(MonicaAppTab.passwords.title, "密码")
         XCTAssertEqual(MonicaAppTab.totp.title, "验证")
+        XCTAssertEqual(MonicaAppTab.wallet.title, "卡包")
         XCTAssertEqual(MonicaAppTab.wallet.systemImage, "creditcard")
-        XCTAssertEqual(MonicaAppTab.passkeys.title, "通行")
-        XCTAssertEqual(MonicaAppTab.generator.title, "生成")
         XCTAssertEqual(MonicaAppTab.settings.title, "设置")
+    }
+
+    func testPasswordModulesUseStableRawValueIDsAndFixedOrder() {
+        XCTAssertEqual(
+            PasswordModule.allModules.map(\.rawValue),
+            ["login", "passkey", "note", "other"]
+        )
+        XCTAssertEqual(PasswordModule.primaryModules, [.login, .passkey, .note])
+        XCTAssertEqual(
+            PasswordModule.allModules.map(\.title),
+            ["登录", "通行密钥", "笔记", "其他"]
+        )
+        XCTAssertEqual(
+            PasswordModule.otherKinds,
+            [.sshKey, .apiToken, .wifi, .send, .attachmentRef]
+        )
+    }
+
+    func testVaultItemKindsMapIntoPasswordModules() {
+        XCTAssertEqual(UnifiedVaultItemKind.login.passwordModule, .login)
+        XCTAssertEqual(UnifiedVaultItemKind.passkey.passwordModule, .passkey)
+        XCTAssertEqual(UnifiedVaultItemKind.note.passwordModule, .note)
+        for kind in PasswordModule.otherKinds {
+            XCTAssertEqual(kind.passwordModule, .other, "\(kind) 应归入密码页「其他」")
+        }
+        XCTAssertNil(UnifiedVaultItemKind.totp.passwordModule)
+        XCTAssertNil(UnifiedVaultItemKind.card.passwordModule)
+        XCTAssertNil(UnifiedVaultItemKind.identity.passwordModule)
     }
 
     func testAndroidParityTypographyUsesCompactIOSSizing() {
@@ -180,36 +207,21 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(engine.resetMasterPasswordCalls.isEmpty)
     }
 
-    func testAndroidParityTabsMapToModuleSpecificVaultItemKinds() {
-        XCTAssertEqual(MonicaAppTab.passwords.coreItemKind, .login)
-        XCTAssertEqual(MonicaAppTab.totp.coreItemKind, .totp)
-        XCTAssertEqual(MonicaAppTab.notes.coreItemKind, .note)
-        XCTAssertEqual(MonicaAppTab.wallet.coreItemKind, .card)
-        XCTAssertEqual(MonicaAppTab.passkeys.coreItemKind, .passkey)
-        XCTAssertNil(MonicaAppTab.generator.coreItemKind)
-        XCTAssertNil(MonicaAppTab.settings.coreItemKind)
-    }
-
-    func testAndroidParityFabRoutesOpenModuleSpecificAddEditors() {
+    func testSessionDefaultsToLoginPasswordModule() {
         let model = AppSessionModel()
 
-        model.presentAddEditor(for: .passwords)
-        XCTAssertEqual(model.presentedEditorMode, .add(.login))
+        XCTAssertEqual(model.selectedTab, .passwords)
+        XCTAssertEqual(model.passwordModule, .login)
+        XCTAssertEqual(model.passwordOtherKind, .sshKey)
+    }
 
-        model.presentAddEditor(for: .totp)
-        XCTAssertEqual(model.presentedEditorMode, .add(.totp))
+    func testPresentAddEditorRoutesEveryVaultItemKind() {
+        let model = AppSessionModel()
 
-        model.presentAddEditor(for: .notes)
-        XCTAssertEqual(model.presentedEditorMode, .add(.note))
-
-        model.presentAddEditor(for: .wallet)
-        XCTAssertEqual(model.presentedEditorMode, .add(.card))
-
-        model.presentAddEditor(for: .passkeys)
-        XCTAssertEqual(model.presentedEditorMode, .add(.passkey))
-
-        model.presentAddEditor(for: .generator)
-        XCTAssertNil(model.presentedEditorMode)
+        for kind in UnifiedVaultItemKind.fullAndroidParityKinds {
+            model.presentAddEditor(forItemKind: kind)
+            XCTAssertEqual(model.presentedEditorMode, .add(kind), "\(kind) 应打开新增编辑器")
+        }
     }
 
     func testSelectingLoginEntryOpensEditEditorRoute() throws {
@@ -267,8 +279,9 @@ final class VaultSessionModelTests: XCTestCase {
         try model.openShortcutEntry(summaries[0])
 
         XCTAssertEqual(model.selectedTab, .passwords)
-        XCTAssertEqual(model.presentedEditorMode, .edit(VaultItemRoute(kind: .login, entryID: "entry-1")))
-        XCTAssertEqual(model.editingLoginTitle, "GitHub")
+        XCTAssertEqual(model.passwordModule, .login)
+        XCTAssertEqual(model.presentedDetailRoute, VaultItemRoute(kind: .login, entryID: "entry-1"))
+        XCTAssertNil(model.presentedEditorMode)
     }
 
     func testShortcutSnapshotStorePersistsAppGroupSafeEntriesWithoutLeakingSecrets() throws {
@@ -333,10 +346,24 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.openShortcutURL(URL(string: "monica://shortcut/login/entry-1")!))
 
         XCTAssertEqual(model.selectedTab, .passwords)
-        XCTAssertEqual(model.presentedEditorMode, .edit(VaultItemRoute(kind: .login, entryID: "entry-1")))
-        XCTAssertEqual(model.editingLoginTitle, "GitHub")
-        XCTAssertEqual(model.editingLoginURL, "https://github.com/login?token=secret-query")
+        XCTAssertEqual(model.passwordModule, .login)
+        XCTAssertEqual(model.presentedDetailRoute, VaultItemRoute(kind: .login, entryID: "entry-1"))
+        XCTAssertNil(model.presentedEditorMode)
         XCTAssertNotEqual(model.vaultOperationState, .failed("github-password-secret"))
+    }
+
+    func testShortcutDeepLinkToNoteLandsInPasswordNoteModule() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        try unlockNewVault(model)
+        model.noteTitle = "Recovery Codes"
+        model.noteBody = "backup-code-secret"
+        try model.createNoteEntry(projectTitle: "Personal")
+
+        XCTAssertTrue(model.openShortcutURL(URL(string: "monica://shortcut/note/note-1")!))
+
+        XCTAssertEqual(model.selectedTab, .passwords)
+        XCTAssertEqual(model.passwordModule, .note)
+        XCTAssertEqual(model.presentedDetailRoute, VaultItemRoute(kind: .note, entryID: "note-1"))
     }
 
     /// 深链回归：`openShortcutURL` 已实现，但如果 `monica` scheme 没在 Info.plist 注册，
@@ -736,7 +763,7 @@ final class VaultSessionModelTests: XCTestCase {
             deviceID: "ios-app-test-device"
         )
 
-        model.presentAddEditor(for: .passwords)
+        model.presentAddEditor(forItemKind: .login)
         model.loginTitle = "GitHub"
         model.loginUsername = "alice"
         model.loginPassword = "secret"
@@ -946,7 +973,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(
             model.permissionStatusRows.map(\.title),
-            ["相机", "自动填充", "通知", "共享数据", "钥匙串"]
+            ["相机", "自动填充", "通知", "共享数据", "钥匙串", "系统自动填充扩展"]
         )
         XCTAssertEqual(model.permissionStatusRows[0].value, "可检查")
         XCTAssertEqual(model.permissionStatusRows[1].value, "待配置")
@@ -1397,7 +1424,7 @@ final class VaultSessionModelTests: XCTestCase {
         // platform abort the request, so the extension must publish a single credential.
         XCTAssertTrue(source.contains("identity-save success="))
         XCTAssertTrue(source.contains("ASCredentialIdentityStore.shared.saveCredentialIdentities(identities)"))
-        XCTAssertFalse(source.contains("replaceCredentialIdentities"))
+        XCTAssertFalse(source.contains("ASCredentialIdentityStore.shared.replaceCredentialIdentities"))
 
         // Parity with Keyguard/Bitwarden: reject unsupported algorithms and duplicates.
         XCTAssertTrue(source.contains("supportedAlgorithms.contains(.ES256)"))

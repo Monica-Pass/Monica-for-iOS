@@ -7,9 +7,10 @@ import UniformTypeIdentifiers
 
 struct AndroidParityVaultHomeView: View {
     @Bindable var session: AppSessionModel
-    let tab: MonicaAppTab
-    let moduleTitle: String
-    let itemKind: UnifiedVaultItemKind
+    /// 是否为密码 Tab 根页：为 true 时显示二级模块 Picker，列表随 `session.passwordModule` 切换。
+    let isPasswordRoot: Bool
+    /// 非密码根页时固定的条目类型（验证器 / 银行卡）。
+    let baseItemKind: UnifiedVaultItemKind?
     let storageStrategy: String
     let mdbxBridge: String
     let createVault: () -> Void
@@ -71,24 +72,49 @@ struct AndroidParityVaultHomeView: View {
     @State private var isRenameCategoryAlertPresented = false
     @State private var pendingCategoryTitle = ""
     @State private var now = Date()
+    @State private var isGeneratorPresented = false
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
 
+    private var itemKind: UnifiedVaultItemKind {
+        guard isPasswordRoot else {
+            return baseItemKind ?? .login
+        }
+        switch session.passwordModule {
+        case .login:
+            return .login
+        case .passkey:
+            return .passkey
+        case .note:
+            return .note
+        case .other:
+            return session.passwordOtherKind
+        }
+    }
+
+    private var addMenuKinds: [UnifiedVaultItemKind] {
+        isPasswordRoot && session.passwordModule == .other ? PasswordModule.otherKinds : []
+    }
+
     var body: some View {
         AndroidParityModuleChrome(
             title: largeTitle,
-            tab: tab,
             selectedAction: $session.expandedToolbarAction,
             searchText: searchBinding,
             favoritesOnly: favoritesBinding,
             stackedGroupMode: $session.isLoginStackedGroupModeEnabled,
             showsStackedGroupModeToggle: itemKind == .login,
             quickFilterRows: session.vaultQuickFilterRows,
+            sectionBar: { passwordSectionBar },
             categoryBar: { categoryBar },
             onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
-            onAdd: { session.presentAddEditor(for: tab) },
+            onAdd: { session.presentAddEditor(forItemKind: itemKind) },
+            onAddKind: { kind in session.presentAddEditor(forItemKind: kind) },
+            addMenuKinds: addMenuKinds,
+            showsMoreMenu: isPasswordRoot,
+            onOpenGenerator: { isGeneratorPresented = true },
             batchBar: { batchActionBar }
         ) {
             if session.vaultState == .unlocked {
@@ -100,6 +126,9 @@ struct AndroidParityVaultHomeView: View {
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
+        .navigationDestination(isPresented: $isGeneratorPresented) {
+            GeneratorRootView()
+        }
         .fileImporter(
             isPresented: $isVaultImporterPresented,
             allowedContentTypes: [vaultFileType],
@@ -233,7 +262,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             } else {
                 ForEach(session.filteredLoginEntries) { entry in
-                    batchAwareButton(id: entry.id, kind: .login, edit: { session.presentEditEditor(for: entry) }) {
+                    batchAwareButton(id: entry.id, kind: .login) {
                         batchSelectableCard(id: entry.id) {
                             AndroidPasswordListCard(
                                 entry: entry,
@@ -274,7 +303,7 @@ struct AndroidParityVaultHomeView: View {
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
             ForEach(session.filteredTotpEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .totp, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .totp) {
                     batchSelectableCard(id: entry.id) {
                         AndroidTotpListCard(entry: entry, code: totpCode(for: entry), remaining: session.totpTimeRemaining(for: entry, at: now))
                     }
@@ -290,14 +319,14 @@ struct AndroidParityVaultHomeView: View {
     private var walletList: some View {
         VStack(spacing: 16) {
             ForEach(session.filteredCardEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .card, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .card) {
                     batchSelectableCard(id: entry.id) {
                         AndroidBankCardListCard(entry: entry)
                     }
                 }
             }
             ForEach(session.filteredIdentityEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .identity, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .identity) {
                     batchSelectableCard(id: entry.id) {
                         AndroidIdentityListCard(entry: entry)
                     }
@@ -314,7 +343,7 @@ struct AndroidParityVaultHomeView: View {
     private var noteList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredNoteEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .note, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .note) {
                     batchSelectableCard(id: entry.id) {
                         AndroidNoteListCard(entry: entry)
                     }
@@ -330,7 +359,7 @@ struct AndroidParityVaultHomeView: View {
     private var passkeyList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredPasskeyEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .passkey, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .passkey) {
                     batchSelectableCard(id: entry.id) {
                         AndroidPasskeyListCard(entry: entry)
                     }
@@ -339,23 +368,6 @@ struct AndroidParityVaultHomeView: View {
             if session.filteredPasskeyEntries.isEmpty {
                 emptyList("没有匹配的通行密钥", icon: "key.horizontal.fill")
             }
-            AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.52), cornerRadius: 22) {
-                AndroidParityInfoRow(title: "SSH 密钥", value: "\(session.sshKeyEntries.count) 条")
-                AndroidParityInfoRow(title: "API Token", value: "\(session.apiTokenEntries.count) 条")
-                AndroidParityInfoRow(title: "Wi-Fi", value: "\(session.wifiEntries.count) 条")
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 132), spacing: 10)], spacing: 10) {
-                    extendedAddButton(.sshKey)
-                    extendedAddButton(.apiToken)
-                    extendedAddButton(.wifi)
-                    extendedAddButton(.send)
-                }
-                Button(action: refreshExtendedParityEntries) {
-                    Label("刷新扩展条目", systemImage: "arrow.clockwise")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-            }
-            extendedPasskeySections
             deletedPasskeyRows
         }
     }
@@ -363,7 +375,7 @@ struct AndroidParityVaultHomeView: View {
     private var sshKeyList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSshKeyEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .sshKey, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .sshKey) {
                     batchSelectableCard(id: entry.id) {
                         AndroidSshKeyListCard(entry: entry)
                     }
@@ -379,7 +391,7 @@ struct AndroidParityVaultHomeView: View {
     private var apiTokenList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredApiTokenEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .apiToken, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .apiToken) {
                     batchSelectableCard(id: entry.id) {
                         AndroidApiTokenListCard(entry: entry)
                     }
@@ -395,7 +407,7 @@ struct AndroidParityVaultHomeView: View {
     private var wifiList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredWifiEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .wifi, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .wifi) {
                     batchSelectableCard(id: entry.id) {
                         AndroidWifiListCard(entry: entry)
                     }
@@ -411,7 +423,7 @@ struct AndroidParityVaultHomeView: View {
     private var sendList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSendEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .send, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .send) {
                     batchSelectableCard(id: entry.id) {
                         AndroidSendListCard(entry: entry)
                     }
@@ -461,39 +473,10 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
-    private var extendedPasskeySections: some View {
-        VStack(spacing: 14) {
-            ForEach(session.filteredSshKeyEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .sshKey, edit: { session.presentEditEditor(for: entry) }) {
-                    batchSelectableCard(id: entry.id) { AndroidSshKeyListCard(entry: entry) }
-                }
-            }
-            ForEach(session.filteredApiTokenEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .apiToken, edit: { session.presentEditEditor(for: entry) }) {
-                    batchSelectableCard(id: entry.id) { AndroidApiTokenListCard(entry: entry) }
-                }
-            }
-            ForEach(session.filteredWifiEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .wifi, edit: { session.presentEditEditor(for: entry) }) {
-                    batchSelectableCard(id: entry.id) { AndroidWifiListCard(entry: entry) }
-                }
-            }
-            ForEach(session.filteredSendEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .send, edit: { session.presentEditEditor(for: entry) }) {
-                    batchSelectableCard(id: entry.id) { AndroidSendListCard(entry: entry) }
-                }
-            }
-            deletedSshKeyRows
-            deletedApiTokenRows
-            deletedWifiRows
-            deletedSendRows
-        }
-    }
-
     private var identityList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredIdentityEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .identity, edit: { session.presentEditEditor(for: entry) }) {
+                batchAwareButton(id: entry.id, kind: .identity) {
                     batchSelectableCard(id: entry.id) {
                         AndroidIdentityListCard(entry: entry)
                     }
@@ -632,6 +615,60 @@ struct AndroidParityVaultHomeView: View {
                 ForEach(session.deletedAttachmentEntries) { entry in
                     restoreButton(id: entry.id, kind: .attachmentRef, title: entry.fileName, subtitle: attachmentSubtitle(for: entry)) {
                         restoreAttachmentEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var passwordSectionBar: some View {
+        if isPasswordRoot {
+            VStack(alignment: .leading, spacing: 10) {
+                Picker("密码模块", selection: $session.passwordModule) {
+                    ForEach(PasswordModule.allModules) { module in
+                        Text(module.title).tag(module)
+                    }
+                }
+                .pickerStyle(.segmented)
+                .accessibilityLabel("密码模块")
+
+                if session.passwordModule == .other {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 10) {
+                            ForEach(PasswordModule.otherKinds, id: \.self) { kind in
+                                Button {
+                                    session.passwordOtherKind = kind
+                                } label: {
+                                    Text(kind.displayName)
+                                        .font(.subheadline.weight(.heavy))
+                                        .padding(.horizontal, 14)
+                                        .frame(height: 44)
+                                        .background(
+                                            session.passwordOtherKind == kind
+                                                ? AndroidParityPalette.primaryContainer
+                                                : AndroidParityPalette.surfaceVariant,
+                                            in: Capsule(style: .continuous)
+                                        )
+                                        .foregroundStyle(
+                                            session.passwordOtherKind == kind
+                                                ? AndroidParityPalette.textPrimary
+                                                : AndroidParityPalette.textSecondary
+                                        )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                            Button(action: refreshExtendedParityEntries) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.subheadline.weight(.heavy))
+                                    .frame(width: 44, height: 44)
+                                    .background(AndroidParityPalette.surfaceVariant, in: Circle())
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("刷新扩展条目")
+                        }
+                        .padding(.vertical, 2)
                     }
                 }
             }
@@ -887,7 +924,6 @@ struct AndroidParityVaultHomeView: View {
     private func batchAwareButton<Content: View>(
         id: String,
         kind: UnifiedVaultItemKind,
-        edit: @escaping () -> Void,
         @ViewBuilder content: @escaping () -> Content
     ) -> some View {
         Button {
@@ -1033,28 +1069,25 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
-    private func extendedAddButton(_ kind: UnifiedVaultItemKind) -> some View {
-        Button { session.presentAddEditor(forItemKind: kind) } label: {
-            Label(kind.displayName, systemImage: kind.systemImage)
-                .frame(maxWidth: .infinity)
-        }
-        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-    }
 }
 
-struct AndroidParityModuleChrome<CategoryBar: View, BatchBar: View, Content: View>: View {
+struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: View, Content: View>: View {
     let title: String
-    let tab: MonicaAppTab
     @Binding var selectedAction: AndroidParityToolbarAction?
     @Binding var searchText: String
     @Binding var favoritesOnly: Bool
     @Binding var stackedGroupMode: Bool
     let showsStackedGroupModeToggle: Bool
     let quickFilterRows: [AppVaultQuickFilterRow]
+    @ViewBuilder var sectionBar: SectionBar
     @ViewBuilder var categoryBar: CategoryBar
     let onQuickFilter: (String) -> Void
     let onOpenVault: () -> Void
     let onAdd: () -> Void
+    let onAddKind: (UnifiedVaultItemKind) -> Void
+    let addMenuKinds: [UnifiedVaultItemKind]
+    let showsMoreMenu: Bool
+    let onOpenGenerator: () -> Void
     @ViewBuilder var batchBar: BatchBar
     @ViewBuilder var content: Content
 
@@ -1063,6 +1096,7 @@ struct AndroidParityModuleChrome<CategoryBar: View, BatchBar: View, Content: Vie
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     header
+                    sectionBar
                     categoryBar
                     quickFilterStrip
                     batchBar
@@ -1076,17 +1110,36 @@ struct AndroidParityModuleChrome<CategoryBar: View, BatchBar: View, Content: Vie
             .background(AndroidParityPalette.background.ignoresSafeArea())
             .foregroundStyle(AndroidParityPalette.textPrimary)
 
-            Button(action: onAdd) {
-                Image(systemName: tab == .generator ? "arrow.clockwise" : "plus")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .medium))
-                    .foregroundStyle(AndroidParityPalette.textPrimary)
-                    .frame(width: 54, height: 54)
-                    .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            if addMenuKinds.isEmpty {
+                Button(action: onAdd) {
+                    fabLabel
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 18)
+                .padding(.bottom, 26)
+            } else {
+                Menu {
+                    ForEach(addMenuKinds, id: \.self) { kind in
+                        Button(kind.displayName) {
+                            onAddKind(kind)
+                        }
+                    }
+                } label: {
+                    fabLabel
+                }
+                .buttonStyle(.plain)
+                .padding(.trailing, 18)
+                .padding(.bottom, 26)
             }
-            .buttonStyle(.plain)
-            .padding(.trailing, 18)
-            .padding(.bottom, 26)
         }
+    }
+
+    private var fabLabel: some View {
+        Image(systemName: "plus")
+            .font(.system(size: AndroidParityTypography.controlIconSize, weight: .medium))
+            .foregroundStyle(AndroidParityPalette.textPrimary)
+            .frame(width: 54, height: 54)
+            .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var header: some View {
@@ -1100,7 +1153,20 @@ struct AndroidParityModuleChrome<CategoryBar: View, BatchBar: View, Content: Vie
             HStack(spacing: 22) {
                 toolbarButton(.folder, icon: "folder.fill", action: onOpenVault)
                 toolbarButton(.search, icon: "magnifyingglass")
-                toolbarButton(.more, icon: "ellipsis")
+                if showsMoreMenu {
+                    Menu {
+                        Button(action: onOpenGenerator) {
+                            Label("生成器", systemImage: "sparkles")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                            .foregroundStyle(AndroidParityPalette.textPrimary.opacity(0.82))
+                            .frame(width: 34, height: 50)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("更多")
+                }
             }
             .padding(.horizontal, 24)
             .frame(height: 64)
