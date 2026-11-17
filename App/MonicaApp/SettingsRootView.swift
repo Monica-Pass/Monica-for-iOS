@@ -304,10 +304,8 @@ struct SettingsRootView: View {
                             .foregroundStyle(securityQuestionStateColor)
                     }
                     Button {
-                        do {
-                            try session.saveSecurityQuestions()
-                        } catch {
-                            // AppSessionModel owns user-visible failure state.
+                        Task {
+                            try? await session.saveSecurityQuestions()
                         }
                     } label: {
                         Label("保存密保问题", systemImage: "questionmark.circle")
@@ -316,6 +314,7 @@ struct SettingsRootView: View {
                     .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                     .disabled(
                         session.vaultState != .unlocked
+                            || session.securityQuestionState.isRunning
                             || session.securityAnswer1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || session.securityAnswer2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                     )
