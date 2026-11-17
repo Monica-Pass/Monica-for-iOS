@@ -10,7 +10,7 @@ struct GeneratorRootView: View {
     @State private var includeDigits = true
     @State private var includeSymbols = true
     @State private var generatedPassword = ""
-    @State private var generatorState = "就绪"
+    @State private var generatorState = String(localized: "就绪")
     @State private var generatorMode: GeneratorMode = .password
     @State private var history: [GeneratedSecretHistoryItem] = []
 
@@ -104,7 +104,7 @@ struct GeneratorRootView: View {
                 Spacer()
                 Button {
                     UIPasteboard.general.string = generatedPassword
-                    generatorState = "已复制"
+                    generatorState = String(localized: "已复制")
                 } label: {
                     Label("复制", systemImage: "doc.on.doc")
                         .font(.headline.weight(.heavy))
@@ -114,7 +114,7 @@ struct GeneratorRootView: View {
             }
             .foregroundStyle(AndroidParityPalette.primary)
 
-            Text(generatedPassword.isEmpty ? "点击刷新生成密码" : generatedPassword)
+            Text(generatedPassword.isEmpty ? String(localized: "点击刷新生成密码") : generatedPassword)
                 .font(.system(size: 16, weight: .medium, design: .monospaced))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
                 .textSelection(.enabled)
@@ -174,7 +174,7 @@ struct GeneratorRootView: View {
                         .tint(AndroidParityPalette.primary)
                         .onChange(of: includeSymbols) { _, _ in generate() }
                 }
-                AndroidParityInfoRow(title: "状态", value: generatorState)
+                AndroidParityInfoRow(title: String(localized: "状态"), value: generatorState)
             }
             .padding(28)
             .padding(.trailing, 72)
@@ -197,7 +197,7 @@ struct GeneratorRootView: View {
     @ViewBuilder
     private var generatorHistorySection: some View {
         if !history.isEmpty {
-            AndroidParitySection(title: "历史") {
+            AndroidParitySection(title: String(localized: "历史")) {
                 ForEach(history) { item in
                     AndroidParityEntryCard(
                         icon: item.mode.systemImage,
@@ -207,7 +207,7 @@ struct GeneratorRootView: View {
                     ) {
                         Button {
                             UIPasteboard.general.string = item.value
-                            generatorState = "已复制"
+                            generatorState = String(localized: "已复制")
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .font(.headline)
@@ -223,28 +223,28 @@ struct GeneratorRootView: View {
     private var passwordStrengthLabel: String {
         switch generatorMode {
         case .pin:
-            return "数字"
+            return String(localized: "数字")
         case .passphrase:
-            return "可读"
+            return String(localized: "可读")
         case .apiToken:
-            return "令牌"
+            return String(localized: "令牌")
         case .password:
             break
         }
         if length >= 64 && includeSymbols && includeDigits {
-            return "非常强"
+            return String(localized: "非常强")
         }
         if length >= 24 {
-            return "强"
+            return String(localized: "强")
         }
-        return "普通"
+        return String(localized: "普通")
     }
 
     private func generate() {
         do {
             generatedPassword = try SecretGenerator.generate(policy: generatorPolicy)
             rememberGeneratedValue()
-            generatorState = "已生成"
+            generatorState = String(localized: "已生成")
         } catch {
             generatorState = error.localizedDescription
         }
@@ -306,11 +306,11 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
     var title: String {
         switch self {
         case .password:
-            return "符号"
+            return String(localized: "符号")
         case .pin:
             return "PIN"
         case .passphrase:
-            return "短语"
+            return String(localized: "短语")
         case .apiToken:
             return "API Token"
         }
@@ -319,11 +319,11 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
     var resultTitle: String {
         switch self {
         case .password:
-            return "密码"
+            return String(localized: "密码")
         case .pin:
             return "PIN"
         case .passphrase:
-            return "短语"
+            return String(localized: "短语")
         case .apiToken:
             return "Token"
         }
@@ -345,11 +345,11 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
     var lengthLabel: String {
         switch self {
         case .passphrase:
-            return "词数"
+            return String(localized: "词数")
         case .apiToken:
-            return "字节"
+            return String(localized: "字节")
         default:
-            return "长度"
+            return String(localized: "长度")
         }
     }
 

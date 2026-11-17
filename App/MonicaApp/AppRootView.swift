@@ -79,19 +79,19 @@ struct AppPermissionStatusRow: Sendable, Equatable, Identifiable {
         var label: String {
             switch self {
             case .granted:
-                "已允许"
+                String(localized: "已允许")
             case .denied:
-                "未允许"
+                String(localized: "未允许")
             case .notDetermined:
-                "可检查"
+                String(localized: "可检查")
             case .unavailable:
-                "不可用"
+                String(localized: "不可用")
             case .configured:
-                "已配置"
+                String(localized: "已配置")
             case .notConfigured:
-                "待配置"
+                String(localized: "待配置")
             case .checkable:
-                "可检查"
+                String(localized: "可检查")
             }
         }
     }
@@ -156,7 +156,7 @@ struct AppPlusFeatureRow: Sendable, Equatable, Identifiable {
     let isUnlocked: Bool
 
     var value: String {
-        isUnlocked ? "已解锁" : "需要 Plus"
+        isUnlocked ? String(localized: "已解锁") : String(localized: "需要 Plus")
     }
 }
 
@@ -219,11 +219,11 @@ enum AppAttachmentPreviewError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .contentEncryptionKeyUnavailable:
-            return "附件内容密钥尚未可用。"
+            return String(localized: "附件内容密钥尚未可用。")
         case .previewFailed:
-            return "附件预览准备失败。"
+            return String(localized: "附件预览准备失败。")
         case .contentWriteFailed:
-            return "附件内容写回失败。"
+            return String(localized: "附件内容写回失败。")
         }
     }
 }
@@ -237,9 +237,9 @@ enum VaultDisplayCardDensity: String, Sendable, Codable, Equatable, CaseIterable
     var label: String {
         switch self {
         case .comfortable:
-            "舒适"
+            String(localized: "舒适")
         case .compact:
-            "紧凑"
+            String(localized: "紧凑")
         }
     }
 
@@ -286,11 +286,11 @@ enum AppAppearanceColorScheme: String, Sendable, Codable, Equatable, CaseIterabl
     var label: String {
         switch self {
         case .system:
-            "跟随系统"
+            String(localized: "跟随系统")
         case .light:
-            "浅色"
+            String(localized: "浅色")
         case .dark:
-            "深色"
+            String(localized: "深色")
         }
     }
 
@@ -319,11 +319,11 @@ enum AppAppearanceAccentColor: String, Sendable, Codable, Equatable, CaseIterabl
         case .monica:
             "Monica"
         case .green:
-            "绿色"
+            String(localized: "绿色")
         case .blue:
-            "蓝色"
+            String(localized: "蓝色")
         case .orange:
-            "橙色"
+            String(localized: "橙色")
         }
     }
 
@@ -351,11 +351,11 @@ enum AppPasswordListIconStyle: String, Sendable, Codable, Equatable, CaseIterabl
     var label: String {
         switch self {
         case .color:
-            "彩色"
+            String(localized: "彩色")
         case .monochrome:
-            "单色"
+            String(localized: "单色")
         case .hidden:
-            "隐藏"
+            String(localized: "隐藏")
         }
     }
 }
@@ -454,27 +454,27 @@ enum AppOperationTimelineAction: String, Sendable, Equatable, Codable {
     var title: String {
         switch self {
         case .created:
-            "已创建"
+            String(localized: "已创建")
         case .updated:
-            "已更新"
+            String(localized: "已更新")
         case .deleted:
-            "已删除"
+            String(localized: "已删除")
         case .restored:
-            "已恢复"
+            String(localized: "已恢复")
         case .moved:
-            "已移动"
+            String(localized: "已移动")
         case .viewed:
-            "已查看"
+            String(localized: "已查看")
         case .backedUp:
-            "已备份"
+            String(localized: "已备份")
         case .restoredBackup:
-            "已恢复备份"
+            String(localized: "已恢复备份")
         case .cleanedUp:
-            "已清理"
+            String(localized: "已清理")
         case .synced:
-            "已同步"
+            String(localized: "已同步")
         case .blocked:
-            "已阻止"
+            String(localized: "已阻止")
         }
     }
 
@@ -573,11 +573,11 @@ struct AppOperationTimelineEvent: Sendable, Equatable, Identifiable, Codable {
     }
 
     var title: String {
-        "\(action.title) \(itemKind.displayName)"
+        "\(action.title) \(itemKind.localizedDisplayName)"
     }
 
     var detail: String {
-        let displayTitle = itemTitle.isEmpty ? "未命名条目" : itemTitle
+        let displayTitle = itemTitle.isEmpty ? String(localized: "未命名条目") : itemTitle
         guard let errorCategory, !errorCategory.isEmpty else {
             return displayTitle
         }
@@ -703,12 +703,12 @@ enum AppBackgroundBackupSchedulerState: Sendable, Equatable {
     var label: String {
         switch self {
         case .unavailable:
-            return "后台任务不可用"
+            return String(localized: "后台任务不可用")
         case .idle:
-            return "未调度"
+            return String(localized: "未调度")
         case .scheduled(let date):
-            guard let date else { return "已调度" }
-            return "已调度 \(date.formatted(date: .abbreviated, time: .shortened))"
+            guard let date else { return String(localized: "已调度") }
+            return String(localized: "已调度 \(date.formatted(date: .abbreviated, time: .shortened))")
         case .failed(let message):
             return message
         }
@@ -733,7 +733,7 @@ struct SystemAppBackgroundBackupScheduler: AppBackgroundBackupScheduler {
             try BGTaskScheduler.shared.submit(request)
             return .scheduled(request.earliestBeginDate)
         } catch {
-            return .failed("后台备份调度失败")
+            return .failed(String(localized: "后台备份调度失败"))
         }
     }
 }
@@ -755,9 +755,9 @@ enum AppBitwardenReceiveState: Sendable, Equatable {
 
     var label: String {
         switch self {
-        case .idle: "未开始"
-        case .running: "正在获取"
-        case .succeeded(let title): "已获取 \(title)"
+        case .idle: String(localized: "未开始")
+        case .running: String(localized: "正在获取")
+        case .succeeded(let title): String(localized: "已获取 \(title)")
         case .failed(let message): message
         }
     }
@@ -779,17 +779,17 @@ enum AppBitwardenSyncError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .providerUnavailable:
-            "Bitwarden 同步尚未配置。"
+            String(localized: "Bitwarden 同步尚未配置。")
         case .invalidServerURL:
-            "Bitwarden 服务器 URL 无效，仅支持 http/https。"
+            String(localized: "Bitwarden 服务器 URL 无效，仅支持 http/https。")
         case .attachmentUnavailable:
-            "Bitwarden 附件不可用，请重新同步后再试。"
+            String(localized: "Bitwarden 附件不可用，请重新同步后再试。")
         case .fileSendUnavailable:
-            "请选择要上传的 Bitwarden Send 文件。"
+            String(localized: "请选择要上传的 Bitwarden Send 文件。")
         case .invalidSendLink:
-            "Send 链接格式不正确，应形如 https://vault.bitwarden.com/#/send/<id>/<key>。"
+            String(localized: "Send 链接格式不正确，应形如 https://vault.bitwarden.com/#/send/<id>/<key>。")
         case .emptyRemoteVault(let localCount):
-            "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 \(localCount) 个已同步条目。请确认账号或稍后重试。"
+            String(localized: "Bitwarden 同步已暂停：远端返回空保险库，本地仍有 \(localCount) 个已同步条目。请确认账号或稍后重试。")
         }
     }
 }
@@ -957,9 +957,9 @@ enum AppWidgetVaultState: String, Sendable, Equatable, Codable {
     var label: String {
         switch self {
         case .locked:
-            "已锁定"
+            String(localized: "已锁定")
         case .unlocked:
-            "已解锁"
+            String(localized: "已解锁")
         }
     }
 }
@@ -972,7 +972,7 @@ struct AppWidgetTotpItem: Sendable, Equatable, Identifiable, Codable {
     let secondsRemaining: Int
 
     var timeRemainingLabel: String {
-        "\(secondsRemaining) 秒"
+        String(localized: "\(secondsRemaining) 秒")
     }
 }
 
@@ -983,7 +983,7 @@ struct AppWidgetSnapshot: Sendable, Equatable, Codable {
     let shortcutItems: [AppShortcutEntrySummary]
 
     var totalEntryLabel: String {
-        "\(totalEntryCount) 项"
+        String(localized: "\(totalEntryCount) 项")
     }
 
     var redactedDebugSummary: String {
@@ -991,7 +991,7 @@ struct AppWidgetSnapshot: Sendable, Equatable, Codable {
             .map { "\($0.title) \($0.issuer) \($0.accountName) \($0.timeRemainingLabel)" }
             .joined(separator: " ")
         let shortcutText = shortcutItems
-            .map { "\($0.kind.displayName) \($0.title) \($0.subtitle) \($0.searchableText)" }
+            .map { "\($0.kind.localizedDisplayName) \($0.title) \($0.subtitle) \($0.searchableText)" }
             .joined(separator: " ")
         return [
             vaultState.label,
@@ -1045,7 +1045,7 @@ struct AppCloudFileRestorePreview: Sendable, Equatable {
     }
 
     var redactedSummary: String {
-        "\(provider.displayName) \(fileName) \(byteCount) 字节"
+        String(localized: "\(provider.displayName) \(fileName) \(byteCount) 字节")
     }
 
     private static func sanitizedFileName(_ value: String) -> String {
@@ -1055,7 +1055,7 @@ struct AppCloudFileRestorePreview: Sendable, Equatable {
             .last
             .map(String.init) ?? value
         let sanitized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
-        return sanitized.isEmpty ? "未命名文件" : sanitized
+        return sanitized.isEmpty ? String(localized: "未命名文件") : sanitized
     }
 }
 
@@ -1258,39 +1258,39 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     var premiumSummary: String {
         switch premiumSource {
         case .none:
-            "未启用"
+            String(localized: "未启用")
         case .account:
-            "账号 Premium"
+            String(localized: "账号 Premium")
         case .organization:
-            "组织 Premium"
+            String(localized: "组织 Premium")
         }
     }
 
     var kindSummary: String {
-        var parts = ["登录 \(remoteLoginCount)"]
+        var parts = [String(localized: "登录 \(remoteLoginCount)")]
         if remotePasskeyCount > 0 {
-            parts.append("通行密钥 \(remotePasskeyCount)")
+            parts.append(String(localized: "通行密钥 \(remotePasskeyCount)"))
         }
         if remoteSshKeyCount > 0 {
             parts.append("SSH Key \(remoteSshKeyCount)")
         }
         parts += [
-            "笔记 \(remoteNoteCount)",
-            "卡片 \(remoteCardCount)",
-            "身份 \(remoteIdentityCount)"
+            String(localized: "笔记 \(remoteNoteCount)"),
+            String(localized: "卡片 \(remoteCardCount)"),
+            String(localized: "身份 \(remoteIdentityCount)")
         ]
         return parts.joined(separator: "，")
     }
 
     var attachmentSummary: String {
-        remoteAttachmentByteCount > 0 ? "附件 \(remoteAttachmentByteCount) 字节" : "无附件"
+        remoteAttachmentByteCount > 0 ? String(localized: "附件 \(remoteAttachmentByteCount) 字节") : String(localized: "无附件")
     }
 
     var redactedSummary: String {
         let sends = remoteSendTitles.prefix(3).joined(separator: " / ")
         return [
-            "Bitwarden \(accountLabel)：\(remoteItemCount) 个条目，\(remoteSendCount) 个 Send",
-            remoteFolderCount > 0 ? "文件夹 \(remoteFolderCount)" : "",
+            String(localized: "Bitwarden \(accountLabel)：\(remoteItemCount) 个条目，\(remoteSendCount) 个 Send"),
+            remoteFolderCount > 0 ? String(localized: "文件夹 \(remoteFolderCount)") : "",
             kindSummary,
             attachmentSummary,
             sends
@@ -1301,7 +1301,7 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
 
     private static func sanitizedTitle(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "未命名" : trimmed
+        return trimmed.isEmpty ? String(localized: "未命名") : trimmed
     }
 }
 
@@ -1431,7 +1431,7 @@ struct AppBitwardenPendingMutationBatch: Sendable, Equatable, Codable, Identifia
     }
 
     var redactedSummary: String {
-        "Bitwarden 待重试 \(mutationCount) 个变更（第 \(retryCount) 次）"
+        String(localized: "Bitwarden 待重试 \(mutationCount) 个变更（第 \(retryCount) 次）")
     }
 }
 
@@ -1983,7 +1983,7 @@ enum FirstTimePasswordSetupError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .passwordMismatch:
-            return "两次输入的主密码不一致。"
+            return String(localized: "两次输入的主密码不一致。")
         }
     }
 }
@@ -1998,15 +1998,15 @@ enum SecurityQuestionRecoveryError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .duplicateQuestions:
-            return "请选择两道不同的密保问题。"
+            return String(localized: "请选择两道不同的密保问题。")
         case .missingAnswers:
-            return "请填写两道密保问题答案。"
+            return String(localized: "请填写两道密保问题答案。")
         case .missingSecurityQuestions:
-            return "当前保险库未设置密保问题。"
+            return String(localized: "当前保险库未设置密保问题。")
         case .verificationRequired:
-            return "请先通过密保问题验证。"
+            return String(localized: "请先通过密保问题验证。")
         case .passwordMismatch:
-            return "两次输入的新密码不一致。"
+            return String(localized: "两次输入的新密码不一致。")
         }
     }
 }
@@ -2330,17 +2330,17 @@ func deviceBiometricUnlockCapability() -> BiometricUnlockCapability {
 @Observable
 final class AppSessionModel {
     static let securityQuestionOptions: [SecurityQuestionOption] = [
-        .init(id: 42, text: "你喜欢什么奥特曼？"),
-        .init(id: 1, text: "您第一只宠物的名字是什么？"),
-        .init(id: 2, text: "您母亲的娘家姓是什么？"),
-        .init(id: 3, text: "您出生在哪个城市？"),
-        .init(id: 4, text: "您的小学校名是什么？"),
-        .init(id: 5, text: "您最喜欢的电影是什么？"),
-        .init(id: 6, text: "您的第一辆汽车是什么型号？"),
-        .init(id: 7, text: "您童年最好朋友的名字是什么？"),
-        .init(id: 8, text: "您小时候最喜欢的食物是什么？"),
-        .init(id: 9, text: "您成长的街道名称是什么？"),
-        .init(id: 10, text: "您高中的吉祥物是什么？")
+        .init(id: 42, text: String(localized: "你喜欢什么奥特曼？")),
+        .init(id: 1, text: String(localized: "您第一只宠物的名字是什么？")),
+        .init(id: 2, text: String(localized: "您母亲的娘家姓是什么？")),
+        .init(id: 3, text: String(localized: "您出生在哪个城市？")),
+        .init(id: 4, text: String(localized: "您的小学校名是什么？")),
+        .init(id: 5, text: String(localized: "您最喜欢的电影是什么？")),
+        .init(id: 6, text: String(localized: "您的第一辆汽车是什么型号？")),
+        .init(id: 7, text: String(localized: "您童年最好朋友的名字是什么？")),
+        .init(id: 8, text: String(localized: "您小时候最喜欢的食物是什么？")),
+        .init(id: 9, text: String(localized: "您成长的街道名称是什么？")),
+        .init(id: 10, text: String(localized: "您高中的吉祥物是什么？"))
     ]
 
     var selectedTab: MonicaAppTab = .passwords
@@ -3223,7 +3223,7 @@ final class AppSessionModel {
             )
             return true
         } catch {
-            vaultOperationState = .failed("快捷入口已失效，请重新选择条目。")
+            vaultOperationState = .failed(String(localized: "快捷入口已失效，请重新选择条目。"))
             return false
         }
     }
@@ -3251,7 +3251,7 @@ final class AppSessionModel {
             kind: .login,
             title: shortcutTitle(entry.title),
             subtitle: subtitle,
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.login.displayName, entry.title, entry.username, host])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.login.localizedDisplayName, entry.title, entry.username, host])
         )
     }
 
@@ -3260,8 +3260,8 @@ final class AppSessionModel {
             id: entry.id,
             kind: .note,
             title: shortcutTitle(entry.title),
-            subtitle: UnifiedVaultItemKind.note.displayName,
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.note.displayName, entry.title])
+            subtitle: UnifiedVaultItemKind.note.localizedDisplayName,
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.note.localizedDisplayName, entry.title])
         )
     }
 
@@ -3272,7 +3272,7 @@ final class AppSessionModel {
             kind: .totp,
             title: shortcutTitle(entry.title),
             subtitle: subtitle,
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.totp.displayName, entry.title, entry.issuer, entry.accountName])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.totp.localizedDisplayName, entry.title, entry.issuer, entry.accountName])
         )
     }
 
@@ -3282,7 +3282,7 @@ final class AppSessionModel {
             kind: .card,
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.cardholderName, entry.issuer, entry.network]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.card.displayName, entry.title, entry.cardholderName, entry.issuer, entry.network])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.card.localizedDisplayName, entry.title, entry.cardholderName, entry.issuer, entry.network])
         )
     }
 
@@ -3292,7 +3292,7 @@ final class AppSessionModel {
             kind: .identity,
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.fullName, entry.documentType, entry.issuer, entry.country]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.identity.displayName, entry.title, entry.fullName, entry.documentType, entry.issuer, entry.country])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.identity.localizedDisplayName, entry.title, entry.fullName, entry.documentType, entry.issuer, entry.country])
         )
     }
 
@@ -3302,7 +3302,7 @@ final class AppSessionModel {
             kind: .passkey,
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.username, entry.relyingPartyID]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.passkey.displayName, entry.title, entry.username, entry.relyingPartyID])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.passkey.localizedDisplayName, entry.title, entry.username, entry.relyingPartyID])
         )
     }
 
@@ -3312,7 +3312,7 @@ final class AppSessionModel {
             kind: .sshKey,
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.username, entry.host]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.sshKey.displayName, entry.title, entry.username, entry.host])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.sshKey.localizedDisplayName, entry.title, entry.username, entry.host])
         )
     }
 
@@ -3322,7 +3322,7 @@ final class AppSessionModel {
             kind: .apiToken,
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.accountName, entry.issuer, entry.expiresAt]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.apiToken.displayName, entry.title, entry.accountName, entry.issuer, entry.expiresAt])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.apiToken.localizedDisplayName, entry.title, entry.accountName, entry.issuer, entry.expiresAt])
         )
     }
 
@@ -3332,7 +3332,7 @@ final class AppSessionModel {
             kind: .wifi,
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.ssid, entry.securityType]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.wifi.displayName, entry.title, entry.ssid, entry.securityType])
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.wifi.localizedDisplayName, entry.title, entry.ssid, entry.securityType])
         )
     }
 
@@ -3341,14 +3341,14 @@ final class AppSessionModel {
             id: entry.id,
             kind: .send,
             title: shortcutTitle(entry.title),
-            subtitle: shortcutSubtitle([entry.expiresAt, "最多查看 \(entry.maxViews) 次"]),
-            searchableText: shortcutSearchableText([UnifiedVaultItemKind.send.displayName, entry.title, entry.expiresAt])
+            subtitle: shortcutSubtitle([entry.expiresAt, String(localized: "最多查看 \(entry.maxViews) 次")]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.send.localizedDisplayName, entry.title, entry.expiresAt])
         )
     }
 
     private func shortcutTitle(_ value: String) -> String {
         let title = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        return title.isEmpty ? "未命名" : title
+        return title.isEmpty ? String(localized: "未命名") : title
     }
 
     private func shortcutSubtitle(_ values: [String?]) -> String {
@@ -3356,7 +3356,7 @@ final class AppSessionModel {
             let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
             return trimmed.isEmpty ? nil : trimmed
         }
-        return parts.isEmpty ? "可打开" : parts.joined(separator: " / ")
+        return parts.isEmpty ? String(localized: "可打开") : parts.joined(separator: " / ")
     }
 
     private func shortcutSearchableText(_ values: [String?]) -> String {
@@ -3388,8 +3388,8 @@ final class AppSessionModel {
         guard let vaultID = activeVaultSession?.handle.vaultID else {
             return AppAttachmentContentStatus(
                 state: .unavailable,
-                value: "未解锁",
-                detail: "请先解锁保险库，再检查附件内容。"
+                value: String(localized: "未解锁"),
+                detail: String(localized: "请先解锁保险库，再检查附件内容。")
             )
         }
         guard entry.downloadState == "downloaded",
@@ -3397,23 +3397,23 @@ final class AppSessionModel {
               !localPath.isEmpty else {
             return AppAttachmentContentStatus(
                 state: .missing,
-                value: "待恢复",
-                detail: "附件密文尚未保存在本机。"
+                value: String(localized: "待恢复"),
+                detail: String(localized: "附件密文尚未保存在本机。")
             )
         }
         guard androidBackupAttachmentBlobStore.encryptedBlobExists(vaultID: vaultID, localPath: localPath) else {
             return AppAttachmentContentStatus(
                 state: .missing,
-                value: "待恢复",
-                detail: "附件密文尚未保存在本机。"
+                value: String(localized: "待恢复"),
+                detail: String(localized: "附件密文尚未保存在本机。")
             )
         }
         return AppAttachmentContentStatus(
             state: .available,
-            value: "\(entry.storedSize) 字节",
+            value: String(localized: "\(entry.storedSize) 字节"),
             detail: storedAttachmentContentCanPreviewDirectly(entry)
-                ? "附件内容已保存在本机，可预览。"
-                : "附件密文已保存在本机，可进入预览恢复流程。"
+                ? String(localized: "附件内容已保存在本机，可预览。")
+                : String(localized: "附件密文已保存在本机，可进入预览恢复流程。")
         )
     }
 
@@ -3428,7 +3428,7 @@ final class AppSessionModel {
                 vaultID: vaultSession.handle.vaultID,
                 localPath: localPath
             )
-            entryOperationState = .succeeded("附件密文已读取：\(entry.fileName) \(blob.count) 字节")
+            entryOperationState = .succeeded(String(localized: "附件密文已读取：\(entry.fileName) \(blob.count) 字节"))
             return blob
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3520,7 +3520,7 @@ final class AppSessionModel {
                 itemID: updated.id,
                 itemTitle: sanitizedAttachmentPreviewFileName(updated.fileName)
             )
-            entryOperationState = .succeeded("附件内容已替换：\(sanitizedAttachmentPreviewFileName(updated.fileName)) \(plaintext.count) 字节")
+            entryOperationState = .succeeded(String(localized: "附件内容已替换：\(sanitizedAttachmentPreviewFileName(updated.fileName)) \(plaintext.count) 字节"))
             return updated
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3588,7 +3588,7 @@ final class AppSessionModel {
                 itemID: attachment.id,
                 itemTitle: attachment.fileName
             )
-            entryOperationState = .succeeded("附件已添加：\(attachment.fileName)")
+            entryOperationState = .succeeded(String(localized: "附件已添加：\(attachment.fileName)"))
             return attachment
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3629,7 +3629,7 @@ final class AppSessionModel {
                 displayFileName: displayFileName,
                 byteCount: plaintext.count
             )
-            entryOperationState = .succeeded("附件预览已准备：\(displayFileName) \(plaintext.count) 字节")
+            entryOperationState = .succeeded(String(localized: "附件预览已准备：\(displayFileName) \(plaintext.count) 字节"))
             return preview
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3658,7 +3658,7 @@ final class AppSessionModel {
                 displayFileName: displayFileName,
                 byteCount: content.count
             )
-            entryOperationState = .succeeded("附件预览已准备：\(displayFileName) \(content.count) 字节")
+            entryOperationState = .succeeded(String(localized: "附件预览已准备：\(displayFileName) \(content.count) 字节"))
             return preview
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3680,7 +3680,7 @@ final class AppSessionModel {
                     itemID: entry.id,
                     itemTitle: preview.displayFileName
                 )
-                entryOperationState = .succeeded("附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节")
+                entryOperationState = .succeeded(String(localized: "附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节"))
                 return
             } catch let error as LocalAttachmentContentStoreError {
                 entryOperationState = .failed(error.localizedDescription)
@@ -3713,7 +3713,7 @@ final class AppSessionModel {
                 itemID: entry.id,
                 itemTitle: preview.displayFileName
             )
-            entryOperationState = .succeeded("附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节")
+            entryOperationState = .succeeded(String(localized: "附件预览已准备：\(preview.displayFileName) \(preview.byteCount) 字节"))
         } catch let error as LocalAttachmentContentStoreError {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -3745,9 +3745,9 @@ final class AppSessionModel {
         var rows = [
             AppVaultQuickFilterRow(
                 id: "all",
-                title: "全部",
+                title: String(localized: "全部"),
                 value: itemCountLabel(activeCount),
-                detail: "显示当前分类里的全部活动条目。",
+                detail: String(localized: "显示当前分类里的全部活动条目。"),
                 systemImage: "tray.full",
                 isSelected: selectedVaultQuickFilterID == "all"
             )
@@ -3758,7 +3758,7 @@ final class AppSessionModel {
                     id: "category-\(category.id)",
                     title: category.title,
                     value: itemCountLabel(activeCount),
-                    detail: "当前分类。",
+                    detail: String(localized: "当前分类。"),
                     systemImage: "folder",
                     isSelected: selectedVaultQuickFilterID == "category-\(category.id)"
                 )
@@ -3767,9 +3767,9 @@ final class AppSessionModel {
         rows.append(
             AppVaultQuickFilterRow(
                 id: "favorites",
-                title: "收藏",
+                title: String(localized: "收藏"),
                 value: itemCountLabel(favoriteVaultEntryCount),
-                detail: "只显示已收藏条目。",
+                detail: String(localized: "只显示已收藏条目。"),
                 systemImage: "star",
                 isSelected: selectedVaultQuickFilterID == "favorites"
             )
@@ -3777,9 +3777,9 @@ final class AppSessionModel {
         rows.append(
             AppVaultQuickFilterRow(
                 id: "trash",
-                title: "回收站",
+                title: String(localized: "回收站"),
                 value: itemCountLabel(deletedCount),
-                detail: "显示当前分类的已删除条目。",
+                detail: String(localized: "显示当前分类的已删除条目。"),
                 systemImage: "trash",
                 isSelected: selectedVaultQuickFilterID == "trash"
             )
@@ -3788,7 +3788,7 @@ final class AppSessionModel {
     }
 
     var activeVaultCategoryTitle: String {
-        activeProject?.title ?? "未选择分类"
+        activeProject?.title ?? String(localized: "未选择分类")
     }
 
     var activeVaultProjectID: String? {
@@ -3819,11 +3819,11 @@ final class AppSessionModel {
 
     var vaultBatchSelectionTitle: String {
         if !isVaultBatchSelectionActive {
-            return "未选择"
+            return String(localized: "未选择")
         }
         return selectedVaultBatchItemIDs.isEmpty
-            ? "选择条目"
-            : "已选择 \(selectedVaultBatchItemIDs.count) 项"
+            ? String(localized: "选择条目")
+            : String(localized: "已选择 \(selectedVaultBatchItemIDs.count) 项")
     }
 
     var canDeleteSelectedVaultBatchItems: Bool {
@@ -3934,7 +3934,7 @@ final class AppSessionModel {
                     resetVaultQuickFilters()
                 }
             }
-            entryOperationState = .succeeded("已删除分类")
+            entryOperationState = .succeeded(String(localized: "已删除分类"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -4031,7 +4031,7 @@ final class AppSessionModel {
                 )
             }
             clearVaultBatchSelection()
-            entryOperationState = .succeeded("已移动 \(events.count) 项")
+            entryOperationState = .succeeded(String(localized: "已移动 \(events.count) 项"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -4042,30 +4042,30 @@ final class AppSessionModel {
         [
             AppVaultDisplayPreferenceRow(
                 id: "card-density",
-                title: "卡片密度",
+                title: String(localized: "卡片密度"),
                 value: vaultDisplayPreferences.cardDensity.label,
-                detail: "调整密码列表卡片的间距和扫描密度。",
+                detail: String(localized: "调整密码列表卡片的间距和扫描密度。"),
                 systemImage: "rectangle.compress.vertical"
             ),
             AppVaultDisplayPreferenceRow(
                 id: "login-username",
-                title: "账号字段",
-                value: vaultDisplayPreferences.showsLoginUsername ? "显示" : "隐藏",
-                detail: "控制密码列表是否展示账号摘要。",
+                title: String(localized: "账号字段"),
+                value: vaultDisplayPreferences.showsLoginUsername ? String(localized: "显示") : String(localized: "隐藏"),
+                detail: String(localized: "控制密码列表是否展示账号摘要。"),
                 systemImage: "person.text.rectangle"
             ),
             AppVaultDisplayPreferenceRow(
                 id: "login-url",
-                title: "网址字段",
-                value: vaultDisplayPreferences.showsLoginURL ? "显示" : "隐藏",
-                detail: "控制密码列表是否展示网站或 URL 摘要。",
+                title: String(localized: "网址字段"),
+                value: vaultDisplayPreferences.showsLoginURL ? String(localized: "显示") : String(localized: "隐藏"),
+                detail: String(localized: "控制密码列表是否展示网站或 URL 摘要。"),
                 systemImage: "globe"
             ),
             AppVaultDisplayPreferenceRow(
                 id: "tab-labels",
-                title: "底部导航文字",
-                value: vaultDisplayPreferences.showsTabLabels ? "显示" : "隐藏",
-                detail: "控制底部导航是否显示文字标签。",
+                title: String(localized: "底部导航文字"),
+                value: vaultDisplayPreferences.showsTabLabels ? String(localized: "显示") : String(localized: "隐藏"),
+                detail: String(localized: "控制底部导航是否显示文字标签。"),
                 systemImage: "menubar.rectangle"
             )
         ]
@@ -4081,23 +4081,23 @@ final class AppSessionModel {
         [
             AppAppearancePreferenceRow(
                 id: "color-scheme",
-                title: "颜色模式",
+                title: String(localized: "颜色模式"),
                 value: appearancePreferences.colorScheme.label,
-                detail: "使用系统外观，或固定为浅色/深色。",
+                detail: String(localized: "使用系统外观，或固定为浅色/深色。"),
                 systemImage: "circle.lefthalf.filled"
             ),
             AppAppearancePreferenceRow(
                 id: "accent-color",
-                title: "强调色",
+                title: String(localized: "强调色"),
                 value: appearancePreferences.accentColor.label,
-                detail: "控制按钮、选择态和系统 tint 色。",
+                detail: String(localized: "控制按钮、选择态和系统 tint 色。"),
                 systemImage: "paintpalette"
             ),
             AppAppearancePreferenceRow(
                 id: "password-list-icon",
-                title: "密码列表图标",
+                title: String(localized: "密码列表图标"),
                 value: appearancePreferences.passwordListIconStyle.label,
-                detail: "控制密码列表图标的显示方式。",
+                detail: String(localized: "控制密码列表图标的显示方式。"),
                 systemImage: "app.badge"
             )
         ]
@@ -4113,7 +4113,7 @@ final class AppSessionModel {
         return AppPlusEntitlementStatusRow(
             id: "plus-entitlement",
             title: "Monica Plus",
-            value: isPlusActive ? "已激活" : "未激活",
+            value: isPlusActive ? String(localized: "已激活") : String(localized: "未激活"),
             detail: plusEntitlementDetail(for: plusEntitlementSnapshot),
             systemImage: isPlusActive ? "checkmark.seal.fill" : "seal"
         )
@@ -4127,29 +4127,29 @@ final class AppSessionModel {
         return [
             AppPlusFeatureRow(
                 id: "premium_themes",
-                title: "会员专属主题",
-                detail: "解锁 Monica Plus 专属主题配色。",
+                title: String(localized: "会员专属主题"),
+                detail: String(localized: "解锁 Monica Plus 专属主题配色。"),
                 systemImage: "paintpalette",
                 isUnlocked: isPlusActive
             ),
             AppPlusFeatureRow(
                 id: "validator_vibration",
-                title: "验证器震动提醒",
-                detail: "验证码即将刷新时的本机提醒能力。",
+                title: String(localized: "验证器震动提醒"),
+                detail: String(localized: "验证码即将刷新时的本机提醒能力。"),
                 systemImage: "waveform",
                 isUnlocked: isPlusActive
             ),
             AppPlusFeatureRow(
                 id: "copy_next_code",
-                title: "智能复制下一个验证码",
-                detail: "倒计时过短时可切换到下一枚 TOTP。",
+                title: String(localized: "智能复制下一个验证码"),
+                detail: String(localized: "倒计时过短时可切换到下一枚 TOTP。"),
                 systemImage: "arrow.triangle.2.circlepath",
                 isUnlocked: isPlusActive
             ),
             AppPlusFeatureRow(
                 id: "bitwarden_sync",
-                title: "Bitwarden 同步",
-                detail: "解锁 Bitwarden 同步能力。",
+                title: String(localized: "Bitwarden 同步"),
+                detail: String(localized: "解锁 Bitwarden 同步能力。"),
                 systemImage: "cloud",
                 isUnlocked: isPlusActive
             )
@@ -4192,54 +4192,54 @@ final class AppSessionModel {
         if let appError = error as? AppPlusResourceUnlockError {
             return appError.localizedDescription
         }
-        return "Plus 解锁失败，请稍后重试。"
+        return String(localized: "Plus 解锁失败，请稍后重试。")
     }
 
     var permissionStatusRows: [AppPermissionStatusRow] {
         [
             AppPermissionStatusRow(
                 id: "camera",
-                title: "相机",
+                title: String(localized: "相机"),
                 systemImage: "camera",
                 state: cameraPermissionState,
-                detail: "用于扫描 TOTP 设置二维码。",
+                detail: String(localized: "用于扫描 TOTP 设置二维码。"),
                 settingsURL: URL(string: UIApplication.openSettingsURLString)
             ),
             AppPermissionStatusRow(
                 id: "autofill",
-                title: "自动填充",
+                title: String(localized: "自动填充"),
                 systemImage: "key.viewfinder",
                 state: autoFillIndexStore == nil || autoFillCredentialIdentityStore == nil ? .notConfigured : .configured,
-                detail: "系统自动填充、建议列表和加密索引。"
+                detail: String(localized: "系统自动填充、建议列表和加密索引。")
             ),
             AppPermissionStatusRow(
                 id: "notifications",
-                title: "通知",
+                title: String(localized: "通知"),
                 systemImage: "bell",
                 state: notificationPermissionState,
-                detail: "TOTP 快捷查看会使用系统安全通知。",
+                detail: String(localized: "TOTP 快捷查看会使用系统安全通知。"),
                 settingsURL: URL(string: UIApplication.openSettingsURLString)
             ),
             AppPermissionStatusRow(
                 id: "app-group",
-                title: "共享数据",
+                title: String(localized: "共享数据"),
                 systemImage: "rectangle.connected.to.line.below",
                 state: autoFillIndexStore == nil || autoFillCredentialSecretStore == nil ? .notConfigured : .configured,
-                detail: "主 App 与扩展共享加密后的自动填充数据。"
+                detail: String(localized: "主 App 与扩展共享加密后的自动填充数据。")
             ),
             AppPermissionStatusRow(
                 id: "keychain",
-                title: "钥匙串",
+                title: String(localized: "钥匙串"),
                 systemImage: "lock.shield",
                 state: vaultKeychainService == nil ? .notConfigured : .configured,
-                detail: "保存受系统保护的本地解锁材料，不保存主密码。"
+                detail: String(localized: "保存受系统保护的本地解锁材料，不保存主密码。")
             ),
             AppPermissionStatusRow(
                 id: "autofill-provider",
-                title: "系统自动填充扩展",
+                title: String(localized: "系统自动填充扩展"),
                 systemImage: "key.viewfinder",
                 state: systemAutoFillProviderState,
-                detail: "在“设置 › 通用 › 自动填充与密码”中启用 Monica 后，系统才能提供填充和通行密钥。"
+                detail: String(localized: "在“设置 › 通用 › 自动填充与密码”中启用 Monica 后，系统才能提供填充和通行密钥。")
             )
         ]
     }
@@ -4260,37 +4260,37 @@ final class AppSessionModel {
         [
             AppExtensionCapabilityRow(
                 id: "security",
-                title: "安全",
-                value: areSecurityQuestionsSetForActiveVault ? "已配置" : "待配置",
-                detail: "主密码、密保问题、钥匙串与生物识别解锁。",
+                title: String(localized: "安全"),
+                value: areSecurityQuestionsSetForActiveVault ? String(localized: "已配置") : String(localized: "待配置"),
+                detail: String(localized: "主密码、密保问题、钥匙串与生物识别解锁。"),
                 systemImage: "lock.shield"
             ),
             AppExtensionCapabilityRow(
                 id: "autofill",
-                title: "自动填充",
-                value: autoFillIndexStore == nil ? "待配置" : autoFillIndexState.label,
-                detail: "使用系统凭据提供器、加密索引和安全策略完成填充。",
+                title: String(localized: "自动填充"),
+                value: autoFillIndexStore == nil ? String(localized: "待配置") : autoFillIndexState.label,
+                detail: String(localized: "使用系统凭据提供器、加密索引和安全策略完成填充。"),
                 systemImage: "key.viewfinder"
             ),
             AppExtensionCapabilityRow(
                 id: "appearance",
-                title: "外观",
+                title: String(localized: "外观"),
                 value: appearancePreferences.accentColor.label,
-                detail: "颜色、图标、卡片密度、列表字段和底栏文字。",
+                detail: String(localized: "颜色、图标、卡片密度、列表字段和底栏文字。"),
                 systemImage: "paintpalette"
             ),
             AppExtensionCapabilityRow(
                 id: "backup",
-                title: "备份",
+                title: String(localized: "备份"),
                 value: "WebDAV / OneDrive",
-                detail: "手动备份、恢复、远端管理和自动备份状态。",
+                detail: String(localized: "手动备份、恢复、远端管理和自动备份状态。"),
                 systemImage: "externaldrive.badge.icloud"
             ),
             AppExtensionCapabilityRow(
                 id: "plus",
                 title: "Monica Plus",
-                value: isPlusActive ? "已解锁" : "可一键解锁",
-                detail: "使用本地授权资源解锁可用能力。",
+                value: isPlusActive ? String(localized: "已解锁") : String(localized: "可一键解锁"),
+                detail: String(localized: "使用本地授权资源解锁可用能力。"),
                 systemImage: "checkmark.seal"
             )
         ]
@@ -4300,30 +4300,30 @@ final class AppSessionModel {
         [
             AppExtensionCapabilityRow(
                 id: "credential-provider",
-                title: "系统自动填充",
-                value: autoFillIndexStore == nil ? "待配置" : "已接入",
-                detail: "按网站和通行密钥服务匹配，并使用加密索引保护数据。",
+                title: String(localized: "系统自动填充"),
+                value: autoFillIndexStore == nil ? String(localized: "待配置") : String(localized: "已接入"),
+                detail: String(localized: "按网站和通行密钥服务匹配，并使用加密索引保护数据。"),
                 systemImage: "key.viewfinder"
             ),
             AppExtensionCapabilityRow(
                 id: "shortcuts",
-                title: "快捷指令",
-                value: shortcutSnapshotStore == nil ? "待配置" : "已接入",
-                detail: "搜索条目、打开 URL、复制安全摘要；锁定态不泄密。",
+                title: String(localized: "快捷指令"),
+                value: shortcutSnapshotStore == nil ? String(localized: "待配置") : String(localized: "已接入"),
+                detail: String(localized: "搜索条目、打开 URL、复制安全摘要；锁定态不泄密。"),
                 systemImage: "sparkles.rectangle.stack"
             ),
             AppExtensionCapabilityRow(
                 id: "widget",
-                title: "小组件",
-                value: widgetSnapshotStore == nil ? "待配置" : "已接入",
-                detail: "只读取脱敏快照，锁定态不展示敏感内容。",
+                title: String(localized: "小组件"),
+                value: widgetSnapshotStore == nil ? String(localized: "待配置") : String(localized: "已接入"),
+                detail: String(localized: "只读取脱敏快照，锁定态不展示敏感内容。"),
                 systemImage: "rectangle.inset.filled"
             ),
             AppExtensionCapabilityRow(
                 id: "share",
-                title: "分享导入",
-                value: "已接入",
-                detail: "从系统分享入口导入内容，锁定态只进入安全收件箱。",
+                title: String(localized: "分享导入"),
+                value: String(localized: "已接入"),
+                detail: String(localized: "从系统分享入口导入内容，锁定态只进入安全收件箱。"),
                 systemImage: "square.and.arrow.down"
             )
         ]
@@ -4333,30 +4333,30 @@ final class AppSessionModel {
         [
             AppExtensionCapabilityRow(
                 id: "match",
-                title: "匹配规则",
-                value: "网站与通行密钥",
-                detail: "按网站域名和通行密钥服务标识匹配。",
+                title: String(localized: "匹配规则"),
+                value: String(localized: "网站与通行密钥"),
+                detail: String(localized: "按网站域名和通行密钥服务标识匹配。"),
                 systemImage: "link"
             ),
             AppExtensionCapabilityRow(
                 id: "blocked-fields",
-                title: "忽略字段",
+                title: String(localized: "忽略字段"),
                 value: "\(autoFillPolicy.blockedFields.count)",
-                detail: "这些输入字段不会触发自动填充建议。",
+                detail: String(localized: "这些输入字段不会触发自动填充建议。"),
                 systemImage: "text.badge.xmark"
             ),
             AppExtensionCapabilityRow(
                 id: "blocked-save",
-                title: "忽略保存目标",
+                title: String(localized: "忽略保存目标"),
                 value: "\(autoFillPolicy.blockedSaveTargets.count)",
-                detail: "这些网站或应用不会自动创建保存草稿。",
+                detail: String(localized: "这些网站或应用不会自动创建保存草稿。"),
                 systemImage: "link.badge.plus"
             ),
             AppExtensionCapabilityRow(
                 id: "identity-sync",
-                title: "系统凭据",
-                value: autoFillCredentialIdentityStore == nil ? "待配置" : "已配置",
-                detail: "自动填充建议会与系统凭据列表保持同步。",
+                title: String(localized: "系统凭据"),
+                value: autoFillCredentialIdentityStore == nil ? String(localized: "待配置") : String(localized: "已配置"),
+                detail: String(localized: "自动填充建议会与系统凭据列表保持同步。"),
                 systemImage: "person.text.rectangle"
             )
         ]
@@ -4380,7 +4380,7 @@ final class AppSessionModel {
             action: .updated,
             itemKind: .login,
             itemID: "quick-setup",
-            itemTitle: "快速设置"
+            itemTitle: String(localized: "快速设置")
         )
     }
 
@@ -4394,8 +4394,8 @@ final class AppSessionModel {
 
     var autoFillPolicyRows: [(title: String, value: String)] {
         [
-            (title: "忽略字段", value: "\(autoFillPolicy.blockedFields.count)"),
-            (title: "忽略保存目标", value: "\(autoFillPolicy.blockedSaveTargets.count)")
+            (title: String(localized: "忽略字段"), value: "\(autoFillPolicy.blockedFields.count)"),
+            (title: String(localized: "忽略保存目标"), value: "\(autoFillPolicy.blockedSaveTargets.count)")
         ]
     }
 
@@ -4406,7 +4406,7 @@ final class AppSessionModel {
         )
         autoFillPolicy = policy
         autoFillPolicyStore.savePolicy(policy)
-        entryOperationState = .succeeded("自动填充规则已更新")
+        entryOperationState = .succeeded(String(localized: "自动填充规则已更新"))
     }
 
     var securityCenterRows: [AppSecurityCenterRow] {
@@ -4417,38 +4417,38 @@ final class AppSessionModel {
         return [
             AppSecurityCenterRow(
                 id: "weak-passwords",
-                title: "弱密码",
+                title: String(localized: "弱密码"),
                 value: itemCountLabel(weakPasswordCount),
                 detail: weakPasswordCount == 0
-                    ? "当前登录条目未发现明显弱密码。"
-                    : "建议优先为这些登录条目生成更长且包含多类字符的密码。",
+                    ? String(localized: "当前登录条目未发现明显弱密码。")
+                    : String(localized: "建议优先为这些登录条目生成更长且包含多类字符的密码。"),
                 systemImage: "exclamationmark.shield"
             ),
             AppSecurityCenterRow(
                 id: "reused-passwords",
-                title: "复用密码",
+                title: String(localized: "复用密码"),
                 value: itemCountLabel(reusedPasswordCount),
                 detail: reusedPasswordCount == 0
-                    ? "当前登录条目未发现密码复用。"
-                    : "建议为复用密码的登录条目分别设置唯一密码。",
+                    ? String(localized: "当前登录条目未发现密码复用。")
+                    : String(localized: "建议为复用密码的登录条目分别设置唯一密码。"),
                 systemImage: "rectangle.2.swap"
             ),
             AppSecurityCenterRow(
                 id: "breached-passwords",
-                title: "泄露风险",
+                title: String(localized: "泄露风险"),
                 value: itemCountLabel(breachedPasswordCount),
                 detail: breachedPasswordCount == 0
-                    ? "当前登录条目未命中本地泄露指纹库。"
-                    : "建议立即为命中泄露指纹的登录条目更换唯一密码。",
+                    ? String(localized: "当前登录条目未命中本地泄露指纹库。")
+                    : String(localized: "建议立即为命中泄露指纹的登录条目更换唯一密码。"),
                 systemImage: "bolt.shield"
             ),
             AppSecurityCenterRow(
                 id: "duplicate-logins",
-                title: "重复项",
+                title: String(localized: "重复项"),
                 value: itemCountLabel(duplicateLoginCount),
                 detail: duplicateLoginCount == 0
-                    ? "当前登录条目未发现明显重复项。"
-                    : "建议检查这些登录条目，确认是否需要合并或保留。",
+                    ? String(localized: "当前登录条目未发现明显重复项。")
+                    : String(localized: "建议检查这些登录条目，确认是否需要合并或保留。"),
                 systemImage: "doc.on.doc"
             )
         ]
@@ -4466,8 +4466,8 @@ final class AppSessionModel {
                 AppSecurityCenterRepairSuggestion(
                     id: "repair-weak-passwords",
                     relatedRowID: "weak-passwords",
-                    title: "生成强密码",
-                    detail: "为弱密码条目生成更长且包含多类字符的唯一密码。",
+                    title: String(localized: "生成强密码"),
+                    detail: String(localized: "为弱密码条目生成更长且包含多类字符的唯一密码。"),
                     systemImage: "wand.and.stars"
                 )
             )
@@ -4477,8 +4477,8 @@ final class AppSessionModel {
                 AppSecurityCenterRepairSuggestion(
                     id: "repair-reused-passwords",
                     relatedRowID: "reused-passwords",
-                    title: "拆分复用密码",
-                    detail: "逐个为复用密码条目设置不同密码，降低单点泄露影响。",
+                    title: String(localized: "拆分复用密码"),
+                    detail: String(localized: "逐个为复用密码条目设置不同密码，降低单点泄露影响。"),
                     systemImage: "rectangle.2.swap"
                 )
             )
@@ -4488,8 +4488,8 @@ final class AppSessionModel {
                 AppSecurityCenterRepairSuggestion(
                     id: "repair-breached-passwords",
                     relatedRowID: "breached-passwords",
-                    title: "更换泄露密码",
-                    detail: "优先处理命中泄露指纹的登录条目，并同步更新对应服务。",
+                    title: String(localized: "更换泄露密码"),
+                    detail: String(localized: "优先处理命中泄露指纹的登录条目，并同步更新对应服务。"),
                     systemImage: "bolt.shield"
                 )
             )
@@ -4499,8 +4499,8 @@ final class AppSessionModel {
                 AppSecurityCenterRepairSuggestion(
                     id: "repair-duplicate-logins",
                     relatedRowID: "duplicate-logins",
-                    title: "合并重复项",
-                    detail: "检查重复登录预览，确认后保留主条目并清理重复记录。",
+                    title: String(localized: "合并重复项"),
+                    detail: String(localized: "检查重复登录预览，确认后保留主条目并清理重复记录。"),
                     systemImage: "arrow.triangle.merge"
                 )
             )
@@ -4524,7 +4524,7 @@ final class AppSessionModel {
                 entryCountLabel: itemCountLabel(entries.count),
                 primaryEntryID: primary.id,
                 duplicateEntryIDs: duplicateIDs,
-                detail: "保留 \(displayTitle)，预览合并 \(duplicateIDs.count) 个重复条目。"
+                detail: String(localized: "保留 \(displayTitle)，预览合并 \(duplicateIDs.count) 个重复条目。")
             )
         }
     }
@@ -4660,15 +4660,15 @@ final class AppSessionModel {
     }
 
     private func itemCountLabel(_ count: Int) -> String {
-        "\(count) 项"
+        String(localized: "\(count) 项")
     }
 
     private func plusEntitlementDetail(for snapshot: AppPlusEntitlementSnapshot) -> String {
         switch snapshot.source {
         case .none:
-            return "点击资源激活按钮即可解锁 Monica Plus。"
+            return String(localized: "点击资源激活按钮即可解锁 Monica Plus。")
         case .resourceUnlock:
-            return "已通过本地授权资源解锁 Monica Plus。"
+            return String(localized: "已通过本地授权资源解锁 Monica Plus。")
         }
     }
 
@@ -4681,7 +4681,7 @@ final class AppSessionModel {
             )
         }
         let title = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fallbackTitle = title.isEmpty ? "未命名" : title
+        let fallbackTitle = title.isEmpty ? String(localized: "未命名") : title
         return AppLoginStackedGroupKey(
             title: fallbackTitle,
             normalized: fallbackTitle.lowercased(),
@@ -4755,19 +4755,19 @@ final class AppSessionModel {
     }
 
     var biometricUnlockDisplayName: String {
-        biometricUnlockKind?.displayName ?? "生物识别"
+        biometricUnlockKind?.displayName ?? String(localized: "生物识别")
     }
 
     var biometricUnlockTitle: String {
-        "使用 \(biometricUnlockDisplayName) 解锁"
+        String(localized: "使用 \(biometricUnlockDisplayName) 解锁")
     }
 
     var biometricUnlockButtonTitle: String {
-        "使用 \(biometricUnlockDisplayName)"
+        String(localized: "使用 \(biometricUnlockDisplayName)")
     }
 
     var biometricUnlockSettingsTitle: String {
-        "\(biometricUnlockDisplayName) 解锁"
+        String(localized: "\(biometricUnlockDisplayName) 解锁")
     }
 
     var biometricUnlockSystemImage: String {
@@ -4972,8 +4972,8 @@ final class AppSessionModel {
                 )
             }
             clearVaultBatchSelection()
-            let verb = action == .deleted ? "删除" : "恢复"
-            entryOperationState = .succeeded("已\(verb) \(events.count) 项")
+            let verb = action == .deleted ? String(localized: "删除") : String(localized: "恢复")
+            entryOperationState = .succeeded(String(localized: "已\(verb) \(events.count) 项"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -5311,7 +5311,7 @@ final class AppSessionModel {
             guard let rememberedVaultID,
                   let setup = try securityQuestionStore.load(vaultID: rememberedVaultID) else {
                 vaultOperationState = .failed(
-                    "主密码无法找回。可尝试钥匙串生物识别解锁、打开可记得密码的备份，或新建保险库。"
+                    String(localized: "主密码无法找回。可尝试钥匙串生物识别解锁、打开可记得密码的备份，或新建保险库。")
                 )
                 return
             }
@@ -5358,7 +5358,7 @@ final class AppSessionModel {
             try securityQuestionStore.save(setup)
             securityAnswer1 = ""
             securityAnswer2 = ""
-            securityQuestionState = .succeeded("密保问题已保存。")
+            securityQuestionState = .succeeded(String(localized: "密保问题已保存。"))
         } catch {
             securityQuestionState = .failed(error.localizedDescription)
             throw error
@@ -5381,8 +5381,8 @@ final class AppSessionModel {
             forgotPasswordAttemptCount += 1
             vaultOperationState = .failed(
                 forgotPasswordAttemptCount >= 3
-                    ? "密保答案错误次数过多，请返回后重试。"
-                    : "密保答案不正确。"
+                    ? String(localized: "密保答案错误次数过多，请返回后重试。")
+                    : String(localized: "密保答案不正确。")
             )
         }
         return isMatch
@@ -5408,7 +5408,7 @@ final class AppSessionModel {
             vaultOperationState = .running
             let wrappedKey = try await vaultKeychainService.loadWrappedKeyAfterAuthentication(
                 vaultID: rememberedVaultID,
-                reason: "重设 Monica 主密码"
+                reason: String(localized: "重设 Monica 主密码")
             )
             guard wrappedKey.vaultID == rememberedVaultID else {
                 throw AppVaultKeychainError.vaultMismatch
@@ -5431,7 +5431,7 @@ final class AppSessionModel {
             resetForgotPasswordInputs()
             vaultState = .locked
             vaultPassword = ""
-            vaultOperationState = .succeeded("主密码已重设，请使用新密码解锁。")
+            vaultOperationState = .succeeded(String(localized: "主密码已重设，请使用新密码解锁。"))
         } catch {
             vaultOperationState = .failed(error.localizedDescription)
             throw error
@@ -5454,7 +5454,7 @@ final class AppSessionModel {
     }
 
     private func securityQuestionText(for id: Int) -> String {
-        Self.securityQuestionOptions.first { $0.id == id }?.text ?? "密保问题"
+        Self.securityQuestionOptions.first { $0.id == id }?.text ?? String(localized: "密保问题")
     }
 
     private func securityQuestionAnswerHash(_ answer: String) -> String {
@@ -5566,19 +5566,19 @@ final class AppSessionModel {
     private func detailTitle(kind: UnifiedVaultItemKind, entryID: String) -> String {
         switch kind {
         case .login:
-            return loginEntries.first { $0.id == entryID }?.title ?? "密码"
+            return loginEntries.first { $0.id == entryID }?.title ?? String(localized: "密码")
         case .note:
-            return noteEntries.first { $0.id == entryID }?.title ?? "笔记"
+            return noteEntries.first { $0.id == entryID }?.title ?? String(localized: "笔记")
         case .totp:
-            return totpEntries.first { $0.id == entryID }?.title ?? "验证器"
+            return totpEntries.first { $0.id == entryID }?.title ?? String(localized: "验证器")
         case .card:
-            return cardEntries.first { $0.id == entryID }?.title ?? "银行卡"
+            return cardEntries.first { $0.id == entryID }?.title ?? String(localized: "银行卡")
         case .identity:
-            return identityEntries.first { $0.id == entryID }?.title ?? "证件"
+            return identityEntries.first { $0.id == entryID }?.title ?? String(localized: "证件")
         case .passkey:
-            return passkeyEntries.first { $0.id == entryID }?.title ?? "通行密钥"
+            return passkeyEntries.first { $0.id == entryID }?.title ?? String(localized: "通行密钥")
         case .sshKey:
-            return sshKeyEntries.first { $0.id == entryID }?.title ?? "SSH 密钥"
+            return sshKeyEntries.first { $0.id == entryID }?.title ?? String(localized: "SSH 密钥")
         case .apiToken:
             return apiTokenEntries.first { $0.id == entryID }?.title ?? "API Token"
         case .wifi:
@@ -5586,7 +5586,7 @@ final class AppSessionModel {
         case .send:
             return sendEntries.first { $0.id == entryID }?.title ?? "Send"
         case .attachmentRef:
-            return attachmentEntries.first { $0.id == entryID }?.fileName ?? "附件"
+            return attachmentEntries.first { $0.id == entryID }?.fileName ?? String(localized: "附件")
         }
     }
 
@@ -5737,7 +5737,7 @@ final class AppSessionModel {
         recordUserActivity()
         do {
             loginPassword = try passwordGenerator()
-            entryOperationState = .succeeded("已生成密码")
+            entryOperationState = .succeeded(String(localized: "已生成密码"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -5853,7 +5853,7 @@ final class AppSessionModel {
                     let entry = try entryRepository.createNoteEntry(
                         projectID: project.id,
                         draft: LocalNoteEntryDraft(
-                            title: "来自分享的文本",
+                            title: String(localized: "来自分享的文本"),
                             body: body
                         )
                     )
@@ -5905,7 +5905,7 @@ final class AppSessionModel {
                 importedCounts: importedCounts,
                 importedTitles: importedTitles
             )
-            entryOperationState = .succeeded("分享导入已导入 \(result.totalCount) 项")
+            entryOperationState = .succeeded(String(localized: "分享导入已导入 \(result.totalCount) 项"))
             return result
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -5957,7 +5957,7 @@ final class AppSessionModel {
                     itemID: updated.id,
                     itemTitle: updated.title
                 )
-                entryOperationState = .succeeded("自动填充已更新 \(updated.title)")
+                entryOperationState = .succeeded(String(localized: "自动填充已更新 \(updated.title)"))
             } else {
                 let title = autoFillSaveTitle(for: normalizedRequest)
                 let entry = try entryRepository.createLoginEntry(
@@ -5978,7 +5978,7 @@ final class AppSessionModel {
                     itemID: entry.id,
                     itemTitle: entry.title
                 )
-                entryOperationState = .succeeded("自动填充已保存 \(entry.title)")
+                entryOperationState = .succeeded(String(localized: "自动填充已保存 \(entry.title)"))
             }
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -6000,7 +6000,7 @@ final class AppSessionModel {
             try saveAutoFillCredential(request, projectTitle: projectTitle)
         }
         try inboxStore.clearPendingSaveRequests()
-        entryOperationState = .succeeded("自动填充已导入 \(requests.count) 个保存请求")
+        entryOperationState = .succeeded(String(localized: "自动填充已导入 \(requests.count) 个保存请求"))
         return requests.count
     }
 
@@ -6008,7 +6008,7 @@ final class AppSessionModel {
         recordUserActivity()
         do {
             editingLoginPassword = try passwordGenerator()
-            entryOperationState = .succeeded("已生成密码")
+            entryOperationState = .succeeded(String(localized: "已生成密码"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6034,7 +6034,7 @@ final class AppSessionModel {
             )
             loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
             selectLoginEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6065,7 +6065,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6096,7 +6096,7 @@ final class AppSessionModel {
             loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             try refreshAutoFillEncryptedIndexIfConfigured()
-            entryOperationState = .succeeded("已合并 \(currentPreview.title)")
+            entryOperationState = .succeeded(String(localized: "已合并 \(currentPreview.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6122,7 +6122,7 @@ final class AppSessionModel {
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             try refreshAutoFillEncryptedIndexIfConfigured()
             lastDuplicateLoginMergeUndo = nil
-            entryOperationState = .succeeded("已撤销合并 \(undo.title)")
+            entryOperationState = .succeeded(String(localized: "已撤销合并 \(undo.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6141,13 +6141,13 @@ final class AppSessionModel {
         }
 
         ignoredDuplicateLoginKeys.insert(group.key)
-        entryOperationState = .succeeded("已忽略 \(preview.title)")
+        entryOperationState = .succeeded(String(localized: "已忽略 \(preview.title)"))
     }
 
     func clearIgnoredDuplicateLoginPreviews() {
         recordUserActivity()
         ignoredDuplicateLoginKeys.removeAll()
-        entryOperationState = .succeeded("已恢复重复项提示")
+        entryOperationState = .succeeded(String(localized: "已恢复重复项提示"))
     }
 
     func restoreLoginEntry(_ entry: LocalLoginEntry) throws {
@@ -6174,7 +6174,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6276,7 +6276,7 @@ final class AppSessionModel {
             )
             noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
             selectNoteEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6306,7 +6306,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6336,7 +6336,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6417,7 +6417,7 @@ final class AppSessionModel {
             totpDigits = digits
             totpAlgorithm = draft.algorithm.rawValue
             totpImportURI = ""
-            entryOperationState = .succeeded("已导入 \(draft.redactedSummary)")
+            entryOperationState = .succeeded(String(localized: "已导入 \(draft.redactedSummary)"))
         } catch {
             entryOperationState = .failed(readableSteamImportErrorMessage(for: error))
             throw error
@@ -6444,7 +6444,7 @@ final class AppSessionModel {
             totpDigits = digits
             totpAlgorithm = draft.algorithm.rawValue
             totpImportURI = ""
-            entryOperationState = .succeeded("已导入 \(draft.title)")
+            entryOperationState = .succeeded(String(localized: "已导入 \(draft.title)"))
         } catch {
             entryOperationState = .failed(readableTotpImportErrorMessage(for: error, source: source))
             throw error
@@ -6458,25 +6458,25 @@ final class AppSessionModel {
 
         switch (source, totpError) {
         case (.scannedQRCode, .invalidURI):
-            return "扫描到的二维码不是 TOTP 设置码。"
+            return String(localized: "扫描到的二维码不是 TOTP 设置码。")
         case (.manualURI, .invalidURI):
-            return "请输入有效的 otpauth:// TOTP 设置 URI。"
+            return String(localized: "请输入有效的 otpauth:// TOTP 设置 URI。")
         case (.scannedQRCode, .invalidSecret):
-            return "扫描到的二维码包含无效的 TOTP 密钥。"
+            return String(localized: "扫描到的二维码包含无效的 TOTP 密钥。")
         case (.manualURI, .invalidSecret):
-            return "TOTP 设置 URI 包含无效密钥。"
+            return String(localized: "TOTP 设置 URI 包含无效密钥。")
         case (.scannedQRCode, .invalidDigits):
-            return "扫描到的二维码使用了不支持的 TOTP 位数。"
+            return String(localized: "扫描到的二维码使用了不支持的 TOTP 位数。")
         case (.manualURI, .invalidDigits):
-            return "TOTP 设置 URI 使用了不支持的位数。"
+            return String(localized: "TOTP 设置 URI 使用了不支持的位数。")
         case (.scannedQRCode, .invalidPeriod):
-            return "扫描到的二维码使用了不支持的 TOTP 周期。"
+            return String(localized: "扫描到的二维码使用了不支持的 TOTP 周期。")
         case (.manualURI, .invalidPeriod):
-            return "TOTP 设置 URI 使用了不支持的周期。"
+            return String(localized: "TOTP 设置 URI 使用了不支持的周期。")
         case (.scannedQRCode, .invalidAlgorithm):
-            return "扫描到的二维码使用了不支持的 TOTP 算法。"
+            return String(localized: "扫描到的二维码使用了不支持的 TOTP 算法。")
         case (.manualURI, .invalidAlgorithm):
-            return "TOTP 设置 URI 使用了不支持的算法。"
+            return String(localized: "TOTP 设置 URI 使用了不支持的算法。")
         }
     }
 
@@ -6487,11 +6487,11 @@ final class AppSessionModel {
 
         switch totpError {
         case .invalidSecret:
-            return "Steam 验证器文件缺少有效密钥。"
+            return String(localized: "Steam 验证器文件缺少有效密钥。")
         case .invalidURI:
-            return "请输入有效的 Steam maFile/JSON 验证器文件。"
+            return String(localized: "请输入有效的 Steam maFile/JSON 验证器文件。")
         case .invalidDigits, .invalidPeriod, .invalidAlgorithm:
-            return "无法导入该 Steam 验证器文件。"
+            return String(localized: "无法导入该 Steam 验证器文件。")
         }
     }
 
@@ -6570,7 +6570,7 @@ final class AppSessionModel {
             )
             totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
             selectTotpEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6600,7 +6600,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6630,7 +6630,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6762,7 +6762,7 @@ final class AppSessionModel {
             )
             cardEntries = try entryRepository.listCardEntries(projectID: projectID)
             selectCardEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6792,7 +6792,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6822,7 +6822,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6950,7 +6950,7 @@ final class AppSessionModel {
             )
             identityEntries = try entryRepository.listIdentityEntries(projectID: projectID)
             selectIdentityEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -6980,7 +6980,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7010,7 +7010,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7097,7 +7097,7 @@ final class AppSessionModel {
                 itemID: entry.id,
                 itemTitle: entry.title
             )
-            entryOperationState = .succeeded("Passkey 已保存：\(entry.title)")
+            entryOperationState = .succeeded(String(localized: "Passkey 已保存：\(entry.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7203,7 +7203,7 @@ final class AppSessionModel {
             passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
             selectPasskeyEntryForEditing(updated)
             try refreshAutoFillEncryptedIndexIfConfigured()
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7234,7 +7234,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7265,7 +7265,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7378,7 +7378,7 @@ final class AppSessionModel {
             let updated = try entryRepository.setSshKeyEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
             sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
             selectSshKeyEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7408,7 +7408,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7435,7 +7435,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7548,7 +7548,7 @@ final class AppSessionModel {
             let updated = try entryRepository.setApiTokenEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
             apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
             selectApiTokenEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7578,7 +7578,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7605,7 +7605,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7715,7 +7715,7 @@ final class AppSessionModel {
             let updated = try entryRepository.setWifiEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
             wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
             selectWifiEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7745,7 +7745,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -7772,7 +7772,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8179,7 +8179,7 @@ final class AppSessionModel {
             let updated = try entryRepository.setSendEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             selectSendEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? "已收藏 \(updated.title)" : "已取消收藏 \(updated.title)")
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8209,7 +8209,7 @@ final class AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded("已删除 \(deletedTitle)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8236,7 +8236,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded("已恢复 \(restored.title)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8263,7 +8263,7 @@ final class AppSessionModel {
                 itemID: entry.id,
                 itemTitle: entry.fileName
             )
-            entryOperationState = .succeeded("已删除 \(entry.fileName)")
+            entryOperationState = .succeeded(String(localized: "已删除 \(entry.fileName)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8290,7 +8290,7 @@ final class AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.fileName
             )
-            entryOperationState = .succeeded("已恢复 \(restored.fileName)")
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.fileName)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8318,7 +8318,7 @@ final class AppSessionModel {
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
             attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
             deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
-            entryOperationState = .succeeded("已刷新扩展通行条目")
+            entryOperationState = .succeeded(String(localized: "已刷新扩展通行条目"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8332,7 +8332,7 @@ final class AppSessionModel {
         csvImportPreview = preview
         androidBackupImportPreview = nil
         clearKeePassImportState()
-        entryOperationState = .succeeded("CSV 预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题")
+        entryOperationState = .succeeded(String(localized: "CSV 预览：\(report.items.count) 项可导入，\(report.issues.count) 个问题"))
         return preview
     }
 
@@ -8366,7 +8366,7 @@ final class AppSessionModel {
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
             csvImportPreview = nil
-            entryOperationState = .succeeded("CSV 已导入 \(preview.items.count) 项")
+            entryOperationState = .succeeded(String(localized: "CSV 已导入 \(preview.items.count) 项"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8402,7 +8402,7 @@ final class AppSessionModel {
         csvImportPreview = nil
         androidBackupImportPreview = nil
         clearPendingAndroidEncryptedBackup()
-        entryOperationState = .succeeded("KeePass 预览：\(report.format.displayName) 数据库，等待密码或密钥文件解锁")
+        entryOperationState = .succeeded(String(localized: "KeePass 预览：\(report.format.localizedDisplayName) 数据库，等待密码或密钥文件解锁"))
         return preview
     }
 
@@ -8447,7 +8447,7 @@ final class AppSessionModel {
     ) throws -> KeePassUnlockPreflightReport {
         recordUserActivity()
         guard let databaseData = keePassPendingDatabaseData else {
-            let message = "请先选择 KDBX 数据库文件"
+            let message = String(localized: "请先选择 KDBX 数据库文件")
             entryOperationState = .failed(message)
             throw KeePassOperationError(code: .formatUnsupported, message: message)
         }
@@ -8484,15 +8484,15 @@ final class AppSessionModel {
                 unlockPreflight: preflight
             )
         }
-        let version = preflight.headerSummary?.displayName ?? preflight.format.displayName
-        entryOperationState = .succeeded("KeePass 解锁输入已准备：\(version)，\(preflight.credentials.displayName)")
+        let version = preflight.headerSummary?.displayName ?? preflight.format.localizedDisplayName
+        entryOperationState = .succeeded(String(localized: "KeePass 解锁输入已准备：\(version)，\(preflight.credentials.localizedDisplayName)"))
         return preflight
     }
 
     func previewKeePassReadOnlyTree() throws -> KeePassReadOnlySnapshot {
         recordUserActivity()
         guard let databaseData = keePassPendingDatabaseData else {
-            let message = "请先选择 KDBX 数据库文件"
+            let message = String(localized: "请先选择 KDBX 数据库文件")
             entryOperationState = .failed(message)
             throw KeePassOperationError(code: .formatUnsupported, message: message)
         }
@@ -8511,7 +8511,7 @@ final class AppSessionModel {
             keePassReadOnlySnapshot = snapshot
             keePassLastSuccessfulUnlockCredentials = successfulCredentials
             keePassReadOnlyImportPlan = nil
-            entryOperationState = .succeeded("KeePass 只读预览：\(snapshot.displaySummary)")
+            entryOperationState = .succeeded(String(localized: "KeePass 只读预览：\(snapshot.displaySummary)"))
             return snapshot
         } catch {
             keePassReadOnlySnapshot = nil
@@ -8534,7 +8534,7 @@ final class AppSessionModel {
             }
             let plan = KeePassReadOnlyImportPlanner.plan(snapshot)
             keePassReadOnlyImportPlan = plan
-            entryOperationState = .succeeded("KeePass 导入计划：\(plan.displaySummary)")
+            entryOperationState = .succeeded(String(localized: "KeePass 导入计划：\(plan.displaySummary)"))
             return plan
         } catch {
             keePassReadOnlyImportPlan = nil
@@ -8696,30 +8696,30 @@ final class AppSessionModel {
                 + importedDecodedAttachmentContentCount
                 + importedNotesFieldCount
             let pendingText = pendingSummary.isEmpty
-                ? (importedDecodedContentCount > 0 ? "" : "，秘密字段待 KDBX 解码器接入")
+                ? (importedDecodedContentCount > 0 ? "" : String(localized: "，秘密字段待 KDBX 解码器接入"))
                 : "；\(pendingSummary)"
             let totpPlaceholderText = importedTotpPlaceholderCount > 0
-                ? "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项"
+                ? String(localized: "，并创建 \(importedTotpPlaceholderCount) 个 TOTP 占位项")
                 : ""
             let decodedPasswordText = importedDecodedPasswordCount > 0
-                ? "，并导入 \(importedDecodedPasswordCount) 个密码字段"
+                ? String(localized: "，并导入 \(importedDecodedPasswordCount) 个密码字段")
                 : ""
             let decodedTotpText = importedDecodedTotpSecretCount > 0
-                ? "，并导入 \(importedDecodedTotpSecretCount) 个 TOTP 密钥"
+                ? String(localized: "，并导入 \(importedDecodedTotpSecretCount) 个 TOTP 密钥")
                 : ""
             let decodedAttachmentText = importedDecodedAttachmentContentCount > 0
-                ? "，并导入 \(importedDecodedAttachmentContentCount) 个附件内容"
+                ? String(localized: "，并导入 \(importedDecodedAttachmentContentCount) 个附件内容")
                 : ""
             let notesFieldText = importedNotesFieldCount > 0
-                ? "，并导入 \(importedNotesFieldCount) 项备注/自定义字段"
+                ? String(localized: "，并导入 \(importedNotesFieldCount) 项备注/自定义字段")
                 : ""
             let attachmentPlaceholderText = importedAttachmentPlaceholderCount > 0
-                ? "，并创建 \(importedAttachmentPlaceholderCount) 个附件占位项"
+                ? String(localized: "，并创建 \(importedAttachmentPlaceholderCount) 个附件占位项")
                 : ""
             let deletedText = importedDeletedMetadataCount > 0
-                ? "，并保留 \(importedDeletedMetadataCount) 项回收站元数据"
+                ? String(localized: "，并保留 \(importedDeletedMetadataCount) 项回收站元数据")
                 : ""
-            entryOperationState = .succeeded("KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(decodedAttachmentText)\(notesFieldText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)")
+            entryOperationState = .succeeded(String(localized: "KeePass 已导入 \(plan.candidateCount) 项元数据\(decodedPasswordText)\(decodedTotpText)\(decodedAttachmentText)\(notesFieldText)\(totpPlaceholderText)\(attachmentPlaceholderText)\(deletedText)\(pendingText)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -8737,7 +8737,7 @@ final class AppSessionModel {
         keePassKeyFileName = sanitizedKeePassFileName(fileURL.lastPathComponent) ?? "keyfile"
         keePassReadOnlySnapshot = nil
         keePassReadOnlyImportPlan = nil
-        entryOperationState = .succeeded("KeePass 密钥文件已选择：\(keePassKeyFileName)")
+        entryOperationState = .succeeded(String(localized: "KeePass 密钥文件已选择：\(keePassKeyFileName)"))
     }
 
     func writeKeePassKdbx4Database(_ result: KeePassKdbx4WritebackResult) throws {
@@ -8765,7 +8765,7 @@ final class AppSessionModel {
             keePassPendingDatabaseData = result.database
             keePassPendingDatabaseName = sourceURL.lastPathComponent
             entryOperationState = .succeeded(
-                "KeePass 数据库已写回：\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes"
+                String(localized: "KeePass 数据库已写回：\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes")
             )
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -8796,7 +8796,7 @@ final class AppSessionModel {
         case .unknown:
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "无法写回未知版本的 KDBX 文件。"
+                message: String(localized: "无法写回未知版本的 KDBX 文件。")
             )
         }
     }
@@ -8848,7 +8848,7 @@ final class AppSessionModel {
                 byteCount: receipt.byteCount
             )
             entryOperationState = .succeeded(
-                "KeePass 云文件已写回：\(source.provider.displayName) \(fileName)，\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes"
+                String(localized: "KeePass 云文件已写回：\(source.provider.displayName) \(fileName)，\(result.entryCount) 个条目，\(result.attachmentCount) 个附件，\(result.database.count) bytes")
             )
             return result
         } catch {
@@ -8970,7 +8970,7 @@ final class AppSessionModel {
             keePassReadOnlySnapshot = updatedSnapshot
             keePassReadOnlyImportPlan = nil
             entryOperationState = .succeeded(
-                "KeePass 附件内容已替换：\(updatedAttachment.fileName) \(content.count) 字节"
+                String(localized: "KeePass 附件内容已替换：\(updatedAttachment.fileName) \(content.count) 字节")
             )
             return updatedSnapshot
         } catch {
@@ -9039,7 +9039,7 @@ final class AppSessionModel {
             keePassReadOnlySnapshot = updatedSnapshot
             keePassReadOnlyImportPlan = nil
             entryOperationState = .succeeded(
-                "KeePass 附件已添加：\(sanitizedFileName) \(content.count) 字节"
+                String(localized: "KeePass 附件已添加：\(sanitizedFileName) \(content.count) 字节")
             )
             return updatedSnapshot
         } catch {
@@ -9074,7 +9074,7 @@ final class AppSessionModel {
             )
             let result = try writeKeePassReadOnlySnapshotBackToSource()
             entryOperationState = .succeeded(
-                "KeePass 附件已添加并写回：\(fileName) \(content.count) 字节"
+                String(localized: "KeePass 附件已添加并写回：\(fileName) \(content.count) 字节")
             )
             return result
         } catch {
@@ -9138,7 +9138,7 @@ final class AppSessionModel {
             keePassReadOnlyImportPlan = nil
             let result = try writeKeePassReadOnlySnapshotBackToSource()
             entryOperationState = .succeeded(
-                "KeePass 附件已删除并写回：\(sanitizedAttachmentPreviewFileName(attachment.fileName))"
+                String(localized: "KeePass 附件已删除并写回：\(sanitizedAttachmentPreviewFileName(attachment.fileName))")
             )
             return result
         } catch {
@@ -9175,7 +9175,7 @@ final class AppSessionModel {
             )
             let result = try writeKeePassReadOnlySnapshotBackToSource()
             entryOperationState = .succeeded(
-                "KeePass 附件已替换并写回：\(fileName) \(content.count) 字节"
+                String(localized: "KeePass 附件已替换并写回：\(fileName) \(content.count) 字节")
             )
             return result
         } catch {
@@ -9264,9 +9264,9 @@ final class AppSessionModel {
             keePassReadOnlySnapshot = updatedSnapshot
             keePassReadOnlyImportPlan = nil
             let result = try writeKeePassReadOnlySnapshotBackToSource()
-            let displayTitle = restoredEntry.title.isEmpty ? "未命名条目" : restoredEntry.title
+            let displayTitle = restoredEntry.title.isEmpty ? String(localized: "未命名条目") : restoredEntry.title
             entryOperationState = .succeeded(
-                "KeePass 回收站条目已还原并写回：\(displayTitle) -> \(targetGroup.path)"
+                String(localized: "KeePass 回收站条目已还原并写回：\(displayTitle) -> \(targetGroup.path)")
             )
             return result
         } catch {
@@ -9305,9 +9305,9 @@ final class AppSessionModel {
         csvImportPreview = nil
         clearKeePassImportState()
         clearPendingAndroidEncryptedBackup()
-        let trashText = report.deletedItems.isEmpty ? "" : "，\(report.deletedItems.count) 项回收站"
-        let attachmentText = report.attachments.isEmpty ? "" : "，\(report.attachments.count) 个附件"
-        entryOperationState = .succeeded("移动端备份预览：\(report.items.count) 项可导入\(trashText)\(attachmentText)，\(report.issues.count) 个问题")
+        let trashText = report.deletedItems.isEmpty ? "" : String(localized: "，\(report.deletedItems.count) 项回收站")
+        let attachmentText = report.attachments.isEmpty ? "" : String(localized: "，\(report.attachments.count) 个附件")
+        entryOperationState = .succeeded(String(localized: "移动端备份预览：\(report.items.count) 项可导入\(trashText)\(attachmentText)，\(report.issues.count) 个问题"))
         return preview
     }
 
@@ -9338,7 +9338,7 @@ final class AppSessionModel {
             pendingAndroidEncryptedBackupData = data
             pendingAndroidEncryptedBackupFileName = fileURL.lastPathComponent
             androidBackupDecryptPassword = ""
-            entryOperationState = .failed("请输入移动端加密备份密码。")
+            entryOperationState = .failed(String(localized: "请输入移动端加密备份密码。"))
             return nil
         } catch {
             clearPendingAndroidEncryptedBackup()
@@ -9458,14 +9458,14 @@ final class AppSessionModel {
             if preview.attachments.isEmpty {
                 attachmentText = ""
             } else if savedAttachmentBlobCount == preview.attachments.count {
-                attachmentText = "；\(savedAttachmentBlobCount) 个附件密文待恢复"
+                attachmentText = String(localized: "；\(savedAttachmentBlobCount) 个附件密文待恢复")
             } else if savedAttachmentBlobCount > 0 {
-                attachmentText = "；\(savedAttachmentBlobCount) 个附件密文待恢复，\(preview.attachments.count - savedAttachmentBlobCount) 个附件元数据待恢复"
+                attachmentText = String(localized: "；\(savedAttachmentBlobCount) 个附件密文待恢复，\(preview.attachments.count - savedAttachmentBlobCount) 个附件元数据待恢复")
             } else {
-                attachmentText = "；\(preview.attachments.count) 个附件元数据待恢复"
+                attachmentText = String(localized: "；\(preview.attachments.count) 个附件元数据待恢复")
             }
-            let trashText = deletedItemCount == 0 ? "" : "；\(deletedItemCount) 项进入回收站"
-            entryOperationState = .succeeded("移动端备份已导入 \(preview.items.count) 项\(attachmentText)\(trashText)")
+            let trashText = deletedItemCount == 0 ? "" : String(localized: "；\(deletedItemCount) 项进入回收站")
+            entryOperationState = .succeeded(String(localized: "移动端备份已导入 \(preview.items.count) 项\(attachmentText)\(trashText)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -9484,7 +9484,7 @@ final class AppSessionModel {
             _ = try requireActiveVaultSession()
             let drafts = csvExportDrafts()
             let data = try AndroidBackupCodec.exportItems(drafts)
-            entryOperationState = .succeeded("移动端备份已导出 \(drafts.count) 项")
+            entryOperationState = .succeeded(String(localized: "移动端备份已导出 \(drafts.count) 项"))
             return data
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -9504,7 +9504,7 @@ final class AppSessionModel {
             _ = try requireActiveVaultSession()
             let drafts = csvExportDrafts()
             let csv = VaultCSVCodec.exportItems(drafts)
-            entryOperationState = .succeeded("CSV 已导出 \(drafts.count) 项")
+            entryOperationState = .succeeded(String(localized: "CSV 已导出 \(drafts.count) 项"))
             return csv
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -9557,7 +9557,7 @@ final class AppSessionModel {
             }
             if let kind = biometricUnlockKind {
                 try await biometricUnlockAuthorizer.authenticate(
-                    reason: "启用 \(kind.displayName) 解锁"
+                    reason: String(localized: "启用 \(kind.displayName) 解锁")
                 )
             }
 
@@ -9606,7 +9606,7 @@ final class AppSessionModel {
 
             let wrappedKey = try await vaultKeychainService.loadWrappedKeyAfterAuthentication(
                 vaultID: rememberedVaultID,
-                reason: "解锁 Monica 保险库"
+                reason: String(localized: "解锁 Monica 保险库")
             )
             guard wrappedKey.vaultID == rememberedVaultID else {
                 throw AppVaultKeychainError.vaultMismatch
@@ -9932,7 +9932,7 @@ final class AppSessionModel {
             action: .updated,
             itemKind: .attachmentRef,
             itemID: "webdav-background",
-            itemTitle: "自动备份"
+            itemTitle: String(localized: "自动备份")
         )
     }
 
@@ -9943,7 +9943,7 @@ final class AppSessionModel {
             action: .updated,
             itemKind: .attachmentRef,
             itemID: "webdav-background",
-            itemTitle: "自动备份"
+            itemTitle: String(localized: "自动备份")
         )
     }
 
@@ -10049,7 +10049,7 @@ final class AppSessionModel {
                     accountLabel: challenge.accountLabel,
                     providers: challenge.providers
                 )
-                bitwardenSyncState = .failed("Bitwarden 需要两步验证")
+                bitwardenSyncState = .failed(String(localized: "Bitwarden 需要两步验证"))
                 throw BitwardenSyncProviderError.twoFactorRequired
             }
         } catch {
@@ -10596,7 +10596,7 @@ final class AppSessionModel {
                 itemID: updated.id,
                 itemTitle: updated.fileName
             )
-            entryOperationState = .succeeded("Bitwarden 附件已下载：\(updated.fileName) \(download.encryptedContent.count) 字节")
+            entryOperationState = .succeeded(String(localized: "Bitwarden 附件已下载：\(updated.fileName) \(download.encryptedContent.count) 字节"))
             return updated
         } catch {
             entryOperationState = .failed(readableBitwardenSyncErrorMessage(for: error))
@@ -10746,32 +10746,32 @@ final class AppSessionModel {
         if let webDAVError = error as? WebDAVError {
             switch webDAVError {
             case .unexpectedStatus(_, let statusCode) where statusCode == 401 || statusCode == 403:
-                return "WebDAV 登录失败，请检查用户名和密码。"
+                return String(localized: "WebDAV 登录失败，请检查用户名和密码。")
             case .unexpectedStatus("download", 404):
-                return "未找到远端备份文件。"
+                return String(localized: "未找到远端备份文件。")
             case .unexpectedStatus(_, let statusCode) where (500...599).contains(statusCode):
-                return "WebDAV 服务器当前不可用，请稍后再试。"
+                return String(localized: "WebDAV 服务器当前不可用，请稍后再试。")
             case .unexpectedStatus:
-                return "WebDAV 请求失败，请检查服务器设置后重试。"
+                return String(localized: "WebDAV 请求失败，请检查服务器设置后重试。")
             case .integrityCheckFailed:
-                return "远端备份未通过完整性校验，可能已经损坏。"
+                return String(localized: "远端备份未通过完整性校验，可能已经损坏。")
             case .nonHTTPResponse:
-                return "WebDAV 服务器返回了无效响应。"
+                return String(localized: "WebDAV 服务器返回了无效响应。")
             }
         }
 
         if let urlError = error as? URLError {
             switch urlError.code {
             case .notConnectedToInternet, .networkConnectionLost:
-                return "网络不可用，请检查连接后重试。"
+                return String(localized: "网络不可用，请检查连接后重试。")
             case .timedOut:
-                return "WebDAV 请求超时，请稍后再试。"
+                return String(localized: "WebDAV 请求超时，请稍后再试。")
             case .cannotFindHost, .cannotConnectToHost, .dnsLookupFailed:
-                return "无法连接 WebDAV 服务器，请检查服务器 URL。"
+                return String(localized: "无法连接 WebDAV 服务器，请检查服务器 URL。")
             case .userAuthenticationRequired, .userCancelledAuthentication:
-                return "WebDAV 登录失败，请检查用户名和密码。"
+                return String(localized: "WebDAV 登录失败，请检查用户名和密码。")
             default:
-                return "WebDAV 连接失败，请检查网络和服务器设置。"
+                return String(localized: "WebDAV 连接失败，请检查网络和服务器设置。")
             }
         }
 
@@ -11203,7 +11203,7 @@ final class AppSessionModel {
 
     private func bitwardenImportTitle(_ title: String) -> String {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "Bitwarden 项目" : trimmed
+        return trimmed.isEmpty ? String(localized: "Bitwarden 项目") : trimmed
     }
 
     private func bitwardenPasskeyRelyingPartyID(for item: BitwardenSyncItem) -> String {
@@ -11774,14 +11774,14 @@ final class AppSessionModel {
         if let urlError = error as? URLError {
             switch urlError.code {
             case .notConnectedToInternet, .networkConnectionLost:
-                return "网络不可用，请检查连接后重试。"
+                return String(localized: "网络不可用，请检查连接后重试。")
             case .timedOut:
-                return "\(kind.displayName) 请求超时，请稍后再试。"
+                return String(localized: "\(kind.displayName) 请求超时，请稍后再试。")
             default:
-                return "\(kind.displayName) 连接失败，请检查网络后重试。"
+                return String(localized: "\(kind.displayName) 连接失败，请检查网络后重试。")
             }
         }
-        return "\(kind.displayName) 操作失败，请稍后重试。"
+        return String(localized: "\(kind.displayName) 操作失败，请稍后重试。")
     }
 
     private func readableBitwardenSyncErrorMessage(for error: Error) -> String {
@@ -11794,14 +11794,14 @@ final class AppSessionModel {
         if let urlError = error as? URLError {
             switch urlError.code {
             case .notConnectedToInternet, .networkConnectionLost:
-                return "网络不可用，请检查连接后重试。"
+                return String(localized: "网络不可用，请检查连接后重试。")
             case .timedOut:
-                return "Bitwarden 请求超时，请稍后再试。"
+                return String(localized: "Bitwarden 请求超时，请稍后再试。")
             default:
-                return "Bitwarden 连接失败，请检查网络后重试。"
+                return String(localized: "Bitwarden 连接失败，请检查网络后重试。")
             }
         }
-        return "Bitwarden 同步失败，请稍后重试。"
+        return String(localized: "Bitwarden 同步失败，请稍后重试。")
     }
 
     private func validBitwardenServerURL(_ value: String) -> URL? {
@@ -11823,7 +11823,7 @@ final class AppSessionModel {
             .last
             .map(String.init) ?? value
         let sanitized = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
-        return sanitized.isEmpty ? "未命名文件" : sanitized
+        return sanitized.isEmpty ? String(localized: "未命名文件") : sanitized
     }
 
     func lockLocalVault() {
@@ -11917,7 +11917,7 @@ final class AppSessionModel {
         }
         if let providerError = error as? CloudFileProviderError,
            case .authenticationRequired = providerError {
-            return "OneDrive 需要先登录。"
+            return String(localized: "OneDrive 需要先登录。")
         }
         let nsError = error as NSError
         return AppOneDriveAuthenticationError.authenticationFailed(
@@ -12136,7 +12136,7 @@ final class AppSessionModel {
 
     private func currentKeePassKdbxEnvelope() throws -> KeePassKdbxPayloadEnvelope {
         guard let databaseData = keePassPendingDatabaseData else {
-            let message = "请先选择 KDBX 数据库文件"
+            let message = String(localized: "请先选择 KDBX 数据库文件")
             throw KeePassOperationError(code: .formatUnsupported, message: message)
         }
         return try KeePassKdbxPayloadEnvelope.parse(databaseData)
@@ -12154,19 +12154,19 @@ final class AppSessionModel {
         guard let cipher = envelope.headerSummary.cryptoSummary?.cipher else {
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "KDBX cipher 参数缺失；请确认文件未损坏。"
+                message: String(localized: "KDBX cipher 参数缺失；请确认文件未损坏。")
             )
         }
         guard let compression = envelope.headerSummary.cryptoSummary?.compression else {
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "KDBX compression 参数缺失；请确认文件未损坏。"
+                message: String(localized: "KDBX compression 参数缺失；请确认文件未损坏。")
             )
         }
         guard let kdfParameters = envelope.headerSummary.kdfParameters else {
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "KDBX KDF 参数缺失；请确认文件未损坏。"
+                message: String(localized: "KDBX KDF 参数缺失；请确认文件未损坏。")
             )
         }
         let credentials = keePassLastSuccessfulUnlockCredentials ?? KeePassUnlockCredentials(
@@ -12191,7 +12191,7 @@ final class AppSessionModel {
         guard parameters.envelope.headerSummary.formatVersion == .kdbx3 else {
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "当前仅支持 KDBX3 数据库写回。"
+                message: String(localized: "当前仅支持 KDBX3 数据库写回。")
             )
         }
         return KeePassKdbx3WritebackRequest(
@@ -12213,7 +12213,7 @@ final class AppSessionModel {
         guard envelope.headerSummary.formatVersion == .kdbx4 else {
             throw KeePassOperationError(
                 code: .formatUnsupported,
-                message: "当前仅支持 KDBX4 数据库写回。"
+                message: String(localized: "当前仅支持 KDBX4 数据库写回。")
             )
         }
         return KeePassKdbx4WritebackRequest(
@@ -12311,7 +12311,7 @@ final class AppSessionModel {
                 return "\(title): \(field.value)"
             }
         if !fieldLines.isEmpty {
-            sections.append((["KeePass 字段："] + fieldLines).joined(separator: "\n"))
+            sections.append(([String(localized: "KeePass 字段：")] + fieldLines).joined(separator: "\n"))
         }
         return sections.joined(separator: "\n\n")
     }
@@ -12652,7 +12652,7 @@ final class AppSessionModel {
             .replacingOccurrences(of: #"://[^\s]+"#, with: "://<redacted>", options: .regularExpression)
             .replacingOccurrences(of: #"(?i)(password|token|secret|key|code)=\S+"#, with: "$1=<redacted>", options: .regularExpression)
         guard !trimmed.isEmpty else {
-            return "未命名条目"
+            return String(localized: "未命名条目")
         }
         return String(trimmed.prefix(80))
     }
@@ -12927,7 +12927,7 @@ final class AppSessionModel {
         if !request.title.isEmpty {
             return request.title
         }
-        return serviceIdentifiers(for: request.serviceIdentifier).first ?? "自动填充登录"
+        return serviceIdentifiers(for: request.serviceIdentifier).first ?? String(localized: "自动填充登录")
     }
 
     private func matchingLoginEntry(
@@ -13039,7 +13039,7 @@ final class AppSessionModel {
                     in: directory
                 )
                 mdbxVerificationState = .passed(
-                    "保险库 \(result.vaultID.prefix(8)) / \(result.entryTitle)"
+                    String(localized: "保险库 \(result.vaultID.prefix(8)) / \(result.entryTitle)")
                 )
             } catch {
                 mdbxVerificationState = .failed(error.localizedDescription)
@@ -13065,13 +13065,13 @@ enum MonicaAppTab: Hashable {
     var title: String {
         switch self {
         case .passwords:
-            return "密码"
+            return String(localized: "密码")
         case .totp:
-            return "验证"
+            return String(localized: "验证")
         case .wallet:
-            return "卡包"
+            return String(localized: "卡包")
         case .settings:
-            return "设置"
+            return String(localized: "设置")
         }
     }
 
@@ -13118,13 +13118,13 @@ enum PasswordModule: String, CaseIterable, Hashable, Identifiable, Sendable {
     var title: String {
         switch self {
         case .login:
-            return "登录"
+            return String(localized: "登录")
         case .passkey:
-            return "通行密钥"
+            return String(localized: "通行密钥")
         case .note:
-            return "笔记"
+            return String(localized: "笔记")
         case .other:
-            return "其他"
+            return String(localized: "其他")
         }
     }
 
@@ -13206,8 +13206,8 @@ enum SendCreateType: String, CaseIterable, Identifiable, Sendable {
 
     var title: String {
         switch self {
-        case .text: return "文本"
-        case .file: return "文件"
+        case .text: return String(localized: "文本")
+        case .file: return String(localized: "文件")
         }
     }
 }
@@ -13237,11 +13237,11 @@ enum VaultOperationState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "处理中"
+            return String(localized: "处理中")
         case .succeeded(let name):
-            return "已创建 \(name)"
+            return String(localized: "已创建 \(name)")
         case .failed(let message):
             return message
         }
@@ -13264,11 +13264,11 @@ enum EntryOperationState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "处理中"
+            return String(localized: "处理中")
         case .succeeded(let title):
-            return "已保存 \(title)"
+            return String(localized: "已保存 \(title)")
         case .failed(let message):
             return message
         }
@@ -13291,11 +13291,11 @@ enum AutoFillIndexState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "处理中"
+            return String(localized: "处理中")
         case .succeeded(let count):
-            return "已索引 \(count)"
+            return String(localized: "已索引 \(count)")
         case .failed(let message):
             return message
         }
@@ -13319,13 +13319,13 @@ enum VaultKeychainState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "处理中"
+            return String(localized: "处理中")
         case .saved(let vaultID):
-            return "已保存 \(vaultID.prefix(8))"
+            return String(localized: "已保存 \(vaultID.prefix(8))")
         case .unlocked(let vaultID):
-            return "已解锁 \(vaultID.prefix(8))"
+            return String(localized: "已解锁 \(vaultID.prefix(8))")
         case .failed(let message):
             return message
         }
@@ -13354,23 +13354,23 @@ enum WebDAVBackupState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "处理中"
+            return String(localized: "处理中")
         case .listed(let count):
-            return "已列出 \(count) 个备份"
+            return String(localized: "已列出 \(count) 个备份")
         case .backupSucceeded(let byteCount, _):
-            return "已备份 \(byteCount) 字节"
+            return String(localized: "已备份 \(byteCount) 字节")
         case .restorePreviewReady(let fileName, let byteCount):
-            return "预览 \(fileName) (\(byteCount) 字节)"
+            return String(localized: "预览 \(fileName) (\(byteCount) 字节)")
         case .restoreSucceeded(let fileName, let byteCount):
-            return "已恢复 \(fileName) (\(byteCount) 字节)"
+            return String(localized: "已恢复 \(fileName) (\(byteCount) 字节)")
         case .deleted(let fileName):
-            return "已删除 \(fileName)"
+            return String(localized: "已删除 \(fileName)")
         case .permanentUpdated(let fileName, let isPermanent):
-            return isPermanent ? "已永久保留 \(fileName)" : "已取消永久保留 \(fileName)"
+            return isPermanent ? String(localized: "已永久保留 \(fileName)") : String(localized: "已取消永久保留 \(fileName)")
         case .cleanupSucceeded(let count):
-            return "已清理 \(count) 个过期备份"
+            return String(localized: "已清理 \(count) 个过期备份")
         case .failed(let message):
             return message
         }
@@ -13398,23 +13398,23 @@ enum CloudFileState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running(let provider):
-            return "正在处理 \(provider.displayName)"
+            return String(localized: "正在处理 \(provider.displayName)")
         case .listed(let provider, let count):
-            return "\(provider.displayName) 已列出 \(count) 个文件"
+            return String(localized: "\(provider.displayName) 已列出 \(count) 个文件")
         case .restorePreviewReady(let provider, let fileName, let byteCount):
-            return "\(provider.displayName) 预览 \(fileName) (\(byteCount) 字节)"
+            return String(localized: "\(provider.displayName) 预览 \(fileName) (\(byteCount) 字节)")
         case .backupSucceeded(let provider, let fileName, let byteCount):
-            return "\(provider.displayName) 已备份 \(fileName) (\(byteCount) 字节)"
+            return String(localized: "\(provider.displayName) 已备份 \(fileName) (\(byteCount) 字节)")
         case .writeSucceeded(let provider, let fileName, let byteCount):
-            return "\(provider.displayName) 已写回 \(fileName) (\(byteCount) 字节)"
+            return String(localized: "\(provider.displayName) 已写回 \(fileName) (\(byteCount) 字节)")
         case .deleted(let provider, let fileName):
-            return "\(provider.displayName) 已删除 \(fileName)"
+            return String(localized: "\(provider.displayName) 已删除 \(fileName)")
         case .permanentUpdated(let provider, let fileName, let isPermanent):
             return isPermanent
-                ? "\(provider.displayName) 已永久保留 \(fileName)"
-                : "\(provider.displayName) 已取消永久保留 \(fileName)"
+                ? String(localized: "\(provider.displayName) 已永久保留 \(fileName)")
+                : String(localized: "\(provider.displayName) 已取消永久保留 \(fileName)")
         case .failed(let message):
             return message
         }
@@ -13438,14 +13438,14 @@ enum OneDriveAuthenticationState: Sendable, Equatable {
     var label: String {
         switch self {
         case .disconnected:
-            return "OneDrive 未登录"
+            return String(localized: "OneDrive 未登录")
         case .running:
-            return "正在登录 OneDrive"
+            return String(localized: "正在登录 OneDrive")
         case .connected(let accountLabel):
             let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-            return normalized.isEmpty ? "OneDrive 已登录" : "OneDrive 已登录 \(normalized)"
+            return normalized.isEmpty ? String(localized: "OneDrive 已登录") : String(localized: "OneDrive 已登录 \(normalized)")
         case .redirectHandled:
-            return "OneDrive 登录回调已处理"
+            return String(localized: "OneDrive 登录回调已处理")
         case .failed(let message):
             return message
         }
@@ -13475,17 +13475,17 @@ enum BitwardenAuthenticationState: Sendable, Equatable {
     var label: String {
         switch self {
         case .disconnected:
-            return "Bitwarden 未登录"
+            return String(localized: "Bitwarden 未登录")
         case .connected(let accountLabel):
             let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
-            return normalized.isEmpty ? "Bitwarden 已登录" : "Bitwarden 已登录 \(normalized)"
+            return normalized.isEmpty ? String(localized: "Bitwarden 已登录") : String(localized: "Bitwarden 已登录 \(normalized)")
         case .twoFactorRequired(let accountLabel, let providers):
             let normalized = accountLabel.trimmingCharacters(in: .whitespacesAndNewlines)
             let providerSummary = providers.map(\.displayName).joined(separator: "、")
             let account = normalized.isEmpty ? "Bitwarden" : "Bitwarden \(normalized)"
             return providerSummary.isEmpty
-                ? "\(account) 需要两步验证"
-                : "\(account) 需要两步验证：\(providerSummary)"
+                ? String(localized: "\(account) 需要两步验证")
+                : String(localized: "\(account) 需要两步验证：\(providerSummary)")
         case .failed(let message):
             return message
         }
@@ -13520,21 +13520,21 @@ enum BitwardenSyncState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "正在处理 Bitwarden"
+            return String(localized: "正在处理 Bitwarden")
         case .previewReady(let itemCount, let sendCount):
-            return "Bitwarden 已预览 \(itemCount) 个条目，\(sendCount) 个 Send"
+            return String(localized: "Bitwarden 已预览 \(itemCount) 个条目，\(sendCount) 个 Send")
         case .synced(let itemCount, let sendCount):
-            return "Bitwarden 已同步 \(itemCount) 个条目，\(sendCount) 个 Send"
+            return String(localized: "Bitwarden 已同步 \(itemCount) 个条目，\(sendCount) 个 Send")
         case .pushed(let acceptedMutationCount, let conflictCount):
-            return "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflictCount) 个冲突"
+            return String(localized: "Bitwarden 已推送 \(acceptedMutationCount) 个变更，\(conflictCount) 个冲突")
         case .queuedForRetry(let mutationCount):
-            return "Bitwarden 已暂存 \(mutationCount) 个变更，等待网络恢复后重试"
+            return String(localized: "Bitwarden 已暂存 \(mutationCount) 个变更，等待网络恢复后重试")
         case .queueCleared:
-            return "Bitwarden 同步队列已清空"
+            return String(localized: "Bitwarden 同步队列已清空")
         case .twoFactorEmailSent:
-            return "Bitwarden 验证码已发送"
+            return String(localized: "Bitwarden 验证码已发送")
         case .failed(let message):
             return message
         }
@@ -13554,7 +13554,7 @@ enum AppAutoFillPolicyError: Error, LocalizedError, Sendable, Equatable {
     var errorDescription: String? {
         switch self {
         case .saveTargetBlocked:
-            return "自动填充保存目标已被忽略。"
+            return String(localized: "自动填充保存目标已被忽略。")
         }
     }
 }
@@ -13569,13 +13569,13 @@ enum PlusActivationState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "处理中"
+            return String(localized: "处理中")
         case .activated:
-            return "Plus 已激活"
+            return String(localized: "Plus 已激活")
         case .deactivated:
-            return "Plus 已关闭"
+            return String(localized: "Plus 已关闭")
         case .failed(let message):
             return message
         }
@@ -13596,9 +13596,9 @@ enum AppPlusResourceUnlockError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .serviceUnavailable:
-            return "Plus 解锁服务不可用。"
+            return String(localized: "Plus 解锁服务不可用。")
         case .activationRejected:
-            return "Plus 解锁未通过。"
+            return String(localized: "Plus 解锁未通过。")
         }
     }
 }
@@ -13614,17 +13614,17 @@ enum AppVaultKeychainError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .vaultLocked:
-            return "请先解锁保险库，再启用钥匙串解锁。"
+            return String(localized: "请先解锁保险库，再启用钥匙串解锁。")
         case .vaultAlreadyUnlocked:
-            return "保险库已经解锁。"
+            return String(localized: "保险库已经解锁。")
         case .keychainUnavailable:
-            return "钥匙串解锁不可用。"
+            return String(localized: "钥匙串解锁不可用。")
         case .wrappedKeyProviderUnavailable:
-            return "保险库安全密钥提供器不可用。"
+            return String(localized: "保险库安全密钥提供器不可用。")
         case .rememberedVaultUnavailable:
-            return "没有可通过钥匙串解锁的已记住保险库。"
+            return String(localized: "没有可通过钥匙串解锁的已记住保险库。")
         case .vaultMismatch:
-            return "已保存的保险库密钥与当前保险库不匹配。"
+            return String(localized: "已保存的保险库密钥与当前保险库不匹配。")
         }
     }
 }
@@ -13656,21 +13656,21 @@ enum AppWebDAVBackupError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .vaultLocked:
-            return "请先解锁保险库，再使用 WebDAV 备份。"
+            return String(localized: "请先解锁保险库，再使用 WebDAV 备份。")
         case .invalidEndpoint:
-            return "请输入有效的 WebDAV 服务器 URL。"
+            return String(localized: "请输入有效的 WebDAV 服务器 URL。")
         case .emptyUsername:
-            return "请输入 WebDAV 用户名。"
+            return String(localized: "请输入 WebDAV 用户名。")
         case .emptyPassword:
-            return "请输入 WebDAV 密码。"
+            return String(localized: "请输入 WebDAV 密码。")
         case .emptyRemoteFileName:
-            return "请输入远端备份文件名。"
+            return String(localized: "请输入远端备份文件名。")
         case .restorePreviewUnavailable:
-            return "恢复前请先下载恢复预览。"
+            return String(localized: "恢复前请先下载恢复预览。")
         case .emptyRestoreVaultPassword:
-            return "请输入待恢复保险库的密码。"
+            return String(localized: "请输入待恢复保险库的密码。")
         case .restoreValidationFailed:
-            return "无法打开恢复备份，请检查保险库密码。"
+            return String(localized: "无法打开恢复备份，请检查保险库密码。")
         }
     }
 }
@@ -13681,7 +13681,7 @@ enum AppCloudFileError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .providerUnavailable(let provider):
-            return "\(provider.displayName) 云文件源尚未配置。"
+            return String(localized: "\(provider.displayName) 云文件源尚未配置。")
         }
     }
 }
@@ -13750,20 +13750,30 @@ enum AppOneDriveAuthenticationError: Error, Sendable, Equatable, LocalizedError 
     var errorDescription: String? {
         switch self {
         case .serviceUnavailable:
-            return "OneDrive 登录服务尚未配置。"
+            return String(localized: "OneDrive 登录服务尚未配置。")
         case .authenticationCancelled:
-            return "OneDrive 登录已取消。"
+            return String(localized: "OneDrive 登录已取消。")
         case .presentationUnavailable:
-            return "OneDrive 登录窗口尚未就绪，请稍后重试。"
+            return String(localized: "OneDrive 登录窗口尚未就绪，请稍后重试。")
         case .invalidRedirect:
-            return "OneDrive 登录回调无效，请重试。"
+            return String(localized: "OneDrive 登录回调无效，请重试。")
         case .tokenUnavailable:
-            return "OneDrive 需要先登录。"
+            return String(localized: "OneDrive 需要先登录。")
         case .authenticationFailed(let domain, let code, let message):
             let cleanMessage = AppOneDriveAuthenticationError.redactedDiagnosticMessage(message)
-            return cleanMessage.isEmpty
-                ? "OneDrive 登录失败：\(domain) \(code)"
-                : "OneDrive 登录失败：\(domain) \(code) \(cleanMessage)"
+            if cleanMessage.isEmpty {
+                return String(
+                    format: String(localized: "OneDrive 登录失败：%@ %lld"),
+                    domain,
+                    code
+                )
+            }
+            return String(
+                format: String(localized: "OneDrive 登录失败：%@ %lld %@"),
+                domain,
+                code,
+                cleanMessage
+            )
         }
     }
 
@@ -13792,9 +13802,9 @@ enum AppKeePassKdbxWritebackError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .sourceFileUnavailable:
-            return "请先从本地文件选择 KeePass KDBX 数据库，再执行写回。"
+            return String(localized: "请先从本地文件选择 KeePass KDBX 数据库，再执行写回。")
         case .cloudSourceUnavailable:
-            return "请先从云文件源选择 KeePass KDBX 数据库，再执行写回。"
+            return String(localized: "请先从云文件源选择 KeePass KDBX 数据库，再执行写回。")
         }
     }
 }
@@ -13808,13 +13818,13 @@ enum AppKeePassSnapshotEditError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .entryUnavailable:
-            return "未找到可编辑的 KeePass 条目。"
+            return String(localized: "未找到可编辑的 KeePass 条目。")
         case .attachmentUnavailable:
-            return "未找到可编辑的 KeePass 附件。"
+            return String(localized: "未找到可编辑的 KeePass 附件。")
         case .entryNotInRecycleBin:
-            return "该 KeePass 条目不在回收站中。"
+            return String(localized: "该 KeePass 条目不在回收站中。")
         case .targetGroupUnavailable:
-            return "未找到可还原到的 KeePass 分组。"
+            return String(localized: "未找到可还原到的 KeePass 分组。")
         }
     }
 }
@@ -13859,7 +13869,7 @@ enum AppAndroidBackupImportError: Error, Sendable, Equatable, LocalizedError {
              .encryptedBackupDecryptionFailed(let message):
             return message
         case .encryptedBackupUnavailable:
-            return "请先选择移动端加密备份文件。"
+            return String(localized: "请先选择移动端加密备份文件。")
         }
     }
 }
@@ -13872,11 +13882,11 @@ enum AppAutoFillIndexError: Error, Sendable, Equatable, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .vaultLocked:
-            return "更新自动填充前必须先解锁保险库。"
+            return String(localized: "更新自动填充前必须先解锁保险库。")
         case .indexStoreUnavailable:
-            return "自动填充索引存储不可用。"
+            return String(localized: "自动填充索引存储不可用。")
         case .indexKeyVaultMismatch:
-            return "自动填充索引密钥与当前保险库不匹配。"
+            return String(localized: "自动填充索引密钥与当前保险库不匹配。")
         }
     }
 }
@@ -13890,9 +13900,9 @@ enum MDBXVerificationState: Sendable, Equatable {
     var label: String {
         switch self {
         case .idle:
-            return "就绪"
+            return String(localized: "就绪")
         case .running:
-            return "运行中"
+            return String(localized: "运行中")
         case .passed(let message):
             return message
         case .failed(let message):
@@ -13935,7 +13945,7 @@ struct AppAutoLockPolicy: Sendable, Identifiable, Hashable {
 
     var label: String {
         let minutes = Int(idleTimeout / 60)
-        return "\(minutes) 分钟"
+        return String(localized: "\(minutes) 分钟")
     }
 }
 
@@ -14068,7 +14078,7 @@ struct AppRootView: View {
         do {
             try session.importPendingAutoFillSaveRequests(
                 inboxStore: inboxStore,
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14084,7 +14094,7 @@ struct AppRootView: View {
         do {
             try session.importPendingShareExtensionItems(
                 inboxStore: inboxStore,
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14266,7 +14276,7 @@ struct AppRootView: View {
     private func createLoginEntry() {
         do {
             try session.createLoginEntry(
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14332,7 +14342,7 @@ struct AppRootView: View {
     private func createNoteEntry() {
         do {
             try session.createNoteEntry(
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14374,7 +14384,7 @@ struct AppRootView: View {
     private func createTotpEntry() {
         do {
             try session.createTotpEntry(
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14434,7 +14444,7 @@ struct AppRootView: View {
     private func createCardEntry() {
         do {
             try session.createCardEntry(
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14476,7 +14486,7 @@ struct AppRootView: View {
     private func createIdentityEntry() {
         do {
             try session.createIdentityEntry(
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
@@ -14518,7 +14528,7 @@ struct AppRootView: View {
     private func createPasskeyEntry() {
         do {
             try session.createPasskeyEntry(
-                projectTitle: session.activeVaultName ?? "个人"
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
             )
         } catch {
             // AppSessionModel owns user-visible failure state.
