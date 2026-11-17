@@ -267,10 +267,12 @@ struct ForgotPasswordRecoverySheet: View {
                         .foregroundStyle(.red)
                 }
                 Button {
-                    _ = session.verifyForgotPasswordSecurityAnswers(
-                        answer1: session.forgotPasswordAnswer1,
-                        answer2: session.forgotPasswordAnswer2
-                    )
+                    Task {
+                        _ = await session.verifyForgotPasswordSecurityAnswers(
+                            answer1: session.forgotPasswordAnswer1,
+                            answer2: session.forgotPasswordAnswer2
+                        )
+                    }
                 } label: {
                     Label("验证答案", systemImage: "checkmark.shield")
                 }
@@ -278,7 +280,7 @@ struct ForgotPasswordRecoverySheet: View {
                 .disabled(
                     session.forgotPasswordAnswer1.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                         || session.forgotPasswordAnswer2.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        || session.forgotPasswordAttemptCount >= 3
+                        || session.isVerifyingForgotPasswordAnswers
                 )
             }
         }
