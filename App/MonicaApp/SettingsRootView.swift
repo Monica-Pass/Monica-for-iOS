@@ -1276,6 +1276,34 @@ struct SettingsRootView: View {
                     }
                 }
             }
+
+            AndroidParitySection(title: "NFC 银行卡诊断") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
+                    NavigationLink {
+                        NFCBankCardProbeView()
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "wave.3.right")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.primary)
+                                .frame(width: 28, height: 28)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("贴卡读取诊断")
+                                    .font(.subheadline.weight(.heavy))
+                                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                                Text("技术验证 · 默认关闭 · 不读取银行卡敏感数据")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .fileImporter(
             isPresented: $isCSVImporterPresented,
