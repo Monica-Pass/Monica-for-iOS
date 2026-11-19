@@ -118,6 +118,20 @@ struct MonicaLockScreen: View {
             .buttonStyle(AndroidParityButtonStyle(tone: .filled))
             .disabled(session.vaultPassword.isEmpty || session.vaultOperationState.isRunning)
 
+            if session.credentialExchange.hasPendingImport {
+                HStack(spacing: 8) {
+                    Image(systemName: "square.and.arrow.down")
+                    Text("系统正在等待导入凭据，解锁后继续")
+                }
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(AndroidParityPalette.primary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .frame(maxWidth: .infinity)
+                .background(AndroidParityPalette.surface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
             if session.shouldShowBiometricUnlockOnLockScreen {
                 Button(action: unlockWithKeychain) {
                     Label(session.biometricUnlockButtonTitle, systemImage: session.biometricUnlockSystemImage)
