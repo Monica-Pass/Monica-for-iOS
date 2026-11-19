@@ -58,6 +58,12 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>用于扫描 TOTP 设置二维码。</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>用于在同一个 Wi-Fi 或热点下发现并连接你自己发起的 Monica 设备，通过端到端加密在两台设备之间同步保险库条目。只会在你主动发起或加入同步时使用。</string>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_monica-sync._tcp</string>
+	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>用于解锁保险库，不会上传或存储生物识别数据。</string>
 	<key>UIApplicationSceneManifest</key>
