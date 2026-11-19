@@ -39,6 +39,7 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 - OneDrive：已接入 MSAL 与 Microsoft Graph app-folder provider，真实账号与网络验收仍在推进。
 - KeePass / KDBX：已完成现代 KDBX3/KDBX4 主链路读写兼容，后续继续扩展真实场景验收。
 - 局域网同步（实验性）：两台 iPhone 在同一 Wi-Fi/热点下通过 Bonjour 手动配对，端到端加密同步登录项、安全笔记与 TOTP；详见 [`LAN_SYNC_NOTES.md`](LAN_SYNC_NOTES.md)。
+- 云端保险库（实验性）：把完整加密的 MDBX 保险库文件与版本清单手动 Push/Pull 到 WebDAV/OneDrive，ETag 条件写避免覆盖，冲突时三选一（保留本机/保留云端/先传冲突副本）；详见 [`CLOUD_VAULT_SYNC_NOTES.md`](CLOUD_VAULT_SYNC_NOTES.md)。
 
 ### 已知状态
 
@@ -87,7 +88,7 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 - 核心逻辑：`MonicaCore` 提供 TOTP、`otpauth://` parser、安全随机密码生成等能力。
 - 存储：`MonicaStorage` 负责本地 vault repository、KDBX 兼容、AutoFill 加密索引和 secret snapshot。
 - 安全：`MonicaSecurity` 负责 Keychain/LocalAuthentication 边界和本地 key material 管理。
-- 同步：`MonicaSync` 提供 WebDAV、OneDrive/CloudFile provider、Bitwarden 同步边界，以及 `LanSync/` 局域网配对/加密传输/三方合并实现。
+- 同步：`MonicaSync` 提供 WebDAV、OneDrive/CloudFile provider、Bitwarden 同步边界，`LanSync/` 局域网配对/加密传输/三方合并实现，以及 `CloudVault/` 云端保险库清单/条件写/冲突决策实现。
 
 ### MDBX UniFFI
 

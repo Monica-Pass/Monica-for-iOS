@@ -35,6 +35,8 @@
 		A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F6 /* AppLanSyncCoordinator.swift */; };
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
 		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
+		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
+		A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FC /* AppCloudVaultSyncView.swift */; };
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
@@ -118,6 +120,8 @@
 		A100000000000000000000F6 /* AppLanSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncCoordinator.swift; sourceTree = "<group>"; };
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
 		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
+		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
+		A100000000000000000000FC /* AppCloudVaultSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSyncView.swift; sourceTree = "<group>"; };
 		A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillCredentialProviderViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000023 /* MonicaAutoFillExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaAutoFillExtension.entitlements; sourceTree = "<group>"; };
@@ -224,6 +228,8 @@
 				A100000000000000000000F6 /* AppLanSyncCoordinator.swift */,
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
 				A100000000000000000000F8 /* AppLanSyncView.swift */,
+				A100000000000000000000FB /* AppCloudVaultSync.swift */,
+				A100000000000000000000FC /* AppCloudVaultSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
@@ -536,6 +542,8 @@
 				A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */,
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
 				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
+				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
+				A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */,
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
