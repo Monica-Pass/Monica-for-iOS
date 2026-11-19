@@ -13,6 +13,7 @@
 		B90000000000000000000004 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000004 /* PrivacyInfo.xcprivacy */; };
 		A10000000000000000000001 /* MonicaApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000011 /* MonicaApp.swift */; };
 		A10000000000000000000002 /* AppRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000012 /* AppRootView.swift */; };
+		AC0000000000000000000001 /* AppCredentialExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = AC0000000000000000000002 /* AppCredentialExchange.swift */; };
 		A10000000000000000000003 /* MonicaAppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000013 /* MonicaAppEnvironment.swift */; };
 		A10000000000000000000004 /* AutoFillCredentialProviderViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */; };
 		A10000000000000000000005 /* MonicaAutoFillExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = A10000000000000000000032 /* MonicaAutoFillExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
@@ -109,6 +110,7 @@
 		BA0000000000000000000004 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A10000000000000000000011 /* MonicaApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaApp.swift; sourceTree = "<group>"; };
 		A10000000000000000000012 /* AppRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRootView.swift; sourceTree = "<group>"; };
+		AC0000000000000000000002 /* AppCredentialExchange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCredentialExchange.swift; sourceTree = "<group>"; };
 		A10000000000000000000013 /* MonicaAppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaAppEnvironment.swift; sourceTree = "<group>"; };
 		A10000000000000000000014 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000015 /* MonicaApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaApp.entitlements; sourceTree = "<group>"; };
@@ -221,6 +223,7 @@
 				A10000000000000000000011 /* MonicaApp.swift */,
 				BA0000000000000000000001 /* PrivacyInfo.xcprivacy */,
 				A10000000000000000000012 /* AppRootView.swift */,
+				AC0000000000000000000002 /* AppCredentialExchange.swift */,
 				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
 				A1000000000000000000001C /* AndroidParityDesign.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
@@ -532,6 +535,7 @@
 			files = (
 				A10000000000000000000001 /* MonicaApp.swift in Sources */,
 				A10000000000000000000002 /* AppRootView.swift in Sources */,
+				AC0000000000000000000001 /* AppCredentialExchange.swift in Sources */,
 				A50000000000000000000001 /* OneDriveMSALAuthenticationService.swift in Sources */,
 				A30000000000000000000001 /* AppShareExtensionInboxStore.swift in Sources */,
 				A60000000000000000000001 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */,

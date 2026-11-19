@@ -66,6 +66,10 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>用于解锁保险库，不会上传或存储生物识别数据。</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>ASCredentialExchangeActivity</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

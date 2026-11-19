@@ -1,4 +1,5 @@
 @testable import Monica
+import AuthenticationServices
 import CryptoKit
 import MonicaSecurity
 import MonicaStorage
@@ -1367,6 +1368,11 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(capabilities["ProvidesPasswords"] as? Bool, true)
         XCTAssertEqual(capabilities["ProvidesPasskeys"] as? Bool, true)
         XCTAssertEqual(capabilities["SupportsSavePasswordCredentials"] as? Bool, true)
+        XCTAssertEqual(capabilities["SupportsCredentialExchange"] as? Bool, true)
+        XCTAssertEqual(
+            capabilities["SupportedCredentialExchangeVersions"] as? [String],
+            ["1.0"]
+        )
 
         // iOS 17+ (ExtensionKit) only publishes the `-ui` extension point; the legacy
         // `com.apple.authentication-services-credential-provider` identifier registers
@@ -1375,6 +1381,155 @@ final class VaultSessionModelTests: XCTestCase {
             extensionConfig["NSExtensionPointIdentifier"] as? String,
             "com.apple.authentication-services-credential-provider-ui"
         )
+    }
+
+    func testAppInfoPlistAdvertisesCredentialExchangeActivity() throws {
+        let plistURL = try repositoryFileURL("App/MonicaApp/Info.plist")
+        let data = try Data(contentsOf: plistURL)
+        guard let plist = try PropertyListSerialization.propertyList(
+            from: data,
+            options: [],
+            format: nil
+        ) as? [String: Any]
+        else {
+            XCTFail("App Info.plist should be a dictionary.")
+            return
+        }
+
+        let activityTypes = plist["NSUserActivityTypes"] as? [String] ?? []
+        XCTAssertTrue(activityTypes.contains("ASCredentialExchangeActivity"))
+    }
+
+    func testCredentialExchangeEntryPointsAreGatedToIOS26() throws {
+        let bridgeURL = try repositoryFileURL("App/MonicaApp/AppCredentialExchange.swift")
+        let bridge = try String(contentsOf: bridgeURL, encoding: .utf8)
+
+        XCTAssertTrue(bridge.contains("@available(iOS 26.0, *)"))
+        XCTAssertTrue(bridge.contains("onContinueUserActivity(ASCredentialExchangeActivity"))
+
+        // Credential payloads must never reach logs or the pasteboard.
+        XCTAssertFalse(bridge.contains("print("))
+        XCTAssertFalse(bridge.contains("NSLog("))
+        XCTAssertFalse(bridge.contains("UIPasteboard"))
+
+        let sessionURL = try repositoryFileURL("App/MonicaApp/AppRootView.swift")
+        let session = try String(contentsOf: sessionURL, encoding: .utf8)
+        XCTAssertTrue(session.contains("ASCredentialExchangeActivity"))
+        XCTAssertTrue(session.contains("ASCredentialImportToken"))
+        XCTAssertTrue(session.contains("importCredentials(token:"))
+        XCTAssertTrue(session.contains("requestExport(for:"))
+        XCTAssertTrue(session.contains("exportCredentials("))
+        XCTAssertFalse(session.contains("NSLog("))
+    }
+
+    @available(iOS 26.0, *)
+    func testCredentialExchangeBridgeRoundTripsPasswordAndTOTP() throws {
+        let item = ASImportableItem(
+            id: Data([1]),
+            created: Date(),
+            lastModified: Date(),
+            title: "Example",
+            subtitle: nil,
+            favorite: true,
+            scope: ASImportableCredentialScope(
+                urls: [URL(string: "https://example.com/login")!],
+                androidApps: []
+            ),
+            credentials: [
+                .basicAuthentication(ASImportableCredential.BasicAuthentication(
+                    userName: ASImportableEditableField(
+                        id: nil,
+                        fieldType: .string,
+                        value: "alice",
+                        label: nil
+                    ),
+                    password: ASImportableEditableField(
+                        id: nil,
+                        fieldType: .concealedString,
+                        value: "s3cret",
+                        label: nil
+                    )
+                )),
+                .totp(ASImportableCredential.TOTP(
+                    secret: Data("JBSWY3DPEHPK3PXP".utf8),
+                    period: 30,
+                    digits: 6,
+                    userName: "alice@example.com",
+                    algorithm: .sha256,
+                    issuer: "Example"
+                ))
+            ],
+            tags: []
+        )
+        let account = ASImportableAccount(
+            id: Data([2]),
+            userName: "alice@example.com",
+            email: "alice@example.com",
+            fullName: nil,
+            collections: [],
+            items: [item]
+        )
+        let data = ASExportedCredentialData(
+            accounts: [account],
+            formatVersion: .v1,
+            exporterRelyingPartyIdentifier: "com.example",
+            exporterDisplayName: "Example",
+            timestamp: Date()
+        )
+
+        let plan = CredentialExchangeCodec.importPlan(
+            accounts: AppCredentialExchangeBridge.accounts(from: data)
+        )
+        XCTAssertEqual(plan.passwordCount, 1)
+        XCTAssertEqual(plan.totpCount, 1)
+        XCTAssertEqual(plan.drafts.count, 2)
+
+        guard case .totp(let totp) = plan.drafts[1] else {
+            XCTFail("TOTP 凭据应映射为 TOTP 草稿")
+            return
+        }
+        XCTAssertEqual(totp.secret, "JBSWY3DPEHPK3PXP")
+        XCTAssertEqual(totp.algorithm, "SHA256")
+        XCTAssertEqual(totp.period, 30)
+        XCTAssertEqual(totp.digits, 6)
+        XCTAssertEqual(totp.issuer, "Example")
+
+        let login = LocalLoginEntry(
+            id: "login-1",
+            projectID: "project-1",
+            title: "Example",
+            username: "alice",
+            password: "s3cret",
+            url: "https://example.com/login",
+            favorite: true
+        )
+        let exported = AppCredentialExchangeBridge.exportedData(
+            from: CredentialExchangeCodec.exportPlan(loginEntries: [login], totpEntries: [])
+        )
+        XCTAssertEqual(exported.formatVersion.rawValue, "1.0")
+        XCTAssertEqual(exported.exporterRelyingPartyIdentifier, "com.monicapass.monica")
+        XCTAssertEqual(exported.exporterDisplayName, "Monica")
+        XCTAssertEqual(exported.accounts.first?.items.first?.title, "Example")
+        XCTAssertEqual(exported.accounts.first?.items.first?.favorite, true)
+        guard case .basicAuthentication(let authentication)? = exported.accounts.first?.items.first?.credentials.first else {
+            XCTFail("导出条目应包含基础认证凭据")
+            return
+        }
+        XCTAssertEqual(authentication.userName?.value, "alice")
+        XCTAssertEqual(authentication.password?.value, "s3cret")
+        XCTAssertEqual(authentication.password?.fieldType, .concealedString)
+    }
+
+    func testCredentialExchangeImportIsPreviewedAndRolledBackOnFailure() throws {
+        let sourceURL = try repositoryFileURL("App/MonicaApp/AppRootView.swift")
+        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+
+        XCTAssertTrue(source.contains(".handlesCredentialExchangeActivity {"))
+        XCTAssertTrue(source.contains("func confirmCredentialExchangeImport() throws"))
+        XCTAssertTrue(source.contains("func rollbackCredentialExchangeImport("))
+        XCTAssertTrue(source.contains("func performCredentialExchangeExport() async -> Bool"))
+        XCTAssertTrue(source.contains("CredentialExchangeImportSheet("))
+        XCTAssertTrue(source.contains("CredentialExchangeExportSheet("))
     }
 
     func testAutoFillExtensionCompletesPasskeyRegistrationAndAssertionRequests() throws {
