@@ -258,7 +258,7 @@ struct AndroidParityVaultHomeView: View {
                     .buttonStyle(.plain)
                 }
                 if session.loginStackedGroups.isEmpty {
-                    emptyList("没有匹配的分组", icon: "square.stack.3d.up.fill")
+                    emptyList(String(localized: "没有匹配的分组"), icon: "square.stack.3d.up.fill")
                 }
             } else {
                 ForEach(session.filteredLoginEntries) { entry in
@@ -273,7 +273,7 @@ struct AndroidParityVaultHomeView: View {
                     }
                 }
                 if session.filteredLoginEntries.isEmpty {
-                    emptyList("没有匹配的密码", icon: "lock.fill")
+                    emptyList(String(localized: "没有匹配的密码"), icon: "lock.fill")
                 }
             }
             deletedLoginRows
@@ -310,7 +310,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredTotpEntries.isEmpty {
-                emptyList("没有匹配的验证码", icon: "shield.lefthalf.filled")
+                emptyList(String(localized: "没有匹配的验证码"), icon: "shield.lefthalf.filled")
             }
             deletedTotpRows
         }
@@ -333,7 +333,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredCardEntries.isEmpty && session.filteredIdentityEntries.isEmpty {
-                emptyList("没有匹配的卡片或证件", icon: "creditcard")
+                emptyList(String(localized: "没有匹配的卡片或证件"), icon: "creditcard")
             }
             deletedCardRows
             deletedIdentityRows
@@ -350,7 +350,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredNoteEntries.isEmpty {
-                emptyList("没有匹配的笔记", icon: "note.text")
+                emptyList(String(localized: "没有匹配的笔记"), icon: "note.text")
             }
             deletedNoteRows
         }
@@ -366,7 +366,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredPasskeyEntries.isEmpty {
-                emptyList("没有匹配的通行密钥", icon: "key.horizontal.fill")
+                emptyList(String(localized: "没有匹配的通行密钥"), icon: "key.horizontal.fill")
             }
             deletedPasskeyRows
         }
@@ -382,7 +382,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredSshKeyEntries.isEmpty {
-                emptyList("没有匹配的 SSH 密钥", icon: "key.fill")
+                emptyList(String(localized: "没有匹配的 SSH 密钥"), icon: "key.fill")
             }
             deletedSshKeyRows
         }
@@ -398,7 +398,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredApiTokenEntries.isEmpty {
-                emptyList("没有匹配的 API Token", icon: "text.badge.key")
+                emptyList(String(localized: "没有匹配的 API Token"), icon: "text.badge.key")
             }
             deletedApiTokenRows
         }
@@ -414,7 +414,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredWifiEntries.isEmpty {
-                emptyList("没有匹配的 Wi-Fi", icon: "wifi")
+                emptyList(String(localized: "没有匹配的 Wi-Fi"), icon: "wifi")
             }
             deletedWifiRows
         }
@@ -430,7 +430,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredSendEntries.isEmpty {
-                emptyList("没有匹配的 Send", icon: "paperplane.fill")
+                emptyList(String(localized: "没有匹配的 Send"), icon: "paperplane.fill")
             }
             deletedSendRows
         }
@@ -467,7 +467,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredAttachmentEntries.isEmpty {
-                emptyList("没有匹配的附件引用", icon: "paperclip")
+                emptyList(String(localized: "没有匹配的附件引用"), icon: "paperclip")
             }
             deletedAttachmentRows
         }
@@ -483,7 +483,7 @@ struct AndroidParityVaultHomeView: View {
                 }
             }
             if session.filteredIdentityEntries.isEmpty {
-                emptyList("没有匹配的证件", icon: "person.text.rectangle")
+                emptyList(String(localized: "没有匹配的证件"), icon: "person.text.rectangle")
             }
             deletedIdentityRows
         }
@@ -640,7 +640,7 @@ struct AndroidParityVaultHomeView: View {
                                 Button {
                                     session.passwordOtherKind = kind
                                 } label: {
-                                    Text(kind.displayName)
+                                    Text(kind.localizedDisplayName)
                                         .font(.subheadline.weight(.heavy))
                                         .padding(.horizontal, 14)
                                         .frame(height: 44)
@@ -676,7 +676,7 @@ struct AndroidParityVaultHomeView: View {
     }
 
     private var largeTitle: String {
-        itemKind == .passkey ? "通行密钥" : (session.activeVaultName ?? "Monica")
+        itemKind == .passkey ? String(localized: "通行密钥") : (session.activeVaultName ?? "Monica")
     }
 
     private var presentedEditorBinding: Binding<Bool> {
@@ -959,7 +959,7 @@ struct AndroidParityVaultHomeView: View {
     private func savePresentedEditor() {
         Task {
             do {
-                try await session.savePresentedEditorWithBitwardenFileSend(projectTitle: session.activeVaultName ?? "个人")
+                try await session.savePresentedEditorWithBitwardenFileSend(projectTitle: session.activeVaultName ?? String(localized: "个人"))
             } catch {}
         }
     }
@@ -1013,9 +1013,9 @@ struct AndroidParityVaultHomeView: View {
     }
 
     private func attachmentSubtitle(for entry: LocalAttachmentMetadata) -> String {
-        let sizeText = "\(entry.storedSize)/\(entry.originalSize) 字节"
+        let sizeText = String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节")
         return [
-            entry.downloadState.isEmpty ? "未知状态" : entry.downloadState,
+            entry.downloadState.isEmpty ? String(localized: "未知状态") : entry.downloadState,
             entry.storageMode,
             sizeText
         ]
@@ -1120,7 +1120,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             } else {
                 Menu {
                     ForEach(addMenuKinds, id: \.self) { kind in
-                        Button(kind.displayName) {
+                        Button(kind.localizedDisplayName) {
                             onAddKind(kind)
                         }
                     }
@@ -1257,7 +1257,7 @@ private struct AndroidPasswordListCard: View {
                     )
                 }
                 VStack(alignment: .leading, spacing: displayPreferences.cardDensity.verticalSpacing) {
-                    Text(entry.title.isEmpty ? "未命名" : entry.title)
+                    Text(entry.title.isEmpty ? String(localized: "未命名") : entry.title)
                         .font(.subheadline.weight(.semibold))
                     if displayPreferences.showsLoginUsername, !entry.username.isEmpty {
                         Text(entry.username)
@@ -1305,7 +1305,7 @@ private struct AndroidPasswordStackedGroupCard: View {
                             .frame(height: 24)
                             .background(AndroidParityPalette.primaryContainer, in: Capsule(style: .continuous))
                     }
-                    Text(group.preview.isEmpty ? "未命名条目" : group.preview)
+                    Text(group.preview.isEmpty ? String(localized: "未命名条目") : group.preview)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
                         .lineLimit(2)
@@ -1450,7 +1450,7 @@ private struct AndroidNoteListCard: View {
             HStack(alignment: .top, spacing: 18) {
                 AndroidParityIconTile(systemImage: "doc.text.fill", fill: AndroidParityPalette.primaryContainer)
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(entry.title.isEmpty ? "未命名" : entry.title)
+                    Text(entry.title.isEmpty ? String(localized: "未命名") : entry.title)
                         .font(.subheadline.weight(.semibold))
                     Text(entry.body)
                         .font(.subheadline.weight(.semibold))
@@ -1555,7 +1555,7 @@ private struct AndroidWifiListCard: View {
             icon: "wifi",
             title: entry.title,
             primary: entry.ssid,
-            secondary: entry.hidden ? "\(entry.securityType) / 隐藏网络" : entry.securityType,
+            secondary: entry.hidden ? String(localized: "\(entry.securityType) / 隐藏网络") : entry.securityType,
             favorite: entry.favorite
         )
     }
@@ -1568,8 +1568,8 @@ private struct AndroidSendListCard: View {
         AndroidExtendedSecretListCard(
             icon: "paperplane.fill",
             title: entry.title,
-            primary: entry.expiresAt.isEmpty ? "不过期" : entry.expiresAt,
-            secondary: "最多查看 \(entry.maxViews) 次",
+            primary: entry.expiresAt.isEmpty ? String(localized: "不过期") : entry.expiresAt,
+            secondary: String(localized: "最多查看 \(entry.maxViews) 次"),
             favorite: entry.favorite
         )
     }
@@ -1587,7 +1587,7 @@ private struct AndroidAttachmentListCard: View {
             HStack(alignment: .top, spacing: 18) {
                 AndroidParityIconTile(systemImage: "paperclip", fill: AndroidParityPalette.primaryContainer)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(entry.fileName.isEmpty ? "未命名附件" : entry.fileName)
+                    Text(entry.fileName.isEmpty ? String(localized: "未命名附件") : entry.fileName)
                         .font(.subheadline.weight(.semibold))
                     Text(primaryText)
                         .font(.subheadline.weight(.semibold))
@@ -1634,14 +1634,14 @@ private struct AndroidAttachmentListCard: View {
 
     private var primaryText: String {
         [
-            entry.mediaType.isEmpty ? "未知类型" : entry.mediaType,
-            entry.downloadState.isEmpty ? "未知状态" : entry.downloadState
+            entry.mediaType.isEmpty ? String(localized: "未知类型") : entry.mediaType,
+            entry.downloadState.isEmpty ? String(localized: "未知状态") : entry.downloadState
         ]
             .joined(separator: " / ")
     }
 
     private var secondaryText: String {
-        let sizeText = "\(entry.storedSize)/\(entry.originalSize) 字节"
+        let sizeText = String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节")
         return [
             entry.storageMode,
             sizeText
@@ -1663,12 +1663,12 @@ private struct AndroidExtendedSecretListCard: View {
             HStack(alignment: .top, spacing: 18) {
                 AndroidParityIconTile(systemImage: icon, fill: AndroidParityPalette.primaryContainer)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(title.isEmpty ? "未命名" : title)
+                    Text(title.isEmpty ? String(localized: "未命名") : title)
                         .font(.subheadline.weight(.semibold))
-                    Text(primary.isEmpty ? "未填写" : primary)
+                    Text(primary.isEmpty ? String(localized: "未填写") : primary)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
-                    Text(secondary.isEmpty ? "无备注" : secondary)
+                    Text(secondary.isEmpty ? String(localized: "无备注") : secondary)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.78))
                         .lineLimit(1)
@@ -1774,7 +1774,7 @@ struct AddEditVaultItemView: View {
             }
             .buttonStyle(.plain)
             .foregroundStyle(AndroidParityPalette.textPrimary)
-            Text(mode.isAdding ? "添加\(mode.kind.displayName)" : "编辑\(mode.kind.displayName)")
+            Text(mode.isAdding ? String(localized: "添加\(mode.kind.localizedDisplayName)") : String(localized: "编辑\(mode.kind.localizedDisplayName)"))
                 .font(.system(size: AndroidParityTypography.editorTitleSize, weight: .heavy, design: .rounded))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
                 .lineLimit(1)
@@ -1851,7 +1851,7 @@ struct AddEditVaultItemView: View {
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
             attachmentEditSection
-            AndroidParityInfoRow(title: "状态", value: session.entryOperationState.label)
+            AndroidParityInfoRow(title: String(localized: "状态"), value: session.entryOperationState.label)
             if !mode.isAdding {
                 Button(role: .destructive, action: deleteEntry) {
                     Label("删除", systemImage: "trash")
@@ -1913,7 +1913,7 @@ struct AddEditVaultItemView: View {
                         .foregroundStyle(AndroidParityPalette.textSecondary)
                 }
             } else {
-                AndroidParityInfoRow(title: "Plus", value: "附件编辑需要解锁")
+                AndroidParityInfoRow(title: "Plus", value: String(localized: "附件编辑需要解锁"))
                 Button {
                     Task { try? await session.activatePlusFromResource() }
                 } label: {
@@ -1935,21 +1935,21 @@ struct AddEditVaultItemView: View {
 
     private var loginFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.loginTitle : $session.editingLoginTitle)
-            field(icon: "globe", title: "网站/网址", text: mode.isAdding ? $session.loginURL : $session.editingLoginURL)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.loginTitle : $session.editingLoginTitle)
+            field(icon: "globe", title: String(localized: "网站/网址"), text: mode.isAdding ? $session.loginURL : $session.editingLoginURL)
             HStack(spacing: 14) {
                 Button("+ 添加 URL") {}
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 Button("绑定应用") {}
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
-            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername)
+            field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername)
             Picker("登录方式", selection: .constant(0)) {
                 Text("密码登录").tag(0)
                 Text("第三方登录").tag(1)
             }
             .pickerStyle(.segmented)
-            secureField(icon: "lock.fill", title: "密码", text: mode.isAdding ? $session.loginPassword : $session.editingLoginPassword)
+            secureField(icon: "lock.fill", title: String(localized: "密码"), text: mode.isAdding ? $session.loginPassword : $session.editingLoginPassword)
             Button(action: mode.isAdding ? generateLoginPassword : generateSelectedLoginPassword) {
                 Label("添加密码", systemImage: "plus")
                     .frame(maxWidth: .infinity)
@@ -1960,7 +1960,7 @@ struct AddEditVaultItemView: View {
 
     private var noteFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.noteTitle : $session.editingNoteTitle)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.noteTitle : $session.editingNoteTitle)
             TextEditor(text: mode.isAdding ? $session.noteBody : $session.editingNoteBody)
                 .frame(minHeight: 190)
                 .padding(12)
@@ -1972,10 +1972,10 @@ struct AddEditVaultItemView: View {
 
     private var totpFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.totpTitle : $session.editingTotpTitle)
-            secureField(icon: "key.fill", title: "密钥", text: mode.isAdding ? $session.totpSecret : $session.editingTotpSecret)
-            field(icon: "building.2.fill", title: "签发方", text: mode.isAdding ? $session.totpIssuer : $session.editingTotpIssuer)
-            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.totpAccountName : $session.editingTotpAccountName)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.totpTitle : $session.editingTotpTitle)
+            secureField(icon: "key.fill", title: String(localized: "密钥"), text: mode.isAdding ? $session.totpSecret : $session.editingTotpSecret)
+            field(icon: "building.2.fill", title: String(localized: "签发方"), text: mode.isAdding ? $session.totpIssuer : $session.editingTotpIssuer)
+            field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.totpAccountName : $session.editingTotpAccountName)
             Button { isTotpScannerPresented = true } label: {
                 Label("扫描二维码", systemImage: "qrcode.viewfinder")
                     .frame(maxWidth: .infinity)
@@ -1986,75 +1986,75 @@ struct AddEditVaultItemView: View {
 
     private var cardFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.cardTitle : $session.editingCardTitle)
-            field(icon: "person.fill", title: "持卡人", text: mode.isAdding ? $session.cardholderName : $session.editingCardholderName)
-            secureField(icon: "creditcard.fill", title: "卡号", text: mode.isAdding ? $session.cardNumber : $session.editingCardNumber)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.cardTitle : $session.editingCardTitle)
+            field(icon: "person.fill", title: String(localized: "持卡人"), text: mode.isAdding ? $session.cardholderName : $session.editingCardholderName)
+            secureField(icon: "creditcard.fill", title: String(localized: "卡号"), text: mode.isAdding ? $session.cardNumber : $session.editingCardNumber)
             HStack(spacing: 14) {
-                field(icon: "calendar", title: "月", text: mode.isAdding ? $session.cardExpiryMonth : $session.editingCardExpiryMonth)
-                field(icon: "calendar", title: "年", text: mode.isAdding ? $session.cardExpiryYear : $session.editingCardExpiryYear)
+                field(icon: "calendar", title: String(localized: "月"), text: mode.isAdding ? $session.cardExpiryMonth : $session.editingCardExpiryMonth)
+                field(icon: "calendar", title: String(localized: "年"), text: mode.isAdding ? $session.cardExpiryYear : $session.editingCardExpiryYear)
             }
             secureField(icon: "lock.fill", title: "CVV", text: mode.isAdding ? $session.cardCVV : $session.editingCardCVV)
-            field(icon: "building.columns.fill", title: "银行", text: mode.isAdding ? $session.cardIssuer : $session.editingCardIssuer)
-            field(icon: "network", title: "卡组织", text: mode.isAdding ? $session.cardNetwork : $session.editingCardNetwork)
+            field(icon: "building.columns.fill", title: String(localized: "银行"), text: mode.isAdding ? $session.cardIssuer : $session.editingCardIssuer)
+            field(icon: "network", title: String(localized: "卡组织"), text: mode.isAdding ? $session.cardNetwork : $session.editingCardNetwork)
         }
     }
 
     private var identityFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.identityTitle : $session.editingIdentityTitle)
-            field(icon: "doc.text.fill", title: "类型", text: mode.isAdding ? $session.identityDocumentType : $session.editingIdentityDocumentType)
-            field(icon: "person.fill", title: "姓名", text: mode.isAdding ? $session.identityFullName : $session.editingIdentityFullName)
-            secureField(icon: "number", title: "证件号", text: mode.isAdding ? $session.identityDocumentNumber : $session.editingIdentityDocumentNumber)
-            field(icon: "building.2.fill", title: "签发方", text: mode.isAdding ? $session.identityIssuer : $session.editingIdentityIssuer)
-            field(icon: "globe", title: "国家/地区", text: mode.isAdding ? $session.identityCountry : $session.editingIdentityCountry)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.identityTitle : $session.editingIdentityTitle)
+            field(icon: "doc.text.fill", title: String(localized: "类型"), text: mode.isAdding ? $session.identityDocumentType : $session.editingIdentityDocumentType)
+            field(icon: "person.fill", title: String(localized: "姓名"), text: mode.isAdding ? $session.identityFullName : $session.editingIdentityFullName)
+            secureField(icon: "number", title: String(localized: "证件号"), text: mode.isAdding ? $session.identityDocumentNumber : $session.editingIdentityDocumentNumber)
+            field(icon: "building.2.fill", title: String(localized: "签发方"), text: mode.isAdding ? $session.identityIssuer : $session.editingIdentityIssuer)
+            field(icon: "globe", title: String(localized: "国家/地区"), text: mode.isAdding ? $session.identityCountry : $session.editingIdentityCountry)
         }
     }
 
     private var passkeyFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.passkeyTitle : $session.editingPasskeyTitle)
-            field(icon: "globe", title: "网站标识", text: mode.isAdding ? $session.passkeyRelyingPartyID : $session.editingPasskeyRelyingPartyID)
-            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.passkeyUsername : $session.editingPasskeyUsername)
-            field(icon: "key.horizontal.fill", title: "通行密钥标识", text: mode.isAdding ? $session.passkeyCredentialID : $session.editingPasskeyCredentialID)
-            field(icon: "curlybraces", title: "公钥数据", text: mode.isAdding ? $session.passkeyPublicKeyCOSE : $session.editingPasskeyPublicKeyCOSE)
-            secureField(icon: "lock.shield.fill", title: "钥匙串引用", text: mode.isAdding ? $session.passkeyPrivateKeyReference : $session.editingPasskeyPrivateKeyReference)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.passkeyTitle : $session.editingPasskeyTitle)
+            field(icon: "globe", title: String(localized: "网站标识"), text: mode.isAdding ? $session.passkeyRelyingPartyID : $session.editingPasskeyRelyingPartyID)
+            field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.passkeyUsername : $session.editingPasskeyUsername)
+            field(icon: "key.horizontal.fill", title: String(localized: "通行密钥标识"), text: mode.isAdding ? $session.passkeyCredentialID : $session.editingPasskeyCredentialID)
+            field(icon: "curlybraces", title: String(localized: "公钥数据"), text: mode.isAdding ? $session.passkeyPublicKeyCOSE : $session.editingPasskeyPublicKeyCOSE)
+            secureField(icon: "lock.shield.fill", title: String(localized: "钥匙串引用"), text: mode.isAdding ? $session.passkeyPrivateKeyReference : $session.editingPasskeyPrivateKeyReference)
         }
     }
 
     private var sshKeyFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.sshKeyTitle : $session.editingSshKeyTitle)
-            field(icon: "person.fill", title: "用户名", text: mode.isAdding ? $session.sshKeyUsername : $session.editingSshKeyUsername)
-            field(icon: "network", title: "主机", text: mode.isAdding ? $session.sshKeyHost : $session.editingSshKeyHost)
-            field(icon: "key.fill", title: "公钥", text: mode.isAdding ? $session.sshKeyPublicKey : $session.editingSshKeyPublicKey)
-            secureField(icon: "lock.shield.fill", title: "私钥引用", text: mode.isAdding ? $session.sshKeyPrivateKeyReference : $session.editingSshKeyPrivateKeyReference)
-            field(icon: "text.bubble.fill", title: "口令提示", text: mode.isAdding ? $session.sshKeyPassphraseHint : $session.editingSshKeyPassphraseHint)
-            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.sshKeyNotes : $session.editingSshKeyNotes)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.sshKeyTitle : $session.editingSshKeyTitle)
+            field(icon: "person.fill", title: String(localized: "用户名"), text: mode.isAdding ? $session.sshKeyUsername : $session.editingSshKeyUsername)
+            field(icon: "network", title: String(localized: "主机"), text: mode.isAdding ? $session.sshKeyHost : $session.editingSshKeyHost)
+            field(icon: "key.fill", title: String(localized: "公钥"), text: mode.isAdding ? $session.sshKeyPublicKey : $session.editingSshKeyPublicKey)
+            secureField(icon: "lock.shield.fill", title: String(localized: "私钥引用"), text: mode.isAdding ? $session.sshKeyPrivateKeyReference : $session.editingSshKeyPrivateKeyReference)
+            field(icon: "text.bubble.fill", title: String(localized: "口令提示"), text: mode.isAdding ? $session.sshKeyPassphraseHint : $session.editingSshKeyPassphraseHint)
+            field(icon: "note.text", title: String(localized: "备注"), text: mode.isAdding ? $session.sshKeyNotes : $session.editingSshKeyNotes)
         }
     }
 
     private var apiTokenFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.apiTokenTitle : $session.editingApiTokenTitle)
-            field(icon: "building.2.fill", title: "签发方", text: mode.isAdding ? $session.apiTokenIssuer : $session.editingApiTokenIssuer)
-            field(icon: "person.fill", title: "账号", text: mode.isAdding ? $session.apiTokenAccountName : $session.editingApiTokenAccountName)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.apiTokenTitle : $session.editingApiTokenTitle)
+            field(icon: "building.2.fill", title: String(localized: "签发方"), text: mode.isAdding ? $session.apiTokenIssuer : $session.editingApiTokenIssuer)
+            field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.apiTokenAccountName : $session.editingApiTokenAccountName)
             secureField(icon: "text.badge.key", title: "Token", text: mode.isAdding ? $session.apiTokenToken : $session.editingApiTokenToken)
-            field(icon: "scope", title: "权限范围", text: mode.isAdding ? $session.apiTokenScopes : $session.editingApiTokenScopes)
-            field(icon: "calendar", title: "过期时间", text: mode.isAdding ? $session.apiTokenExpiresAt : $session.editingApiTokenExpiresAt)
-            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.apiTokenNotes : $session.editingApiTokenNotes)
+            field(icon: "scope", title: String(localized: "权限范围"), text: mode.isAdding ? $session.apiTokenScopes : $session.editingApiTokenScopes)
+            field(icon: "calendar", title: String(localized: "过期时间"), text: mode.isAdding ? $session.apiTokenExpiresAt : $session.editingApiTokenExpiresAt)
+            field(icon: "note.text", title: String(localized: "备注"), text: mode.isAdding ? $session.apiTokenNotes : $session.editingApiTokenNotes)
         }
     }
 
     private var wifiFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.wifiTitle : $session.editingWifiTitle)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.wifiTitle : $session.editingWifiTitle)
             field(icon: "wifi", title: "SSID", text: mode.isAdding ? $session.wifiSSID : $session.editingWifiSSID)
-            field(icon: "lock.shield.fill", title: "安全类型", text: mode.isAdding ? $session.wifiSecurityType : $session.editingWifiSecurityType)
-            secureField(icon: "lock.fill", title: "密码", text: mode.isAdding ? $session.wifiPassword : $session.editingWifiPassword)
+            field(icon: "lock.shield.fill", title: String(localized: "安全类型"), text: mode.isAdding ? $session.wifiSecurityType : $session.editingWifiSecurityType)
+            secureField(icon: "lock.fill", title: String(localized: "密码"), text: mode.isAdding ? $session.wifiPassword : $session.editingWifiPassword)
             Toggle("隐藏网络", isOn: mode.isAdding ? $session.wifiHidden : $session.editingWifiHidden)
                 .font(.subheadline.weight(.semibold))
                 .tint(AndroidParityPalette.primary)
-            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.wifiNotes : $session.editingWifiNotes)
+            field(icon: "note.text", title: String(localized: "备注"), text: mode.isAdding ? $session.wifiNotes : $session.editingWifiNotes)
             if !mode.isAdding, !session.editingWifiQRCodePayload.isEmpty {
                 if let image = WifiQRCodeRenderer.image(for: session.editingWifiQRCodePayload, size: 192) {
                     Image(uiImage: image)
@@ -2065,7 +2065,7 @@ struct AddEditVaultItemView: View {
                         .background(.white, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
                         .frame(maxWidth: .infinity)
                 }
-                AndroidParityInfoRow(title: "二维码内容", value: session.editingWifiQRCodePayload)
+                AndroidParityInfoRow(title: String(localized: "二维码内容"), value: session.editingWifiQRCodePayload)
                 ShareLink(item: session.editingWifiQRCodePayload) {
                     Label("分享 Wi-Fi", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity)
@@ -2077,7 +2077,7 @@ struct AddEditVaultItemView: View {
 
     private var sendFields: some View {
         VStack(spacing: 18) {
-            field(icon: "folder.fill", title: "标题 *", text: mode.isAdding ? $session.sendTitle : $session.editingSendTitle)
+            field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.sendTitle : $session.editingSendTitle)
             if mode.isAdding {
                 Picker("Send 类型", selection: $session.sendCreateType) {
                     ForEach(SendCreateType.allCases) { type in
@@ -2090,25 +2090,25 @@ struct AddEditVaultItemView: View {
                 Button {
                     isSendFileImporterPresented = true
                 } label: {
-                    Label(session.sendFileName.isEmpty ? "选择文件" : session.sendFileName, systemImage: "paperclip")
+                    Label(session.sendFileName.isEmpty ? String(localized: "选择文件") : session.sendFileName, systemImage: "paperclip")
                         .lineLimit(1)
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-                secureField(icon: "key.fill", title: "访问密码", text: $session.sendPassword)
+                secureField(icon: "key.fill", title: String(localized: "访问密码"), text: $session.sendPassword)
                 Toggle("隐藏邮箱", isOn: $session.sendHideEmail)
                     .font(.subheadline.weight(.semibold))
                     .tint(AndroidParityPalette.primary)
             } else {
-                secureField(icon: "text.alignleft", title: "内容", text: mode.isAdding ? $session.sendBody : $session.editingSendBody)
+                secureField(icon: "text.alignleft", title: String(localized: "内容"), text: mode.isAdding ? $session.sendBody : $session.editingSendBody)
             }
-            field(icon: "calendar", title: "过期时间", text: mode.isAdding ? $session.sendExpiresAt : $session.editingSendExpiresAt)
+            field(icon: "calendar", title: String(localized: "过期时间"), text: mode.isAdding ? $session.sendExpiresAt : $session.editingSendExpiresAt)
             Stepper(value: mode.isAdding ? $session.sendMaxViews : $session.editingSendMaxViews, in: 1...999) {
                 Text("最多查看 \(mode.isAdding ? session.sendMaxViews : session.editingSendMaxViews) 次")
                     .font(.subheadline.weight(.semibold))
             }
             .tint(AndroidParityPalette.primary)
-            field(icon: "note.text", title: "备注", text: mode.isAdding ? $session.sendNotes : $session.editingSendNotes)
+            field(icon: "note.text", title: String(localized: "备注"), text: mode.isAdding ? $session.sendNotes : $session.editingSendNotes)
             if mode.isAdding, session.bitwardenAuthenticationState.isConnected {
                 Text("将推送到 Bitwarden 并在创建后给出可分享链接")
                     .font(.caption.weight(.semibold))
@@ -2172,18 +2172,18 @@ struct AddEditVaultItemView: View {
     }
 
     private var typeChipTitle: String {
-        mode.kind == .login ? "*** 密码" : mode.kind.displayName
+        mode.kind == .login ? String(localized: "*** 密码") : mode.kind.localizedDisplayName
     }
 
     private var formTitle: String {
         switch mode.kind {
-        case .login: return "凭据"
-        case .note: return "笔记"
-        case .totp: return "验证器"
-        case .card: return "银行卡"
-        case .identity: return "证件"
-        case .passkey: return "通行密钥"
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return mode.kind.displayName
+        case .login: return String(localized: "凭据")
+        case .note: return String(localized: "笔记")
+        case .totp: return String(localized: "验证器")
+        case .card: return String(localized: "银行卡")
+        case .identity: return String(localized: "证件")
+        case .passkey: return String(localized: "通行密钥")
+        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return mode.kind.localizedDisplayName
         }
     }
 
@@ -2233,7 +2233,7 @@ private struct VaultItemDetailView: View {
                 HStack(spacing: 14) {
                     AndroidParityIconTile(systemImage: route.kind.systemImage, fill: AndroidParityPalette.primaryContainer)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(route.kind.displayName)
+                        Text(route.kind.localizedDisplayName)
                             .font(.caption.weight(.heavy))
                             .foregroundStyle(AndroidParityPalette.primary)
                         Text(title)
@@ -2257,7 +2257,7 @@ private struct VaultItemDetailView: View {
                     .tint(AndroidParityPalette.primary)
             }
 
-            AndroidParitySection(title: "详情") {
+            AndroidParitySection(title: String(localized: "详情")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(rows) { row in
                         AndroidParityInfoRow(title: row.title, value: row.value)
@@ -2271,7 +2271,7 @@ private struct VaultItemDetailView: View {
     }
 
     private var title: String {
-        rows.first(where: { $0.id == "title" })?.value ?? route.kind.displayName
+        rows.first(where: { $0.id == "title" })?.value ?? route.kind.localizedDisplayName
     }
 
     private var rows: [AppExtensionCapabilityRow] {
@@ -2279,56 +2279,56 @@ private struct VaultItemDetailView: View {
         case .login:
             guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [
-                row("title", "标题", entry.title),
-                row("username", "账号", entry.username),
-                row("url", "网址", redactedURL(entry.url)),
-                row("password", "密码", sensitive(entry.password)),
-                row("favorite", "收藏", entry.favorite ? "是" : "否")
+                row("title", String(localized: "标题"), entry.title),
+                row("username", String(localized: "账号"), entry.username),
+                row("url", String(localized: "网址"), redactedURL(entry.url)),
+                row("password", String(localized: "密码"), sensitive(entry.password)),
+                row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))
             ]
         case .note:
             guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("body", "正文", sensitive(entry.body)), row("favorite", "收藏", entry.favorite ? "是" : "否")]
+            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "正文"), sensitive(entry.body)), row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))]
         case .totp:
             guard let entry = session.totpEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("issuer", "签发方", entry.issuer), row("account", "账号", entry.accountName), row("secret", "密钥", sensitive(entry.secret)), row("period", "周期", "\(entry.period)s")]
+            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("secret", String(localized: "密钥"), sensitive(entry.secret)), row("period", String(localized: "周期"), "\(entry.period)s")]
         case .card:
             guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("holder", "持卡人", entry.cardholderName), row("number", "卡号", sensitive(entry.number)), row("expiry", "有效期", "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv)), row("issuer", "银行", entry.issuer)]
+            return [row("title", String(localized: "标题"), entry.title), row("holder", String(localized: "持卡人"), entry.cardholderName), row("number", String(localized: "卡号"), sensitive(entry.number)), row("expiry", String(localized: "有效期"), "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv)), row("issuer", String(localized: "银行"), entry.issuer)]
         case .identity:
             guard let entry = session.identityEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("type", "类型", entry.documentType), row("name", "姓名", entry.fullName), row("number", "证件号", sensitive(entry.documentNumber)), row("issuer", "签发方", entry.issuer), row("country", "国家/地区", entry.country)]
+            return [row("title", String(localized: "标题"), entry.title), row("type", String(localized: "类型"), entry.documentType), row("name", String(localized: "姓名"), entry.fullName), row("number", String(localized: "证件号"), sensitive(entry.documentNumber)), row("issuer", String(localized: "签发方"), entry.issuer), row("country", String(localized: "国家/地区"), entry.country)]
         case .passkey:
             guard let entry = session.passkeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("rp", "网站标识", entry.relyingPartyID), row("username", "账号", entry.username), row("credential", "通行密钥标识", sensitive(entry.credentialID)), row("private", "私钥引用", sensitive(entry.privateKeyReference))]
+            return [row("title", String(localized: "标题"), entry.title), row("rp", String(localized: "网站标识"), entry.relyingPartyID), row("username", String(localized: "账号"), entry.username), row("credential", String(localized: "通行密钥标识"), sensitive(entry.credentialID)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference))]
         case .sshKey:
             guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("user", "用户名", entry.username), row("host", "主机", entry.host), row("public", "公钥", revealsSensitiveFields ? entry.publicKey : "••••••"), row("private", "私钥引用", sensitive(entry.privateKeyReference)), row("hint", "口令提示", entry.passphraseHint)]
+            return [row("title", String(localized: "标题"), entry.title), row("user", String(localized: "用户名"), entry.username), row("host", String(localized: "主机"), entry.host), row("public", String(localized: "公钥"), revealsSensitiveFields ? entry.publicKey : "••••••"), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference)), row("hint", String(localized: "口令提示"), entry.passphraseHint)]
         case .apiToken:
             guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("issuer", "签发方", entry.issuer), row("account", "账号", entry.accountName), row("token", "Token", sensitive(entry.token)), row("scopes", "范围", entry.scopes), row("expires", "过期", entry.expiresAt)]
+            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("token", "Token", sensitive(entry.token)), row("scopes", String(localized: "范围"), entry.scopes), row("expires", String(localized: "过期"), entry.expiresAt)]
         case .wifi:
             guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("ssid", "SSID", entry.ssid), row("security", "安全类型", entry.securityType), row("password", "密码", sensitive(entry.password)), row("hidden", "隐藏网络", entry.hidden ? "是" : "否")]
+            return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "标题", entry.title), row("body", "内容", sensitive(entry.body)), row("expires", "过期", entry.expiresAt), row("views", "最多查看", "\(entry.maxViews)")]
+            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body)), row("expires", String(localized: "过期"), entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
         case .attachmentRef:
             guard let entry = session.attachmentEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", "文件名", entry.fileName), row("state", "状态", entry.downloadState), row("mode", "存储", entry.storageMode), row("size", "大小", "\(entry.storedSize)/\(entry.originalSize) 字节")]
+            return [row("title", String(localized: "文件名"), entry.fileName), row("state", String(localized: "状态"), entry.downloadState), row("mode", String(localized: "存储"), entry.storageMode), row("size", String(localized: "大小"), String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节"))]
         }
     }
 
     private var missingRows: [AppExtensionCapabilityRow] {
-        [row("missing", "状态", "条目不可用")]
+        [row("missing", String(localized: "状态"), String(localized: "条目不可用"))]
     }
 
     private func sensitive(_ value: String) -> String {
-        guard !value.isEmpty else { return "空" }
+        guard !value.isEmpty else { return String(localized: "空") }
         return revealsSensitiveFields ? value : "••••••"
     }
 
     private func redactedURL(_ value: String) -> String {
-        guard !value.isEmpty else { return "空" }
+        guard !value.isEmpty else { return String(localized: "空") }
         guard let host = URL(string: value)?.host() else { return value }
         return host
     }
@@ -2337,7 +2337,7 @@ private struct VaultItemDetailView: View {
         AppExtensionCapabilityRow(
             id: id,
             title: title,
-            value: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "空" : value,
+            value: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? String(localized: "空") : value,
             detail: "",
             systemImage: ""
         )

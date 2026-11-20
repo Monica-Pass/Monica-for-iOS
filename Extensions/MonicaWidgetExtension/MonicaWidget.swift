@@ -12,9 +12,9 @@ private enum MonicaWidgetVaultState: String, Codable {
     var label: String {
         switch self {
         case .locked:
-            return "已锁定"
+            return String(localized: "已锁定")
         case .unlocked:
-            return "已解锁"
+            return String(localized: "已解锁")
         }
     }
 }
@@ -130,7 +130,7 @@ private struct MonicaWidgetEntryView: View {
                     .font(.title2.weight(.semibold))
                 if let item = entry.snapshot.totpItems.first {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(item.title.isEmpty ? "验证码" : item.title)
+                        Text(item.title.isEmpty ? String(localized: "验证码") : item.title)
                             .font(.subheadline.weight(.medium))
                             .lineLimit(1)
                         Text([item.issuer, item.accountName].filter { !$0.isEmpty }.joined(separator: " / "))
@@ -142,7 +142,7 @@ private struct MonicaWidgetEntryView: View {
                             .foregroundStyle(.secondary)
                     }
                 } else if let shortcut = entry.snapshot.shortcutItems.first {
-                    Text(shortcut.title.isEmpty ? "快捷入口" : shortcut.title)
+                    Text(shortcut.title.isEmpty ? String(localized: "快捷入口") : shortcut.title)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(1)
                     Text(shortcut.subtitle)
@@ -170,7 +170,7 @@ struct MonicaWidget: Widget {
             MonicaWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Monica")
-        .description("显示安全的保险库状态和快捷摘要。")
+        .description(String(localized: "显示安全的保险库状态和快捷摘要。"))
         .supportedFamilies([.systemSmall, .systemMedium])
     }
 }

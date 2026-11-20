@@ -280,7 +280,7 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
 
     private func redactedAccountLabel(for account: MSALAccount) -> String {
         let username = account.username?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        return username.isEmpty ? "已登录" : username
+        return username.isEmpty ? String(localized: "已登录") : username
     }
 
     @MainActor

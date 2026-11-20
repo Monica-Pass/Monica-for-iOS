@@ -109,16 +109,16 @@ struct SettingsRootView: View {
 
     var body: some View {
         AndroidParityScreen {
-            AndroidParitySection(title: "应用") {
+            AndroidParitySection(title: String(localized: "应用")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "系统要求", value: environment.minimumIOSVersion)
+                    AndroidParityInfoRow(title: String(localized: "系统要求"), value: environment.minimumIOSVersion)
                     AndroidParityDivider()
-                    AndroidParityInfoRow(title: "备份", value: MonicaSyncBaseline.firstBackupProvider)
-                    AndroidParityInfoRow(title: "密钥策略", value: MonicaSecurityBaseline.biometricPolicy)
-                    AndroidParityInfoRow(title: "保险库钥匙串", value: session.vaultKeychainState.label)
+                    AndroidParityInfoRow(title: String(localized: "备份"), value: MonicaSyncBaseline.firstBackupProvider)
+                    AndroidParityInfoRow(title: String(localized: "密钥策略"), value: MonicaSecurityBaseline.biometricPolicy)
+                    AndroidParityInfoRow(title: String(localized: "保险库钥匙串"), value: session.vaultKeychainState.label)
                     AndroidParityInfoRow(
                         title: session.biometricUnlockSettingsTitle,
-                        value: session.isBiometricUnlockEnabled ? "已启用" : biometricStatusText
+                        value: session.isBiometricUnlockEnabled ? String(localized: "已启用") : biometricStatusText
                     )
                     Picker("自动锁定", selection: autoLockSelection) {
                         ForEach(AppAutoLockPolicy.presets) { policy in
@@ -172,8 +172,8 @@ struct SettingsRootView: View {
                     } label: {
                         Label(
                             session.isBiometricUnlockEnabled
-                                ? "关闭 \(session.biometricUnlockDisplayName) 解锁"
-                                : "启用 \(session.biometricUnlockDisplayName) 解锁",
+                                ? String(localized: "关闭 \(session.biometricUnlockDisplayName) 解锁")
+                                : String(localized: "启用 \(session.biometricUnlockDisplayName) 解锁"),
                             systemImage: session.biometricUnlockSystemImage
                         )
                             .frame(maxWidth: .infinity)
@@ -224,7 +224,7 @@ struct SettingsRootView: View {
                     Text(session.plusEntitlementStatusRow.detail)
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
-                    AndroidParityInfoRow(title: "激活", value: session.plusActivationState.label)
+                    AndroidParityInfoRow(title: String(localized: "激活"), value: session.plusActivationState.label)
                     if session.isPlusActive {
                         Button(role: .destructive) {
                             session.deactivatePlus()
@@ -274,11 +274,11 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "密保问题") {
+            AndroidParitySection(title: String(localized: "密保问题")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(
-                        title: "状态",
-                        value: session.areSecurityQuestionsSetForActiveVault ? "已设置" : "未设置"
+                        title: String(localized: "状态"),
+                        value: session.areSecurityQuestionsSetForActiveVault ? String(localized: "已设置") : String(localized: "未设置")
                     )
                     Picker("问题 1", selection: $session.securityQuestion1ID) {
                         ForEach(AppSessionModel.securityQuestionOptions) { option in
@@ -322,10 +322,10 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "自动填充") {
+            AndroidParitySection(title: String(localized: "自动填充")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "索引", value: session.autoFillIndexState.label)
-                    AndroidParityInfoRow(title: "共享数据", value: environment.appGroupIdentifier.isEmpty ? "待配置" : "已配置")
+                    AndroidParityInfoRow(title: String(localized: "索引"), value: session.autoFillIndexState.label)
+                    AndroidParityInfoRow(title: String(localized: "共享数据"), value: environment.appGroupIdentifier.isEmpty ? String(localized: "待配置") : String(localized: "已配置"))
                     ForEach(session.autoFillPolicyRows, id: \.title) { row in
                         AndroidParityInfoRow(title: row.title, value: row.value)
                     }
@@ -379,9 +379,9 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "Steam 导入") {
+            AndroidParitySection(title: String(localized: "Steam 导入")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "格式", value: "Steam maFile / JSON")
+                    AndroidParityInfoRow(title: String(localized: "格式"), value: "Steam maFile / JSON")
                     Button {
                         isSteamAuthenticatorImporterPresented = true
                     } label: {
@@ -393,7 +393,7 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "安全中心") {
+            AndroidParitySection(title: String(localized: "安全中心")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(session.securityCenterRows) { row in
                         AndroidParitySecurityCenterRow(row: row)
@@ -470,7 +470,7 @@ struct SettingsRootView: View {
                     )) {
                         Text("全部").tag("all")
                         ForEach(UnifiedVaultItemKind.allCases, id: \.rawValue) { kind in
-                            Text(kind.displayName).tag(kind.rawValue)
+                            Text(kind.localizedDisplayName).tag(kind.rawValue)
                         }
                     }
                     Picker("动作", selection: Binding(
@@ -491,12 +491,12 @@ struct SettingsRootView: View {
                         }
                     }
                     if session.filteredOperationTimelineEvents.isEmpty {
-                        AndroidParityInfoRow(title: "记录", value: "暂无")
+                        AndroidParityInfoRow(title: String(localized: "记录"), value: String(localized: "暂无"))
                     }
                 }
             }
 
-            AndroidParitySection(title: "权限管理") {
+            AndroidParitySection(title: String(localized: "权限管理")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(session.permissionStatusRows) { row in
                         AndroidParityPermissionRow(row: row)
@@ -507,7 +507,7 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "迁移") {
+            AndroidParitySection(title: String(localized: "迁移")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "CSV", value: session.entryOperationState.label)
                     HStack(spacing: 12) {
@@ -537,11 +537,11 @@ struct SettingsRootView: View {
 
                     if let preview = session.csvImportPreview {
                         AndroidParityDivider()
-                        AndroidParityInfoRow(title: "可导入", value: "\(preview.items.count)")
-                        AndroidParityInfoRow(title: "问题", value: "\(preview.issues.count)")
+                        AndroidParityInfoRow(title: String(localized: "可导入"), value: "\(preview.items.count)")
+                        AndroidParityInfoRow(title: String(localized: "问题"), value: "\(preview.issues.count)")
                         Button {
                             do {
-                                try session.confirmCSVImport(projectTitle: "CSV 导入")
+                                try session.confirmCSVImport(projectTitle: String(localized: "CSV 导入"))
                             } catch {
                                 // AppSessionModel owns user-visible failure state.
                             }
@@ -566,12 +566,12 @@ struct SettingsRootView: View {
 
                     if let preview = session.keePassImportPreview {
                         AndroidParityDivider()
-                        AndroidParityInfoRow(title: "KeePass 格式", value: preview.format.displayName)
-                        AndroidParityInfoRow(title: "状态", value: keePassPreviewStatusText(preview.status))
+                        AndroidParityInfoRow(title: String(localized: "KeePass 格式"), value: preview.format.localizedDisplayName)
+                        AndroidParityInfoRow(title: String(localized: "状态"), value: keePassPreviewStatusText(preview.status))
                         if let headerSummary = preview.headerSummary {
-                            AndroidParityInfoRow(title: "KDBX 版本", value: headerSummary.displayName)
+                            AndroidParityInfoRow(title: String(localized: "KDBX 版本"), value: headerSummary.displayName)
                             if let cryptoSummary = headerSummary.cryptoSummary {
-                                AndroidParityInfoRow(title: "KDBX 加密", value: cryptoSummary.displaySummary)
+                                AndroidParityInfoRow(title: String(localized: "KDBX 加密"), value: cryptoSummary.displaySummary)
                             }
                         }
                         SecureField("数据库密码", text: $session.keePassUnlockPassword)
@@ -601,11 +601,11 @@ struct SettingsRootView: View {
                             .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                         }
                         AndroidParityInfoRow(
-                            title: "密钥文件",
-                            value: session.keePassKeyFileName.isEmpty ? "未选择" : session.keePassKeyFileName
+                            title: String(localized: "密钥文件"),
+                            value: session.keePassKeyFileName.isEmpty ? String(localized: "未选择") : session.keePassKeyFileName
                         )
                         if let preflight = preview.unlockPreflight {
-                            AndroidParityInfoRow(title: "凭据", value: preflight.credentials.displayName)
+                            AndroidParityInfoRow(title: String(localized: "凭据"), value: preflight.credentials.localizedDisplayName)
                         }
                         Button {
                             do {
@@ -620,18 +620,18 @@ struct SettingsRootView: View {
                         .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
 
                         if let snapshot = session.keePassReadOnlySnapshot {
-                            AndroidParityInfoRow(title: "只读预览", value: snapshot.displaySummary)
-                            AndroidParityInfoRow(title: "分组", value: "\(snapshot.groupCount)")
-                            AndroidParityInfoRow(title: "条目", value: "\(snapshot.entryCount)")
+                            AndroidParityInfoRow(title: String(localized: "只读预览"), value: snapshot.displaySummary)
+                            AndroidParityInfoRow(title: String(localized: "分组"), value: "\(snapshot.groupCount)")
+                            AndroidParityInfoRow(title: String(localized: "条目"), value: "\(snapshot.entryCount)")
                             ForEach(snapshot.groups.prefix(3)) { group in
                                 AndroidParityInfoRow(
-                                    title: group.title.isEmpty ? "未命名分组" : group.title,
+                                    title: group.title.isEmpty ? String(localized: "未命名分组") : group.title,
                                     value: group.path
                                 )
                             }
                             ForEach(snapshot.entries) { entry in
                                 AndroidParityInfoRow(
-                                    title: entry.title.isEmpty ? "未命名条目" : entry.title,
+                                    title: entry.title.isEmpty ? String(localized: "未命名条目") : entry.title,
                                     value: entry.username.isEmpty ? entry.groupPath : entry.username
                                 )
                                 HStack(spacing: 12) {
@@ -671,15 +671,15 @@ struct SettingsRootView: View {
                             let candidates = (try? session.keePassAttachmentEditCandidates(
                                 matching: keePassAttachmentSearchText
                             )) ?? []
-                            AndroidParityInfoRow(title: "可编辑附件", value: "\(candidates.count)")
+                            AndroidParityInfoRow(title: String(localized: "可编辑附件"), value: "\(candidates.count)")
                             ForEach(candidates) { candidate in
                                 VStack(alignment: .leading, spacing: 8) {
                                     AndroidParityInfoRow(
                                         title: candidate.fileName,
-                                        value: "\(candidate.originalSize) 字节"
+                                        value: String(localized: "\(candidate.originalSize) 字节")
                                     )
                                     AndroidParityInfoRow(
-                                        title: candidate.entryTitle.isEmpty ? "未命名条目" : candidate.entryTitle,
+                                        title: candidate.entryTitle.isEmpty ? String(localized: "未命名条目") : candidate.entryTitle,
                                         value: candidate.entryUsername.isEmpty ? candidate.groupPath : candidate.entryUsername
                                     )
                                     HStack(spacing: 12) {
@@ -726,22 +726,22 @@ struct SettingsRootView: View {
                         .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
 
                         if let plan = session.keePassReadOnlyImportPlan {
-                            AndroidParityInfoRow(title: "导入计划", value: plan.displaySummary)
-                            AndroidParityInfoRow(title: "可预览", value: "\(plan.candidateCount)")
-                            AndroidParityInfoRow(title: "跳过", value: "\(plan.skippedCount)")
+                            AndroidParityInfoRow(title: String(localized: "导入计划"), value: plan.displaySummary)
+                            AndroidParityInfoRow(title: String(localized: "可预览"), value: "\(plan.candidateCount)")
+                            AndroidParityInfoRow(title: String(localized: "跳过"), value: "\(plan.skippedCount)")
                             if !plan.pendingCapabilitySummary.isEmpty {
-                                AndroidParityInfoRow(title: "待解码", value: plan.pendingCapabilitySummary)
+                                AndroidParityInfoRow(title: String(localized: "待解码"), value: plan.pendingCapabilitySummary)
                             }
                             ForEach(plan.candidates.prefix(3)) { candidate in
                                 AndroidParityInfoRow(
-                                    title: candidate.title.isEmpty ? "未命名条目" : candidate.title,
+                                    title: candidate.title.isEmpty ? String(localized: "未命名条目") : candidate.title,
                                     value: candidate.username.isEmpty ? candidate.groupPath : candidate.username
                                 )
                             }
                             ForEach(plan.skipped.prefix(3)) { skipped in
                                 AndroidParityInfoRow(
-                                    title: skipped.title.isEmpty ? "跳过条目" : skipped.title,
-                                    value: skipped.reason.displayName
+                                    title: skipped.title.isEmpty ? String(localized: "跳过条目") : skipped.title,
+                                    value: skipped.reason.localizedDisplayName
                                 )
                             }
                             Button {
@@ -760,9 +760,9 @@ struct SettingsRootView: View {
                     }
 
                     AndroidParityDivider()
-                    AndroidParityInfoRow(title: "移动端备份", value: session.entryOperationState.label)
+                    AndroidParityInfoRow(title: String(localized: "移动端备份"), value: session.entryOperationState.label)
                     if let encryptedFileName = session.pendingAndroidEncryptedBackupFileName {
-                        AndroidParityInfoRow(title: "加密备份", value: encryptedFileName)
+                        AndroidParityInfoRow(title: String(localized: "加密备份"), value: encryptedFileName)
                     }
                     HStack(spacing: 12) {
                         Button {
@@ -791,11 +791,11 @@ struct SettingsRootView: View {
 
                     if let preview = session.androidBackupImportPreview {
                         AndroidParityDivider()
-                        AndroidParityInfoRow(title: "备份可导入", value: "\(preview.items.count)")
-                        AndroidParityInfoRow(title: "备份问题", value: "\(preview.issues.count)")
+                        AndroidParityInfoRow(title: String(localized: "备份可导入"), value: "\(preview.items.count)")
+                        AndroidParityInfoRow(title: String(localized: "备份问题"), value: "\(preview.issues.count)")
                         Button {
                             do {
-                                try session.confirmAndroidBackupImport(projectTitle: "移动端备份")
+                                try session.confirmAndroidBackupImport(projectTitle: String(localized: "移动端备份"))
                             } catch {
                                 // AppSessionModel owns user-visible failure state.
                             }
@@ -811,8 +811,8 @@ struct SettingsRootView: View {
 
             AndroidParitySection(title: "OneDrive") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "账号", value: session.oneDriveAuthenticationState.label)
-                    AndroidParityInfoRow(title: "文件", value: session.cloudFileState.label)
+                    AndroidParityInfoRow(title: String(localized: "账号"), value: session.oneDriveAuthenticationState.label)
+                    AndroidParityInfoRow(title: String(localized: "文件"), value: session.cloudFileState.label)
                     if session.oneDriveAuthenticationState.isConnected {
                         Button(role: .destructive) {
                             Task {
@@ -886,7 +886,7 @@ struct SettingsRootView: View {
                                         )
                                     }
                                 } label: {
-                                    Label(item.name.contains("_permanent") ? "取消永久" : "永久", systemImage: "pin")
+                                    Label(item.name.contains("_permanent") ? String(localized: "取消永久") : String(localized: "永久"), systemImage: "pin")
                                         .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -908,23 +908,23 @@ struct SettingsRootView: View {
 
             AndroidParitySection(title: "Bitwarden") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: "账号", value: session.bitwardenAuthenticationState.label)
-                    AndroidParityInfoRow(title: "同步", value: session.bitwardenSyncState.label)
+                    AndroidParityInfoRow(title: String(localized: "账号"), value: session.bitwardenAuthenticationState.label)
+                    AndroidParityInfoRow(title: String(localized: "同步"), value: session.bitwardenSyncState.label)
                     if let preview = session.bitwardenSyncPreview {
-                        AndroidParityInfoRow(title: "远端", value: "\(preview.remoteItemCount) 个条目，\(preview.remoteSendCount) 个 Send")
-                        AndroidParityInfoRow(title: "文件夹", value: "\(preview.remoteFolderCount) 个")
+                        AndroidParityInfoRow(title: String(localized: "远端"), value: String(localized: "\(preview.remoteItemCount) 个条目，\(preview.remoteSendCount) 个 Send"))
+                        AndroidParityInfoRow(title: String(localized: "文件夹"), value: String(localized: "\(preview.remoteFolderCount) 个"))
                         AndroidParityInfoRow(title: "Premium", value: preview.premiumSummary)
-                        AndroidParityInfoRow(title: "类型", value: preview.kindSummary)
-                        AndroidParityInfoRow(title: "附件", value: preview.attachmentSummary)
+                        AndroidParityInfoRow(title: String(localized: "类型"), value: preview.kindSummary)
+                        AndroidParityInfoRow(title: String(localized: "附件"), value: preview.attachmentSummary)
                     }
                     if !session.bitwardenPendingMutationBatches.isEmpty {
                         AndroidParityDivider()
                         ForEach(Array(session.bitwardenPendingMutationBatches.prefix(3))) { batch in
-                            AndroidParityInfoRow(title: "待重试", value: batch.redactedSummary)
-                            AndroidParityInfoRow(title: "最近错误", value: batch.lastErrorSummary)
+                            AndroidParityInfoRow(title: String(localized: "待重试"), value: batch.redactedSummary)
+                            AndroidParityInfoRow(title: String(localized: "最近错误"), value: batch.lastErrorSummary)
                             ForEach(Array(batch.redactedSummaries.prefix(3)).indices, id: \.self) { index in
                                 AndroidParityInfoRow(
-                                    title: "变更 \(index + 1)",
+                                    title: String(localized: "变更 \(index + 1)"),
                                     value: batch.redactedSummaries[index]
                                 )
                             }
@@ -1082,7 +1082,7 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "接收 Bitwarden Send") {
+            AndroidParitySection(title: String(localized: "接收 Bitwarden Send")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     Text("粘贴别人发来的 Send 链接即可查看内容，无需登录。")
                         .font(.footnote)
@@ -1094,7 +1094,7 @@ struct SettingsRootView: View {
                         .textFieldStyle(AndroidParityTextFieldStyle())
                     SecureField("访问密码（如无则留空）", text: $session.bitwardenReceivePassword)
                         .textFieldStyle(AndroidParityTextFieldStyle())
-                    AndroidParityInfoRow(title: "状态", value: session.bitwardenReceiveState.label)
+                    AndroidParityInfoRow(title: String(localized: "状态"), value: session.bitwardenReceiveState.label)
                     Button {
                         Task {
                             try? await session.receiveBitwardenSend(
@@ -1113,13 +1113,13 @@ struct SettingsRootView: View {
                     )
                     if let received = session.bitwardenReceivedSend {
                         AndroidParityDivider()
-                        AndroidParityInfoRow(title: "标题", value: received.title.isEmpty ? "（无标题）" : received.title)
+                        AndroidParityInfoRow(title: String(localized: "标题"), value: received.title.isEmpty ? String(localized: "（无标题）") : received.title)
                         if !received.expiresAt.isEmpty {
-                            AndroidParityInfoRow(title: "过期时间", value: received.expiresAt)
+                            AndroidParityInfoRow(title: String(localized: "过期时间"), value: received.expiresAt)
                         }
-                        AndroidParityInfoRow(title: "最大查看", value: "\(received.maxViews) 次")
+                        AndroidParityInfoRow(title: String(localized: "最大查看"), value: String(localized: "\(received.maxViews) 次"))
                         if let remaining = received.remainingViews {
-                            AndroidParityInfoRow(title: "剩余查看", value: "\(remaining) 次")
+                            AndroidParityInfoRow(title: String(localized: "剩余查看"), value: String(localized: "\(remaining) 次"))
                         }
                         Text(received.text)
                             .font(.footnote.monospaced())
@@ -1160,8 +1160,8 @@ struct SettingsRootView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .textFieldStyle(AndroidParityTextFieldStyle())
-                    AndroidParityInfoRow(title: "状态", value: session.webDAVBackupState.label)
-                    AndroidParityInfoRow(title: "后台备份", value: session.webDAVBackgroundBackupSchedulerState.label)
+                    AndroidParityInfoRow(title: String(localized: "状态"), value: session.webDAVBackupState.label)
+                    AndroidParityInfoRow(title: String(localized: "后台备份"), value: session.webDAVBackgroundBackupSchedulerState.label)
                     Toggle("后台自动备份", isOn: Binding(
                         get: { session.webDAVBackgroundBackupEnabled },
                         set: { enabled in
@@ -1223,7 +1223,7 @@ struct SettingsRootView: View {
                         ForEach(session.webDAVBackupItems.prefix(8)) { item in
                             AndroidParityInfoRow(
                                 title: item.fileName,
-                                value: item.isPermanent ? "永久 · \(item.byteCount) 字节" : "\(item.byteCount) 字节"
+                                value: item.isPermanent ? String(localized: "永久 · \(item.byteCount) 字节") : String(localized: "\(item.byteCount) 字节")
                             )
                             HStack(spacing: 10) {
                                 Button {
@@ -1239,7 +1239,7 @@ struct SettingsRootView: View {
                                         try? await session.setWebDAVBackupItemPermanent(item, isPermanent: !item.isPermanent)
                                     }
                                 } label: {
-                                    Label(item.isPermanent ? "取消永久" : "永久", systemImage: "pin")
+                                    Label(item.isPermanent ? String(localized: "取消永久") : String(localized: "永久"), systemImage: "pin")
                                         .frame(maxWidth: .infinity)
                                 }
                                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
@@ -1256,8 +1256,8 @@ struct SettingsRootView: View {
                     }
                     if let preview = session.webDAVRestorePreview {
                         AndroidParityDivider()
-                        AndroidParityInfoRow(title: "恢复文件", value: preview.fileName)
-                        AndroidParityInfoRow(title: "字节", value: "\(preview.byteCount)")
+                        AndroidParityInfoRow(title: String(localized: "恢复文件"), value: preview.fileName)
+                        AndroidParityInfoRow(title: String(localized: "字节"), value: "\(preview.byteCount)")
                         AndroidParityInfoRow(title: "SHA-256", value: preview.sha256)
                         SecureField("保险库密码", text: $session.webDAVRestoreVaultPassword)
                             .textFieldStyle(AndroidParityTextFieldStyle())
@@ -1450,7 +1450,7 @@ struct SettingsRootView: View {
     private func replacePendingKeePassAttachment(with fileURL: URL) {
         guard let entryID = pendingKeePassAttachmentReplacementEntryID,
               let attachmentID = pendingKeePassAttachmentReplacementAttachmentID else {
-            session.entryOperationState = .failed("请先选择要替换的 KeePass 附件。")
+            session.entryOperationState = .failed(String(localized: "请先选择要替换的 KeePass 附件。"))
             return
         }
         do {
@@ -1466,7 +1466,7 @@ struct SettingsRootView: View {
 
     private func addPendingKeePassAttachment(from fileURL: URL) {
         guard let entryID = pendingKeePassAttachmentAdditionEntryID else {
-            session.entryOperationState = .failed("请先选择要添加附件的 KeePass 条目。")
+            session.entryOperationState = .failed(String(localized: "请先选择要添加附件的 KeePass 条目。"))
             return
         }
         do {
@@ -1530,19 +1530,19 @@ struct SettingsRootView: View {
     }
 
     private var biometricStatusText: String {
-        session.canUseBiometricUnlockHardware ? "未启用" : "不可用"
+        session.canUseBiometricUnlockHardware ? String(localized: "未启用") : String(localized: "不可用")
     }
 
     private func keePassPreviewStatusText(_ status: KeePassImportStatus) -> String {
         switch status {
         case .requiresCredentials:
-            return "等待密码或密钥文件"
+            return String(localized: "等待密码或密钥文件")
         case .readyToUnlock:
-            return "等待解锁"
+            return String(localized: "等待解锁")
         case .unsupported:
-            return "无法导入"
+            return String(localized: "无法导入")
         case .unknown:
-            return "无法识别"
+            return String(localized: "无法识别")
         }
     }
 
@@ -1612,7 +1612,7 @@ struct AppQuickSetupView: View {
 
     var body: some View {
         AndroidParityScreen {
-            AndroidParitySection(title: "快速设置") {
+            AndroidParitySection(title: String(localized: "快速设置")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
                     ForEach(session.quickSetupRows) { row in
                         AppCapabilityRowView(row: row)
@@ -1638,7 +1638,7 @@ struct AppExtensionsView: View {
 
     var body: some View {
         AndroidParityScreen {
-            AndroidParitySection(title: "扩展功能") {
+            AndroidParitySection(title: String(localized: "扩展功能")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
                     ForEach(session.extensionCapabilityRows) { row in
                         AppCapabilityRowView(row: row)

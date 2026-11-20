@@ -164,24 +164,24 @@ struct MonicaLockScreen: View {
         if session.isFirstTimeVaultSetup {
             switch session.firstTimePasswordSetupStep {
             case .enterPassword:
-                return "设置您的主密码"
+                return String(localized: "设置您的主密码")
             case .confirmPassword:
-                return "确认主密码"
+                return String(localized: "确认主密码")
             }
         }
-        return "输入您的主密码"
+        return String(localized: "输入您的主密码")
     }
 
     private var primaryButtonTitle: String {
         if session.isFirstTimeVaultSetup {
             switch session.firstTimePasswordSetupStep {
             case .enterPassword:
-                return "设置密码"
+                return String(localized: "设置密码")
             case .confirmPassword:
-                return "确认"
+                return String(localized: "确认")
             }
         }
-        return "解锁"
+        return String(localized: "解锁")
     }
 
     private var shouldShowOperationState: Bool {
@@ -247,7 +247,7 @@ struct ForgotPasswordRecoverySheet: View {
     }
 
     private var securityQuestionContent: some View {
-        AndroidParitySection(title: "验证身份") {
+        AndroidParitySection(title: String(localized: "验证身份")) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                 Text(session.forgotPasswordQuestion1Text)
                     .font(.subheadline.weight(.semibold))
@@ -285,7 +285,7 @@ struct ForgotPasswordRecoverySheet: View {
     }
 
     private var resetPasswordContent: some View {
-        AndroidParitySection(title: "重设主密码") {
+        AndroidParitySection(title: String(localized: "重设主密码")) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                 Text("身份已通过验证。请输入新的主密码，重设后请使用新密码解锁。")
                     .font(.footnote)

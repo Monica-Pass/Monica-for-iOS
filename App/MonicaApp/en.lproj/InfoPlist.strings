@@ -1,0 +1,4 @@
+"CFBundleDisplayName" = "Monica";
+"NSCameraUsageDescription" = "Used to scan TOTP setup QR codes.";
+"NSFaceIDUsageDescription" = "Used to unlock your vault. Biometric data is never uploaded or stored.";
+"NSLocalNetworkUsageDescription" = "Monica uses the local network to connect to your self-hosted sync server.";
