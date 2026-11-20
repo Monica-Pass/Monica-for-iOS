@@ -1,35 +1,18 @@
 import AppIntents
 import Foundation
-
-private let monicaShortcutsAppGroupIdentifier = "group.com.monicapass.monica"
-private let monicaShortcutsSnapshotFileName = "shortcuts-snapshot-v1.json"
-
-private struct MonicaShortcutSnapshot: Decodable, Sendable {
-    let vaultState: String
-    let entries: [MonicaShortcutSnapshotEntry]
-}
-
-private struct MonicaShortcutSnapshotEntry: Decodable, Sendable {
-    let id: String
-    let kind: String
-    let title: String
-    let subtitle: String
-    let searchableText: String
-    let openURL: URL
-}
+import MonicaWidgetShared
 
 private struct MonicaShortcutSnapshotReader: Sendable {
     func loadEntries() -> [MonicaShortcutSnapshotEntry] {
         guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: monicaShortcutsAppGroupIdentifier
+            forSecurityApplicationGroupIdentifier: MonicaWidgetConstants.appGroupIdentifier
         ) else {
             return []
         }
-        let snapshotURL = containerURL.appendingPathComponent(monicaShortcutsSnapshotFileName)
-        guard let data = try? Data(contentsOf: snapshotURL),
-              let snapshot = try? JSONDecoder().decode(MonicaShortcutSnapshot.self, from: data),
-              snapshot.vaultState == "unlocked"
-        else {
+        // A missing, corrupt, locked, or newer-version snapshot yields no App Intent
+        // entities; the shared store guarantees the `.locked` fallback.
+        let snapshot = MonicaShortcutSnapshotFileStore(containerURL: containerURL).loadSnapshotOrFallback()
+        guard snapshot.vaultState == .unlocked else {
             return []
         }
         return snapshot.entries.filter { entry in
