@@ -22,6 +22,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     private var passkeyListTask: Task<Void, Never>?
     private var credentialResolver: AutoFillCredentialResolver?
     private var matchedCredentialRecords: [AutoFillCredentialIndexRecord] = []
+    /// 最近一次加载的域名规则（#40）。静默填充路径用它做二次校验；
+    /// 尚未加载时为空集合，按「不限制」处理（fail-open），避免规则存储故障把自动填充彻底打断。
+    private var domainRules: AutoFillDomainRuleSet = .empty
     private let passkeyCredentialManager = MonicaPasskeyCredentialManager(
         privateKeyStore: KeychainPasskeyPrivateKeyStore()
     )
@@ -53,6 +56,12 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     }
 
     override func provideCredentialWithoutUserInteraction(for credentialIdentity: ASPasswordCredentialIdentity) {
+        guard !domainRules.hidesServiceIdentifier(credentialIdentity.serviceIdentifier.identifier) else {
+            // 被域名规则屏蔽的站点不允许静默填充；交回系统 UI，由列表页给出明确原因。
+            cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
+            return
+        }
+
         if let recordIdentifier = credentialIdentity.recordIdentifier,
            let secret = try? credentialResolver?.credential(recordIdentifier: recordIdentifier) {
             let credential = ASPasswordCredential(
@@ -245,11 +254,22 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                     index: unlockedData.index,
                     secrets: unlockedData.secrets
                 )
-                let records = resolver.records(
+                let matchedRecords = resolver.records(
                     matchingServiceIdentifiers: serviceIdentifiers.map(\.identifier)
                 )
+                let rules = await Self.loadDomainRules(vaultID: unlockedData.index.vaultID)
+                let requestIdentifiers = serviceIdentifiers.map(\.identifier)
+                let requestFullyBlocked = !requestIdentifiers.isEmpty
+                    && requestIdentifiers.allSatisfy { rules.hidesServiceIdentifier($0) }
+                let records = matchedRecords.filter { record in
+                    record.serviceIdentifiers.contains { !rules.hidesServiceIdentifier($0) }
+                }
+                let blockedStatus = requestFullyBlocked
+                    ? String(localized: "该网站已被「自动填充域名规则」屏蔽。可在 Monica 设置 → 自动填充中调整。")
+                    : nil
                 await MainActor.run {
                     self.credentialResolver = resolver
+                    self.domainRules = rules
                     self.matchedCredentialRecords = records
                     if let preferredRecordIdentifier,
                        let secret = try? resolver.credential(
@@ -268,7 +288,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                     self.configureCredentialList(
                         records,
                         searchQuery: "",
-                        emptyStatus: emptyStatus
+                        emptyStatus: blockedStatus ?? emptyStatus
                     )
                 }
             } catch {
@@ -282,6 +302,17 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 }
             }
         }
+    }
+
+    /// 读取用户在 Monica 里配置的自动填充域名规则（#40）。
+    ///
+    /// 规则存 Keychain；读取失败时返回空集合（fail-open），并且不把任何规则内容写进日志。
+    private static func loadDomainRules(vaultID: String) async -> AutoFillDomainRuleSet {
+        let store = KeychainAutoFillDomainRuleStore()
+        guard let payload = try? await store.loadPayload(vaultID: vaultID) else {
+            return .empty
+        }
+        return (try? AutoFillDomainRuleCodec.decode(payload)) ?? .empty
     }
 
     private static func loadUnlockedCredentialData(
