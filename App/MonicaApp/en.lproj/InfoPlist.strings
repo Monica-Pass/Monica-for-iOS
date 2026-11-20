@@ -1,4 +1,4 @@
 "CFBundleDisplayName" = "Monica";
 "NSCameraUsageDescription" = "Used to scan TOTP setup QR codes.";
-"NSFaceIDUsageDescription" = "Used to unlock your vault. Biometric data is never uploaded or stored.";
-"NSLocalNetworkUsageDescription" = "Monica uses the local network to connect to your self-hosted sync server.";
+"NSFaceIDUsageDescription" = "Used to unlock your vault and to verify it is you when you turn on biometric unlock. Biometric data is handled by the system and is never uploaded or stored.";
+"NSLocalNetworkUsageDescription" = "Used to discover and connect to Monica devices you start on the same Wi-Fi network or hotspot, syncing vault entries between them with end-to-end encryption. Only used when you start or join a sync.";
