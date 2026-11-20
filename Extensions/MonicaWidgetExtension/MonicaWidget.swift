@@ -161,7 +161,6 @@ private struct MonicaWidgetEntryView: View {
     }
 }
 
-@main
 struct MonicaWidget: Widget {
     let kind = "MonicaWidget"
 
