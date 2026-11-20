@@ -81,6 +81,7 @@
 		B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */; };
 		B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */; };
 		A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000013 /* SensitivePrivacyTests.swift */; };
+		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -198,6 +199,7 @@
 		B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWidgetSnapshotSupport.swift; sourceTree = "<group>"; };
 		B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotReloadTests.swift; sourceTree = "<group>"; };
 		A13000000000000000000013 /* SensitivePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyTests.swift; sourceTree = "<group>"; };
+		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -308,8 +310,17 @@
 				A10000000000000000000014 /* Info.plist */,
 				A10000000000000000000015 /* MonicaApp.entitlements */,
 				A10000000000000000000024 /* Assets.xcassets */,
+				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
+			sourceTree = "<group>";
+		};
+		AB0000000000000000000001 /* AppRoot */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000001 /* WifiQRCodeRenderer.swift */,
+			);
+			path = AppRoot;
 			sourceTree = "<group>";
 		};
 		A10000000000000000000074 /* Extensions */ = {
@@ -687,6 +698,7 @@
 				A80000000000000000000001 /* MonicaControlCenterIntents.swift in Sources */,
 				A10000000000000000000003 /* MonicaAppEnvironment.swift in Sources */,
 				B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */,
+				AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
