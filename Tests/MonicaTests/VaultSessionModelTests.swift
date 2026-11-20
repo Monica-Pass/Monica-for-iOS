@@ -2407,8 +2407,12 @@ final class VaultSessionModelTests: XCTestCase {
 
         // A full `replaceCredentialIdentities` during an in-flight ceremony can make the
         // platform abort the request, so the extension must publish a single credential.
-        XCTAssertTrue(source.contains("identity-save success="))
         XCTAssertTrue(source.contains("ASCredentialIdentityStore.shared.saveCredentialIdentities(identities)"))
+        // Issue #65 replaced the free-form extension trace with a redacted structured spool:
+        // the incremental publish stays, but no credential IDs, usernames or raw errors are
+        // written to the old per-container log file any more.
+        XCTAssertFalse(source.contains("passkey-diagnostics.log"))
+        XCTAssertFalse(source.contains("identity-save success="))
         XCTAssertFalse(source.contains("ASCredentialIdentityStore.shared.replaceCredentialIdentities"))
 
         // Parity with Keyguard/Bitwarden: reject unsupported algorithms and duplicates.

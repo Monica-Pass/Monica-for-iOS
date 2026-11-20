@@ -1,4 +1,5 @@
 import Foundation
+import MonicaCore
 import MonicaSync
 import MSAL
 import UIKit
@@ -23,12 +24,24 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
     func accessToken() async throws -> String {
         let application = try makeApplication()
         guard let account = try currentAccount(application: application) else {
+            DiagnosticLog.shared.record(
+                .oneDriveAccountUnavailable,
+                level: .warning,
+                module: .oneDriveAuth,
+                metadata: .reason(.identityUnavailable)
+            )
             throw CloudFileProviderError.authenticationRequired(provider: .oneDrive)
         }
 
         let parameters = MSALSilentTokenParameters(scopes: configuration.scopes, account: account)
         let result = try await acquireTokenSilent(application: application, parameters: parameters)
         guard !result.accessToken.isEmpty else {
+            DiagnosticLog.shared.record(
+                .oneDriveSilentTokenFailed,
+                level: .warning,
+                module: .oneDriveAuth,
+                metadata: .merged(.stage(.silentToken), .reason(.emptyResult))
+            )
             throw AppOneDriveAuthenticationError.tokenUnavailable
         }
         return result.accessToken
@@ -110,16 +123,26 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
     }
 
     func signOut() async throws {
-        let application = try makeApplication()
-        if let account = try currentAccount(application: application) {
-            try application.remove(account)
-        } else {
-            let accounts = try application.allAccounts()
-            for account in accounts {
+        do {
+            let application = try makeApplication()
+            if let account = try currentAccount(application: application) {
                 try application.remove(account)
+            } else {
+                let accounts = try application.allAccounts()
+                for account in accounts {
+                    try application.remove(account)
+                }
             }
+            clearAccountIdentifier()
+        } catch {
+            DiagnosticLog.shared.record(
+                .oneDriveSignOutFailed,
+                level: .error,
+                module: .oneDriveAuth,
+                metadata: .reason(.keychain)
+            )
+            throw error
         }
-        clearAccountIdentifier()
     }
 
     func handleRedirectURL(_ url: URL) -> Bool {
@@ -145,7 +168,7 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
     ) async throws -> MSALResult {
         try await withCheckedThrowingContinuation { continuation in
             application.acquireToken(with: parameters) { result, error in
-                Self.resume(continuation, result: result, error: error)
+                Self.resume(continuation, stage: .signIn, result: result, error: error)
             }
         }
     }
@@ -156,13 +179,14 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
     ) async throws -> MSALResult {
         try await withCheckedThrowingContinuation { continuation in
             application.acquireTokenSilent(with: parameters) { result, error in
-                Self.resume(continuation, result: result, error: error)
+                Self.resume(continuation, stage: .silentToken, result: result, error: error)
             }
         }
     }
 
     private static func resume(
         _ continuation: CheckedContinuation<MSALResult, Error>,
+        stage: DiagnosticTag,
         result: MSALResult?,
         error: Error?
     ) {
@@ -170,8 +194,22 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
             let nsError = error as NSError
             if nsError.domain == MSALErrorDomain,
                nsError.code == MSALError.userCanceled.rawValue {
+                recordAuthenticationFailure(
+                    .oneDriveSignInCancelled,
+                    level: .info,
+                    stage: stage,
+                    reason: .cancelled,
+                    error: nsError
+                )
                 continuation.resume(throwing: AppOneDriveAuthenticationError.authenticationCancelled)
             } else {
+                recordAuthenticationFailure(
+                    stage == .signIn ? .oneDriveSignInFailed : .oneDriveSilentTokenFailed,
+                    level: .error,
+                    stage: stage,
+                    reason: Self.diagnosticReason(for: nsError),
+                    error: nsError
+                )
                 continuation.resume(throwing: AppOneDriveAuthenticationError.authenticationFailed(
                     domain: nsError.domain,
                     code: nsError.code,
@@ -181,10 +219,64 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
             return
         }
         guard let result else {
+            recordAuthenticationFailure(
+                .oneDriveSilentTokenFailed,
+                level: .warning,
+                stage: stage,
+                reason: .emptyResult,
+                error: nil
+            )
             continuation.resume(throwing: AppOneDriveAuthenticationError.tokenUnavailable)
             return
         }
         continuation.resume(returning: result)
+    }
+
+    /// Writes one structured event. Only the stage, a reason tag, the HTTP status
+    /// and MSAL's correlation id (a UUID) are allowed through; the MSAL userInfo
+    /// dump stays in `diagnosticMessage` for the existing error text.
+    private static func recordAuthenticationFailure(
+        _ code: DiagnosticCode,
+        level: DiagnosticLevel,
+        stage: DiagnosticTag,
+        reason: DiagnosticTag,
+        error: NSError?
+    ) {
+        var metadata = DiagnosticMetadata.stage(stage).merging(.reason(reason))
+        if let error {
+            if let status = error.userInfo[MSALHTTPResponseCodeKey] as? Int {
+                metadata = metadata.merging(.status(status))
+            }
+            if let correlation = error.userInfo[MSALCorrelationIDKey] as? String,
+               let flowID = UUID(uuidString: correlation) {
+                metadata = metadata.merging(.flow(flowID))
+            }
+        }
+        DiagnosticLog.shared.record(code, level: level, module: .oneDriveAuth, metadata: metadata)
+    }
+
+    private static func diagnosticReason(for error: NSError) -> DiagnosticTag {
+        if let status = error.userInfo[MSALHTTPResponseCodeKey] as? Int {
+            if status >= 500 {
+                return .server
+            }
+            if status == 401 || status == 403 {
+                return .unauthorized
+            }
+        }
+        if let oauthError = error.userInfo[MSALOAuthErrorKey] as? String {
+            switch oauthError {
+            case "invalid_grant", "interaction_required", "consent_required":
+                return .interactionRequired
+            default:
+                break
+            }
+        }
+        if error.domain == MSALErrorDomain,
+           error.code == MSALError.interactionRequired.rawValue {
+            return .interactionRequired
+        }
+        return .identityUnavailable
     }
 
     static func diagnosticMessage(for error: NSError) -> String {
