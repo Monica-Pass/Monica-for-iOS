@@ -84,6 +84,7 @@
 		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
 		AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* AppAttachmentSupport.swift */; };
 		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
+		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -204,6 +205,7 @@
 		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000003 /* AppAttachmentSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAttachmentSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -325,6 +327,7 @@
 				AA0000000000000000000001 /* WifiQRCodeRenderer.swift */,
 				AA0000000000000000000003 /* AppAttachmentSupport.swift */,
 				AA0000000000000000000005 /* AppSecurityCenterSupport.swift */,
+				AA0000000000000000000007 /* AppAutoFillSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -707,6 +710,7 @@
 				AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */,
 				AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */,
 				AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */,
+				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
