@@ -42,6 +42,8 @@
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
 		A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000011 /* AppVaultLayoutPreferences.swift */; };
 		A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000011 /* AppUpdateCheckView.swift */; };
+		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
+		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
 		A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FC /* AppCloudVaultSyncView.swift */; };
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
@@ -172,6 +174,8 @@
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
 		A90000000000000000000011 /* AppVaultLayoutPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultLayoutPreferences.swift; sourceTree = "<group>"; };
 		A91000000000000000000011 /* AppUpdateCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckView.swift; sourceTree = "<group>"; };
+		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
+		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
 		A100000000000000000000FC /* AppCloudVaultSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSyncView.swift; sourceTree = "<group>"; };
 		A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillCredentialProviderViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -328,6 +332,8 @@
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
+				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
+				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A100000000000000000000FC /* AppCloudVaultSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
@@ -736,6 +742,8 @@
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
+				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */,
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,

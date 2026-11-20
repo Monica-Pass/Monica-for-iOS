@@ -49,6 +49,17 @@ final class AppSessionModel {
     var passwordModule: PasswordModule = .login
     var passwordOtherKind: UnifiedVaultItemKind = .sshKey
     var vaultState: VaultState = .locked
+
+    /// 生成历史的 Vault 作用域（#24）：只有解锁后才暴露 vaultID。
+    ///
+    /// 生成历史按 Vault 隔离加密存放，锁库或未打开 Vault 时为 nil，
+    /// 调用方不应再尝试读取历史。
+    var activeVaultHistoryScope: String? {
+        guard vaultState == .unlocked else {
+            return nil
+        }
+        return activeVaultSession?.handle.vaultID
+    }
     var vaultOperationState: VaultOperationState = .idle
     var vaultName = ""
     var vaultPassword = ""
