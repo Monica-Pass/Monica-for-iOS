@@ -231,7 +231,7 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # 纯 Swift 包：一个 matrix job，4 个包并行。无需 MDBX 产物。
+  # 纯 Swift 包：一个 matrix job，按包并行。无需 MDBX 产物。
   # ---------------------------------------------------------------------------
   swift-packages:
     name: SwiftPM ${{ matrix.package }}
@@ -240,7 +240,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [MonicaCore, MonicaSecurity, MonicaSync]
+        package: [MonicaCore, MonicaSecurity, MonicaSync, MonicaWidgetShared]
     steps:
       - uses: actions/checkout@v4
 
