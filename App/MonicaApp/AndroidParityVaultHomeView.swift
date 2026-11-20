@@ -2090,24 +2090,29 @@ struct AddEditVaultItemView: View {
             field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.loginTitle : $session.editingLoginTitle)
             iconRow
             field(icon: "globe", title: String(localized: "网站/网址"), text: mode.isAdding ? $session.loginURL : $session.editingLoginURL)
-            HStack(spacing: 14) {
-                Button("+ 添加 URL") {}
-                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-                Button("绑定应用") {}
-                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-            }
+            LoginAdditionalURLEditor(urls: mode.isAdding ? $session.loginAdditionalURLs : $session.editingLoginAdditionalURLs)
+            LoginAppBindingEditor(
+                appName: mode.isAdding ? $session.loginAppName : $session.editingLoginAppName,
+                bundleID: mode.isAdding ? $session.loginAppBundleID : $session.editingLoginAppBundleID
+            )
             field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername)
-            Picker("登录方式", selection: .constant(0)) {
-                Text("密码登录").tag(0)
-                Text("第三方登录").tag(1)
-            }
-            .pickerStyle(.segmented)
             secureField(icon: "lock.fill", title: String(localized: "密码"), text: mode.isAdding ? $session.loginPassword : $session.editingLoginPassword)
             Button(action: mode.isAdding ? generateLoginPassword : generateSelectedLoginPassword) {
                 Label("添加密码", systemImage: "plus")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("备注")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                TextEditor(text: mode.isAdding ? $session.loginNotes : $session.editingLoginNotes)
+                    .frame(minHeight: 120)
+                    .padding(12)
+                    .scrollContentBackground(.hidden)
+                    .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1) }
+            }
         }
     }
 
@@ -2381,10 +2386,17 @@ private extension UnifiedVaultItemKind {
 }
 
 struct VaultItemDetailView: View {
+    private struct CopyFeedback: Equatable {
+        let rowID: String
+        let message: String
+    }
+
     @Bindable var session: AppSessionModel
     let route: VaultItemRoute
     @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
-    @State private var copyFeedback: String?
+    @State private var copyFeedback: CopyFeedback?
+    @State private var copyFeedbackDismissTask: Task<Void, Never>?
+    @State private var historyOperationMessage: String?
 
     var body: some View {
         AndroidParityScreen {
@@ -2432,19 +2444,30 @@ struct VaultItemDetailView: View {
             AndroidParitySection(title: String(localized: "详情")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(rows) { row in
-                        HStack(spacing: 12) {
-                            AndroidParityInfoRow(title: row.title, value: row.value)
-                            if let secret = copyableSecrets[row.id], !secret.isEmpty {
-                                Button {
-                                    copyFeedback = session.copySensitiveValueToPasteboard(secret).message
-                                } label: {
-                                    Image(systemName: "doc.on.doc")
-                                        .font(.caption.weight(.bold))
-                                        .frame(minWidth: 44, minHeight: 44)
+                        VStack(alignment: .leading, spacing: 6) {
+                            HStack(spacing: 12) {
+                                AndroidParityInfoRow(title: row.title, value: row.value)
+                                if let secret = copyableSecrets[row.id], !secret.isEmpty {
+                                    let isCopied = copyFeedback?.rowID == row.id
+                                    Button {
+                                        copy(secret, rowID: row.id)
+                                    } label: {
+                                        Image(systemName: isCopied ? "checkmark.circle.fill" : "doc.on.doc")
+                                            .font(.caption.weight(.bold))
+                                            .frame(minWidth: 44, minHeight: 44)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(AndroidParityPalette.primary)
+                                    .accessibilityLabel(Text("复制 \(row.title)"))
                                 }
-                                .buttonStyle(.plain)
-                                .foregroundStyle(AndroidParityPalette.primary)
-                                .accessibilityLabel(Text("复制 \(row.title)"))
+                            }
+                            if let copyFeedback, copyFeedback.rowID == row.id {
+                                Text(copyFeedback.message)
+                                    .font(.caption2)
+                                    .foregroundStyle(AndroidParityPalette.primary)
+                                    .padding(.horizontal, 4)
+                                    .transition(.opacity)
+                                    .accessibilityLabel(Text(copyFeedback.message))
                             }
                         }
                         if row.id != rows.last?.id {
@@ -2452,16 +2475,68 @@ struct VaultItemDetailView: View {
                         }
                     }
                 }
-                if let copyFeedback {
-                    Text(copyFeedback)
+            }
+
+            if let entry = loginEntry, !entry.passwordHistory.isEmpty {
+                LoginPasswordHistorySection(
+                    history: entry.passwordHistory,
+                    canReveal: session.canTemporarilyRevealSensitiveFieldsInDetail,
+                    onDelete: { historyEntryID in
+                        Task { @MainActor in
+                            do {
+                                try session.deleteLoginPasswordHistoryEntry(
+                                    entryID: route.entryID,
+                                    historyEntryID: historyEntryID
+                                )
+                                historyOperationMessage = nil
+                            } catch {
+                                historyOperationMessage = error.localizedDescription
+                            }
+                        }
+                    },
+                    onClear: {
+                        Task { @MainActor in
+                            do {
+                                try session.clearLoginPasswordHistory(entryID: route.entryID)
+                                historyOperationMessage = nil
+                            } catch {
+                                historyOperationMessage = error.localizedDescription
+                            }
+                        }
+                    }
+                )
+                if let historyOperationMessage {
+                    Text(historyOperationMessage)
                         .font(.caption2)
-                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .foregroundStyle(.red)
                         .padding(.horizontal, 4)
                 }
             }
         }
         .onDisappear {
+            copyFeedbackDismissTask?.cancel()
+            copyFeedback = nil
             session.setSensitivePreviewRevealed(false, entryID: route.entryID)
+        }
+    }
+
+    private var loginEntry: LocalLoginEntry? {
+        guard route.kind == .login else { return nil }
+        return session.loginEntries.first(where: { $0.id == route.entryID })
+    }
+
+    private func copy(_ secret: String, rowID: String) {
+        let feedback = session.copySensitiveValueToPasteboard(secret)
+        copyFeedbackDismissTask?.cancel()
+        withAnimation(.easeOut(duration: 0.15)) {
+            copyFeedback = CopyFeedback(rowID: rowID, message: feedback.message)
+        }
+        copyFeedbackDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(5))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeOut(duration: 0.2)) {
+                copyFeedback = nil
+            }
         }
     }
 
@@ -2473,13 +2548,29 @@ struct VaultItemDetailView: View {
         switch route.kind {
         case .login:
             guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [
+            let urls = entry.effectiveURLs
+            var items = [
                 row("title", String(localized: "标题"), entry.title),
-                row("username", String(localized: "账号"), entry.username),
-                row("url", String(localized: "网址"), redactedURL(entry.url)),
-                row("password", String(localized: "密码"), sensitive(entry.password, .password)),
-                row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))
+                row("username", String(localized: "账号"), entry.username)
             ]
+            if urls.isEmpty {
+                items.append(row("url", String(localized: "网址"), ""))
+            } else {
+                for (index, url) in urls.enumerated() {
+                    items.append(
+                        row(
+                            index == 0 ? "url" : "url-\(index + 1)",
+                            index == 0 ? String(localized: "网址") : String(localized: "网址") + " \(index + 2)",
+                            redactedURL(url)
+                        )
+                    )
+                }
+            }
+            items.append(row("password", String(localized: "密码"), sensitive(entry.password, .password)))
+            items.append(row("appBinding", String(localized: "应用绑定"), appBinding(entry)))
+            items.append(row("notes", String(localized: "备注"), sensitive(entry.notes, .noteBody)))
+            items.append(row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否")))
+            return items
         case .note:
             guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "正文"), sensitive(entry.body, .noteBody)), row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))]
@@ -2545,7 +2636,8 @@ struct VaultItemDetailView: View {
         switch route.kind {
         case .login:
             guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return [:] }
-            return ["password": entry.password]
+            // 用户名、密码、备注都给复制入口；密码与备注在展示层仍是掩码，复制值来自 Vault 解锁后的内存数据。
+            return ["username": entry.username, "password": entry.password, "notes": entry.notes]
         case .note:
             guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["body": entry.body]
@@ -2582,6 +2674,21 @@ struct VaultItemDetailView: View {
         guard !value.isEmpty else { return String(localized: "空") }
         if masksSensitiveFields { return AppSessionModel.sensitivePreviewMaskPlaceholder }
         return session.sensitivePreviewValue(value, category: category, entryID: route.entryID)
+    }
+
+    private func appBinding(_ entry: LocalLoginEntry) -> String {
+        let name = entry.appName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let bundle = entry.appBundleID.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (name.isEmpty, bundle.isEmpty) {
+        case (true, true):
+            return ""
+        case (false, true):
+            return name
+        case (true, false):
+            return bundle
+        case (false, false):
+            return "\(name)（\(bundle)）"
+        }
     }
 
     private func redactedURL(_ value: String) -> String {
