@@ -3,107 +3,88 @@
 # 一键准备 MDBX 原生产物（Artifacts/MDBX/MonicaMDBXGenerated.xcframework）。
 #
 # 全新 clone 后运行本脚本，即可让 Monica.xcodeproj 正常构建。
-# 若产物已存在且不是 --force，则直接跳过。
+# 产物已存在且未指定 --force 时直接跳过（此时不需要 Rust 工具链）。
 #
 # 用法：
 #   Scripts/bootstrap.sh            # 产物存在则跳过，否则构建
 #   Scripts/bootstrap.sh --force    # 强制重新构建
 #
+# 上游 workspace 定位、UniFFI 版本与 Rust target 校验统一实现在
+# Scripts/mdbx-common.sh，本脚本只负责编排。
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$IOS_DIR/.." && pwd)"
+# shellcheck source=Scripts/mdbx-common.sh
+source "$SCRIPT_DIR/mdbx-common.sh"
 
-if [ -n "${MONICA_MDBX_DIR:-}" ]; then
-  MDBX_DIR="$MONICA_MDBX_DIR"
-elif [ -d "$REPO_ROOT/mdbx/crates/mdbx-ffi" ]; then
-  MDBX_DIR="$REPO_ROOT/mdbx"
-elif [ -d "$IOS_DIR/mdbx/crates/mdbx-ffi" ]; then
-  MDBX_DIR="$IOS_DIR/mdbx"
-else
-  MDBX_DIR="$REPO_ROOT/mdbx"
-fi
-XCFRAMEWORK_PATH="$IOS_DIR/Artifacts/MDBX/MonicaMDBXGenerated.xcframework"
-UNIFFI_VERSION="0.31.1"
-IOS_TARGETS=(aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin)
+XCFRAMEWORK_PATH="$REPO_DIR/Artifacts/MDBX/MonicaMDBXGenerated.xcframework"
+
 
 FORCE=0
-[ "${1:-}" = "--force" ] && FORCE=1
-
-info()  { printf '\033[1;34m==>\033[0m %s\n' "$*"; }
-warn()  { printf '\033[1;33m[!]\033[0m %s\n' "$*" >&2; }
-fail()  { printf '\033[1;31m[x]\033[0m %s\n' "$*" >&2; exit 1; }
+for arg in "$@"; do
+  case "$arg" in
+    --force) FORCE=1 ;;
+    -h|--help)
+      sed -n '2,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+      exit 0
+      ;;
+    *)
+      monica_fail "未知参数：${arg}（可用：--force、--help）"
+      ;;
+  esac
+done
 
 # ---------- 1. 产物已存在 ----------
 if [ -d "$XCFRAMEWORK_PATH" ] && [ "$FORCE" = "0" ]; then
-  info "MDBX 产物已存在，跳过：$XCFRAMEWORK_PATH"
-  info "如需重新生成，请运行：Scripts/bootstrap.sh --force"
+  monica_info "MDBX 产物已存在，跳过：$XCFRAMEWORK_PATH"
+  monica_info "如需重新生成，请运行：Scripts/bootstrap.sh --force"
   exit 0
 fi
 
 # ---------- 2. 前置检查 ----------
-info "检查上游 MDBX workspace"
-if [ ! -d "$MDBX_DIR" ]; then
-  fail "$(cat <<EOF
-找不到上游 MDBX workspace：$MDBX_DIR
+monica_info "检查上游 MDBX workspace"
+require_mdbx_workspace
 
-构建脚本要求目录结构如下（MDBX 必须与本仓库同级）：
-
-  $(basename "$REPO_ROOT")/
-  ├── Monica-for-iOS/   ← 本仓库
-  └── mdbx/            ← 上游 MDBX workspace
-
-获取方式：
-  git clone https://github.com/Monica-Pass/Mdbx.git "$MDBX_DIR"
-EOF
-)"
+monica_info "检查 Rust 工具链"
+if ! find_tool cargo >/dev/null; then
+  monica_fail "找不到 cargo。请安装 Rust：https://rustup.rs"
 fi
-if [ ! -d "$MDBX_DIR/crates/mdbx-ffi" ]; then
-  fail "上游 MDBX workspace 不完整（缺 crates/mdbx-ffi）：$MDBX_DIR"
+if ! RUSTC="$(find_tool rustc)"; then
+  monica_fail "找不到 rustc。请安装 Rust：https://rustup.rs"
 fi
 
-info "检查 Rust 工具链"
-for tool in cargo rustc; do
-  command -v "$tool" >/dev/null 2>&1 || fail "缺少 $tool，请安装 rustup：https://rustup.rs"
-done
-if ! command -v rustup >/dev/null 2>&1; then
-  fail "缺少 rustup（无法自动添加 iOS target），请安装：https://rustup.rs"
+# 先尽力自动补 target（rustup 缺失或指向别的 toolchain 时忽略失败），
+# 再由 require_std_targets 以 sysroot 为准做权威校验。
+missing_targets="$(missing_std_targets "$RUSTC" "${MDBX_TARGETS[@]}")"
+if [ -n "$missing_targets" ] && RUSTUP="$(find_tool rustup)"; then
+  # shellcheck disable=SC2086
+  monica_info "尝试安装缺失的 Rust target：${missing_targets//$'\n'/ }"
+  # shellcheck disable=SC2086
+  "$RUSTUP" target add $missing_targets || monica_warn "rustup target add 未成功，继续以 sysroot 校验"
+fi
+if ! require_std_targets "$RUSTC" "$SCRIPT_DIR/bootstrap.sh" "${MDBX_TARGETS[@]}"; then
+  exit 2
 fi
 
-MISSING_TARGETS=()
-for target in "${IOS_TARGETS[@]}"; do
-  if ! rustup target list --installed 2>/dev/null | grep -qx "$target"; then
-    MISSING_TARGETS+=("$target")
-  fi
-done
-if [ "${#MISSING_TARGETS[@]}" -gt 0 ]; then
-  info "安装缺失的 Rust iOS target：${MISSING_TARGETS[*]}"
-  rustup target add "${MISSING_TARGETS[@]}"
-fi
-
-info "检查 UniFFI CLI（需要 $UNIFFI_VERSION）"
-if ! command -v uniffi-bindgen-swift >/dev/null 2>&1 \
-   && [ ! -x "$HOME/.cargo/bin/uniffi-bindgen-swift" ]; then
-  warn "未找到 uniffi-bindgen-swift，开始安装（可能需要几分钟）"
-  cargo install uniffi --version "$UNIFFI_VERSION" --locked --features cli
-fi
-export PATH="$HOME/.cargo/bin:$PATH"
-command -v uniffi-bindgen-swift >/dev/null 2>&1 \
-  || fail "uniffi-bindgen-swift 安装后仍不可用，请检查 PATH"
+monica_info "检查 UniFFI CLI"
+"$SCRIPT_DIR/uniffi-version.sh" --install
 
 # ---------- 3. 构建 ----------
-info "开始生成 MDBX xcframework（首次约 1-2 分钟）"
+monica_info "开始生成 MDBX xcframework（首次约 1-2 分钟）"
 "$SCRIPT_DIR/build-mdbx-xcframework.sh"
 
-[ -d "$XCFRAMEWORK_PATH" ] || fail "构建结束但未找到产物：$XCFRAMEWORK_PATH"
+[ -d "$XCFRAMEWORK_PATH" ] || monica_fail "构建结束但未找到产物：$XCFRAMEWORK_PATH"
 
-info "完成：$XCFRAMEWORK_PATH"
-info "现在可以构建工程了："
-cat <<EOF
+monica_info "完成：$XCFRAMEWORK_PATH"
+monica_info "入库的 Swift 绑定也已同步：SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated/mdbx_ffi.swift"
+monica_warn "若上游接口有变化，请把该文件一起提交（此前生成的是同一份绑定的旧版本）。"
+cat <<'EOF'
 
-  xcodebuild -project Monica.xcodeproj -scheme Monica \\
-    -sdk iphonesimulator -destination 'id=<simulator-udid>' \\
+现在可以构建工程了：
+
+  xcodebuild -project Monica.xcodeproj -scheme Monica \
+    -destination 'generic/platform=iOS Simulator' \
     CODE_SIGNING_ALLOWED=NO build
 
 EOF
