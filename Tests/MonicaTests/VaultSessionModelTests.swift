@@ -657,6 +657,113 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testControlCenterDeepLinkOpensEachFixedTab() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        try unlockNewVault(model)
+
+        for page in MonicaControlPage.allCases {
+            XCTAssertTrue(model.openDeepLinkURL(page.deepLinkURL), "控制中心页面 \(page.rawValue) 应能打开")
+            XCTAssertEqual(model.selectedTab, page.appTab)
+            XCTAssertNil(model.presentedDetailRoute)
+            XCTAssertNil(model.pendingControlPage)
+        }
+    }
+
+    func testControlCenterDeepLinkWaitsForUnlockBeforeNavigating() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        XCTAssertEqual(model.vaultState, .locked)
+
+        XCTAssertTrue(model.openDeepLinkURL(URL(string: "monica://open/totp")!))
+
+        XCTAssertEqual(model.pendingControlPage, .totp)
+        XCTAssertEqual(model.selectedTab, .passwords)
+
+        try unlockNewVault(model)
+        model.consumePendingControlPageIfUnlocked()
+
+        XCTAssertEqual(model.selectedTab, .totp)
+        XCTAssertNil(model.pendingControlPage)
+        XCTAssertNil(model.presentedDetailRoute)
+    }
+
+    func testControlCenterDeepLinkRejectsUnknownPageWithoutNavigating() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        try unlockNewVault(model)
+
+        XCTAssertFalse(model.openDeepLinkURL(URL(string: "monica://open/unknown")!))
+
+        XCTAssertEqual(model.selectedTab, .passwords)
+        XCTAssertNil(model.pendingControlPage)
+        XCTAssertEqual(model.vaultOperationState, .failed("快捷入口无效，请重新选择页面。"))
+    }
+
+    func testControlCenterPageMetadataMatchesFixedTabIA() {
+        XCTAssertEqual(
+            MonicaControlPage.allCases.map(\.rawValue),
+            ["passwords", "totp", "wallet", "settings"]
+        )
+        for page in MonicaControlPage.allCases {
+            XCTAssertEqual(page.title, page.appTab.title)
+            XCTAssertEqual(page.systemImage, page.appTab.systemImage)
+        }
+    }
+
+    func testControlCenterNavigationStoreRoundTripsOnlyFixedDeepLink() throws {
+        let suiteName = "monica.tests.control.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        MonicaControlNavigationStore.save(.wallet, to: defaults)
+
+        XCTAssertEqual(
+            defaults.string(forKey: MonicaControlNavigationStore.storageKey),
+            "monica://open/wallet"
+        )
+        XCTAssertEqual(
+            MonicaControlNavigationStore.consume(from: defaults),
+            MonicaControlPage.wallet.deepLinkURL
+        )
+        XCTAssertNil(MonicaControlNavigationStore.consume(from: defaults))
+    }
+
+    func testPendingControlNavigationFromAppGroupOpensPageAfterUnlock() throws {
+        let suiteName = "monica.tests.pending-control.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            controlNavigationDefaults: defaults
+        )
+        MonicaControlNavigationStore.save(.settings, to: defaults)
+        model.consumePendingControlNavigationIfAvailable()
+
+        XCTAssertEqual(model.pendingControlPage, .settings)
+        XCTAssertEqual(model.selectedTab, .passwords)
+
+        try unlockNewVault(model)
+        model.consumePendingControlPageIfUnlocked()
+
+        XCTAssertEqual(model.selectedTab, .settings)
+        XCTAssertNil(model.pendingControlPage)
+        XCTAssertNil(MonicaControlNavigationStore.consume(from: defaults))
+    }
+
+    func testOpenDeepLinkURLStillSupportsLegacyShortcutRoute() throws {
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()))
+        try unlockNewVault(model)
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "github-password-secret"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        XCTAssertTrue(model.openDeepLinkURL(URL(string: "monica://shortcut/login/entry-1")!))
+
+        XCTAssertEqual(model.selectedTab, .passwords)
+        XCTAssertEqual(model.passwordModule, .login)
+        XCTAssertEqual(model.presentedDetailRoute, VaultItemRoute(kind: .login, entryID: "entry-1"))
+    }
+
     func testShareActionImportCreatesEntriesAndAttachmentWithoutLeakingSecrets() throws {
         let engine = RecordingVaultEngine()
         let blobStore = RecordingAndroidBackupAttachmentBlobStore()
