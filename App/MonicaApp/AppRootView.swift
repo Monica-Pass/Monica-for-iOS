@@ -24,80 +24,6 @@ struct SecurityQuestionOption: Identifiable, Sendable, Equatable {
     let text: String
 }
 
-struct AppPermissionStatusRow: Sendable, Equatable, Identifiable {
-    enum State: String, Sendable, Equatable {
-        case granted
-        case denied
-        case notDetermined
-        case unavailable
-        case configured
-        case notConfigured
-        case checkable
-
-        var label: String {
-            switch self {
-            case .granted:
-                String(localized: "已允许")
-            case .denied:
-                String(localized: "未允许")
-            case .notDetermined:
-                String(localized: "可检查")
-            case .unavailable:
-                String(localized: "不可用")
-            case .configured:
-                String(localized: "已配置")
-            case .notConfigured:
-                String(localized: "待配置")
-            case .checkable:
-                String(localized: "可检查")
-            }
-        }
-    }
-
-    let id: String
-    let title: String
-    let systemImage: String
-    let state: State
-    let detail: String
-    let settingsURL: URL?
-
-    init(
-        id: String,
-        title: String,
-        systemImage: String,
-        state: State,
-        detail: String,
-        settingsURL: URL? = nil
-    ) {
-        self.id = id
-        self.title = title
-        self.systemImage = systemImage
-        self.state = state
-        self.detail = detail
-        self.settingsURL = settingsURL
-    }
-
-    var value: String {
-        state.label
-    }
-}
-
-struct AppSecurityCenterRow: Sendable, Equatable, Identifiable {
-    let id: String
-    let title: String
-    let value: String
-    let detail: String
-    let systemImage: String
-}
-
-struct AppSecurityCenterRepairSuggestion: Sendable, Equatable, Identifiable {
-    let id: String
-    let relatedRowID: String
-    let title: String
-    let detail: String
-    let systemImage: String
-}
-
 struct AppPlusEntitlementStatusRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -749,13 +675,6 @@ struct SystemAppBackgroundBackupScheduler: AppBackgroundBackupScheduler {
     }
 }
 
-struct AppExtensionCapabilityRow: Sendable, Equatable, Identifiable {
-    let id: String
-    let title: String
-    let value: String
-    let detail: String
-    let systemImage: String
-}
 
 /// 接收 Bitwarden Send 的 UI 状态。
 enum AppBitwardenReceiveState: Sendable, Equatable {
@@ -1590,47 +1509,9 @@ struct FileAppBitwardenPendingMutationQueueStore: AppBitwardenPendingMutationQue
     }
 }
 
-struct AppDuplicateLoginMergePreview: Sendable, Equatable, Identifiable {
-    let id: String
-    let title: String
-    let username: String
-    let url: String
-    let entryCountLabel: String
-    let primaryEntryID: String
-    let duplicateEntryIDs: [String]
-    let detail: String
-}
 
-private struct AppDuplicateLoginMergeUndo: Sendable, Equatable {
-    let title: String
-    let restoredEntryIDs: [String]
-}
 
-private struct DuplicateLoginEntryKey: Hashable {
-    let title: String
-    let username: String
-    let url: String
 
-    init?(entry: LocalLoginEntry) {
-        title = Self.normalized(entry.title)
-        username = Self.normalized(entry.username)
-        url = Self.normalized(entry.url)
-        guard !title.isEmpty || !username.isEmpty || !url.isEmpty else {
-            return nil
-        }
-    }
-
-    private static func normalized(_ value: String) -> String {
-        value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-    }
-}
-
-private extension String {
-    var nonBlankValue: String? {
-        let trimmed = trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-}
 
 // 密保记录、答案规范化与 KDF 验证由 MonicaSecurity 提供（#59）。
 enum ForgotPasswordRecoveryStep: Sendable, Equatable {
