@@ -1,5 +1,6 @@
 import Foundation
 import AuthenticationServices
+import MonicaCore
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
@@ -347,7 +348,10 @@ extension AppSessionModel {
                 oneDriveBackupPreferencesStore: environment.oneDriveBackupPreferencesStore,
                 autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
                 plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
-                plusEntitlementStore: environment.plusEntitlementStore
+                plusEntitlementStore: environment.plusEntitlementStore,
+                sensitivePasteboard: MonicaSensitivePasteboard(pasteboard: SystemSensitivePasteboard()),
+                sensitivePreviewPreferenceStore: UserDefaultsSensitivePreviewPreferenceStore(),
+                sensitiveClipboardPreferenceStore: UserDefaultsSensitiveClipboardPreferenceStore()
             )
         }
         let appGroupDefaults = UserDefaults(suiteName: environment.appGroupIdentifier) ?? .standard
@@ -419,6 +423,9 @@ extension AppSessionModel {
             widgetSnapshotStore: widgetSnapshotStore,
             shortcutSnapshotStore: shortcutSnapshotStore,
             widgetReloadScheduler: widgetReloadScheduler
+            sensitivePasteboard: MonicaSensitivePasteboard(pasteboard: SystemSensitivePasteboard()),
+            sensitivePreviewPreferenceStore: UserDefaultsSensitivePreviewPreferenceStore(),
+            sensitiveClipboardPreferenceStore: UserDefaultsSensitiveClipboardPreferenceStore()
         )
         session.refreshNotificationPermissionStatus()
         return session
