@@ -4073,6 +4073,118 @@ import MonicaStorage
     ])
 }
 
+@Test func changeMasterPasswordVerifiesCurrentPasswordThenRewraps() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let session = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "old password",
+        deviceID: "ios-storage-test"
+    )
+
+    try repository.changeMasterPassword(
+        for: session,
+        currentPassword: "old password",
+        newPassword: "new password"
+    )
+
+    #expect(engine.verifiedMasterPasswords == [
+        .init(
+            fileURL: session.descriptor.fileURL,
+            password: "old password",
+            deviceID: "ios-storage-test"
+        )
+    ])
+    #expect(engine.resetMasterPasswordCalls == [
+        .init(vaultID: "created-vault", newPassword: "new password")
+    ])
+}
+
+@Test func changeMasterPasswordStopsBeforeRewrapWhenCurrentPasswordIsWrong() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let session = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "old password",
+        deviceID: "ios-storage-test"
+    )
+    engine.verifyMasterPasswordError = LocalVaultRepositoryError.currentPasswordMismatch
+
+    #expect(throws: LocalVaultRepositoryError.currentPasswordMismatch) {
+        try repository.changeMasterPassword(
+            for: session,
+            currentPassword: "wrong password",
+            newPassword: "new password"
+        )
+    }
+    #expect(engine.resetMasterPasswordCalls.isEmpty)
+}
+
+@Test func changeMasterPasswordRejectsVerificationOfAnotherVault() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let session = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "old password",
+        deviceID: "ios-storage-test"
+    )
+    engine.verifyMasterPasswordVaultID = "another-vault"
+
+    #expect(throws: LocalVaultRepositoryError.currentPasswordMismatch) {
+        try repository.changeMasterPassword(
+            for: session,
+            currentPassword: "old password",
+            newPassword: "new password"
+        )
+    }
+    #expect(engine.resetMasterPasswordCalls.isEmpty)
+}
+
+@Test func changeMasterPasswordRejectsReusedPassword() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let session = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "old password",
+        deviceID: "ios-storage-test"
+    )
+
+    #expect(throws: LocalVaultRepositoryError.passwordUnchanged) {
+        try repository.changeMasterPassword(
+            for: session,
+            currentPassword: "old password",
+            newPassword: "old password"
+        )
+    }
+    #expect(engine.verifiedMasterPasswords.isEmpty)
+    #expect(engine.resetMasterPasswordCalls.isEmpty)
+}
+
+@Test func changeMasterPasswordRejectsEmptyPasswords() throws {
+    let engine = RecordingVaultEngine()
+    let repository = LocalVaultRepository(engine: engine)
+    let session = try repository.createVault(
+        named: "Mobile",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "old password",
+        deviceID: "ios-storage-test"
+    )
+
+    #expect(throws: LocalVaultRepositoryError.emptyPassword) {
+        try repository.changeMasterPassword(
+            for: session,
+            currentPassword: "old password",
+            newPassword: "   "
+        )
+    }
+    #expect(engine.verifiedMasterPasswords.isEmpty)
+    #expect(engine.resetMasterPasswordCalls.isEmpty)
+}
+
 @Test func loginEntryRepositoryCreatesProjectScopedLoginAndListsIt() throws {
     let engine = RecordingVaultEngine()
     let vaultRepository = LocalVaultRepository(engine: engine)
@@ -5526,6 +5638,9 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var securityKeyOpenedVaults: [RecordedSecurityKeyVaultCall] = []
     private(set) var securityKeySetups: [RecordedSecurityKeySetupCall] = []
     private(set) var resetMasterPasswordCalls: [RecordedResetMasterPasswordCall] = []
+    private(set) var verifiedMasterPasswords: [RecordedVaultCall] = []
+    var verifyMasterPasswordError: Error?
+    var verifyMasterPasswordVaultID = "created-vault"
     private(set) var createdProjects: [RecordedProjectCall] = []
     private(set) var renamedProjects: [RecordedRenamedProjectCall] = []
     private(set) var deletedProjects: [RecordedDeletedProjectCall] = []
@@ -5634,6 +5749,20 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             .init(fileURL: fileURL, keyMaterial: securityKeyMaterial, deviceID: deviceID)
         )
         return LocalVaultHandle(vaultID: "security-key-opened-vault", deviceID: deviceID)
+    }
+
+    func verifyMasterPassword(
+        at fileURL: URL,
+        password: String,
+        deviceID: String
+    ) throws -> LocalVaultHandle {
+        verifiedMasterPasswords.append(
+            .init(fileURL: fileURL, password: password, deviceID: deviceID)
+        )
+        if let verifyMasterPasswordError {
+            throw verifyMasterPasswordError
+        }
+        return LocalVaultHandle(vaultID: verifyMasterPasswordVaultID, deviceID: deviceID)
     }
 
     func setupLocalSecurityKeyUnlock(
