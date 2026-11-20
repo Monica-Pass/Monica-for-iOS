@@ -37,7 +37,7 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 - iOS AutoFill：通过 Credential Provider Extension 读取加密索引并返回系统填充凭据。
 - 安全解锁：Keychain + LocalAuthentication + MDBX `security_key`，不保存主密码。
 - WebDAV：支持上传、下载、SHA-256 完整性校验、恢复预览和恢复前打开验证。
-- OneDrive：已接入 MSAL 与 Microsoft Graph app-folder provider，真实账号与网络验收仍在推进。
+- OneDrive：已接入 MSAL 多账号切换、app-folder 内备份目录选择/新建、固定文件名覆盖或按时间戳保留版本；真实账号与网络验收仍在推进。
 - KeePass / KDBX：已完成现代 KDBX3/KDBX4 主链路读写兼容，后续继续扩展真实场景验收。
 - 局域网同步（实验性）：两台 iPhone 在同一 Wi-Fi/热点下通过 Bonjour 手动配对，端到端加密同步登录项、安全笔记与 TOTP；详见 [`LAN_SYNC_NOTES.md`](LAN_SYNC_NOTES.md)。
 - 云端保险库（实验性）：把完整加密的 MDBX 保险库文件与版本清单手动 Push/Pull 到 WebDAV/OneDrive，ETag 条件写避免覆盖，冲突时三选一（保留本机/保留云端/先传冲突副本）；详见 [`CLOUD_VAULT_SYNC_NOTES.md`](CLOUD_VAULT_SYNC_NOTES.md)。

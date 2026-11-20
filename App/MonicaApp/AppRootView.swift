@@ -1284,6 +1284,16 @@ struct AppCloudFileRestorePreview: Sendable, Equatable {
 
 struct AppOneDriveAuthenticationSession: Sendable, Equatable {
     let accountLabel: String
+    let accountIdentifier: String
+
+    init(accountLabel: String, accountIdentifier: String = "") {
+        self.accountLabel = accountLabel
+        self.accountIdentifier = accountIdentifier
+    }
+
+    var normalizedAccountIdentifier: String {
+        accountIdentifier.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var redactedSummary: String {
         "OneDrive \(accountLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "已登录" : accountLabel)"
@@ -1292,9 +1302,100 @@ struct AppOneDriveAuthenticationSession: Sendable, Equatable {
 
 protocol AppOneDriveAuthenticationService: OneDriveAccessTokenProvider {
     func restoreSession() async throws -> AppOneDriveAuthenticationSession?
+    func availableAccounts() async throws -> [AppOneDriveAuthenticationSession]
+    func switchAccount(identifier: String) async throws -> AppOneDriveAuthenticationSession
     func signIn() async throws -> AppOneDriveAuthenticationSession
     func signOut() async throws
     func handleRedirectURL(_ url: URL) -> Bool
+}
+
+/// Backup location preferences are keyed by the signed-in account so account A and
+/// account B never share a target directory or retention policy.
+protocol AppOneDriveBackupPreferencesStore: Sendable {
+    func loadPreferences(accountIdentifier: String) -> CloudFileBackupPreferences
+    func savePreferences(_ preferences: CloudFileBackupPreferences, accountIdentifier: String)
+}
+
+struct UserDefaultsAppOneDriveBackupPreferencesStore: @unchecked Sendable, AppOneDriveBackupPreferencesStore {
+    private let userDefaults: UserDefaults
+    private let keyPrefix: String
+
+    init(
+        userDefaults: UserDefaults = .standard,
+        keyPrefix: String = "Monica.OneDrive.BackupPreferences."
+    ) {
+        self.userDefaults = userDefaults
+        self.keyPrefix = keyPrefix
+    }
+
+    func loadPreferences(accountIdentifier: String) -> CloudFileBackupPreferences {
+        guard let key = Self.storageKey(accountIdentifier, prefix: keyPrefix),
+              let data = userDefaults.data(forKey: key),
+              let preferences = try? JSONDecoder().decode(CloudFileBackupPreferences.self, from: data)
+        else {
+            return CloudFileBackupPreferences()
+        }
+        return preferences
+    }
+
+    func savePreferences(_ preferences: CloudFileBackupPreferences, accountIdentifier: String) {
+        guard let key = Self.storageKey(accountIdentifier, prefix: keyPrefix),
+              let data = try? JSONEncoder().encode(preferences)
+        else {
+            return
+        }
+        userDefaults.set(data, forKey: key)
+    }
+
+    static func storageKey(_ accountIdentifier: String, prefix: String) -> String? {
+        let normalized = accountIdentifier
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        guard !normalized.isEmpty else {
+            return nil
+        }
+        let digest = SHA256.hash(data: Data(normalized.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
+        return prefix + digest
+    }
+}
+
+final class MemoryAppOneDriveBackupPreferencesStore: @unchecked Sendable, AppOneDriveBackupPreferencesStore {
+    private let lock = NSLock()
+    private var storage: [String: CloudFileBackupPreferences]
+
+    init(seeded: [String: CloudFileBackupPreferences] = [:]) {
+        self.storage = seeded.reduce(into: [:]) { result, entry in
+            result[Self.key(entry.key)] = entry.value
+        }
+    }
+
+    func loadPreferences(accountIdentifier: String) -> CloudFileBackupPreferences {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage[Self.key(accountIdentifier)] ?? CloudFileBackupPreferences()
+    }
+
+    func savePreferences(_ preferences: CloudFileBackupPreferences, accountIdentifier: String) {
+        let key = Self.key(accountIdentifier)
+        guard !key.isEmpty else {
+            return
+        }
+        lock.lock()
+        defer { lock.unlock() }
+        storage[key] = preferences
+    }
+
+    var savedAccountIdentifiers: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage.keys.sorted()
+    }
+
+    private static func key(_ accountIdentifier: String) -> String {
+        accountIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    }
 }
 
 protocol AppBitwardenPasswordAuthenticationService: Sendable {
@@ -2822,6 +2923,12 @@ final class AppSessionModel {
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
     var cloudFileSelectedBackupItemByProvider: [CloudFileProviderKind: CloudFileItem] = [:]
     var oneDriveAuthenticationState: OneDriveAuthenticationState = .disconnected
+    var oneDriveAccounts: [AppOneDriveAuthenticationSession] = []
+    var currentOneDriveAccountIdentifier = ""
+    var oneDriveBackupPreferences = CloudFileBackupPreferences()
+    var oneDriveBackupDirectoryState: AppOneDriveBackupDirectoryState = .unknown
+    var oneDriveDefaultLocationFiles: [CloudFileItem] = []
+    var oneDriveBackupNotice: String?
     var bitwardenServerURL = "https://vault.bitwarden.com"
     var bitwardenEmail = ""
     var bitwardenMasterPassword = ""
@@ -2874,6 +2981,8 @@ final class AppSessionModel {
     }
     private var downloadedWebDAVRestoreBackup: WebDAVDownloadedBackup?
     private var downloadedCloudFileRestore: CloudFileDownload?
+    private let oneDriveBackupPreferencesStore: any AppOneDriveBackupPreferencesStore
+    private let oneDriveNow: () -> Date
 
     private let vaultRepository: LocalVaultRepository
     private let vaultKeychainService: (any AppVaultKeychainService)?
@@ -2964,6 +3073,8 @@ final class AppSessionModel {
         backgroundBackupScheduler: any AppBackgroundBackupScheduler = SystemAppBackgroundBackupScheduler(),
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
+        oneDriveBackupPreferencesStore: (any AppOneDriveBackupPreferencesStore)? = nil,
+        oneDriveNow: @escaping () -> Date = Date.init,
         bitwardenPasswordAuthenticationService: (any AppBitwardenPasswordAuthenticationService)? = nil,
         bitwardenSyncProvider: (any BitwardenSyncProvider)? = nil,
         bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore = MemoryBitwardenAuthenticationSessionStore(),
@@ -3022,6 +3133,8 @@ final class AppSessionModel {
         self.backgroundBackupScheduler = backgroundBackupScheduler
         self.cloudFileProviders = cloudFileProviders
         self.oneDriveAuthenticationService = oneDriveAuthenticationService
+        self.oneDriveBackupPreferencesStore = oneDriveBackupPreferencesStore ?? MemoryAppOneDriveBackupPreferencesStore()
+        self.oneDriveNow = oneDriveNow
         self.bitwardenPasswordAuthenticationService = bitwardenPasswordAuthenticationService
         self.bitwardenSyncProvider = bitwardenSyncProvider
         self.bitwardenAuthenticationSessionStore = bitwardenAuthenticationSessionStore
@@ -10178,6 +10291,10 @@ final class AppSessionModel {
 
         do {
             let provider = try cloudFileProvider(for: kind)
+            if kind == .oneDrive,
+               let directoryProvider = provider as? any CloudFileBackupDirectoryProviding {
+                return try await refreshOneDriveBackupDirectory(using: directoryProvider)
+            }
             let items = try await provider.listFiles()
             cloudFileItemsByProvider[kind] = items
             cloudFileState = .listed(provider: kind, count: items.count)
@@ -10186,6 +10303,44 @@ final class AppSessionModel {
             cloudFileState = .failed(readableCloudFileErrorMessage(for: error, provider: kind))
             throw error
         }
+    }
+
+    private func refreshOneDriveBackupDirectory(
+        using provider: any CloudFileBackupDirectoryProviding
+    ) async throws -> [CloudFileItem] {
+        let selectedDirectoryID = oneDriveBackupPreferences.directory?.id
+        do {
+            let listing = try await provider.listBackupDirectory(id: selectedDirectoryID)
+            if let directory = listing.directory {
+                if oneDriveBackupPreferences.directory != directory {
+                    oneDriveBackupPreferences.directory = directory
+                    persistOneDriveBackupPreferences()
+                }
+                oneDriveBackupDirectoryState = .available(directory.displayPath)
+                await loadOneDriveDefaultLocationFiles(using: provider)
+            } else {
+                oneDriveBackupDirectoryState = .unknown
+                oneDriveDefaultLocationFiles = []
+            }
+            cloudFileItemsByProvider[.oneDrive] = listing.files
+            cloudFileState = .listed(provider: .oneDrive, count: listing.files.count)
+            return listing.files
+        } catch let error as CloudFileProviderError
+            where error == .itemNotFound(provider: .oneDrive) {
+            oneDriveBackupDirectoryState = .missing
+            cloudFileItemsByProvider[.oneDrive] = []
+            await loadOneDriveDefaultLocationFiles(using: provider)
+            throw error
+        }
+    }
+
+    private func loadOneDriveDefaultLocationFiles(
+        using provider: any CloudFileBackupDirectoryProviding
+    ) async {
+        guard let listing = try? await provider.listBackupDirectory(id: nil) else {
+            return
+        }
+        oneDriveDefaultLocationFiles = listing.files
     }
 
     func refreshWebDAVBackupItems() async throws -> [WebDAVBackupItem] {
@@ -10329,9 +10484,12 @@ final class AppSessionModel {
             throw error
         }
         oneDriveAuthenticationState = .running
+        clearOneDriveSessionState()
         do {
             let session = try await oneDriveAuthenticationService.signIn()
             oneDriveAuthenticationState = .connected(accountLabel: session.accountLabel)
+            applyOneDriveSession(session)
+            await loadOneDriveAccounts()
             return session
         } catch {
             oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
@@ -10342,16 +10500,22 @@ final class AppSessionModel {
     @discardableResult
     func restoreOneDriveAuthenticationSession() async throws -> AppOneDriveAuthenticationSession? {
         guard let oneDriveAuthenticationService else {
+            clearOneDriveSessionState()
             oneDriveAuthenticationState = .disconnected
             return nil
         }
 
         do {
-            guard let session = try await oneDriveAuthenticationService.restoreSession() else {
+            let session = try await oneDriveAuthenticationService.restoreSession()
+            clearOneDriveSessionState()
+            guard let session else {
                 oneDriveAuthenticationState = .disconnected
+                oneDriveAccounts = []
                 return nil
             }
             oneDriveAuthenticationState = .connected(accountLabel: session.accountLabel)
+            applyOneDriveSession(session)
+            await loadOneDriveAccounts()
             return session
         } catch {
             oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
@@ -10369,16 +10533,76 @@ final class AppSessionModel {
         oneDriveAuthenticationState = .running
         do {
             try await oneDriveAuthenticationService.signOut()
-            cloudFileItemsByProvider[.oneDrive] = nil
-            if cloudFileRestorePreview?.provider == .oneDrive {
-                cloudFileRestorePreview = nil
-                downloadedCloudFileRestore = nil
-            }
+            clearOneDriveSessionState()
             oneDriveAuthenticationState = .disconnected
+            if let remaining = try? await oneDriveAuthenticationService.restoreSession() {
+                oneDriveAuthenticationState = .connected(accountLabel: remaining.accountLabel)
+                applyOneDriveSession(remaining)
+            } else {
+                oneDriveAccounts = []
+            }
+            await loadOneDriveAccounts()
         } catch {
             oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
             throw error
         }
+    }
+
+    @discardableResult
+    func switchOneDriveAccount(identifier: String) async throws -> AppOneDriveAuthenticationSession {
+        recordUserActivity()
+        guard let oneDriveAuthenticationService else {
+            let error = AppOneDriveAuthenticationError.serviceUnavailable
+            oneDriveAuthenticationState = .failed(error.localizedDescription)
+            throw error
+        }
+        oneDriveAuthenticationState = .running
+        clearOneDriveSessionState()
+        do {
+            let session = try await oneDriveAuthenticationService.switchAccount(identifier: identifier)
+            oneDriveAuthenticationState = .connected(accountLabel: session.accountLabel)
+            applyOneDriveSession(session)
+            await loadOneDriveAccounts()
+            _ = try? await refreshCloudFileItems(provider: .oneDrive)
+            return session
+        } catch {
+            oneDriveAuthenticationState = .failed(readableOneDriveAuthenticationErrorMessage(error))
+            throw error
+        }
+    }
+
+    private func loadOneDriveAccounts() async {
+        guard let oneDriveAuthenticationService else {
+            oneDriveAccounts = []
+            return
+        }
+        oneDriveAccounts = (try? await oneDriveAuthenticationService.availableAccounts()) ?? []
+    }
+
+    private func applyOneDriveSession(_ session: AppOneDriveAuthenticationSession) {
+        currentOneDriveAccountIdentifier = session.accountIdentifier
+        oneDriveBackupPreferences = oneDriveBackupPreferencesStore.loadPreferences(
+            accountIdentifier: session.accountIdentifier
+        )
+        oneDriveBackupDirectoryState = .unknown
+        oneDriveBackupNotice = nil
+    }
+
+    private func clearOneDriveSessionState() {
+        cloudFileItemsByProvider[.oneDrive] = nil
+        cloudFileSelectedBackupItemByProvider[.oneDrive] = nil
+        if cloudFileRestorePreview?.provider == .oneDrive {
+            cloudFileRestorePreview = nil
+            downloadedCloudFileRestore = nil
+        }
+        if cloudFileState.providerKind == .oneDrive {
+            cloudFileState = .idle
+        }
+        oneDriveDefaultLocationFiles = []
+        oneDriveBackupNotice = nil
+        oneDriveBackupPreferences = CloudFileBackupPreferences()
+        oneDriveBackupDirectoryState = .unknown
+        currentOneDriveAccountIdentifier = ""
     }
 
     func handleOneDriveRedirectURL(_ url: URL) -> Bool {
@@ -10600,10 +10824,21 @@ final class AppSessionModel {
             let session = try requireActiveVaultSession()
             let provider = try cloudFileProvider(for: kind)
             let data = try Data(contentsOf: session.descriptor.fileURL)
-            let receipt = try await provider.uploadFile(
-                named: kind.defaultBackupFileName,
-                data: data
-            )
+            let receipt: CloudFileWriteReceipt
+            if kind == .oneDrive,
+               let directoryProvider = provider as? any CloudFileBackupDirectoryProviding {
+                receipt = try await uploadOneDriveVault(
+                    data: data,
+                    cloudProvider: provider,
+                    directoryProvider: directoryProvider,
+                    baseName: kind.defaultBackupFileName
+                )
+            } else {
+                receipt = try await provider.uploadFile(
+                    named: kind.defaultBackupFileName,
+                    data: data
+                )
+            }
             cloudFileState = .backupSucceeded(
                 provider: kind,
                 fileName: sanitizedCloudFileName(receipt.name),
@@ -10628,6 +10863,269 @@ final class AppSessionModel {
             )
             throw error
         }
+    }
+
+    private func uploadOneDriveVault(
+        data: Data,
+        cloudProvider: any CloudFileProvider,
+        directoryProvider: any CloudFileBackupDirectoryProviding,
+        baseName: String
+    ) async throws -> CloudFileWriteReceipt {
+        let directoryID = oneDriveBackupPreferences.directory?.id
+        let listing: CloudFileBackupDirectoryListing
+        do {
+            listing = try await directoryProvider.listBackupDirectory(id: directoryID)
+        } catch let error as CloudFileProviderError
+            where error == .itemNotFound(provider: .oneDrive) {
+            oneDriveBackupDirectoryState = .missing
+            oneDriveBackupNotice = "备份目录已不存在，请重建目录或选择新的位置。"
+            throw error
+        }
+        if let directory = listing.directory {
+            oneDriveBackupDirectoryState = .available(directory.displayPath)
+        }
+        cloudFileItemsByProvider[.oneDrive] = listing.files
+
+        do {
+            let receipt: CloudFileWriteReceipt
+            if oneDriveBackupPreferences.usesTimestampedFileNames {
+                let fileName = CloudFileBackupFileNameFormatter.timestampedFileName(
+                    baseName: baseName,
+                    date: oneDriveNow()
+                )
+                receipt = try await directoryProvider.uploadFile(
+                    named: fileName,
+                    data: data,
+                    inDirectory: directoryID,
+                    conflictBehavior: .fail
+                )
+                return try await pruneOneDriveBackups(
+                    cloudProvider: cloudProvider,
+                    directoryProvider: directoryProvider,
+                    directoryID: directoryID,
+                    baseName: baseName,
+                    uploadedReceipt: receipt
+                )
+            }
+
+            if let existing = listing.files.first(where: { $0.name == baseName }) {
+                receipt = try await cloudProvider.overwriteFile(
+                    id: existing.id,
+                    data: data,
+                    fileName: baseName,
+                    expectedRevision: existing.revision
+                )
+            } else {
+                receipt = try await directoryProvider.uploadFile(
+                    named: baseName,
+                    data: data,
+                    inDirectory: directoryID,
+                    conflictBehavior: .fail
+                )
+            }
+            var items = cloudFileItemsByProvider[.oneDrive] ?? []
+            let uploadedItem = CloudFileItem(
+                id: receipt.itemID,
+                name: receipt.name,
+                path: receipt.name,
+                byteCount: receipt.byteCount,
+                modifiedAt: oneDriveNow(),
+                sha256: receipt.sha256,
+                revision: receipt.revision
+            )
+            if let existingIndex = items.firstIndex(where: {
+                $0.name == receipt.name || $0.id == receipt.itemID
+            }) {
+                items[existingIndex] = uploadedItem
+            } else {
+                items.append(uploadedItem)
+            }
+            cloudFileItemsByProvider[.oneDrive] = items
+            return receipt
+        } catch let error as CloudFileProviderError
+            where error == .itemNotFound(provider: .oneDrive) {
+            oneDriveBackupDirectoryState = .missing
+            oneDriveBackupNotice = "备份目录已不存在，请重建目录或选择新的位置。"
+            throw error
+        }
+    }
+
+    private func pruneOneDriveBackups(
+        cloudProvider: any CloudFileProvider,
+        directoryProvider: any CloudFileBackupDirectoryProviding,
+        directoryID: String?,
+        baseName: String,
+        uploadedReceipt: CloudFileWriteReceipt
+    ) async throws -> CloudFileWriteReceipt {
+        guard let listing = try? await directoryProvider.listBackupDirectory(id: directoryID) else {
+            oneDriveBackupNotice = "备份已上传，但暂时无法读取目录以清理旧版本。"
+            return uploadedReceipt
+        }
+        var files = listing.files
+        if !files.contains(where: { $0.id == uploadedReceipt.itemID }) {
+            files.append(
+                CloudFileItem(
+                    id: uploadedReceipt.itemID,
+                    name: uploadedReceipt.name,
+                    path: uploadedReceipt.name,
+                    byteCount: uploadedReceipt.byteCount,
+                    modifiedAt: oneDriveNow(),
+                    sha256: uploadedReceipt.sha256,
+                    revision: uploadedReceipt.revision
+                )
+            )
+        }
+        let pruned = CloudFileBackupRetention.filesToPrune(
+            from: files,
+            baseName: baseName,
+            retainedVersions: oneDriveBackupPreferences.retainedVersionCount
+        )
+        var removedIDs = Set<String>()
+        var failureCount = 0
+        for item in pruned {
+            do {
+                _ = try await cloudProvider.deleteFile(id: item.id)
+                removedIDs.insert(item.id)
+            } catch let error as CloudFileProviderError
+                where error == .itemNotFound(provider: .oneDrive) {
+                removedIDs.insert(item.id)
+            } catch {
+                failureCount += 1
+            }
+        }
+        if let items = cloudFileItemsByProvider[.oneDrive] {
+            cloudFileItemsByProvider[.oneDrive] = items.filter { !removedIDs.contains($0.id) }
+        }
+        if failureCount > 0 {
+            oneDriveBackupNotice = "备份已上传，但有 \(failureCount) 个旧版本未能清理。"
+        } else if !pruned.isEmpty {
+            oneDriveBackupNotice = "已清理 \(pruned.count) 个旧版本备份。"
+        }
+        return uploadedReceipt
+    }
+
+    func selectOneDriveBackupDirectory(_ directory: CloudFileBackupDirectory) {
+        oneDriveBackupPreferences.directory = directory
+        oneDriveBackupDirectoryState = .available(directory.displayPath)
+        oneDriveBackupNotice = nil
+        cloudFileItemsByProvider[.oneDrive] = nil
+        persistOneDriveBackupPreferences()
+    }
+
+    func useDefaultOneDriveBackupLocation() {
+        oneDriveBackupPreferences.directory = nil
+        oneDriveBackupDirectoryState = .unknown
+        oneDriveBackupNotice = nil
+        cloudFileItemsByProvider[.oneDrive] = nil
+        persistOneDriveBackupPreferences()
+    }
+
+    func updateOneDriveBackupFileNamePolicy(
+        usesTimestampedFileNames: Bool,
+        retainedVersionCount: Int? = nil
+    ) {
+        oneDriveBackupPreferences.usesTimestampedFileNames = usesTimestampedFileNames
+        if let retainedVersionCount {
+            oneDriveBackupPreferences.retainedVersionCount = retainedVersionCount
+        }
+        persistOneDriveBackupPreferences()
+    }
+
+    func loadOneDriveBackupDirectory(id: String?) async throws -> CloudFileBackupDirectoryListing {
+        recordUserActivity()
+        let provider = try cloudFileProvider(for: .oneDrive)
+        guard let directoryProvider = provider as? any CloudFileBackupDirectoryProviding else {
+            throw AppCloudFileError.directoryUnavailable
+        }
+        return try await directoryProvider.listBackupDirectory(id: id)
+    }
+
+    @discardableResult
+    func createOneDriveBackupDirectory(
+        named name: String,
+        parentID: String?
+    ) async throws -> CloudFileBackupDirectory {
+        recordUserActivity()
+        let provider = try cloudFileProvider(for: .oneDrive)
+        guard let directoryProvider = provider as? any CloudFileBackupDirectoryProviding else {
+            throw AppCloudFileError.directoryUnavailable
+        }
+        do {
+            let directory = try await directoryProvider.createBackupDirectory(named: name, parentID: parentID)
+            selectOneDriveBackupDirectory(directory)
+            _ = try? await refreshCloudFileItems(provider: .oneDrive)
+            return directory
+        } catch {
+            oneDriveBackupDirectoryState = .failed(
+                readableCloudFileErrorMessage(for: error, provider: .oneDrive)
+            )
+            throw error
+        }
+    }
+
+    func recreateOneDriveBackupDirectory() async throws {
+        recordUserActivity()
+        let provider = try cloudFileProvider(for: .oneDrive)
+        guard let directoryProvider = provider as? any CloudFileBackupDirectoryProviding else {
+            throw AppCloudFileError.directoryUnavailable
+        }
+        let path = (oneDriveBackupPreferences.directory?.displayPath ?? "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let components = path
+            .split(separator: "/")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "." && $0 != ".." }
+        guard !components.isEmpty else {
+            oneDriveBackupNotice = nil
+            _ = try? await refreshCloudFileItems(provider: .oneDrive)
+            return
+        }
+
+        var parentID: String?
+        do {
+            for component in components {
+                let listing = try await directoryProvider.listBackupDirectory(id: parentID)
+                if let existing = listing.directories.first(where: { $0.name == component }) {
+                    parentID = existing.id
+                    continue
+                }
+                do {
+                    let created = try await directoryProvider.createBackupDirectory(
+                        named: component,
+                        parentID: parentID
+                    )
+                    parentID = created.id
+                } catch let error as CloudFileProviderError
+                    where error == .conflict(provider: .oneDrive) {
+                    let refreshed = try await directoryProvider.listBackupDirectory(id: parentID)
+                    guard let existing = refreshed.directories.first(where: { $0.name == component }) else {
+                        throw error
+                    }
+                    parentID = existing.id
+                }
+            }
+            if let directory = try await directoryProvider.listBackupDirectory(id: parentID).directory {
+                selectOneDriveBackupDirectory(directory)
+            }
+            oneDriveBackupNotice = "已重建备份目录。"
+            _ = try? await refreshCloudFileItems(provider: .oneDrive)
+        } catch {
+            oneDriveBackupDirectoryState = .failed(
+                readableCloudFileErrorMessage(for: error, provider: .oneDrive)
+            )
+            throw error
+        }
+    }
+
+    private func persistOneDriveBackupPreferences() {
+        let identifier = currentOneDriveAccountIdentifier
+        guard !identifier.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            return
+        }
+        oneDriveBackupPreferencesStore.savePreferences(
+            oneDriveBackupPreferences,
+            accountIdentifier: identifier
+        )
     }
 
     func overwriteCloudFile(
@@ -10676,6 +11174,7 @@ final class AppSessionModel {
             let provider = try cloudFileProvider(for: kind)
             _ = try await provider.deleteFile(id: item.id)
             cloudFileItemsByProvider[kind]?.removeAll { $0.id == item.id }
+            oneDriveDefaultLocationFiles.removeAll { $0.id == item.id }
             cloudFileState = .deleted(provider: kind, fileName: sanitizedCloudFileName(item.name))
             appendOperationTimelineEvent(
                 action: .deleted,
@@ -10712,6 +11211,9 @@ final class AppSessionModel {
             )
             if let index = cloudFileItemsByProvider[kind]?.firstIndex(where: { $0.id == item.id }) {
                 cloudFileItemsByProvider[kind]?[index] = updated
+            }
+            if let defaultIndex = oneDriveDefaultLocationFiles.firstIndex(where: { $0.id == item.id }) {
+                oneDriveDefaultLocationFiles[defaultIndex] = updated
             }
             cloudFileState = .permanentUpdated(
                 provider: kind,
@@ -13800,6 +14302,48 @@ enum CloudFileState: Sendable, Equatable {
         }
         return false
     }
+
+    var providerKind: CloudFileProviderKind? {
+        switch self {
+        case .idle, .failed:
+            return nil
+        case .running(let provider),
+             .listed(let provider, _),
+             .restorePreviewReady(let provider, _, _),
+             .backupSucceeded(let provider, _, _),
+             .writeSucceeded(let provider, _, _),
+             .deleted(let provider, _),
+             .permanentUpdated(let provider, _, _):
+            return provider
+        }
+    }
+}
+
+enum AppOneDriveBackupDirectoryState: Sendable, Equatable {
+    case unknown
+    case available(String)
+    case missing
+    case failed(String)
+
+    var label: String {
+        switch self {
+        case .unknown:
+            return "默认位置"
+        case .available(let path):
+            return path
+        case .missing:
+            return "备份目录已不存在"
+        case .failed(let message):
+            return message
+        }
+    }
+
+    var isMissing: Bool {
+        if case .missing = self {
+            return true
+        }
+        return false
+    }
 }
 
 enum OneDriveAuthenticationState: Sendable, Equatable {
@@ -14051,11 +14595,14 @@ enum AppWebDAVBackupError: Error, Sendable, Equatable, LocalizedError {
 
 enum AppCloudFileError: Error, Sendable, Equatable, LocalizedError {
     case providerUnavailable(CloudFileProviderKind)
+    case directoryUnavailable
 
     var errorDescription: String? {
         switch self {
         case .providerUnavailable(let provider):
             return String(localized: "\(provider.displayName) 云文件源尚未配置。")
+        case .directoryUnavailable:
+            return String(localized: "OneDrive 备份目录不可用，请重新登录后再试。")
         }
     }
 }
@@ -14119,6 +14666,7 @@ enum AppOneDriveAuthenticationError: Error, Sendable, Equatable, LocalizedError 
     case presentationUnavailable
     case invalidRedirect
     case tokenUnavailable
+    case accountUnavailable
     case authenticationFailed(domain: String, code: Int, message: String)
 
     var errorDescription: String? {
@@ -14133,6 +14681,8 @@ enum AppOneDriveAuthenticationError: Error, Sendable, Equatable, LocalizedError 
             return String(localized: "OneDrive 登录回调无效，请重试。")
         case .tokenUnavailable:
             return String(localized: "OneDrive 需要先登录。")
+        case .accountUnavailable:
+            return String(localized: "OneDrive 账号不可用，请重新登录。")
         case .authenticationFailed(let domain, let code, let message):
             let cleanMessage = AppOneDriveAuthenticationError.redactedDiagnosticMessage(message)
             if cleanMessage.isEmpty {

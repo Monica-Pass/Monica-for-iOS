@@ -1456,6 +1456,202 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("MonicaPrivate"))
     }
 
+    func testOneDriveBackupPreferencesAreScopedPerAccountAndSwitchingResetsState() async throws {
+        let accountA = AppOneDriveAuthenticationSession(
+            accountLabel: "alice@example.com",
+            accountIdentifier: "Account-A"
+        )
+        let accountB = AppOneDriveAuthenticationSession(
+            accountLabel: "bob@example.com",
+            accountIdentifier: "Account-B"
+        )
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com",
+            accountIdentifier: "Account-A",
+            accounts: [accountA, accountB],
+            isSignedIn: true
+        )
+        let preferencesStore = MemoryAppOneDriveBackupPreferencesStore()
+        let model = AppSessionModel(
+            oneDriveAuthenticationService: authenticationService,
+            oneDriveBackupPreferencesStore: preferencesStore
+        )
+
+        _ = try await model.restoreOneDriveAuthenticationSession()
+        XCTAssertEqual(model.currentOneDriveAccountIdentifier, "Account-A")
+        XCTAssertEqual(model.oneDriveAccounts.map(\.accountIdentifier), ["Account-A", "Account-B"])
+        XCTAssertEqual(model.oneDriveBackupPreferences, CloudFileBackupPreferences())
+
+        model.updateOneDriveBackupFileNamePolicy(usesTimestampedFileNames: true, retainedVersionCount: 7)
+        model.selectOneDriveBackupDirectory(
+            CloudFileBackupDirectory(id: "folder-a", name: "AliceBackups", path: "AliceBackups")
+        )
+        XCTAssertTrue(preferencesStore.savedAccountIdentifiers.contains("account-a"))
+
+        let switched = try await model.switchOneDriveAccount(identifier: "Account-B")
+        XCTAssertEqual(switched.accountLabel, "bob@example.com")
+        XCTAssertEqual(model.currentOneDriveAccountIdentifier, "Account-B")
+        XCTAssertEqual(model.oneDriveBackupPreferences, CloudFileBackupPreferences())
+        XCTAssertNil(model.oneDriveBackupPreferences.directory)
+        XCTAssertNil(model.cloudFileItemsByProvider[.oneDrive])
+
+        model.updateOneDriveBackupFileNamePolicy(usesTimestampedFileNames: false, retainedVersionCount: 3)
+        let switchedBack = try await model.switchOneDriveAccount(identifier: "Account-A")
+        XCTAssertEqual(switchedBack.accountLabel, "alice@example.com")
+        XCTAssertEqual(model.oneDriveBackupPreferences.directory?.id, "folder-a")
+        XCTAssertTrue(model.oneDriveBackupPreferences.usesTimestampedFileNames)
+        XCTAssertEqual(model.oneDriveBackupPreferences.retainedVersionCount, 7)
+        XCTAssertTrue(preferencesStore.savedAccountIdentifiers.contains("account-b"))
+        XCTAssertEqual(authenticationService.switchedAccountIdentifiers, ["account-b", "account-a"])
+    }
+
+    func testOneDriveBackupDirectoryDeletionReportsMissingAndLoadsDefaultLocationHistory() async throws {
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com",
+            isSignedIn: true
+        )
+        let graphTransport = AppTestOneDriveGraphTransport()
+        graphTransport.enqueue(OneDriveGraphResponse(statusCode: 404, body: Data("{}".utf8)))
+        graphTransport.enqueue(
+            OneDriveGraphResponse(
+                statusCode: 200,
+                body: Data(
+                    """
+                    {
+                      "value": [
+                        {
+                          "id": "legacy-backup-id",
+                          "name": "monica-onedrive.mdbx",
+                          "size": 12,
+                          "eTag": "\\\"legacy-etag\\\"",
+                          "parentReference": { "path": "/drive/special/approot" },
+                          "file": {}
+                        }
+                      ]
+                    }
+                    """.utf8
+                )
+            )
+        )
+        let environment = MonicaAppEnvironment(
+            oneDriveAuthenticationService: authenticationService,
+            oneDriveGraphTransport: graphTransport
+        )
+        let model = AppSessionModel(
+            cloudFileProviders: environment.productionCloudFileProviders,
+            oneDriveAuthenticationService: authenticationService
+        )
+        model.selectOneDriveBackupDirectory(
+            CloudFileBackupDirectory(id: "deleted-folder", name: "Backups", path: "Backups")
+        )
+
+        do {
+            _ = try await model.refreshCloudFileItems(provider: .oneDrive)
+            XCTFail("Expected the deleted backup directory to surface an error.")
+        } catch {}
+
+        XCTAssertTrue(model.oneDriveBackupDirectoryState.isMissing)
+        XCTAssertEqual(model.cloudFileState.label, "OneDrive 未找到远端文件。")
+        XCTAssertEqual(model.cloudFileItemsByProvider[.oneDrive]?.count, 0)
+        XCTAssertEqual(model.oneDriveDefaultLocationFiles.map(\.name), ["monica-onedrive.mdbx"])
+        XCTAssertEqual(graphTransport.requests.count, 2)
+    }
+
+    func testOneDriveFixedNameBackupOverwritesExistingFileWithRevision() async throws {
+        let authenticationService = RecordingAppOneDriveAuthenticationService(
+            token: "onedrive-access-token-secret",
+            accountLabel: "alice@example.com",
+            isSignedIn: true
+        )
+        let graphTransport = AppTestOneDriveGraphTransport()
+        graphTransport.enqueue(
+            OneDriveGraphResponse(
+                statusCode: 200,
+                body: Data(
+                    """
+                    {
+                      "id": "folder-id",
+                      "name": "Backups",
+                      "folder": {},
+                      "parentReference": { "path": "/drive/special/approot:" }
+                    }
+                    """.utf8
+                )
+            )
+        )
+        graphTransport.enqueue(
+            OneDriveGraphResponse(
+                statusCode: 200,
+                body: Data(
+                    """
+                    {
+                      "value": [
+                        {
+                          "id": "existing-file-id",
+                          "name": "monica-onedrive.mdbx",
+                          "size": 9,
+                          "eTag": "\\\"revision-1\\\"",
+                          "parentReference": { "path": "/drive/special/approot:/Backups" },
+                          "file": {}
+                        }
+                      ]
+                    }
+                    """.utf8
+                )
+            )
+        )
+        graphTransport.enqueue(
+            OneDriveGraphResponse(
+                statusCode: 200,
+                body: Data(
+                    """
+                    {
+                      "id": "existing-file-id",
+                      "name": "monica-onedrive.mdbx",
+                      "size": 19,
+                      "eTag": "\\\"revision-2\\\"",
+                      "file": {}
+                    }
+                    """.utf8
+                )
+            )
+        )
+        let environment = MonicaAppEnvironment(
+            oneDriveAuthenticationService: authenticationService,
+            oneDriveGraphTransport: graphTransport
+        )
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            cloudFileProviders: environment.productionCloudFileProviders,
+            oneDriveAuthenticationService: authenticationService
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+        let backupData = Data("fixed-name-vault-bytes".utf8)
+        try backupData.write(to: directory.appendingPathComponent("Mobile.mdbx"))
+        model.selectOneDriveBackupDirectory(
+            CloudFileBackupDirectory(id: "folder-id", name: "Backups", path: "Backups")
+        )
+
+        let receipt = try await model.uploadActiveVaultToCloud(provider: .oneDrive)
+        let overwriteRequest = try XCTUnwrap(graphTransport.requests.last)
+
+        XCTAssertEqual(receipt.name, "monica-onedrive.mdbx")
+        XCTAssertEqual(overwriteRequest.method, "PUT")
+        XCTAssertEqual(overwriteRequest.url.absoluteString, "https://graph.microsoft.com/v1.0/me/drive/items/existing-file-id/content")
+        XCTAssertEqual(overwriteRequest.headers["If-Match"], "\"revision-1\"")
+        XCTAssertEqual(overwriteRequest.body, backupData)
+        XCTAssertNil(model.oneDriveBackupNotice)
+        XCTAssertEqual(model.cloudFileItemsByProvider[.oneDrive]?.first?.id, "existing-file-id")
+    }
+
     func testOneDriveMSALRedirectAndSignOutDoNotLeakSecrets() async throws {
         let authenticationService = RecordingAppOneDriveAuthenticationService(
             token: "onedrive-access-token-secret",
@@ -13877,15 +14073,30 @@ private struct RecordedUpdatedAttachmentMetadataCall: Equatable {
 
 private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthenticationService, @unchecked Sendable {
     private let token: String
-    private let accountLabel: String
+    private var accountLabel: String
+    private var accountIdentifier: String
     private let signInError: Error?
     private var isSignedIn = false
+    private(set) var accounts: [AppOneDriveAuthenticationSession]
     private(set) var signInCount = 0
+    private(set) var switchedAccountIdentifiers: [String] = []
     private(set) var handledRedirects: [URL] = []
 
-    init(token: String, accountLabel: String, signInError: Error? = nil, isSignedIn: Bool = false) {
+    init(
+        token: String,
+        accountLabel: String,
+        accountIdentifier: String = "onedrive-account-a",
+        accounts: [AppOneDriveAuthenticationSession]? = nil,
+        signInError: Error? = nil,
+        isSignedIn: Bool = false
+    ) {
         self.token = token
         self.accountLabel = accountLabel
+        self.accountIdentifier = accountIdentifier
+        self.accounts = accounts ?? [AppOneDriveAuthenticationSession(
+            accountLabel: accountLabel,
+            accountIdentifier: accountIdentifier
+        )]
         self.signInError = signInError
         self.isSignedIn = isSignedIn
     }
@@ -13901,7 +14112,31 @@ private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthen
         guard isSignedIn else {
             return nil
         }
-        return AppOneDriveAuthenticationSession(accountLabel: accountLabel)
+        return session()
+    }
+
+    func availableAccounts() async throws -> [AppOneDriveAuthenticationSession] {
+        guard isSignedIn else {
+            throw CloudFileProviderError.authenticationRequired(provider: .oneDrive)
+        }
+        return accounts
+    }
+
+    func switchAccount(identifier: String) async throws -> AppOneDriveAuthenticationSession {
+        guard isSignedIn else {
+            throw CloudFileProviderError.authenticationRequired(provider: .oneDrive)
+        }
+        let normalized = identifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let account = accounts.first(where: {
+            $0.accountIdentifier.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalized
+        }) else {
+            throw AppOneDriveAuthenticationError.accountUnavailable
+        }
+        switchAccountCount += 1
+        switchedAccountIdentifiers.append(account.accountIdentifier.lowercased())
+        accountLabel = account.accountLabel
+        accountIdentifier = account.accountIdentifier
+        return account
     }
 
     func signIn() async throws -> AppOneDriveAuthenticationSession {
@@ -13910,11 +14145,17 @@ private final class RecordingAppOneDriveAuthenticationService: AppOneDriveAuthen
             throw signInError
         }
         isSignedIn = true
-        return AppOneDriveAuthenticationSession(accountLabel: accountLabel)
+        return session()
     }
 
     func signOut() async throws {
         isSignedIn = false
+    }
+
+    private(set) var switchAccountCount = 0
+
+    private func session() -> AppOneDriveAuthenticationSession {
+        AppOneDriveAuthenticationSession(accountLabel: accountLabel, accountIdentifier: accountIdentifier)
     }
 
     func handleRedirectURL(_ url: URL) -> Bool {

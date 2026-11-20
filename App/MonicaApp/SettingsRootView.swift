@@ -28,6 +28,27 @@ struct SettingsRootView: View {
     @State private var isSteamAuthenticatorImporterPresented = false
     @State private var autoFillBlockedFieldInput = ""
     @State private var autoFillBlockedSaveTargetInput = ""
+    @State private var isOneDriveDirectoryBrowserPresented = false
+    @State private var isOneDriveDirectoryCreatePresented = false
+
+    private var usesTimestampedOneDriveBackups: Binding<Bool> {
+        Binding {
+            session.oneDriveBackupPreferences.usesTimestampedFileNames
+        } set: { value in
+            session.updateOneDriveBackupFileNamePolicy(usesTimestampedFileNames: value)
+        }
+    }
+
+    private var retainedOneDriveBackupVersions: Binding<Int> {
+        Binding {
+            session.oneDriveBackupPreferences.retainedVersionCount
+        } set: { value in
+            session.updateOneDriveBackupFileNamePolicy(
+                usesTimestampedFileNames: session.oneDriveBackupPreferences.usesTimestampedFileNames,
+                retainedVersionCount: value
+            )
+        }
+    }
 
     private var autoLockSelection: Binding<AppAutoLockPolicy> {
         Binding {
@@ -930,8 +951,37 @@ struct SettingsRootView: View {
 
             AndroidParitySection(title: "OneDrive") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: String(localized: "账号"), value: session.oneDriveAuthenticationState.label)
-                    AndroidParityInfoRow(title: String(localized: "文件"), value: session.cloudFileState.label)
+                    AndroidParityInfoRow(title: String(localized: "账号", value: session.oneDriveAuthenticationState.label)
+                    AndroidParityInfoRow(title: String(localized: "文件", value: session.cloudFileState.label)
+                    AndroidParityInfoRow(title: String(localized: "备份目录", value: session.oneDriveBackupPreferences.displayPath)
+                    AndroidParityInfoRow(title: String(localized: "目录状态", value: session.oneDriveBackupDirectoryState.label)
+                    if session.oneDriveBackupDirectoryState.isMissing {
+                        Text("备份目录已不存在。请重建目录，或改用默认位置。")
+                            .font(.footnote)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                        HStack(spacing: 10) {
+                            Button {
+                                Task {
+                                    try? await session.recreateOneDriveBackupDirectory()
+                                }
+                            } label: {
+                                Label("重建目录", systemImage: "folder.badge.plus")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                            Button {
+                                session.useDefaultOneDriveBackupLocation()
+                                Task {
+                                    try? await session.refreshCloudFileItems(provider: .oneDrive)
+                                }
+                            } label: {
+                                Label("使用默认位置", systemImage: "folder")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                        }
+                        .disabled(session.cloudFileState.isRunning)
+                    }
                     if session.oneDriveAuthenticationState.isConnected {
                         Button(role: .destructive) {
                             Task {
@@ -979,6 +1029,89 @@ struct SettingsRootView: View {
                             || session.vaultState != .unlocked
                             || session.cloudFileState.isRunning
                     )
+                    if session.oneDriveAuthenticationState.isConnected {
+                        HStack(spacing: 10) {
+                            Button {
+                                isOneDriveDirectoryBrowserPresented = true
+                            } label: {
+                                Label("选择目录", systemImage: "folder")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                            Button {
+                                isOneDriveDirectoryCreatePresented = true
+                            } label: {
+                                Label("新建目录", systemImage: "folder.badge.plus")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                        }
+                        .disabled(session.cloudFileState.isRunning)
+                        if let notice = session.oneDriveBackupNotice {
+                            Text(notice)
+                                .font(.footnote)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                        AndroidParityDivider()
+                        Toggle("按时间保留多个版本", isOn: usesTimestampedOneDriveBackups)
+                            .tint(AndroidParityPalette.primary)
+                        if session.oneDriveBackupPreferences.usesTimestampedFileNames {
+                            Stepper(
+                                "保留 \(session.oneDriveBackupPreferences.retainedVersionCount) 个版本",
+                                value: retainedOneDriveBackupVersions,
+                                in: 1...50
+                            )
+                        }
+                        if session.oneDriveAccounts.count > 1 {
+                            AndroidParityDivider()
+                            Text("OneDrive 账号")
+                                .font(.footnote)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                            ForEach(session.oneDriveAccounts, id: \.accountIdentifier) { account in
+                                HStack(spacing: 10) {
+                                    Text(account.accountLabel)
+                                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                                    Spacer(minLength: 8)
+                                    Button {
+                                        Task {
+                                            try? await session.switchOneDriveAccount(identifier: account.accountIdentifier)
+                                        }
+                                    } label: {
+                                        Text(
+                                            account.accountIdentifier == session.currentOneDriveAccountIdentifier
+                                                ? "当前"
+                                                : "切换"
+                                        )
+                                    }
+                                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                                    .disabled(
+                                        account.accountIdentifier == session.currentOneDriveAccountIdentifier
+                                            || session.oneDriveAuthenticationState.isRunning
+                                            || session.cloudFileState.isRunning
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    if !session.oneDriveDefaultLocationFiles.isEmpty {
+                        AndroidParityDivider()
+                        Text("默认位置的备份")
+                            .font(.footnote)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                        ForEach(session.oneDriveDefaultLocationFiles.prefix(3)) { item in
+                            AndroidParityInfoRow(title: item.name, value: item.redactedSummary)
+                            Button {
+                                Task {
+                                    try? await session.downloadCloudFileRestorePreview(itemID: item.id, provider: .oneDrive)
+                                }
+                            } label: {
+                                Label("预览并恢复", systemImage: "arrow.down.doc")
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                            .disabled(session.vaultState != .unlocked || session.cloudFileState.isRunning)
+                        }
+                    }
                     if let items = session.cloudFileItemsByProvider[.oneDrive], !items.isEmpty {
                         AndroidParityDivider()
                         ForEach(items.prefix(3)) { item in
@@ -1650,6 +1783,12 @@ struct SettingsRootView: View {
         } message: {
             Text("请输入导出该移动端备份时设置的密码。密码只在本次解密中使用。")
         }
+        .sheet(isPresented: $isOneDriveDirectoryBrowserPresented) {
+            OneDriveDirectoryBrowserSheet(session: session)
+        }
+        .sheet(isPresented: $isOneDriveDirectoryCreatePresented) {
+            OneDriveDirectoryCreateSheet(session: session)
+        }
         .navigationTitle("设置")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -2039,6 +2178,146 @@ private struct AndroidParityPermissionRow: View {
             .red
         case .notDetermined, .notConfigured, .checkable:
             AndroidParityPalette.textSecondary
+        }
+    }
+}
+
+private struct OneDriveDirectoryBrowserSheet: View {
+    @Bindable var session: AppSessionModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var listing: CloudFileBackupDirectoryListing?
+    @State private var isLoading = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    Button {
+                        session.useDefaultOneDriveBackupLocation()
+                        dismiss()
+                    } label: {
+                        Label("使用默认位置", systemImage: "folder")
+                    }
+                }
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundStyle(.red)
+                    }
+                }
+                Section("目录") {
+                    if isLoading, listing == nil {
+                        ProgressView()
+                    }
+                    ForEach(listing?.directories ?? []) { directory in
+                        Button {
+                            Task { await load(id: directory.id) }
+                        } label: {
+                            HStack {
+                                Image(systemName: "folder")
+                                Text(directory.displayPath)
+                                Spacer()
+                                Image(systemName: "chevron.right")
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                        }
+                    }
+                    if !isLoading, listing?.directories.isEmpty ?? true {
+                        Text("没有子目录")
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    }
+                }
+                if let files = listing?.files, !files.isEmpty {
+                    Section("此目录中的备份") {
+                        ForEach(files.prefix(10)) { file in
+                            Text(file.redactedSummary)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                    }
+                }
+            }
+            .navigationTitle(listing?.directory?.displayPath ?? "选择备份目录")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("选择此目录") {
+                        if let directory = listing?.directory {
+                            session.selectOneDriveBackupDirectory(directory)
+                        } else {
+                            session.useDefaultOneDriveBackupLocation()
+                        }
+                        dismiss()
+                    }
+                    .disabled(isLoading)
+                }
+            }
+            .task { await load(id: session.oneDriveBackupPreferences.directoryID) }
+        }
+    }
+
+    private func load(id: String?) async {
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            listing = try await session.loadOneDriveBackupDirectory(id: id)
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+private struct OneDriveDirectoryCreateSheet: View {
+    @Bindable var session: AppSessionModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var isCreating = false
+    @State private var errorMessage: String?
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("目录名称") {
+                    TextField("例如 MonicaBackups", text: $name)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                }
+                if let errorMessage {
+                    Section {
+                        Text(errorMessage)
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("新建备份目录")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("创建") {
+                        Task { await create() }
+                    }
+                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isCreating)
+                }
+            }
+            .disabled(isCreating)
+        }
+    }
+
+    private func create() async {
+        isCreating = true
+        defer { isCreating = false }
+        do {
+            _ = try await session.createOneDriveBackupDirectory(named: name, parentID: nil)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 }
