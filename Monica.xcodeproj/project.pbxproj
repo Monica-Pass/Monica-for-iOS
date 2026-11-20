@@ -86,6 +86,7 @@
 		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
 		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
 		AA000000000000000000000A /* AppPlusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* AppPlusSupport.swift */; };
+		AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* AppAppearancePreferences.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -208,6 +209,7 @@
 		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000009 /* AppPlusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusSupport.swift"; sourceTree = "<group>"; };
+		AA000000000000000000000B /* AppAppearancePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAppearancePreferences.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -331,6 +333,7 @@
 				AA0000000000000000000005 /* AppSecurityCenterSupport.swift */,
 				AA0000000000000000000007 /* AppAutoFillSupport.swift */,
 				AA0000000000000000000009 /* AppPlusSupport.swift */,
+				AA000000000000000000000B /* AppAppearancePreferences.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -715,6 +718,7 @@
 				AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */,
 				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
 				AA000000000000000000000A /* AppPlusSupport.swift in Sources */,
+				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
