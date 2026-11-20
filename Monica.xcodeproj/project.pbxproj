@@ -93,6 +93,7 @@
 		AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* AppQuickSetupSupport.swift */; };
 		AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000015 /* AppShortcutEntrySummary.swift */; };
 		AA0000000000000000000018 /* AppCloudBackupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000017 /* AppCloudBackupSupport.swift */; };
+		AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -222,6 +223,7 @@
 		AA0000000000000000000013 /* AppQuickSetupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppQuickSetupSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000015 /* AppShortcutEntrySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppShortcutEntrySummary.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000017 /* AppCloudBackupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppCloudBackupSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBitwardenSyncSupport.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -352,6 +354,7 @@
 				AA0000000000000000000013 /* AppQuickSetupSupport.swift */,
 				AA0000000000000000000015 /* AppShortcutEntrySummary.swift */,
 				AA0000000000000000000017 /* AppCloudBackupSupport.swift */,
+				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -743,6 +746,7 @@
 				AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */,
 				AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */,
 				AA0000000000000000000018 /* AppCloudBackupSupport.swift in Sources */,
+				AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
