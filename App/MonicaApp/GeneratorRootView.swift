@@ -12,7 +12,8 @@ struct GeneratorRootView: View {
     @State private var generatedPassword = ""
     @State private var generatorState = String(localized: "就绪")
     @State private var generatorMode: GeneratorMode = .password
-    @State private var history: [GeneratedSecretHistoryItem] = []
+    @State private var usernameOptions = GeneratorUsernameOptions()
+    @State private var historyController: GeneratorHistoryController?
 
     var body: some View {
         AndroidParityScreen {
@@ -20,19 +21,57 @@ struct GeneratorRootView: View {
             generatorModeControl
             generatedPasswordCard
             generatorControlsCard
-            generatorHistorySection
+            if generatorMode == .username {
+                GeneratorUsernameOptionsCard(
+                    options: $usernameOptions,
+                    username: generatedPassword,
+                    uniqueness: usernameUniqueness
+                )
+            }
+            if let historyController {
+                GeneratorHistorySettingsSection(controller: historyController) { value in
+                    copy(value)
+                }
+            }
+            GeneratorDependencyStatusSection()
         }
         .navigationTitle("")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .onAppear {
-            if generatedPassword.isEmpty {
-                generate()
+            ensureHistoryController()
+            Task {
+                await historyController?.sync(
+                    vaultID: session.activeVaultHistoryScope,
+                    isVaultUnlocked: session.vaultState == .unlocked
+                )
+                if generatedPassword.isEmpty {
+                    generate()
+                }
             }
         }
         .onChange(of: generatorMode) { _, _ in
             normalizeLengthForMode()
             generate()
+        }
+        .onChange(of: usernameOptions) { _, _ in
+            guard generatorMode == .username else {
+                return
+            }
+            generate()
+        }
+        .onChange(of: session.vaultState) { _, _ in
+            Task {
+                if session.vaultState == .unlocked {
+                    await historyController?.sync(
+                        vaultID: session.activeVaultHistoryScope,
+                        isVaultUnlocked: true
+                    )
+                } else {
+                    // 锁库：历史内容与密钥立刻从内存消失，界面不再展示旧值。
+                    await historyController?.lock()
+                }
+            }
         }
     }
 
@@ -122,14 +161,27 @@ struct GeneratorRootView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             HStack(alignment: .lastTextBaseline) {
-                VStack(alignment: .leading, spacing: 12) {
+                VStack(alignment: .leading, spacing: 10) {
                     Text("安全程度")
                         .font(.headline.weight(.heavy))
-                    Label("\(generatorMode.lengthLabel)：\(Int(length))", systemImage: "info.circle.fill")
+                    if let assessment = strengthAssessment {
+                        Text("约 \(Int(assessment.estimatedBits.rounded())) bit（估算）· \(assessment.characterClassCount) 类字符")
+                            .font(.subheadline.weight(.heavy))
+                        if !findingSummary.isEmpty {
+                            Text(findingSummary)
+                                .font(.footnote)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    } else {
+                        Text("用户名不做密码强度评分")
+                            .font(.subheadline.weight(.heavy))
+                    }
+                    Label(lengthDetailLabel, systemImage: "info.circle.fill")
                         .font(.subheadline.weight(.heavy))
                 }
                 Spacer()
-                Text(passwordStrengthLabel)
+                Text(strengthBadgeLabel)
                     .font(.headline.weight(.heavy))
                     .padding(.horizontal, 18)
                     .padding(.vertical, 8)
@@ -148,12 +200,14 @@ struct GeneratorRootView: View {
             VStack(alignment: .leading, spacing: 26) {
                 Text("\(generatorMode.title)生成器")
                     .font(AndroidParityTypography.prominentTitle(weight: .heavy))
-                Text("\(generatorMode.lengthLabel)：\(Int(length))")
-                    .font(.headline.weight(.heavy))
-                Slider(value: $length, in: generatorMode.lengthRange, step: 1)
-                    .tint(AndroidParityPalette.primary)
-                    .controlSize(.large)
-                    .onChange(of: length) { _, _ in generate() }
+                if generatorMode != .username {
+                    Text("\(generatorMode.lengthLabel)：\(Int(length))")
+                        .font(.headline.weight(.heavy))
+                    Slider(value: $length, in: generatorMode.lengthRange, step: 1)
+                        .tint(AndroidParityPalette.primary)
+                        .controlSize(.large)
+                        .onChange(of: length) { _, _ in generate() }
+                }
                 if generatorMode == .password {
                     Text("字符类型")
                         .font(.headline.weight(.heavy))
@@ -194,73 +248,104 @@ struct GeneratorRootView: View {
         .padding(.top, 8)
     }
 
-    @ViewBuilder
-    private var generatorHistorySection: some View {
-        if !history.isEmpty {
-            AndroidParitySection(title: String(localized: "历史")) {
-                ForEach(history) { item in
-                    AndroidParityEntryCard(
-                        icon: item.mode.systemImage,
-                        title: item.mode.title,
-                        subtitle: item.value,
-                        fill: AndroidParityPalette.surfaceVariant.opacity(0.55)
-                    ) {
-                        Button {
-                            generatorState = session.copySensitiveValueToPasteboard(item.value).message
-                        } label: {
-                            Image(systemName: "doc.on.doc")
-                                .font(.headline)
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("复制")
-                    }
-                }
-            }
+    private var usernameUniqueness: UsernameUniquenessReport {
+        UsernameUniqueness.compare(
+            candidate: generatedPassword,
+            against: session.loginEntries.map(\.username)
+        )
+    }
+
+    private var strengthAssessment: PasswordStrengthAssessment? {
+        guard generatorMode != .username, !generatedPassword.isEmpty else {
+            return nil
+        }
+        return PasswordStrengthAnalyzer.assess(generatedPassword, context: strengthContext)
+    }
+
+    private var strengthContext: PasswordStrengthContext {
+        switch generatorMode {
+        case .pin:
+            return .pin
+        case .passphrase:
+            return .passphrase(wordListSize: SecretGenerator.defaultPassphraseWords.count)
+        case .apiToken:
+            return .apiToken(byteCount: Int(length))
+        case .password, .username:
+            return .password
         }
     }
 
-    private var passwordStrengthLabel: String {
-        switch generatorMode {
-        case .pin:
-            return String(localized: "数字")
-        case .passphrase:
-            return String(localized: "可读")
-        case .apiToken:
-            return String(localized: "令牌")
-        case .password:
-            break
+    private var strengthBadgeLabel: String {
+        if generatorMode == .username {
+            return String(localized: "不评分")
         }
-        if length >= 64 && includeSymbols && includeDigits {
-            return String(localized: "非常强")
+        guard let assessment = strengthAssessment else {
+            return String(localized: "待生成")
         }
-        if length >= 24 {
-            return String(localized: "强")
+        return GeneratorStrengthCopy.levelLabel(assessment.level)
+    }
+
+    private var findingSummary: String {
+        guard let assessment = strengthAssessment, !assessment.findings.isEmpty else {
+            return ""
         }
-        return String(localized: "普通")
+        return assessment.findings.prefix(3)
+            .map(GeneratorStrengthCopy.findingLabel)
+            .joined(separator: " · ")
+    }
+
+    private var lengthDetailLabel: String {
+        if generatorMode == .username {
+            return String(localized: "长度上限：\(usernameOptions.maximumLength)")
+        }
+        return "\(generatorMode.lengthLabel)：\(Int(length))"
+    }
+
+    private func ensureHistoryController() {
+        if historyController == nil {
+            historyController = GeneratorHistoryController()
+        }
+    }
+
+    private func copy(_ value: String) {
+        guard !value.isEmpty else {
+            return
+        }
+        generatorState = session.copySensitiveValueToPasteboard(value).message
     }
 
     private func generate() {
         do {
-            generatedPassword = try SecretGenerator.generate(policy: generatorPolicy)
-            rememberGeneratedValue()
+            generatedPassword = try generateValue()
             generatorState = String(localized: "已生成")
+            recordGeneratedValue()
         } catch {
-            generatorState = error.localizedDescription
+            generatorState = GeneratorStrengthCopy.message(for: error)
         }
+    }
+
+    private func generateValue() throws -> String {
+        switch generatorMode {
+        case .username:
+            return try UsernameGenerator.generate(policy: usernamePolicy)
+        case .password, .pin, .passphrase, .apiToken:
+            return try SecretGenerator.generate(policy: generatorPolicy)
+        }
+    }
+
+    private var usernamePolicy: UsernameGeneratorPolicy {
+        let upperBound = usernameOptions.maximumLength
+        let lowerBound = min(GeneratorUsernameOptions.lengthBounds.lowerBound, upperBound)
+        return UsernameGeneratorPolicy(
+            includeNumberSuffix: usernameOptions.includeNumberSuffix,
+            digitCount: usernameOptions.digitCount,
+            separator: usernameOptions.separator,
+            lengthRange: lowerBound...upperBound
+        )
     }
 
     private var generatorPolicy: SecretGeneratorPolicy {
         switch generatorMode {
-        case .password:
-            return .password(
-                PasswordGeneratorPolicy(
-                    length: Int(length),
-                    includeUppercase: includeUppercase,
-                    includeLowercase: includeLowercase,
-                    includeDigits: includeDigits,
-                    includeSymbols: includeSymbols
-                )
-            )
         case .pin:
             return .pin(length: Int(length))
         case .passphrase:
@@ -271,25 +356,36 @@ struct GeneratorRootView: View {
             )
         case .apiToken:
             return .apiToken(prefix: "monica", byteCount: Int(length))
+        case .password, .username:
+            // 用户名走 `UsernameGenerator`，这个分支不会被使用。
+            return .password(
+                PasswordGeneratorPolicy(
+                    length: Int(length),
+                    includeUppercase: includeUppercase,
+                    includeLowercase: includeLowercase,
+                    includeDigits: includeDigits,
+                    includeSymbols: includeSymbols
+                )
+            )
         }
     }
 
     private func normalizeLengthForMode() {
+        guard generatorMode != .username else {
+            return
+        }
         let range = generatorMode.lengthRange
         length = min(max(length, range.lowerBound), range.upperBound)
     }
 
-    private func rememberGeneratedValue() {
-        guard !generatedPassword.isEmpty else {
+    private func recordGeneratedValue() {
+        guard !generatedPassword.isEmpty, let historyController else {
             return
         }
-        history.removeAll { $0.value == generatedPassword }
-        history.insert(
-            GeneratedSecretHistoryItem(mode: generatorMode, value: generatedPassword),
-            at: 0
-        )
-        if history.count > 6 {
-            history.removeLast(history.count - 6)
+        let kind = generatorMode.secretKind
+        let value = generatedPassword
+        Task {
+            await historyController.record(kind: kind, value: value)
         }
     }
 }
@@ -299,6 +395,7 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
     case pin
     case passphrase
     case apiToken
+    case username
 
     var id: String { rawValue }
 
@@ -312,6 +409,8 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
             return String(localized: "短语")
         case .apiToken:
             return "API Token"
+        case .username:
+            return String(localized: "用户名")
         }
     }
 
@@ -325,6 +424,8 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
             return String(localized: "短语")
         case .apiToken:
             return "Token"
+        case .username:
+            return String(localized: "用户名")
         }
     }
 
@@ -338,6 +439,8 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
             return "text.quote"
         case .apiToken:
             return "curlybraces"
+        case .username:
+            return "person.crop.circle"
         }
     }
 
@@ -362,12 +465,23 @@ private enum GeneratorMode: String, CaseIterable, Identifiable {
             return 3...8
         case .apiToken:
             return 16...64
+        case .username:
+            return 12...32
         }
     }
-}
 
-private struct GeneratedSecretHistoryItem: Identifiable, Equatable {
-    let id = UUID()
-    let mode: GeneratorMode
-    let value: String
+    var secretKind: GeneratorSecretKind {
+        switch self {
+        case .password:
+            return .password
+        case .pin:
+            return .pin
+        case .passphrase:
+            return .passphrase
+        case .apiToken:
+            return .apiToken
+        case .username:
+            return .username
+        }
+    }
 }
