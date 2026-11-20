@@ -377,6 +377,84 @@ public final class KeychainAutoFillIndexKeyStore: AutoFillIndexKeyStore, @unchec
     }
 }
 
+/// 把自动填充域名规则（#40）以不透明二进制存进 Keychain。
+///
+/// 规则内容属于安全敏感配置：放在 Keychain（`WhenUnlockedThisDeviceOnly`）里，
+/// 由 App 与 AutoFill 扩展通过同一个 access group 读取，避免写明文 `UserDefaults`。
+/// 这里刻意只处理 `Data`，编解码交给 `MonicaCore` 的 `AutoFillDomainRuleCodec`，
+/// 以免 MonicaSecurity 依赖上层模型。
+public final class KeychainAutoFillDomainRuleStore: @unchecked Sendable {
+    public static let defaultService = "ru.takagi.monica.autofill-domain-rules"
+
+    private let service: String
+    private let accessGroup: String?
+
+    public init(service: String = KeychainAutoFillDomainRuleStore.defaultService, accessGroup: String? = nil) {
+        self.service = service
+        self.accessGroup = accessGroup
+    }
+
+    public func savePayload(_ payload: Data, vaultID: String) async throws {
+        let account = try normalizedAccount(vaultID)
+        var query = baseQuery(account: account)
+        SecItemDelete(query as CFDictionary)
+
+        query[kSecValueData as String] = payload
+        query[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+
+        let status = SecItemAdd(query as CFDictionary, nil)
+        guard status == errSecSuccess else {
+            throw MonicaSecurityError.keychainUnexpectedStatus(status)
+        }
+    }
+
+    public func loadPayload(vaultID: String) async throws -> Data? {
+        var query = baseQuery(account: try normalizedAccount(vaultID))
+        query[kSecReturnData as String] = kCFBooleanTrue
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound {
+            return nil
+        }
+        guard status == errSecSuccess else {
+            throw MonicaSecurityError.keychainUnexpectedStatus(status)
+        }
+        guard let data = item as? Data else {
+            throw MonicaSecurityError.keychainUnexpectedStatus(errSecDecode)
+        }
+        return data
+    }
+
+    public func deletePayload(vaultID: String) async throws {
+        let status = SecItemDelete(baseQuery(account: try normalizedAccount(vaultID)) as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw MonicaSecurityError.keychainUnexpectedStatus(status)
+        }
+    }
+
+    private func normalizedAccount(_ vaultID: String) throws -> String {
+        let account = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !account.isEmpty else {
+            throw MonicaSecurityError.emptyVaultID
+        }
+        return account
+    }
+
+    private func baseQuery(account: String) -> [String: Any] {
+        var query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: account
+        ]
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
+        }
+        return query
+    }
+}
+
 public final class DeviceOwnerLocalAuthenticator: MonicaLocalAuthenticator, @unchecked Sendable {
     private let policy: LAPolicy
 

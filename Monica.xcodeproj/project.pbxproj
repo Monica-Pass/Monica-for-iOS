@@ -42,6 +42,8 @@
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
 		A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000011 /* AppVaultLayoutPreferences.swift */; };
 		A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000011 /* AppUpdateCheckView.swift */; };
+		A92000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000011 /* AppAutoFillDomainRules.swift */; };
+		A93000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FC /* AppCloudVaultSyncView.swift */; };
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
@@ -172,6 +174,8 @@
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
 		A90000000000000000000011 /* AppVaultLayoutPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultLayoutPreferences.swift; sourceTree = "<group>"; };
 		A91000000000000000000011 /* AppUpdateCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckView.swift; sourceTree = "<group>"; };
+		A92000000000000000000011 /* AppAutoFillDomainRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDomainRules.swift; sourceTree = "<group>"; };
+		A93000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A100000000000000000000FC /* AppCloudVaultSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSyncView.swift; sourceTree = "<group>"; };
 		A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillCredentialProviderViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -328,6 +332,7 @@
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
+				A92000000000000000000011 /* AppAutoFillDomainRules.swift */,
 				A100000000000000000000FC /* AppCloudVaultSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
@@ -422,6 +427,7 @@
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
+				A93000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -736,6 +742,7 @@
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				A92000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */,
 				A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */,
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
@@ -786,6 +793,7 @@
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
+				A93000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
