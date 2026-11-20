@@ -3,6 +3,7 @@ import MonicaMDBX
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
+import MonicaWidgetShared
 import AVFoundation
 import AuthenticationServices
 import Combine
@@ -892,20 +893,12 @@ struct AppShareImportResult: Sendable, Equatable {
     }
 }
 
-struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable, Codable {
+struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable {
     let id: String
     let kind: UnifiedVaultItemKind
     let title: String
     let subtitle: String
     let searchableText: String
-
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case kind
-        case title
-        case subtitle
-        case searchableText
-    }
 
     init(
         id: String,
@@ -919,206 +912,6 @@ struct AppShortcutEntrySummary: Sendable, Equatable, Identifiable, Codable {
         self.title = title
         self.subtitle = subtitle
         self.searchableText = searchableText
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        let kindRawValue = try container.decode(String.self, forKey: .kind)
-        guard let decodedKind = UnifiedVaultItemKind(rawValue: kindRawValue) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .kind,
-                in: container,
-                debugDescription: "Unknown widget shortcut item kind."
-            )
-        }
-        kind = decodedKind
-        title = try container.decode(String.self, forKey: .title)
-        subtitle = try container.decode(String.self, forKey: .subtitle)
-        searchableText = try container.decode(String.self, forKey: .searchableText)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(kind.rawValue, forKey: .kind)
-        try container.encode(title, forKey: .title)
-        try container.encode(subtitle, forKey: .subtitle)
-        try container.encode(searchableText, forKey: .searchableText)
-    }
-}
-
-struct AppShortcutSnapshotEntry: Sendable, Equatable, Identifiable, Codable {
-    let id: String
-    let kind: UnifiedVaultItemKind
-    let title: String
-    let subtitle: String
-    let searchableText: String
-    let openURL: URL
-
-    private enum CodingKeys: String, CodingKey {
-        case id
-        case kind
-        case title
-        case subtitle
-        case searchableText
-        case openURL
-    }
-
-    init(summary: AppShortcutEntrySummary) {
-        id = summary.id
-        kind = summary.kind
-        title = summary.title
-        subtitle = summary.subtitle
-        searchableText = summary.searchableText
-        openURL = URL(string: "monica://shortcut/\(summary.kind.rawValue)/\(summary.id)")!
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        id = try container.decode(String.self, forKey: .id)
-        let kindRawValue = try container.decode(String.self, forKey: .kind)
-        guard let decodedKind = UnifiedVaultItemKind(rawValue: kindRawValue) else {
-            throw DecodingError.dataCorruptedError(
-                forKey: .kind,
-                in: container,
-                debugDescription: "Unknown shortcut snapshot item kind."
-            )
-        }
-        kind = decodedKind
-        title = try container.decode(String.self, forKey: .title)
-        subtitle = try container.decode(String.self, forKey: .subtitle)
-        searchableText = try container.decode(String.self, forKey: .searchableText)
-        openURL = try container.decode(URL.self, forKey: .openURL)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(id, forKey: .id)
-        try container.encode(kind.rawValue, forKey: .kind)
-        try container.encode(title, forKey: .title)
-        try container.encode(subtitle, forKey: .subtitle)
-        try container.encode(searchableText, forKey: .searchableText)
-        try container.encode(openURL, forKey: .openURL)
-    }
-}
-
-struct AppShortcutSnapshot: Sendable, Equatable, Codable {
-    let vaultState: AppWidgetVaultState
-    let entries: [AppShortcutSnapshotEntry]
-
-    static let locked = AppShortcutSnapshot(vaultState: .locked, entries: [])
-}
-
-struct AppShortcutSnapshotFileStore: Sendable {
-    let snapshotFileURL: URL
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
-
-    init(containerURL: URL) {
-        snapshotFileURL = containerURL.appendingPathComponent("shortcuts-snapshot-v1.json")
-        encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        decoder = JSONDecoder()
-    }
-
-    func saveSnapshot(_ snapshot: AppShortcutSnapshot) throws {
-        let data = try encoder.encode(snapshot)
-        try data.write(
-            to: snapshotFileURL,
-            options: [.atomic, .completeFileProtection]
-        )
-    }
-
-    func loadSnapshot() throws -> AppShortcutSnapshot? {
-        guard FileManager.default.fileExists(atPath: snapshotFileURL.path) else {
-            return nil
-        }
-        let data = try Data(contentsOf: snapshotFileURL)
-        return try decoder.decode(AppShortcutSnapshot.self, from: data)
-    }
-}
-
-enum AppWidgetVaultState: String, Sendable, Equatable, Codable {
-    case locked
-    case unlocked
-
-    var label: String {
-        switch self {
-        case .locked:
-            String(localized: "已锁定")
-        case .unlocked:
-            String(localized: "已解锁")
-        }
-    }
-}
-
-struct AppWidgetTotpItem: Sendable, Equatable, Identifiable, Codable {
-    let id: String
-    let title: String
-    let issuer: String
-    let accountName: String
-    let secondsRemaining: Int
-
-    var timeRemainingLabel: String {
-        String(localized: "\(secondsRemaining) 秒")
-    }
-}
-
-struct AppWidgetSnapshot: Sendable, Equatable, Codable {
-    let vaultState: AppWidgetVaultState
-    let totalEntryCount: Int
-    let totpItems: [AppWidgetTotpItem]
-    let shortcutItems: [AppShortcutEntrySummary]
-
-    var totalEntryLabel: String {
-        String(localized: "\(totalEntryCount) 项")
-    }
-
-    var redactedDebugSummary: String {
-        let totpText = totpItems
-            .map { "\($0.title) \($0.issuer) \($0.accountName) \($0.timeRemainingLabel)" }
-            .joined(separator: " ")
-        let shortcutText = shortcutItems
-            .map { "\($0.kind.localizedDisplayName) \($0.title) \($0.subtitle) \($0.searchableText)" }
-            .joined(separator: " ")
-        return [
-            vaultState.label,
-            totalEntryLabel,
-            totpText,
-            shortcutText
-        ]
-        .filter { !$0.isEmpty }
-        .joined(separator: " ")
-    }
-}
-
-struct AppWidgetSnapshotFileStore: Sendable {
-    let snapshotFileURL: URL
-    private let encoder: JSONEncoder
-    private let decoder: JSONDecoder
-
-    init(containerURL: URL) {
-        snapshotFileURL = containerURL.appendingPathComponent("widget-snapshot-v1.json")
-        encoder = JSONEncoder()
-        encoder.outputFormatting = [.sortedKeys]
-        decoder = JSONDecoder()
-    }
-
-    func saveSnapshot(_ snapshot: AppWidgetSnapshot) throws {
-        let data = try encoder.encode(snapshot)
-        try data.write(
-            to: snapshotFileURL,
-            options: [.atomic, .completeFileProtection]
-        )
-    }
-
-    func loadSnapshot() throws -> AppWidgetSnapshot? {
-        guard FileManager.default.fileExists(atPath: snapshotFileURL.path) else {
-            return nil
-        }
-        let data = try Data(contentsOf: snapshotFileURL)
-        return try decoder.decode(AppWidgetSnapshot.self, from: data)
     }
 }
 
@@ -2842,6 +2635,8 @@ final class AppSessionModel {
     private let keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator
     private let widgetSnapshotStore: AppWidgetSnapshotFileStore?
     private let shortcutSnapshotStore: AppShortcutSnapshotFileStore?
+    private let widgetReloadScheduler: (any MonicaWidgetReloadScheduling)?
+    private(set) var widgetSnapshotSyncError: String?
     private let controlNavigationDefaults: UserDefaults?
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
@@ -2914,6 +2709,7 @@ final class AppSessionModel {
         keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator = DefaultKeePassKdbx4WritebackCoordinator(),
         widgetSnapshotStore: AppWidgetSnapshotFileStore? = nil,
         shortcutSnapshotStore: AppShortcutSnapshotFileStore? = nil,
+        widgetReloadScheduler: (any MonicaWidgetReloadScheduling)? = nil,
         controlNavigationDefaults: UserDefaults? = UserDefaults(suiteName: MonicaControlNavigationStore.appGroupIdentifier),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
@@ -2975,6 +2771,7 @@ final class AppSessionModel {
         self.keePassKdbx4WritebackCoordinator = keePassKdbx4WritebackCoordinator
         self.widgetSnapshotStore = widgetSnapshotStore
         self.shortcutSnapshotStore = shortcutSnapshotStore
+        self.widgetReloadScheduler = widgetReloadScheduler
         self.controlNavigationDefaults = controlNavigationDefaults
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
@@ -3311,7 +3108,7 @@ final class AppSessionModel {
             vaultState: .unlocked,
             totalEntryCount: activeVaultEntryCount,
             totpItems: Array(totpItems),
-            shortcutItems: Array(allShortcutEntrySummaries().prefix(4))
+            shortcutItems: allShortcutEntrySummaries().prefix(4).map(MonicaWidgetShortcutItem.init(summary:))
         )
     }
 
@@ -3320,6 +3117,49 @@ final class AppSessionModel {
             return
         }
         try widgetSnapshotStore.saveSnapshot(widgetSnapshot(now: now))
+    }
+
+    /// Rewrites both App Group snapshots (a privacy-safe projection of the vault) and,
+    /// only when at least one write succeeded, asks WidgetKit to reload.
+    ///
+    /// The reload is requested through `MonicaWidgetReloadScheduling`, which coalesces
+    /// bursts: creating/importing many entries produces one timeline reload instead of one
+    /// per entry. `reloadImmediately` is reserved for lock and vault switches, where the
+    /// widget must observe the now-empty projection without waiting for the coalescing
+    /// window. A failure never changes the vault operation result; the (secret-free) error
+    /// description is kept in `widgetSnapshotSyncError` for diagnostics.
+    @discardableResult
+    func publishWidgetSnapshots(now: Date = Date(), reloadImmediately: Bool = false) -> Bool {
+        var didWriteSnapshot = false
+        if let widgetSnapshotStore {
+            do {
+                try widgetSnapshotStore.saveSnapshot(widgetSnapshot(now: now))
+                didWriteSnapshot = true
+            } catch {
+                widgetSnapshotSyncError = error.localizedDescription
+            }
+        }
+        if let shortcutSnapshotStore {
+            do {
+                try shortcutSnapshotStore.saveSnapshot(shortcutSnapshot())
+                didWriteSnapshot = true
+            } catch {
+                widgetSnapshotSyncError = error.localizedDescription
+            }
+        }
+        guard didWriteSnapshot else {
+            return false
+        }
+        widgetSnapshotSyncError = nil
+        guard let widgetReloadScheduler else {
+            return true
+        }
+        if reloadImmediately {
+            widgetReloadScheduler.requestImmediateReload()
+        } else {
+            widgetReloadScheduler.requestReload()
+        }
+        return true
     }
 
     func openShortcutEntry(_ summary: AppShortcutEntrySummary) throws {
@@ -4154,6 +3994,7 @@ final class AppSessionModel {
                     resetVaultQuickFilters()
                 }
             }
+            publishWidgetSnapshots()
             entryOperationState = .succeeded(String(localized: "已删除分类"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -5489,8 +5330,7 @@ final class AppSessionModel {
             clearExtendedParityEntries()
             clearOperationTimelineEvents()
             recordUserActivity(at: now)
-            try refreshWidgetSnapshotIfConfigured(now: now)
-            try refreshShortcutSnapshotIfConfigured()
+            publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
             clearVaultAccessAfterFailure()
@@ -5541,8 +5381,7 @@ final class AppSessionModel {
             clearExtendedParityEntries()
             clearOperationTimelineEvents()
             recordUserActivity(at: now)
-            try refreshWidgetSnapshotIfConfigured(now: now)
-            try refreshShortcutSnapshotIfConfigured()
+            publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
             clearVaultAccessAfterFailure()
@@ -6168,7 +6007,6 @@ final class AppSessionModel {
             loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
             try refreshAutoFillEncryptedIndexIfConfigured()
-            try refreshShortcutSnapshotIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .login,
@@ -6651,7 +6489,6 @@ final class AppSessionModel {
             )
             noteEntries = try entryRepository.listNoteEntries(projectID: project.id)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: project.id)
-            try refreshShortcutSnapshotIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .note,
@@ -6824,7 +6661,6 @@ final class AppSessionModel {
             totpSecret = ""
             totpEntries = try entryRepository.listTotpEntries(projectID: project.id)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: project.id)
-            try refreshShortcutSnapshotIfConfigured()
             appendOperationTimelineEvent(
                 action: .created,
                 itemKind: .totp,
@@ -10342,6 +10178,7 @@ final class AppSessionModel {
             recordUserActivity(at: now)
             vaultOperationState = .succeeded(session.descriptor.displayName)
             vaultKeychainState = .unlocked(session.handle.vaultID)
+            publishWidgetSnapshots(now: now, reloadImmediately: true)
         } catch {
             clearVaultAccessAfterFailure()
             vaultKeychainState = .failed(readableVaultKeychainErrorMessage(for: error))
@@ -12925,8 +12762,6 @@ final class AppSessionModel {
         bitwardenPendingMutationBatches = []
         clearPendingAndroidEncryptedBackup()
         dismissAttachmentQuickLookPreview()
-        try? refreshWidgetSnapshotIfConfigured()
-        try? refreshShortcutSnapshotIfConfigured()
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
@@ -13052,6 +12887,7 @@ final class AppSessionModel {
         clearKeePassImportState()
         entryOperationState = .idle
         clearOperationTimelineEvents()
+        publishWidgetSnapshots(reloadImmediately: true)
     }
 
     private func clearVaultAccessAfterFailure() {
@@ -13107,6 +12943,7 @@ final class AppSessionModel {
         bitwardenPendingMutationBatches = []
         clearPendingAndroidEncryptedBackup()
         clearKeePassImportState()
+        publishWidgetSnapshots(reloadImmediately: true)
     }
 
     private func clearPendingAndroidEncryptedBackup() {
@@ -13522,7 +13359,7 @@ final class AppSessionModel {
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
-        try refreshWidgetSnapshotIfConfigured()
+        publishWidgetSnapshots()
     }
 
     private func clearAllEntryLists() {
@@ -13725,6 +13562,7 @@ final class AppSessionModel {
             operationTimelineEvents.removeLast(operationTimelineEvents.count - 500)
         }
         operationTimelineStore.saveEvents(operationTimelineEvents)
+        publishWidgetSnapshots()
     }
 
     private static func redactedTimelineTitle(_ value: String) -> String {
@@ -13814,6 +13652,7 @@ final class AppSessionModel {
         case .inactive:
             isPrivacyShieldVisible = vaultState == .unlocked
         case .background:
+            widgetReloadScheduler?.flushPendingReload()
             guard vaultState == .unlocked else {
                 return
             }
