@@ -3,7 +3,9 @@ import AuthenticationServices
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
+import MonicaWidgetShared
 import Security
+import WidgetKit
 
 struct MonicaAppEnvironment: Sendable {
     let appGroupIdentifier: String
@@ -353,6 +355,11 @@ extension AppSessionModel {
         let secretStore = FileAutoFillCredentialSecretStore(appGroupContainerURL: appGroupContainerURL)
         let widgetSnapshotStore = AppWidgetSnapshotFileStore(containerURL: appGroupContainerURL)
         let shortcutSnapshotStore = AppShortcutSnapshotFileStore(containerURL: appGroupContainerURL)
+        // WidgetKit's only public "please refresh" hook. The scheduler coalesces the burst
+        // of mutations produced by imports/sync so the widget is not rate limited.
+        let widgetReloadScheduler = MonicaWidgetReloadScheduler {
+            WidgetCenter.shared.reloadTimelines(ofKind: MonicaWidgetConstants.widgetKind)
+        }
         let bitwardenAuthenticationSessionStore = FileAppBitwardenAuthenticationSessionStore(containerURL: appGroupContainerURL)
         let bitwardenVaultKeyStore = FileAppBitwardenVaultKeyStore(containerURL: appGroupContainerURL)
         let bitwardenSendSyncStateStore = FileAppBitwardenSendSyncStateStore(containerURL: appGroupContainerURL)
@@ -410,7 +417,8 @@ extension AppSessionModel {
             plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
             plusEntitlementStore: environment.plusEntitlementStore,
             widgetSnapshotStore: widgetSnapshotStore,
-            shortcutSnapshotStore: shortcutSnapshotStore
+            shortcutSnapshotStore: shortcutSnapshotStore,
+            widgetReloadScheduler: widgetReloadScheduler
         )
         session.refreshNotificationPermissionStatus()
         return session
