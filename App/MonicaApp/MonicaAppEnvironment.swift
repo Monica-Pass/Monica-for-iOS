@@ -12,6 +12,7 @@ struct MonicaAppEnvironment: Sendable {
     let oneDriveConfiguration: OneDriveCloudFileConfiguration
     let oneDriveAuthenticationService: any AppOneDriveAuthenticationService
     let oneDriveGraphTransport: any OneDriveGraphTransport
+    let oneDriveBackupPreferencesStore: any AppOneDriveBackupPreferencesStore
     let plusEntitlementStore: any AppPlusEntitlementStore
 
     init(
@@ -21,6 +22,7 @@ struct MonicaAppEnvironment: Sendable {
         oneDriveConfiguration: OneDriveCloudFileConfiguration = .monicaProduction,
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         oneDriveGraphTransport: any OneDriveGraphTransport = URLSessionOneDriveGraphTransport(),
+        oneDriveBackupPreferencesStore: (any AppOneDriveBackupPreferencesStore)? = nil,
         plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore()
     ) {
         self.appGroupIdentifier = appGroupIdentifier
@@ -31,6 +33,7 @@ struct MonicaAppEnvironment: Sendable {
             configuration: oneDriveConfiguration
         )
         self.oneDriveGraphTransport = oneDriveGraphTransport
+        self.oneDriveBackupPreferencesStore = oneDriveBackupPreferencesStore ?? UserDefaultsAppOneDriveBackupPreferencesStore()
         self.plusEntitlementStore = plusEntitlementStore
     }
 
@@ -338,6 +341,7 @@ extension AppSessionModel {
                 quickSetupStateStore: UserDefaultsAppQuickSetupStateStore(),
                 cloudFileProviders: environment.productionCloudFileProviders,
                 oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
+                oneDriveBackupPreferencesStore: environment.oneDriveBackupPreferencesStore,
                 autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
                 plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
                 plusEntitlementStore: environment.plusEntitlementStore
@@ -377,6 +381,7 @@ extension AppSessionModel {
             quickSetupStateStore: UserDefaultsAppQuickSetupStateStore(defaults: appGroupDefaults),
             cloudFileProviders: environment.productionCloudFileProviders,
             oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
+            oneDriveBackupPreferencesStore: environment.oneDriveBackupPreferencesStore,
             bitwardenPasswordAuthenticationService: MonicaSyncBitwardenPasswordAuthenticationService(
                 authenticator: BitwardenPasswordAuthenticator(
                     sessionStore: bitwardenAuthenticationSessionStore,
