@@ -75,6 +75,10 @@
 	<string>用于解锁保险库，不会上传或存储生物识别数据。</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Monica 使用本地网络连接你的自托管同步服务器。</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>ASCredentialExchangeActivity</string>
+	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

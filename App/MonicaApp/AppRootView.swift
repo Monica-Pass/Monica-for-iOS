@@ -2940,6 +2940,7 @@ final class AppSessionModel {
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
     var bitwardenPendingMutationBatches: [AppBitwardenPendingMutationBatch] = []
     var csvImportPreview: CSVImportPreview?
+    var credentialExchange = AppCredentialExchangeState()
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
     var keePassReadOnlySnapshot: KeePassReadOnlySnapshot?
@@ -8858,6 +8859,246 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    // MARK: - 凭据交换（CXF，iOS 26+）
+
+    /// 系统完成导入握手后通过 NSUserActivity 调用；令牌只保留在内存里。
+    func handleCredentialExchangeActivity(_ activity: NSUserActivity) {
+        guard #available(iOS 26.0, *) else { return }
+        guard activity.activityType == ASCredentialExchangeActivity else { return }
+        guard let token = activity.userInfo?[ASCredentialImportToken] as? UUID else {
+            credentialExchange.importError = "系统没有提供可用的凭据导入令牌，本地保险库未做改动。"
+            return
+        }
+        recordUserActivity()
+        credentialExchange.importError = nil
+        guard vaultState == .unlocked else {
+            credentialExchange.pendingImportToken = token
+            return
+        }
+        Task { await fetchCredentialExchangeImport(token: token) }
+    }
+
+    /// 解锁完成后继续处理系统已经交给 App 的导入令牌。
+    func continuePendingCredentialExchangeImportIfAvailable() {
+        guard #available(iOS 26.0, *) else { return }
+        guard vaultState == .unlocked, let token = credentialExchange.pendingImportToken else { return }
+        credentialExchange.pendingImportToken = nil
+        Task { await fetchCredentialExchangeImport(token: token) }
+    }
+
+    private func fetchCredentialExchangeImport(token: UUID) async {
+        guard #available(iOS 26.0, *), vaultState == .unlocked else {
+            credentialExchange.pendingImportToken = token
+            return
+        }
+        if credentialExchange.isFetchingImport {
+            credentialExchange.pendingImportToken = token
+            return
+        }
+        credentialExchange.isFetchingImport = true
+        credentialExchange.importError = nil
+        entryOperationState = .running
+        defer { credentialExchange.isFetchingImport = false }
+
+        do {
+            let data = try await ASCredentialImportManager().importCredentials(token: token)
+            guard data.formatVersion.rawValue == CredentialExchangeFormat.supportedVersion else {
+                credentialExchange.importError = "不支持的凭据交换版本 \(data.formatVersion.rawValue)。本地保险库未做改动。"
+                entryOperationState = .failed("不支持的凭据交换版本")
+                return
+            }
+            let plan = CredentialExchangeCodec.importPlan(
+                accounts: AppCredentialExchangeBridge.accounts(from: data),
+                existingLoginEntries: loginEntries,
+                existingTOTPEntries: totpEntries
+            )
+            guard !plan.isEmpty else {
+                credentialExchange.importError = emptyCredentialExchangeMessage(plan)
+                entryOperationState = .failed("没有可导入的凭据")
+                return
+            }
+            credentialExchange.importPreview = AppCredentialExchangeImportPreview(
+                plan: plan,
+                exporterDisplayName: data.exporterDisplayName,
+                formatVersion: data.formatVersion.rawValue
+            )
+            entryOperationState = .idle
+        } catch {
+            credentialExchange.importError = credentialExchangeFailureMessage(
+                prefix: "无法读取系统提供的凭据",
+                error: error
+            )
+            entryOperationState = .failed("系统凭据读取失败")
+        }
+    }
+
+    func confirmCredentialExchangeImport() throws {
+        recordUserActivity()
+        guard let preview = credentialExchange.importPreview else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        guard let entryRepository = activeEntryRepository else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+
+        credentialExchange.isImporting = true
+        credentialExchange.importError = nil
+        entryOperationState = .running
+        defer { credentialExchange.isImporting = false }
+
+        var projectID: String?
+        var created: [(VaultCSVItemDraft, String)] = []
+        do {
+            let project = try ensureActiveProject(projectTitle: "凭据交换", entryRepository: entryRepository)
+            projectID = project.id
+            for item in preview.plan.drafts {
+                if let entryID = try createCSVImportedItem(
+                    item,
+                    projectID: project.id,
+                    entryRepository: entryRepository
+                ) {
+                    created.append((item, entryID))
+                }
+            }
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            credentialExchange.importPreview = nil
+            credentialExchange.importError = nil
+            entryOperationState = .succeeded("凭据已导入 \(created.count) 项")
+        } catch {
+            let rollbackIncomplete = rollbackCredentialExchangeImport(
+                created,
+                projectID: projectID,
+                entryRepository: entryRepository
+            )
+            credentialExchange.importError = rollbackIncomplete
+                ? "导入失败，且部分条目未能回滚，请检查「凭据交换」项目：\(error.localizedDescription)"
+                : "导入失败，已回滚本次改动：\(error.localizedDescription)"
+            entryOperationState = .failed("凭据导入失败")
+            throw error
+        }
+    }
+
+    func cancelCredentialExchangeImport() {
+        credentialExchange.importPreview = nil
+        credentialExchange.importError = nil
+        credentialExchange.isImporting = false
+        credentialExchange.pendingImportToken = nil
+    }
+
+    @discardableResult
+    private func rollbackCredentialExchangeImport(
+        _ created: [(VaultCSVItemDraft, String)],
+        projectID: String?,
+        entryRepository: LocalVaultEntryRepository
+    ) -> Bool {
+        guard let projectID else {
+            return !created.isEmpty
+        }
+        var incomplete = false
+        for (item, entryID) in created.reversed() {
+            do {
+                try deleteCSVImportedItem(
+                    item,
+                    entryID: entryID,
+                    projectID: projectID,
+                    entryRepository: entryRepository
+                )
+            } catch {
+                incomplete = true
+            }
+        }
+        try? refreshAllEntryLists(projectID: projectID, entryRepository: entryRepository)
+        try? refreshAutoFillEncryptedIndexIfConfigured()
+        return incomplete
+    }
+
+    private func emptyCredentialExchangeMessage(_ plan: CredentialExchangeImportPlan) -> String {
+        if plan.skippedDuplicateCount > 0,
+           plan.unsupportedCredentialCount == 0,
+           plan.invalidCredentialCount == 0 {
+            return "这些凭据已经存在于本地保险库，没有新增任何条目。"
+        }
+        if plan.unsupportedCredentialCount > 0,
+           plan.skippedDuplicateCount == 0,
+           plan.invalidCredentialCount == 0 {
+            return "系统提供的条目暂不支持迁移（例如通行密钥），本地保险库未做改动。"
+        }
+        return "没有找到可导入的密码或 TOTP，本地保险库未做改动。"
+    }
+
+    /// 系统错误只暴露 domain/code，避免把凭据内容带进日志或界面。
+    private func credentialExchangeFailureMessage(prefix: String, error: Error) -> String {
+        let nsError = error as NSError
+        return "\(prefix)（\(nsError.domain) \(nsError.code)）。本地保险库未做改动。"
+    }
+
+    @discardableResult
+    func prepareCredentialExchangeExport() -> Bool {
+        guard #available(iOS 26.0, *) else {
+            credentialExchange.exportError = "凭据交换需要 iOS 26 或更新版本。"
+            return false
+        }
+        guard vaultState == .unlocked else {
+            credentialExchange.exportError = "请先解锁保险库再导出。"
+            return false
+        }
+        credentialExchange.exportError = nil
+        credentialExchange.exportMessage = nil
+        let plan = CredentialExchangeCodec.exportPlan(
+            loginEntries: loginEntries,
+            totpEntries: totpEntries
+        )
+        guard !plan.isEmpty else {
+            credentialExchange.exportError = plan.skippedCount > 0
+                ? "没有可导出的密码或 TOTP；另有 \(plan.skippedCount) 条 TOTP 密钥无效。"
+                : "没有可导出的密码或 TOTP。"
+            return false
+        }
+        credentialExchange.exportPlan = plan
+        return true
+    }
+
+    @discardableResult
+    func performCredentialExchangeExport() async -> Bool {
+        guard #available(iOS 26.0, *) else { return false }
+        guard let plan = credentialExchange.exportPlan else { return false }
+        guard let anchor = AppCredentialExchangePresenter.keyWindow() else {
+            credentialExchange.exportError = "找不到可用于系统导出面板的窗口。"
+            return false
+        }
+
+        credentialExchange.isExporting = true
+        credentialExchange.exportError = nil
+        defer { credentialExchange.isExporting = false }
+
+        do {
+            let manager = ASCredentialExportManager(presentationAnchor: anchor)
+            let options = try await manager.requestExport(for: nil)
+            guard options.formatVersion.rawValue == CredentialExchangeFormat.supportedVersion else {
+                credentialExchange.exportError = "接收方请求了不支持的版本 \(options.formatVersion.rawValue)。"
+                return false
+            }
+            try await manager.exportCredentials(AppCredentialExchangeBridge.exportedData(from: plan))
+            credentialExchange.exportPlan = nil
+            credentialExchange.exportMessage = "已导出 \(plan.passwordCount) 条密码、\(plan.totpCount) 条 TOTP。"
+            entryOperationState = .idle
+            return true
+        } catch {
+            credentialExchange.exportError = credentialExchangeFailureMessage(
+                prefix: "导出没有完成",
+                error: error
+            )
+            return false
+        }
+    }
+
+    func cancelCredentialExchangeExport() {
+        credentialExchange.exportPlan = nil
+        credentialExchange.exportError = nil
+        credentialExchange.isExporting = false
     }
 
     func previewKeePassImport(
@@ -14961,10 +15202,18 @@ struct AppRootView: View {
                 importPendingExtensionInboxItems()
             }
         }
+        .onChange(of: session.vaultState) { _, state in
+            if state == .unlocked {
+                session.continuePendingCredentialExchangeImportIfAvailable()
+            }
+        }
         .onOpenURL { url in
             if !session.handleOneDriveRedirectURL(url) {
                 _ = session.openShortcutURL(url)
             }
+        }
+        .handlesCredentialExchangeActivity { activity in
+            session.handleCredentialExchangeActivity(activity)
         }
         .task {
             restoreOneDriveAuthenticationSessionIfAvailable()
@@ -14987,6 +15236,53 @@ struct AppRootView: View {
             AppExtensionsView(session: session)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: credentialExchangeImportSheetBinding) {
+            CredentialExchangeImportSheet(session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: credentialExchangeExportSheetBinding) {
+            CredentialExchangeExportSheet(session: session)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        .alert("无法导入凭据", isPresented: credentialExchangeImportAlertBinding) {
+            Button("好", role: .cancel) {}
+        } message: {
+            Text(session.credentialExchange.importError ?? "")
+        }
+    }
+
+    private var credentialExchangeImportSheetBinding: Binding<Bool> {
+        Binding {
+            session.credentialExchange.importPreview != nil
+        } set: { isPresented in
+            if !isPresented {
+                session.cancelCredentialExchangeImport()
+            }
+        }
+    }
+
+    private var credentialExchangeExportSheetBinding: Binding<Bool> {
+        Binding {
+            session.credentialExchange.exportPlan != nil
+        } set: { isPresented in
+            if !isPresented {
+                session.cancelCredentialExchangeExport()
+            }
+        }
+    }
+
+    private var credentialExchangeImportAlertBinding: Binding<Bool> {
+        Binding {
+            session.credentialExchange.importError != nil
+                && session.credentialExchange.importPreview == nil
+                && !session.credentialExchange.isFetchingImport
+        } set: { isPresented in
+            if !isPresented {
+                session.credentialExchange.importError = nil
+            }
         }
     }
 
