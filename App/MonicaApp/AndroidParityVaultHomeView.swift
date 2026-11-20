@@ -1,3 +1,4 @@
+import MonicaCore
 import MonicaStorage
 import Observation
 import QuickLook
@@ -137,7 +138,7 @@ struct AndroidParityVaultHomeView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $isGeneratorPresented) {
-            GeneratorRootView()
+            GeneratorRootView(session: session)
         }
         .fileImporter(
             isPresented: $isVaultImporterPresented,
@@ -315,7 +316,11 @@ struct AndroidParityVaultHomeView: View {
             ForEach(session.filteredTotpEntries) { entry in
                 batchAwareButton(id: entry.id, kind: .totp) {
                     batchSelectableCard(id: entry.id) {
-                        AndroidTotpListCard(entry: entry, code: totpCode(for: entry), remaining: session.totpTimeRemaining(for: entry, at: now))
+                        AndroidTotpListCard(
+                            entry: entry,
+                            code: session.maskedSensitivePreview(totpCode(for: entry)),
+                            remaining: session.totpTimeRemaining(for: entry, at: now)
+                        )
                     }
                 }
             }
@@ -355,7 +360,7 @@ struct AndroidParityVaultHomeView: View {
             ForEach(session.filteredNoteEntries) { entry in
                 batchAwareButton(id: entry.id, kind: .note) {
                     batchSelectableCard(id: entry.id) {
-                        AndroidNoteListCard(entry: entry)
+                        AndroidNoteListCard(entry: entry, previewBody: session.maskedSensitivePreview(entry.body))
                     }
                 }
             }
@@ -1483,6 +1488,7 @@ private struct AndroidIdentityListCard: View {
 
 private struct AndroidNoteListCard: View {
     let entry: LocalNoteEntry
+    let previewBody: String
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
@@ -1491,7 +1497,7 @@ private struct AndroidNoteListCard: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text(entry.title.isEmpty ? String(localized: "未命名") : entry.title)
                         .font(.subheadline.weight(.semibold))
-                    Text(entry.body)
+                    Text(previewBody)
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
                         .lineLimit(3)
@@ -1737,6 +1743,7 @@ struct AddEditVaultItemView: View {
     @State private var isTotpScannerPresented = false
     @State private var isSendFileImporterPresented = false
     @State private var isAttachmentImporterPresented = false
+    @State private var sendLinkCopyFeedback: String?
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -2163,12 +2170,17 @@ struct AddEditVaultItemView: View {
                     .textSelection(.enabled)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                 Button {
-                    UIPasteboard.general.string = shareLink
+                    sendLinkCopyFeedback = session.copySensitiveValueToPasteboard(shareLink).message
                 } label: {
                     Label("复制链接", systemImage: "doc.on.doc")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                if let sendLinkCopyFeedback {
+                    Text(sendLinkCopyFeedback)
+                        .font(.caption2)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
                 Text("链接包含解密密钥，只能通过安全渠道发送，且只显示这一次。")
                     .font(.caption2)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
@@ -2264,7 +2276,7 @@ private extension UnifiedVaultItemKind {
 private struct VaultItemDetailView: View {
     @Bindable var session: AppSessionModel
     let route: VaultItemRoute
-    @State private var revealsSensitiveFields = false
+    @State private var copyFeedback: String?
 
     var body: some View {
         AndroidParityScreen {
@@ -2291,21 +2303,50 @@ private struct VaultItemDetailView: View {
                     .foregroundStyle(AndroidParityPalette.primary)
                     .disabled(route.kind == .attachmentRef)
                 }
-                Toggle("显示敏感字段", isOn: $revealsSensitiveFields)
+                Toggle("显示敏感字段", isOn: revealBinding)
                     .font(.subheadline.weight(.semibold))
                     .tint(AndroidParityPalette.primary)
+                    .disabled(!session.canTemporarilyRevealSensitiveFieldsInDetail)
+                if !session.canTemporarilyRevealSensitiveFieldsInDetail {
+                    Text("在「设置 › 敏感隐私」中允许显示后可用")
+                        .font(.caption2)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
             }
 
             AndroidParitySection(title: String(localized: "详情")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(rows) { row in
-                        AndroidParityInfoRow(title: row.title, value: row.value)
+                        HStack(spacing: 12) {
+                            AndroidParityInfoRow(title: row.title, value: row.value)
+                            if let secret = copyableSecrets[row.id], !secret.isEmpty {
+                                Button {
+                                    copyFeedback = session.copySensitiveValueToPasteboard(secret).message
+                                } label: {
+                                    Image(systemName: "doc.on.doc")
+                                        .font(.caption.weight(.bold))
+                                        .frame(minWidth: 44, minHeight: 44)
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(AndroidParityPalette.primary)
+                                .accessibilityLabel(Text("复制 \(row.title)"))
+                            }
+                        }
                         if row.id != rows.last?.id {
                             AndroidParityDivider()
                         }
                     }
                 }
+                if let copyFeedback {
+                    Text(copyFeedback)
+                        .font(.caption2)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .padding(.horizontal, 4)
+                }
             }
+        }
+        .onDisappear {
+            session.setSensitivePreviewRevealed(false, entryID: route.entryID)
         }
     }
 
@@ -2321,36 +2362,36 @@ private struct VaultItemDetailView: View {
                 row("title", String(localized: "标题"), entry.title),
                 row("username", String(localized: "账号"), entry.username),
                 row("url", String(localized: "网址"), redactedURL(entry.url)),
-                row("password", String(localized: "密码"), sensitive(entry.password)),
+                row("password", String(localized: "密码"), sensitive(entry.password, .password)),
                 row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))
             ]
         case .note:
             guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "正文"), sensitive(entry.body)), row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))]
+            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "正文"), sensitive(entry.body, .noteBody)), row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))]
         case .totp:
             guard let entry = session.totpEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("secret", String(localized: "密钥"), sensitive(entry.secret)), row("period", String(localized: "周期"), "\(entry.period)s")]
+            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("secret", String(localized: "密钥"), sensitive(entry.secret, .totp)), row("period", String(localized: "周期"), "\(entry.period)s")]
         case .card:
             guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("holder", String(localized: "持卡人"), entry.cardholderName), row("number", String(localized: "卡号"), sensitive(entry.number)), row("expiry", String(localized: "有效期"), "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv)), row("issuer", String(localized: "银行"), entry.issuer)]
+            return [row("title", String(localized: "标题"), entry.title), row("holder", String(localized: "持卡人"), entry.cardholderName), row("number", String(localized: "卡号"), sensitive(entry.number, .cardNumber)), row("expiry", String(localized: "有效期"), "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv, .cvv)), row("issuer", String(localized: "银行"), entry.issuer)]
         case .identity:
             guard let entry = session.identityEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("type", String(localized: "类型"), entry.documentType), row("name", String(localized: "姓名"), entry.fullName), row("number", String(localized: "证件号"), sensitive(entry.documentNumber)), row("issuer", String(localized: "签发方"), entry.issuer), row("country", String(localized: "国家/地区"), entry.country)]
+            return [row("title", String(localized: "标题"), entry.title), row("type", String(localized: "类型"), entry.documentType), row("name", String(localized: "姓名"), entry.fullName), row("number", String(localized: "证件号"), sensitive(entry.documentNumber, .otherSecret)), row("issuer", String(localized: "签发方"), entry.issuer), row("country", String(localized: "国家/地区"), entry.country)]
         case .passkey:
             guard let entry = session.passkeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("rp", String(localized: "网站标识"), entry.relyingPartyID), row("username", String(localized: "账号"), entry.username), row("credential", String(localized: "通行密钥标识"), sensitive(entry.credentialID)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference))]
+            return [row("title", String(localized: "标题"), entry.title), row("rp", String(localized: "网站标识"), entry.relyingPartyID), row("username", String(localized: "账号"), entry.username), row("credential", String(localized: "通行密钥标识"), sensitive(entry.credentialID, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret))]
         case .sshKey:
             guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("user", String(localized: "用户名"), entry.username), row("host", String(localized: "主机"), entry.host), row("public", String(localized: "公钥"), revealsSensitiveFields ? entry.publicKey : "••••••"), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference)), row("hint", String(localized: "口令提示"), entry.passphraseHint)]
+            return [row("title", String(localized: "标题"), entry.title), row("user", String(localized: "用户名"), entry.username), row("host", String(localized: "主机"), entry.host), row("public", String(localized: "公钥"), sensitive(entry.publicKey, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret)), row("hint", String(localized: "口令提示"), entry.passphraseHint)]
         case .apiToken:
             guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("token", "Token", sensitive(entry.token)), row("scopes", String(localized: "范围"), entry.scopes), row("expires", String(localized: "过期"), entry.expiresAt)]
+            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("token", "Token", sensitive(entry.token, .otherSecret)), row("scopes", String(localized: "范围"), entry.scopes), row("expires", String(localized: "过期"), entry.expiresAt)]
         case .wifi:
             guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
+            return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password, .password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body)), row("expires", String(localized: "过期"), entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
+            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
         case .attachmentRef:
             guard let entry = session.attachmentEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "文件名"), entry.fileName), row("state", String(localized: "状态"), entry.downloadState), row("mode", String(localized: "存储"), entry.storageMode), row("size", String(localized: "大小"), String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节"))]
@@ -2361,9 +2402,53 @@ private struct VaultItemDetailView: View {
         [row("missing", String(localized: "状态"), String(localized: "条目不可用"))]
     }
 
-    private func sensitive(_ value: String) -> String {
-        guard !value.isEmpty else { return String(localized: "空") }
-        return revealsSensitiveFields ? value : "••••••"
+    private var revealBinding: Binding<Bool> {
+        Binding(
+            get: { session.isSensitivePreviewRevealed(entryID: route.entryID) },
+            set: { session.setSensitivePreviewRevealed($0, entryID: route.entryID) }
+        )
+    }
+
+    /// 只有被掩码的敏感行才给复制入口，复制内容仍走统一的剪贴板治理。
+    private var copyableSecrets: [String: String] {
+        switch route.kind {
+        case .login:
+            guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["password": entry.password]
+        case .note:
+            guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["body": entry.body]
+        case .totp:
+            guard let entry = session.totpEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["secret": entry.secret]
+        case .card:
+            guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["number": entry.number, "cvv": entry.cvv]
+        case .identity:
+            guard let entry = session.identityEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["number": entry.documentNumber]
+        case .passkey:
+            guard let entry = session.passkeyEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["credential": entry.credentialID, "private": entry.privateKeyReference]
+        case .sshKey:
+            guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["public": entry.publicKey, "private": entry.privateKeyReference]
+        case .apiToken:
+            guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["token": entry.token]
+        case .wifi:
+            guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["password": entry.password]
+        case .send:
+            guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["body": entry.body]
+        case .attachmentRef:
+            return [:]
+        }
+    }
+
+    private func sensitive(_ value: String, _ category: SensitivePreviewCategory) -> String {
+        session.sensitivePreviewValue(value, category: category, entryID: route.entryID)
     }
 
     private func redactedURL(_ value: String) -> String {

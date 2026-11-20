@@ -2498,6 +2498,12 @@ final class AppSessionModel {
     var vaultDisplayPreferences: VaultDisplayPreferences
     var appearancePreferences: AppAppearancePreferences
     var vaultLayoutPreferences: VaultLayoutPreferences
+    /// #58：剪贴板自动清除时长与敏感预览掩码偏好。
+    var sensitiveClipboardTTL: SensitiveClipboardTTL
+    var sensitivePreviewPreferences: SensitivePreviewPreferences
+    /// 本次解锁会话内的「显示敏感字段」状态；锁库立即清空，不持久化。
+    var sensitivePreviewSession = SensitivePreviewSession()
+    var sensitivePasteboardHasPendingAutoClear = false
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -2599,6 +2605,10 @@ final class AppSessionModel {
     private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
+    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
+    private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
+    private let sensitivePasteboard: MonicaSensitivePasteboard
+    @ObservationIgnored private var sensitivePasteboardExpiryTask: Task<Void, Never>?
     private let biometricUnlockAuthorizer: any BiometricUnlockAuthorizer
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
@@ -2723,7 +2733,10 @@ final class AppSessionModel {
         bitwardenTextSendLocalIDProvider: @escaping () -> String = {
             "bitwarden-text-send-\(UUID().uuidString)"
         },
-        autoLockPolicy: AppAutoLockPolicy = .default
+        autoLockPolicy: AppAutoLockPolicy = .default,
+        sensitivePasteboard: MonicaSensitivePasteboard? = nil,
+        sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore = MemorySensitivePreviewPreferenceStore(),
+        sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore = MemorySensitiveClipboardPreferenceStore()
     ) {
         self.vaultRepository = vaultRepository
         self.vaultKeychainService = vaultKeychainService
@@ -2788,6 +2801,12 @@ final class AppSessionModel {
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
         self.vaultLayoutPreferences = vaultLayoutPreferenceStore.loadPreferences()
+        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
+        self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
+        self.sensitiveClipboardPreferenceStore = sensitiveClipboardPreferenceStore
+        self.sensitiveClipboardTTL = sensitiveClipboardPreferenceStore.loadTTL()
+        self.sensitivePasteboard = sensitivePasteboard
+            ?? MonicaSensitivePasteboard(pasteboard: UnavailableSensitivePasteboard())
         self.autoFillPolicy = autoFillPolicyStore.loadPolicy()
         if plusEntitlementStore.loadIsResourceUnlocked() {
             self.plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
@@ -4136,6 +4155,141 @@ final class AppSessionModel {
         vaultDisplayPreferences = preferences
         vaultDisplayPreferenceStore.savePreferences(preferences)
         recordUserActivity()
+    }
+
+    // MARK: - 敏感值复制与预览掩码（#58）
+
+    static let sensitivePreviewMaskPlaceholder = "••••••"
+
+    /// 列表、搜索结果与卡包摘要一律掩码，不依赖临时显示状态。
+    func maskedSensitivePreview(_ value: String) -> String {
+        value.isEmpty ? String(localized: "空") : Self.sensitivePreviewMaskPlaceholder
+    }
+
+    /// 详情页按「类别偏好 + 本次解锁会话的临时显示状态」决定显示掩码还是明文。
+    func sensitivePreviewValue(_ value: String, category: SensitivePreviewCategory, entryID: String) -> String {
+        guard !value.isEmpty else {
+            return String(localized: "空")
+        }
+        let revealed = sensitivePreviewPreferences.allowsTemporaryReveal(category)
+            && sensitivePreviewSession.isRevealed(entryID: entryID)
+        return revealed ? value : Self.sensitivePreviewMaskPlaceholder
+    }
+
+    /// 详情页「显示敏感字段」开关能否使用：全部类别都被禁止时不给误触机会。
+    var canTemporarilyRevealSensitiveFieldsInDetail: Bool {
+        !sensitivePreviewPreferences.alwaysMask && sensitivePreviewPreferences.hasRevealableCategories
+    }
+
+    func isSensitivePreviewRevealed(entryID: String) -> Bool {
+        sensitivePreviewSession.isRevealed(entryID: entryID)
+    }
+
+    func setSensitivePreviewRevealed(_ revealed: Bool, entryID: String) {
+        sensitivePreviewSession.setRevealed(revealed, forEntryID: entryID)
+    }
+
+    /// 锁库时清空临时显示状态；不写入任何持久化存储。
+    func resetSensitivePreviewReveal() {
+        sensitivePreviewSession.reset()
+    }
+
+    func updateSensitivePreviewPreferences(_ preferences: SensitivePreviewPreferences) {
+        sensitivePreviewPreferences = preferences
+        sensitivePreviewPreferenceStore.savePreferences(preferences)
+        if preferences.alwaysMask {
+            sensitivePreviewSession.reset()
+        }
+        recordUserActivity()
+    }
+
+    func updateSensitiveClipboardTTL(_ ttl: SensitiveClipboardTTL) {
+        sensitiveClipboardTTL = ttl
+        sensitiveClipboardPreferenceStore.saveTTL(ttl)
+        if ttl == .off {
+            // 关闭自动清除后丢弃待清理记录，避免下一次回到前台时把仅剩的记录清掉。
+            sensitivePasteboard.discardPendingRecord()
+            sensitivePasteboardHasPendingAutoClear = false
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
+        }
+        recordUserActivity()
+    }
+
+    @discardableResult
+    func copySensitiveValueToPasteboard(_ secret: String) -> SensitivePasteboardCopyFeedback {
+        switch sensitivePasteboard.copy(secret: secret, ttl: sensitiveClipboardTTL) {
+        case .nothingToCopy:
+            return .nothingToCopy
+        case .copiedWithoutAutoClear:
+            sensitivePasteboardHasPendingAutoClear = false
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
+            return .copiedWithoutAutoClear
+        case .copiedWithAutoClear:
+            sensitivePasteboardHasPendingAutoClear = true
+            startSensitivePasteboardExpiryMonitor()
+            return .copiedWithAutoClear(seconds: sensitiveClipboardTTL.rawValue)
+        }
+    }
+
+    @discardableResult
+    func checkSensitivePasteboardExpiry(at date: Date = Date()) -> MonicaSensitivePasteboard.ExpiryOutcome {
+        let outcome = sensitivePasteboard.clearIfExpired(at: date)
+        switch outcome {
+        case .noPendingValue, .cleared, .skippedBecauseReplacedByAnotherApp:
+            sensitivePasteboardHasPendingAutoClear = false
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
+        case .notYetDue:
+            sensitivePasteboardHasPendingAutoClear = true
+        }
+        return outcome
+    }
+
+    @discardableResult
+    func clearSensitivePasteboardManually() -> MonicaSensitivePasteboard.ExpiryOutcome {
+        let outcome = sensitivePasteboard.clearImmediatelyIfOwned()
+        sensitivePasteboardHasPendingAutoClear = sensitivePasteboard.hasPendingAutoClear
+        if !sensitivePasteboard.hasPendingAutoClear {
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
+        }
+        return outcome
+    }
+
+    /// 回到前台时补做到期检查：App 被挂起期间 Timer 不会运行，系统也不允许可靠的秒级后台清理。
+    func resumeSensitivePasteboardExpiryMonitoringIfNeeded() {
+        guard sensitivePasteboard.hasPendingAutoClear else {
+            sensitivePasteboardHasPendingAutoClear = false
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
+            return
+        }
+        _ = checkSensitivePasteboardExpiry()
+        if sensitivePasteboard.hasPendingAutoClear {
+            startSensitivePasteboardExpiryMonitor()
+        }
+    }
+
+    private func startSensitivePasteboardExpiryMonitor() {
+        sensitivePasteboardExpiryTask?.cancel()
+        guard sensitivePasteboard.hasPendingAutoClear else {
+            sensitivePasteboardHasPendingAutoClear = false
+            return
+        }
+        sensitivePasteboardExpiryTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else {
+                    return
+                }
+                self.checkSensitivePasteboardExpiry()
+                if !self.sensitivePasteboard.hasPendingAutoClear {
+                    return
+                }
+            }
+        }
     }
 
     /// 密码页模块栏里实际展示的 `PasswordModule`（#63）。
@@ -12744,6 +12898,8 @@ final class AppSessionModel {
     func lockLocalVault() {
         isPrivacyShieldVisible = false
         pendingControlPage = nil
+        // 锁库立即恢复敏感预览掩码；临时显示状态只在内存里，不跨解锁会话。
+        resetSensitivePreviewReveal()
         if let activeVaultSession {
             vaultRepository.closeVault(for: activeVaultSession)
         }
@@ -13649,10 +13805,14 @@ final class AppSessionModel {
             refreshNotificationPermissionStatus()
             refreshSystemAutoFillProviderStatus()
             lockIfIdle()
+            // 挂起期间计时器不会运行，回到前台补做到期检查并重启前台轮询。
+            resumeSensitivePasteboardExpiryMonitoringIfNeeded()
         case .inactive:
             isPrivacyShieldVisible = vaultState == .unlocked
         case .background:
             widgetReloadScheduler?.flushPendingReload()
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
             guard vaultState == .unlocked else {
                 return
             }
