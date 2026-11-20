@@ -49,8 +49,96 @@ final class MDBXRoundTripTests: XCTestCase {
         XCTAssertEqual(listed.first?.username, "alice")
     }
 
-    func testStorageEntryRepositoryMovesEntriesThroughRealMDBXEngine() throws {
+    func testChangeMasterPasswordKeepsVaultKeyAndRejectsOldPassword() throws {
         let repository = LocalVaultRepository()
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-change-password-\(UUID().uuidString).mdbx")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+        }
+
+        let deviceID = "ios-change-password-xctest-device"
+        let oldPassword = "中文 password 12345!"
+        let newPassword = "新的 password 67890!"
+        let session = try repository.createVault(
+            named: vaultURL.deletingPathExtension().lastPathComponent,
+            in: vaultURL.deletingLastPathComponent(),
+            password: oldPassword,
+            deviceID: deviceID
+        )
+        let entries = repository.entryRepository(for: session)
+        let project = try entries.createProject(title: "Personal")
+        let entry = try entries.createLoginEntry(
+            projectID: project.id,
+            draft: LocalLoginEntryDraft(
+                title: "GitHub",
+                username: "alice",
+                password: "correct horse battery staple",
+                url: "https://github.com"
+            )
+        )
+
+        let securityKeyMaterial = Data(repeating: 0x5A, count: 32)
+        try repository.setupLocalSecurityKeyUnlock(
+            for: session,
+            securityKeyMaterial: securityKeyMaterial
+        )
+
+        XCTAssertThrowsError(
+            try repository.changeMasterPassword(
+                for: session,
+                currentPassword: "错误的 password",
+                newPassword: newPassword
+            )
+        ) { error in
+            XCTAssertEqual(error as? LocalVaultRepositoryError, .currentPasswordMismatch)
+        }
+        XCTAssertEqual(try entries.listLoginEntries(projectID: project.id), [entry])
+        try repository.openVaultWithSecurityKey(
+            at: vaultURL,
+            securityKeyMaterial: securityKeyMaterial,
+            deviceID: deviceID
+        )
+
+        try repository.changeMasterPassword(
+            for: session,
+            currentPassword: oldPassword,
+            newPassword: newPassword
+        )
+        XCTAssertEqual(try entries.listLoginEntries(projectID: project.id), [entry])
+
+        repository.closeVault(for: session)
+
+        let reopened = try repository.openVault(
+            at: vaultURL,
+            password: newPassword,
+            deviceID: deviceID
+        )
+        let reopenedEntries = repository.entryRepository(for: reopened)
+        XCTAssertEqual(
+            try reopenedEntries.listLoginEntries(projectID: project.id).map(\.title),
+            ["GitHub"]
+        )
+
+        XCTAssertThrowsError(
+            try repository.openVault(at: vaultURL, password: oldPassword, deviceID: deviceID)
+        )
+
+        // 改密只重新包裹 vault_key，之前注册的 security key 解锁方式必须继续可用。
+        let keySession = try repository.openVaultWithSecurityKey(
+            at: vaultURL,
+            securityKeyMaterial: securityKeyMaterial,
+            deviceID: deviceID
+        )
+        XCTAssertEqual(
+            try repository.entryRepository(for: keySession)
+                .listLoginEntries(projectID: project.id)
+                .map(\.title),
+            ["GitHub"]
+        )
+    }
+
+    func testStorageEntryRepositoryMovesEntriesThroughRealMDBXEngine() throws {        let repository = LocalVaultRepository()
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("monica-move-\(UUID().uuidString).mdbx")
         defer {

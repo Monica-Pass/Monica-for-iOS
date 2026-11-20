@@ -7721,6 +7721,8 @@ public enum LocalVaultRepositoryError: Error, Sendable, Equatable, LocalizedErro
     case emptyVaultName
     case emptyPassword
     case emptySecurityKeyMaterial
+    case currentPasswordMismatch
+    case passwordUnchanged
     case emptyProjectTitle
     case emptyEntryTitle
     case vaultUnavailable
@@ -7737,6 +7739,10 @@ public enum LocalVaultRepositoryError: Error, Sendable, Equatable, LocalizedErro
             return "保险库密码不能为空。"
         case .emptySecurityKeyMaterial:
             return "保险库安全密钥材料不能为空。"
+        case .currentPasswordMismatch:
+            return "当前主密码不正确。"
+        case .passwordUnchanged:
+            return "新主密码不能与当前主密码相同。"
         case .emptyProjectTitle:
             return "项目标题不能为空。"
         case .emptyEntryTitle:
@@ -7814,6 +7820,16 @@ public protocol LocalVaultEngine {
         in handle: LocalVaultHandle,
         securityKeyMaterial: Data
     ) throws
+
+    /// 只校验主密码，不登记新会话，也不改变已经在使用的句柄。
+    ///
+    /// 修改主密码前需要先确认旧口令；实现必须在一个独立的临时连接上验证，
+    /// 让正在使用的会话在验证失败时保持原样。
+    func verifyMasterPassword(
+        at fileURL: URL,
+        password: String,
+        deviceID: String
+    ) throws -> LocalVaultHandle
 
     func resetMasterPassword(
         in handle: LocalVaultHandle,
@@ -9848,6 +9864,48 @@ public struct LocalVaultRepository {
         )
     }
 
+    /// 修改主密码：先校验旧口令，再在同一个已解锁会话上重包裹 vault key。
+    ///
+    /// 设计要点：
+    /// - 主密码只是 KEK，MDBX 里的记录/附件仍然由同一个随机 vault key 加密，所以这里
+    ///   只替换 `unlock_methods` 里的 KDF 参数与 `wrapped_vault_key`，不做全库重加密。
+    /// - 旧口令在**独立临时连接**上验证，失败时不触碰正在使用的句柄；引擎实现必须保证
+    ///   临时连接不会被登记为当前会话（见 `verifyMasterPassword`）。
+    /// - 真正的重包裹由引擎在单个事务里完成；中途掉电由 SQLite 回滚，旧口令仍然有效。
+    /// - 注意：当前 FFI 的 `resetMasterPassword` 使用默认 KDF 档位（Multi），与「忘记密码」
+    ///   重置路径一致；这只会影响新建 wrapped key 的 KDF 参数，不影响既有数据。
+    public func changeMasterPassword(
+        for session: LocalVaultSession,
+        currentPassword: String,
+        newPassword: String
+    ) throws {
+        guard session.state == .unlocked else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        try validatePassword(currentPassword)
+        try validatePassword(newPassword)
+        guard !newPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw LocalVaultRepositoryError.emptyPassword
+        }
+        guard currentPassword != newPassword else {
+            throw LocalVaultRepositoryError.passwordUnchanged
+        }
+
+        let verifiedHandle = try engine.verifyMasterPassword(
+            at: session.descriptor.fileURL,
+            password: currentPassword,
+            deviceID: session.handle.deviceID
+        )
+        guard verifiedHandle.vaultID == session.handle.vaultID else {
+            throw LocalVaultRepositoryError.currentPasswordMismatch
+        }
+
+        try engine.resetMasterPassword(
+            in: session.handle,
+            newPassword: newPassword
+        )
+    }
+
     private func normalizedVaultName(_ name: String) throws -> String {
         let normalized = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalized.isEmpty else {
@@ -10697,6 +10755,42 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         let info = vault.info()
         store(vault, vaultID: info.vaultID)
         return LocalVaultHandle(vaultID: info.vaultID, deviceID: info.deviceID)
+    }
+
+    /// 用临时连接校验主密码。
+    ///
+    /// 这里刻意**不**把这个连接登记进 `vaults`：同一个保险库的 vaultID 不变，一旦登记就会
+    /// 覆盖正在使用的句柄，随后 `closeVault` 会把用户的活会话一起关掉。临时连接在函数返回
+    /// 时随 ARC 释放，SQLite 的 WAL 允许它与现有连接并存。
+    public func verifyMasterPassword(
+        at fileURL: URL,
+        password: String,
+        deviceID: String
+    ) throws -> LocalVaultHandle {
+        do {
+            let vault = try MonicaMDBXRuntime.openVault(
+                at: fileURL,
+                password: password,
+                deviceID: deviceID
+            )
+            let info = vault.info()
+            return LocalVaultHandle(vaultID: info.vaultID, deviceID: info.deviceID)
+        } catch {
+            throw Self.verificationError(from: error)
+        }
+    }
+
+    private static func verificationError(from error: Error) -> Error {
+        #if canImport(mdbx_ffiFFI)
+        if let ffiError = error as? MdbxFfiError, case .Storage(let message) = ffiError {
+            // 引擎对错误口令返回 StorageError::Validation("incorrect credential")，
+            // 只有这种情形才转换成「当前主密码不正确」，其余错误（IO、schema 等）原样抛出。
+            if message.localizedCaseInsensitiveContains("credential") {
+                return LocalVaultRepositoryError.currentPasswordMismatch
+            }
+        }
+        #endif
+        return error
     }
 
     public func setupLocalSecurityKeyUnlock(
