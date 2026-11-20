@@ -33,6 +33,9 @@
 		A1000000000000000000001D /* GeneratorRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* GeneratorRootView.swift */; };
 		A1000000000000000000001F /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* SettingsRootView.swift */; };
 		A100000000000000000000F1 /* NFCBankCardProbeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F2 /* NFCBankCardProbeView.swift */; };
+		A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F6 /* AppLanSyncCoordinator.swift */; };
+		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
+		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
@@ -123,6 +126,9 @@
 		A1000000000000000000001E /* GeneratorRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		A100000000000000000000F2 /* NFCBankCardProbeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NFCBankCardProbeView.swift; sourceTree = "<group>"; };
+		A100000000000000000000F6 /* AppLanSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncCoordinator.swift; sourceTree = "<group>"; };
+		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
+		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
 		A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillCredentialProviderViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A10000000000000000000023 /* MonicaAutoFillExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaAutoFillExtension.entitlements; sourceTree = "<group>"; };
@@ -239,6 +245,9 @@
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
 				A100000000000000000000F2 /* NFCBankCardProbeView.swift */,
+				A100000000000000000000F6 /* AppLanSyncCoordinator.swift */,
+				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
+				A100000000000000000000F8 /* AppLanSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
@@ -600,6 +609,9 @@
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
 				A100000000000000000000F1 /* NFCBankCardProbeView.swift in Sources */,
+				A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */,
+				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
+				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
