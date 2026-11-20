@@ -15,6 +15,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     }
 
     private let appGroupIdentifier = "group.com.monicapass.monica"
+    /// App group used by the diagnostics spool. The spool resolves the container URL itself
+    /// and only ever receives closed codes plus allowlisted metadata.
+    private static let passkeyDiagnosticAppGroupIdentifier = "group.com.monicapass.monica"
     private var loadTask: Task<Void, Never>?
     private var passkeyListTask: Task<Void, Never>?
     private var credentialResolver: AutoFillCredentialResolver?
@@ -118,7 +121,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         let relyingPartyID = relyingPartyID(for: passkeyRequest)
         guard passkeyRequest.supportedAlgorithms.contains(.ES256) else {
             Self.logPasskeyDiagnostic(
-                "registration rejected algorithms=\(passkeyRequest.supportedAlgorithms.map(\.rawValue))"
+                .passkeyRegistrationFailed,
+                level: .warning,
+                metadata: .merged(.stage(.register), .reason(.unsupported))
             )
             configurePasskeyStatusView(
                 relyingPartyID: relyingPartyID,
@@ -144,14 +149,22 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 reason: String(localized: "为 \(relyingPartyID) 创建 Monica 通行密钥")
             ) ?? .unavailable
             guard let self, verification != .cancelled else {
-                Self.logPasskeyDiagnostic("registration aborted verification=\(verification)")
+                Self.logPasskeyDiagnostic(
+                    .passkeyDeviceOwnerVerificationFailed,
+                    level: .info,
+                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.cancelled))
+                )
                 self?.cancelRequest(code: ASExtensionError.Code.userCanceled)
                 return
             }
             // A relying party that lists one of our credentials in excludedCredentials must
             // not receive a duplicate passkey for the same account.
             if await self.matchesExcludedCredential(passkeyRequest) {
-                Self.logPasskeyDiagnostic("registration rejected excluded-credential")
+                Self.logPasskeyDiagnostic(
+                    .passkeyRegistrationFailed,
+                    level: .info,
+                    metadata: .merged(.stage(.register), .reason(.policyBlocked))
+                )
                 self.configurePasskeyStatusView(
                     relyingPartyID: relyingPartyID,
                     status: String(localized: "此账号已有通行密钥，无需重复创建")
@@ -415,15 +428,17 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 attestationObject: registration.attestationObject
             )
             Self.logPasskeyDiagnostic(
-                "registration cred=\(registration.credentialID.base64EncodedString()) "
-                    + "rp=\(registration.relyingPartyID) user=\(registration.username) verified=\(userVerified)"
+                .passkeyRegistrationSucceeded,
+                level: .info,
+                metadata: .merged(.stage(.register), .flag(userVerified))
             )
             // Finish the ceremony before touching the credential identity store: mutating it
             // while the request is still in flight makes the platform abort the WebAuthn call.
             extensionContext.completeRegistrationRequest(using: credential) { [weak self] expired in
                 Self.logPasskeyDiagnostic(
-                    "registration-completed expired=\(expired) "
-                        + "cred=\(registration.credentialID.base64EncodedString())"
+                    .passkeyRegistrationSucceeded,
+                    level: .info,
+                    metadata: .merged(.stage(.register), .flag(expired))
                 )
                 guard let self, !expired else {
                     return
@@ -431,7 +446,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 do {
                     try self.persistPasskeyRegistration(registration)
                 } catch {
-                    Self.logPasskeyDiagnostic("registration-inbox-failed error=\(error)")
+                    Self.logPasskeyDiagnostic(
+                        .passkeyInboxPersistFailed,
+                        level: .warning,
+                        metadata: .merged(.stage(.register), .reason(.storage))
+                    )
                 }
                 self.savePasskeyIdentity(for: registration)
             }
@@ -483,16 +502,10 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             // the user pick one of our passkeys for this relying party. Relying parties often
             // send stale or partial lists, and the site verifies the signature anyway.
             let candidates = allowedMatches.isEmpty ? relyingPartyMatches : allowedMatches
-            let inventory = passkeyIdentities
-                .map { "\($0.relyingPartyIdentifier)/\($0.credentialID.base64EncodedString())" }
-                .joined(separator: ",")
-            let allowList = allowedCredentialIDs.map { $0.base64EncodedString() }.joined(separator: ",")
-
             Self.logPasskeyDiagnostic(
-                "identity-lookup store=\(identities.count) passkeys=\(passkeyIdentities.count) "
-                    + "rpMatches=\(relyingPartyMatches.count) allowMatches=\(allowedMatches.count) "
-                    + "candidates=\(candidates.count) rp=\(relyingPartyID) "
-                    + "allow=[\(allowList)] have=[\(inventory)]"
+                .passkeyAssertionStarted,
+                level: .info,
+                metadata: .merged(.stage(.assert), .count(candidates.count))
             )
             guard !candidates.isEmpty else {
                 let emptyStatus = passkeyIdentities.isEmpty
@@ -608,7 +621,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 reason: String(localized: "使用 Monica 通行密钥登录 \(relyingPartyID)")
             ) ?? .unavailable
             guard let self, verification != .cancelled else {
-                Self.logPasskeyDiagnostic("assertion aborted verification=\(verification)")
+                Self.logPasskeyDiagnostic(
+                    .passkeyAssertionFailed,
+                    level: .info,
+                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.cancelled))
+                )
                 self?.cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
                 return
             }
@@ -644,8 +661,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 credentialID: assertion.credentialID
             )
             Self.logPasskeyDiagnostic(
-                "assertion cred=\(assertion.credentialID.base64EncodedString()) "
-                    + "rp=\(assertion.relyingPartyID) verified=\(userVerified) flags=\(assertion.authenticatorData[32])"
+                .passkeyAssertionSucceeded,
+                level: .info,
+                metadata: .merged(.stage(.assert), .flag(userVerified))
             )
             extensionContext.completeAssertionRequest(
                 using: credential,
@@ -653,8 +671,9 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             )
         } catch {
             Self.logPasskeyDiagnostic(
-                "assertion-failed cred=\(identity.credentialID.base64EncodedString()) "
-                    + "rp=\(identity.relyingPartyIdentifier) error=\(error)"
+                .passkeyAssertionFailed,
+                level: .error,
+                metadata: .merged(.stage(.assert), .reason(.commandFailed))
             )
             configurePasskeyStatusView(
                 relyingPartyID: identity.relyingPartyIdentifier,
@@ -679,45 +698,55 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
         ASCredentialIdentityStore.shared.getState { state in
             guard state.isEnabled else {
-                Self.logPasskeyDiagnostic("identity-skip store-disabled")
+                Self.logPasskeyDiagnostic(
+                    .passkeyIdentityUnavailable,
+                    level: .warning,
+                    metadata: .merged(.stage(.register), .reason(.policyBlocked))
+                )
                 return
             }
             ASCredentialIdentityStore.shared.saveCredentialIdentities(identities) { success, error in
-                Self.logPasskeyDiagnostic(
-                    "identity-save success=\(success) incremental=\(state.supportsIncrementalUpdates) "
-                        + "cred=\(registration.credentialID.base64EncodedString()) "
-                        + "error=\(error.map { "\($0)" } ?? "nil")"
-                )
+                if success {
+                    Self.logPasskeyDiagnostic(
+                        .passkeyRegistrationSucceeded,
+                        level: .info,
+                        metadata: .stage(.register)
+                    )
+                } else {
+                    Self.logPasskeyDiagnostic(
+                        .passkeyIdentityUnavailable,
+                        level: .warning,
+                        metadata: .merged(.stage(.register), .reason(.storage))
+                    )
+                }
             }
         }
     }
 
-    /// Writes a one-line trace into the extension container so device runs can be inspected
-    /// over USB (`afcclient --container com.monicapass.monica.autofill`).
-    static func logPasskeyDiagnostic(_ message: String) {
-        let formatter = ISO8601DateFormatter()
-        let line = "\(formatter.string(from: Date())) \(message)\n"
-        guard let documents = FileManager.default.urls(
-            for: .documentDirectory,
-            in: .userDomainMask
-        ).first else {
+    /// Records one structured passkey event into the shared app-group spool.
+    /// It never writes messages, credential IDs, usernames or raw errors: the spool only
+    /// carries a closed event code plus allowlisted metadata, and the app imports it when
+    /// the developer section is opened.
+    nonisolated static func logPasskeyDiagnostic(
+        _ code: DiagnosticCode,
+        level: DiagnosticLevel = .info,
+        metadata: DiagnosticMetadata = DiagnosticMetadata()
+    ) {
+        guard let fileURL = DiagnosticEventSpool.defaultFileURL(
+            appGroupIdentifier: passkeyDiagnosticAppGroupIdentifier
+        ) else {
             return
         }
-        let fileURL = documents.appendingPathComponent("passkey-diagnostics.log")
-        // Keep the diagnostic trace bounded: it is a debugging aid, not a log store.
-        let maximumSize = 64 * 1024
-        let existingSize = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
-        if existingSize + line.utf8.count > maximumSize {
-            try? Data(line.utf8).write(to: fileURL, options: .atomic)
-            return
-        }
-        if let handle = try? FileHandle(forWritingTo: fileURL) {
-            defer { try? handle.close() }
-            _ = try? handle.seekToEnd()
-            try? handle.write(contentsOf: Data(line.utf8))
-        } else {
-            try? Data(line.utf8).write(to: fileURL, options: .atomic)
-        }
+        let spool = DiagnosticEventSpool(fileURL: fileURL)
+        _ = spool.append(
+            DiagnosticEvent(
+                timestamp: Date(),
+                level: level,
+                module: .passkey,
+                code: code,
+                metadata: metadata
+            )
+        )
     }
 
     private func persistPasskeyRegistration(_ registration: MonicaPasskeyRegistrationResult) throws {
@@ -907,7 +936,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             try? await Task.sleep(nanoseconds: 25_000_000)
         }
         if !hasAppeared {
-            Self.logPasskeyDiagnostic("verification skipped: interface never appeared")
+            Self.logPasskeyDiagnostic(
+                .passkeyDeviceOwnerVerificationFailed,
+                level: .info,
+                metadata: .merged(.stage(.verifyDeviceOwner), .reason(.interactionRequired))
+            )
         }
         return await Self.verifyDeviceOwner(reason: reason)
     }
@@ -921,18 +954,21 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             var canEvaluateError: NSError?
             guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &canEvaluateError) else {
                 logPasskeyDiagnostic(
-                    "verification unavailable attempt=\(attempt) canEvaluate=\(canEvaluateError?.code ?? -1) "
-                        + "desc=\(canEvaluateError?.localizedDescription ?? "nil")"
+                    .passkeyDeviceOwnerVerificationFailed,
+                    level: .warning,
+                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.policyBlocked), .status(canEvaluateError?.code ?? -1))
                 )
                 return .unavailable
             }
             do {
                 try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: reason)
-                logPasskeyDiagnostic("verification verified attempt=\(attempt)")
+
                 return .verified
             } catch let error as LAError {
                 logPasskeyDiagnostic(
-                    "verification failed attempt=\(attempt) LAError=\(error.code.rawValue) desc=\(error.localizedDescription)"
+                    .passkeyDeviceOwnerVerificationFailed,
+                    level: .warning,
+                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.verificationFailed), .status(Int(error.code.rawValue)))
                 )
                 // Only an explicit user cancel should abort the ceremony.
                 if error.code == .userCancel {
@@ -944,7 +980,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 }
                 return .unavailable
             } catch {
-                logPasskeyDiagnostic("verification failed attempt=\(attempt) error=\(error)")
+                logPasskeyDiagnostic(
+                    .passkeyDeviceOwnerVerificationFailed,
+                    level: .warning,
+                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.commandFailed))
+                )
                 return .unavailable
             }
         }

@@ -31,6 +31,25 @@ struct SettingsRootView: View {
     @State private var isOneDriveDirectoryBrowserPresented = false
     @State private var isOneDriveDirectoryCreatePresented = false
 
+    private var diagnosticsCenter: AppDiagnosticsCenter {
+        AppDiagnosticsCenter.shared
+    }
+
+    private var appVersionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "—"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "—"
+        return "\(version) (\(build))"
+    }
+
+    /// Unlocks the developer section after seven quick taps on the version row, the same
+    /// gesture Android Monica uses for its hidden developer entry.
+    private func registerDeveloperModeTap() {
+        guard !diagnosticsCenter.isDeveloperModeUnlocked else { return }
+        if diagnosticsCenter.registerDeveloperModeTap(at: .now) {
+            diagnosticsCenter.revealDeveloperMode()
+        }
+    }
+
     private var usesTimestampedOneDriveBackups: Binding<Bool> {
         Binding {
             session.oneDriveBackupPreferences.usesTimestampedFileNames
@@ -165,12 +184,45 @@ struct SettingsRootView: View {
 
     var body: some View {
         AndroidParityScreen {
+            if diagnosticsCenter.isDeveloperModeUnlocked {
+                AndroidParitySection(title: String(localized: "开发者")) {
+                    AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
+                        NavigationLink {
+                            AppDeveloperSettingsView(
+                                session: session,
+                                center: diagnosticsCenter,
+                                appGroupIdentifier: environment.appGroupIdentifier
+                            )
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                Image(systemName: "ladybug")
+                                    .font(.headline.weight(.bold))
+                                    .foregroundStyle(AndroidParityPalette.primary)
+                                    .frame(width: 28, height: 28)
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("诊断日志")
+                                        .font(.subheadline.weight(.heavy))
+                                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                                    Text("脱敏事件 · 环形缓冲 · 手动导出")
+                                        .font(.caption.weight(.semibold))
+                                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                        }
+                    }
+                }
+            }
+
             AndroidParitySection(title: String(localized: "应用")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "系统要求"), value: environment.minimumIOSVersion)
                     AndroidParityDivider()
                     AndroidParityInfoRow(title: String(localized: "备份"), value: MonicaSyncBaseline.firstBackupProvider)
                     AndroidParityInfoRow(title: String(localized: "密钥策略"), value: MonicaSecurityBaseline.biometricPolicy)
+                    AndroidParityInfoRow(title: String(localized: "应用版本"), value: appVersionText)
+                        .contentShape(Rectangle())
+                        .onTapGesture { registerDeveloperModeTap() }
                     AndroidParityInfoRow(title: String(localized: "保险库钥匙串"), value: session.vaultKeychainState.label)
                     AndroidParityInfoRow(
                         title: session.biometricUnlockSettingsTitle,
