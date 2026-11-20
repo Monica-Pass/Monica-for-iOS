@@ -1,4 +1,5 @@
 import Foundation
+import MonicaCore
 import MonicaSync
 import Observation
 import UIKit
@@ -61,6 +62,9 @@ struct AppCloudVaultSyncBridge {
     /// Validates a download from a *different* vault with its password and saves
     /// it as a new local vault file. Never touches the currently open vault.
     let adoptDifferentVault: @MainActor (CloudVaultPullOutcome, String) throws -> URL
+    /// The host a provider talks to, when the app knows it. Only the host is ever
+    /// logged (never the path, query or credentials).
+    var providerHost: (CloudVaultRemoteKind) -> URL? = { _ in nil }
 
     func provider(for kind: CloudVaultRemoteKind) -> Bool {
         availableProviders.contains(kind)
@@ -103,6 +107,8 @@ final class AppCloudVaultSyncCoordinator {
     private let stateStore: CloudVaultStateStore
     private var state: CloudVaultSyncState = CloudVaultSyncState()
     private var isPrepared = false
+    /// Correlates every event of one user-triggered operation (issue #65).
+    private var currentFlowID = UUID()
 
     init(bridge: AppCloudVaultSyncBridge) {
         self.bridge = bridge
@@ -326,7 +332,45 @@ final class AppCloudVaultSyncCoordinator {
         stage = next
         lastFailureMessage = nil
         guidance = nil
+        currentFlowID = UUID()
+        recordOperationStarted(next)
         return true
+    }
+
+    /// Emits the operation-start event with the flow id and the provider tag.
+    private func recordOperationStarted(_ next: Stage) {
+        guard let code = Self.startedCode(for: next) else { return }
+        DiagnosticLog.shared.record(
+            code,
+            level: .info,
+            module: .cloudSync,
+            metadata: diagnosticMetadata()
+        )
+    }
+
+    /// Flow id + provider + (optionally) host. Callers merge the rest.
+    private func diagnosticMetadata() -> DiagnosticMetadata {
+        var metadata = DiagnosticMetadata.flow(currentFlowID)
+            .merging(.provider(selectedProvider.diagnosticProviderTag))
+        if let host = bridge.providerHost(selectedProvider) {
+            metadata = metadata.merging(.host(of: host))
+        }
+        return metadata
+    }
+
+    private static func startedCode(for stage: Stage) -> DiagnosticCode? {
+        switch stage {
+        case .checking:
+            return .cloudSyncCheckStarted
+        case .pushing:
+            return .cloudSyncUploadStarted
+        case .pulling:
+            return .cloudSyncDownloadStarted
+        case .resolvingConflict:
+            return .cloudSyncConflictResolveStarted
+        case .idle, .needsVaultPassword, .finished, .failed:
+            return nil
+        }
     }
 
     private func makeStore() throws -> any CloudVaultRemoteStore {
@@ -411,6 +455,7 @@ final class AppCloudVaultSyncCoordinator {
     }
 
     private func present(error: Error) {
+        recordFailure(error)
         let message = error.localizedDescription
         if let cloudError = error as? CloudVaultError,
            case .conflictRequiresResolution(let cloudConflict) = cloudError {
@@ -431,6 +476,24 @@ final class AppCloudVaultSyncCoordinator {
             state.setRecord(engine.recordFailure(cloudError, in: record))
             persist()
         }
+    }
+
+    /// Logs the failure code and reason only. Never the error message, which can
+    /// carry a server response, a path or provider-specific detail.
+    private func recordFailure(_ error: Error) {
+        var metadata = diagnosticMetadata()
+        let code: DiagnosticCode
+        if let coded = error as? any DiagnosticCodedError {
+            code = coded.diagnosticCode
+            metadata = metadata.merging(coded.diagnosticMetadata, .reason(coded.diagnosticReason))
+        } else if error is AppCloudVaultSyncError {
+            code = .cloudSyncUnknownFailure
+            metadata = metadata.merging(.reason(.policyBlocked))
+        } else {
+            code = .cloudSyncUnknownFailure
+            metadata = metadata.merging(.reason(.commandFailed))
+        }
+        DiagnosticLog.shared.record(code, level: .error, module: .cloudSync, metadata: metadata)
     }
 
     static func recoveryGuidance(for error: Error) -> String? {

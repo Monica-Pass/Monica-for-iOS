@@ -5487,6 +5487,7 @@ final class AppSessionModel {
             publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
+            AppDiagnosticEmission.vaultFailure(error, stage: .create)
             clearVaultAccessAfterFailure()
             vaultOperationState = .failed(error.localizedDescription)
             throw error
@@ -5538,6 +5539,7 @@ final class AppSessionModel {
             publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
         } catch {
+            AppDiagnosticEmission.vaultFailure(error, stage: .open)
             clearVaultAccessAfterFailure()
             vaultOperationState = .failed(error.localizedDescription)
             throw error
@@ -6169,6 +6171,7 @@ final class AppSessionModel {
             )
             entryOperationState = .succeeded(entry.title)
         } catch {
+            AppDiagnosticEmission.passkeyFailure(error, stage: .create)
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
@@ -7538,6 +7541,7 @@ final class AppSessionModel {
             )
             entryOperationState = .succeeded(String(localized: "Passkey 已保存：\(entry.title)"))
         } catch {
+            AppDiagnosticEmission.passkeyFailure(error, stage: .register)
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
@@ -7550,19 +7554,24 @@ final class AppSessionModel {
         guard vaultState == .unlocked else {
             throw AppAutoFillIndexError.vaultLocked
         }
-        let registrations = try inboxStore.loadPendingRegistrations()
-        guard !registrations.isEmpty else {
-            return 0
-        }
+        do {
+            let registrations = try inboxStore.loadPendingRegistrations()
+            guard !registrations.isEmpty else {
+                return 0
+            }
 
-        for registration in registrations {
-            try recordSystemPasskeyRegistration(
-                registration.registrationResult,
-                projectTitle: projectTitle
-            )
+            for registration in registrations {
+                try recordSystemPasskeyRegistration(
+                    registration.registrationResult,
+                    projectTitle: projectTitle
+                )
+            }
+            try inboxStore.clearPendingRegistrations()
+            return registrations.count
+        } catch {
+            AppDiagnosticEmission.passkeyFailure(error, stage: .importInbox)
+            throw error
         }
-        try inboxStore.clearPendingRegistrations()
-        return registrations.count
     }
 
     func selectPasskeyEntryForEditing(_ entry: LocalPasskeyEntry) {
@@ -16460,6 +16469,11 @@ extension AppSessionModel {
                     vaultDirectoryURL: vaultDirectoryURL,
                     deviceID: deviceID
                 )
+            },
+            providerHost: { kind in
+                // Only the WebDAV endpoint is a URL the app owns; OneDrive hosts
+                // are Graph endpoints, not the user's server.
+                kind == .webDAV ? webDAVEndpoint?.baseURL : nil
             }
         )
     }

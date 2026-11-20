@@ -33,6 +33,8 @@
 		A1000000000000000000001B /* AndroidParityDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001C /* AndroidParityDesign.swift */; };
 		A1000000000000000000001D /* GeneratorRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* GeneratorRootView.swift */; };
 		A1000000000000000000001F /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* SettingsRootView.swift */; };
+		A10000000000000000000103 /* AppDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000104 /* AppDiagnostics.swift */; };
+		A10000000000000000000105 /* AppDeveloperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000106 /* AppDeveloperSettingsView.swift */; };
 		A100000000000000000000F1 /* NFCBankCardProbeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F2 /* NFCBankCardProbeView.swift */; };
 		A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F6 /* AppLanSyncCoordinator.swift */; };
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
@@ -144,6 +146,8 @@
 		A1000000000000000000001C /* AndroidParityDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityDesign.swift; sourceTree = "<group>"; };
 		A1000000000000000000001E /* GeneratorRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
+		A10000000000000000000104 /* AppDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiagnostics.swift; sourceTree = "<group>"; };
+		A10000000000000000000106 /* AppDeveloperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDeveloperSettingsView.swift; sourceTree = "<group>"; };
 		A100000000000000000000F2 /* NFCBankCardProbeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NFCBankCardProbeView.swift; sourceTree = "<group>"; };
 		A100000000000000000000F6 /* AppLanSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncCoordinator.swift; sourceTree = "<group>"; };
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
@@ -281,6 +285,8 @@
 				A1000000000000000000001C /* AndroidParityDesign.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
+				A10000000000000000000104 /* AppDiagnostics.swift */,
+				A10000000000000000000106 /* AppDeveloperSettingsView.swift */,
 				A100000000000000000000F2 /* NFCBankCardProbeView.swift */,
 				A100000000000000000000F6 /* AppLanSyncCoordinator.swift */,
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
@@ -662,6 +668,8 @@
 				A1000000000000000000001B /* AndroidParityDesign.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
+				A10000000000000000000103 /* AppDiagnostics.swift in Sources */,
+				A10000000000000000000105 /* AppDeveloperSettingsView.swift in Sources */,
 				A100000000000000000000F1 /* NFCBankCardProbeView.swift in Sources */,
 				A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */,
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
