@@ -1717,6 +1717,10 @@ struct SettingsRootView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            AndroidParitySection(title: String(localized: "关于")) {
+                AppUpdateCheckSectionView()
+            }
         }
         .fileImporter(
             isPresented: $isCSVImporterPresented,
