@@ -655,7 +655,7 @@ struct AndroidParityVaultHomeView: View {
                         )
                         .font(.subheadline.weight(.heavy))
                         .padding(.horizontal, 14)
-                        .frame(height: 44)
+                        .frame(minHeight: 44)
                         .background(
                             AndroidParityPalette.primaryContainer,
                             in: Capsule(style: .continuous)
@@ -676,7 +676,7 @@ struct AndroidParityVaultHomeView: View {
                                     Text(kind.localizedDisplayName)
                                         .font(.subheadline.weight(.heavy))
                                         .padding(.horizontal, 14)
-                                        .frame(height: 44)
+                                        .frame(minHeight: 44)
                                         .background(
                                             session.passwordOtherKind == kind
                                                 ? AndroidParityPalette.primaryContainer
@@ -694,7 +694,7 @@ struct AndroidParityVaultHomeView: View {
                             Button(action: refreshExtendedParityEntries) {
                                 Image(systemName: "arrow.clockwise")
                                     .font(.subheadline.weight(.heavy))
-                                    .frame(width: 44, height: 44)
+                                    .frame(minWidth: 44, minHeight: 44)
                                     .background(AndroidParityPalette.surfaceVariant, in: Circle())
                                     .foregroundStyle(AndroidParityPalette.textSecondary)
                             }
@@ -848,7 +848,7 @@ struct AndroidParityVaultHomeView: View {
                     isCreateCategoryAlertPresented = true
                 } label: {
                     Image(systemName: "folder.badge.plus")
-                        .frame(width: 34, height: 34)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AndroidParityPalette.primary)
@@ -858,7 +858,7 @@ struct AndroidParityVaultHomeView: View {
                     isRenameCategoryAlertPresented = true
                 } label: {
                     Image(systemName: "square.and.pencil")
-                        .frame(width: 34, height: 34)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AndroidParityPalette.primary)
@@ -870,7 +870,7 @@ struct AndroidParityVaultHomeView: View {
                     }
                 } label: {
                     Image(systemName: "folder.badge.minus")
-                        .frame(width: 34, height: 34)
+                        .frame(minWidth: 44, minHeight: 44)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.red)
@@ -892,7 +892,7 @@ struct AndroidParityVaultHomeView: View {
                         session.selectAllVisibleVaultBatchItems(for: batchActionKind)
                     } label: {
                         Image(systemName: "checklist.checked")
-                            .frame(width: 34, height: 34)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.primary)
@@ -910,7 +910,7 @@ struct AndroidParityVaultHomeView: View {
                         }
                     } label: {
                         Image(systemName: "folder.badge.gearshape")
-                            .frame(width: 34, height: 34)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.primary)
@@ -927,7 +927,7 @@ struct AndroidParityVaultHomeView: View {
                         }
                     } label: {
                         Image(systemName: session.isTrashQuickFilterSelected ? "arrow.uturn.backward.circle.fill" : "trash.circle.fill")
-                            .frame(width: 34, height: 34)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(session.isTrashQuickFilterSelected ? AndroidParityPalette.primary : .red)
@@ -936,7 +936,7 @@ struct AndroidParityVaultHomeView: View {
                         session.clearVaultBatchSelection()
                     } label: {
                         Image(systemName: "xmark.circle.fill")
-                            .frame(width: 34, height: 34)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
@@ -945,7 +945,7 @@ struct AndroidParityVaultHomeView: View {
                         session.enterVaultBatchSelection(for: itemKind)
                     } label: {
                         Image(systemName: "checkmark.circle")
-                            .frame(width: 34, height: 34)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.primary)
@@ -979,7 +979,7 @@ struct AndroidParityVaultHomeView: View {
         if session.isVaultBatchSelectionActive {
             HStack(alignment: .center, spacing: 10) {
                 Image(systemName: session.selectedVaultBatchItemIDs.contains(id) ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .font(AndroidParityTypography.controlIcon(weight: .heavy))
                     .foregroundStyle(session.selectedVaultBatchItemIDs.contains(id) ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
                     .frame(width: 30, height: 30)
                 content()
@@ -1084,7 +1084,7 @@ struct AndroidParityVaultHomeView: View {
                 batchSelectableCard(id: id) {
                     AndroidParityEntryCard(icon: "arrow.uturn.backward", title: title, subtitle: subtitle) {
                         Image(systemName: "arrow.uturn.backward.circle.fill")
-                            .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                            .font(AndroidParityTypography.controlIcon(weight: .bold))
                             .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
                 }
@@ -1094,7 +1094,7 @@ struct AndroidParityVaultHomeView: View {
             AndroidParityEntryCard(icon: "arrow.uturn.backward", title: title, subtitle: subtitle) {
                 Button(action: action) {
                     Image(systemName: "arrow.uturn.backward.circle.fill")
-                        .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                        .font(AndroidParityTypography.controlIcon(weight: .bold))
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AndroidParityPalette.primary)
@@ -1170,19 +1170,19 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
 
     private var fabLabel: some View {
         Image(systemName: "plus")
-            .font(.system(size: AndroidParityTypography.controlIconSize, weight: .medium))
+            .font(AndroidParityTypography.controlIcon(weight: .medium))
             .foregroundStyle(AndroidParityPalette.textPrimary)
-            .frame(width: 54, height: 54)
+            .frame(minWidth: 54, minHeight: 54)
             .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
     private var header: some View {
         HStack(alignment: .top, spacing: 16) {
             Text(title)
-                .font(.system(size: AndroidParityTypography.screenTitleSize, weight: .heavy, design: .rounded))
+                .font(AndroidParityTypography.displayTitle(weight: .heavy))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.64)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 22) {
                 toolbarButton(.folder, icon: "folder.fill", action: onOpenVault)
@@ -1198,16 +1198,16 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                         }
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                            .font(AndroidParityTypography.controlIcon(weight: .heavy))
                             .foregroundStyle(AndroidParityPalette.textPrimary.opacity(0.82))
-                            .frame(width: 34, height: 50)
+                            .frame(minWidth: AppInterfaceDensity.minimumTouchTarget, minHeight: 50)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("更多")
                 }
             }
             .padding(.horizontal, 24)
-            .frame(height: 64)
+            .frame(minHeight: 64)
             .background(AndroidParityPalette.surfaceVariant, in: Capsule(style: .continuous))
         }
     }
@@ -1250,7 +1250,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                             }
                         }
                         .padding(.horizontal, 14)
-                        .frame(height: 52)
+                        .frame(minHeight: 52)
                         .background(
                             row.isSelected ? AndroidParityPalette.primaryContainer : AndroidParityPalette.surfaceVariant,
                             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
@@ -1271,9 +1271,9 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             if let directAction { directAction() } else { selectedAction = selectedAction == action ? nil : action }
         } label: {
             Image(systemName: icon)
-                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                .font(AndroidParityTypography.controlIcon(weight: .heavy))
                 .foregroundStyle(AndroidParityPalette.textPrimary.opacity(selectedAction == action ? 1 : 0.82))
-                .frame(width: 34, height: 50)
+                .frame(minWidth: AppInterfaceDensity.minimumTouchTarget, minHeight: 50)
         }
         .buttonStyle(.plain)
     }
@@ -1311,7 +1311,7 @@ private struct AndroidPasswordListCard: View {
                 }
                 Spacer()
                 Image(systemName: "ellipsis")
-                    .font(.system(size: displayPreferences.cardDensity.iconSize, weight: .semibold))
+                    .font(displayPreferences.cardDensity.iconFont)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
         }
@@ -1340,7 +1340,7 @@ private struct AndroidPasswordStackedGroupCard: View {
                         Text(group.value)
                             .font(.caption.weight(.heavy))
                             .padding(.horizontal, 8)
-                            .frame(height: 24)
+                            .frame(minHeight: 24)
                             .background(AndroidParityPalette.primaryContainer, in: Capsule(style: .continuous))
                     }
                     Text(group.preview.isEmpty ? String(localized: "未命名条目") : group.preview)
@@ -1394,7 +1394,7 @@ private struct AndroidTotpListCard: View {
                 Spacer()
                 VStack(alignment: .trailing, spacing: 6) {
                     Text(code)
-                        .font(.system(size: AndroidParityTypography.prominentValueSize, weight: .heavy, design: .rounded))
+                        .font(AndroidParityTypography.prominentTitle(weight: .heavy))
                         .foregroundStyle(AndroidParityPalette.primary)
                     Text("\(remaining)s")
                         .font(.subheadline.weight(.semibold))
@@ -1423,8 +1423,9 @@ private struct AndroidBankCardListCard: View {
                     .font(.subheadline.weight(.semibold))
             }
             Text(maskedCardNumber(entry.number))
-                .font(.system(size: AndroidParityTypography.prominentValueSize, weight: .heavy, design: .rounded))
-                .minimumScaleFactor(0.62)
+                .font(AndroidParityTypography.prominentTitle(weight: .heavy))
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("持卡人")
@@ -1641,7 +1642,7 @@ private struct AndroidAttachmentListCard: View {
                         if canDownloadBitwardenAttachment, let download {
                             Button(action: download) {
                                 Image(systemName: "arrow.down.circle")
-                                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                                    .font(AndroidParityTypography.controlIcon(weight: .bold))
                             }
                             .buttonStyle(.plain)
                             .foregroundStyle(AndroidParityPalette.primary)
@@ -1649,14 +1650,14 @@ private struct AndroidAttachmentListCard: View {
 
                         Button(action: preview) {
                             Image(systemName: "eye")
-                                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                                .font(AndroidParityTypography.controlIcon(weight: .bold))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(AndroidParityPalette.primary)
 
                         Button(role: .destructive, action: delete) {
                             Image(systemName: "trash")
-                                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .bold))
+                                .font(AndroidParityTypography.controlIcon(weight: .bold))
                         }
                         .buttonStyle(.plain)
                         .foregroundStyle(.red)
@@ -1752,7 +1753,7 @@ struct AddEditVaultItemView: View {
             .background(AndroidParityPalette.background.ignoresSafeArea())
             Button(action: save) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .font(AndroidParityTypography.controlIcon(weight: .heavy))
                     .foregroundStyle(AndroidParityPalette.textPrimary)
                     .frame(width: 54, height: 54)
                     .background(AndroidParityPalette.tertiaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -1807,16 +1808,16 @@ struct AddEditVaultItemView: View {
         HStack(spacing: 18) {
             Button(action: dismiss) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
-                    .frame(width: 44, height: 44)
+                    .font(AndroidParityTypography.controlIcon(weight: .heavy))
+                    .frame(minWidth: AppInterfaceDensity.minimumTouchTarget, minHeight: AppInterfaceDensity.minimumTouchTarget)
             }
             .buttonStyle(.plain)
             .foregroundStyle(AndroidParityPalette.textPrimary)
             Text(mode.isAdding ? String(localized: "添加\(mode.kind.localizedDisplayName)") : String(localized: "编辑\(mode.kind.localizedDisplayName)"))
-                .font(.system(size: AndroidParityTypography.editorTitleSize, weight: .heavy, design: .rounded))
+                .font(AndroidParityTypography.prominentTitle(weight: .heavy))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             typeChip
             favoriteButton
@@ -1832,7 +1833,7 @@ struct AddEditVaultItemView: View {
         }
         .foregroundStyle(AndroidParityPalette.textPrimary)
         .padding(.horizontal, 18)
-        .frame(height: 56)
+        .frame(minHeight: 56)
         .background(AndroidParityPalette.primaryContainer, in: Capsule(style: .continuous))
     }
 
@@ -1840,8 +1841,8 @@ struct AddEditVaultItemView: View {
     private var favoriteButton: some View {
         Button { setFavorite(!currentFavorite) } label: {
             Image(systemName: currentFavorite ? "heart.fill" : "heart")
-                .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
-                .frame(width: 50, height: 50)
+                .font(AndroidParityTypography.controlIcon(weight: .heavy))
+                .frame(minWidth: 50, minHeight: 50)
         }
         .buttonStyle(.plain)
         .foregroundStyle(currentFavorite ? AndroidParityPalette.primary : AndroidParityPalette.textPrimary)
@@ -2180,7 +2181,7 @@ struct AddEditVaultItemView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
-                .frame(width: 34)
+                .frame(minWidth: 34)
             TextField(title, text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -2197,7 +2198,7 @@ struct AddEditVaultItemView: View {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
-                .frame(width: 34)
+                .frame(minWidth: 34)
             SecureField(title, text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
@@ -2284,7 +2285,7 @@ private struct VaultItemDetailView: View {
                     } label: {
                         Image(systemName: "square.and.pencil")
                             .font(.headline.weight(.bold))
-                            .frame(width: 44, height: 44)
+                            .frame(minWidth: 44, minHeight: 44)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.primary)
