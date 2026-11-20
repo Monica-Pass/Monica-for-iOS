@@ -39,6 +39,7 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 - WebDAV：支持上传、下载、SHA-256 完整性校验、恢复预览和恢复前打开验证。
 - OneDrive：已接入 MSAL 多账号切换、app-folder 内备份目录选择/新建、固定文件名覆盖或按时间戳保留版本；真实账号与网络验收仍在推进。
 - KeePass / KDBX：已完成现代 KDBX3/KDBX4 主链路读写兼容，后续继续扩展真实场景验收。
+- 凭据交换（CXF，iOS 26+）：与支持 Apple Credential Exchange Format 的密码管理器互导密码与 TOTP；导入先预览、按登录 URL/用户名/密码与 TOTP 密钥去重，写入失败会回滚本次新增条目；Passkey、备注、银行卡等类型暂不导出。
 - 局域网同步（实验性）：两台 iPhone 在同一 Wi-Fi/热点下通过 Bonjour 手动配对，端到端加密同步登录项、安全笔记与 TOTP；详见 [`LAN_SYNC_NOTES.md`](LAN_SYNC_NOTES.md)。
 - 云端保险库（实验性）：把完整加密的 MDBX 保险库文件与版本清单手动 Push/Pull 到 WebDAV/OneDrive，ETag 条件写避免覆盖，冲突时三选一（保留本机/保留云端/先传冲突副本）；详见 [`CLOUD_VAULT_SYNC_NOTES.md`](CLOUD_VAULT_SYNC_NOTES.md)。
 
@@ -47,6 +48,7 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 - 项目仍处于 iOS 客户端开发和真机验收阶段。
 - 未签名模拟器测试使用 `CODE_SIGNING_ALLOWED=NO` 时，App Group container 不可用属于预期现象。
 - AutoFill QuickType 展示、Credential Provider、App Group、Keychain access group、TOTP 相机扫描等能力需要签名真机环境继续验证。
+- CXF 导入必须由来源 App 发起并经系统令牌握手，模拟器无法替代；需要在 iOS 26+ 真机上用两家支持 CXF 的密码管理器完成密码与 TOTP 迁移验收。
 
 ---
 

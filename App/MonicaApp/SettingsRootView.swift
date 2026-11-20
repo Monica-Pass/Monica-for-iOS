@@ -946,6 +946,56 @@ struct SettingsRootView: View {
                         .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                         .disabled(preview.items.isEmpty)
                     }
+
+                    AndroidParityDivider()
+                    if #available(iOS 26.0, *) {
+                        AndroidParityInfoRow(title: "凭据交换（CXF）", value: "iOS 26 系统迁移")
+                        Text("通过系统凭据交换，从其他密码管理器导入密码与 TOTP，或导出给支持 CXF 的 App。Passkey、备注、卡片等类型不会导出。")
+                            .font(.footnote)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                        AndroidParityInfoRow(
+                            title: "可导出",
+                            value: "密码 \(session.loginEntries.count) · TOTP \(session.totpEntries.count)"
+                        )
+                        Button {
+                            _ = session.prepareCredentialExchangeExport()
+                        } label: {
+                            Label("导出到其他密码管理器", systemImage: "arrow.left.arrow.right")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                        .disabled(session.vaultState != .unlocked || session.credentialExchange.isExporting)
+
+                        if session.credentialExchange.isFetchingImport || session.credentialExchange.isImporting {
+                            HStack(spacing: 8) {
+                                ProgressView()
+                                Text("正在处理系统凭据…")
+                                    .font(.footnote)
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                        }
+
+                        if let message = session.credentialExchange.exportMessage {
+                            Text(message)
+                                .font(.footnote)
+                                .foregroundStyle(AndroidParityPalette.primary)
+                        }
+
+                        if let error = session.credentialExchange.exportError {
+                            Text(error)
+                                .font(.footnote)
+                                .foregroundStyle(.red)
+                        }
+
+                        Text("导入由来源 App 发起：选择 Monica 后，回到本 App 解锁并确认预览。")
+                            .font(.caption)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    } else {
+                        AndroidParityInfoRow(title: "凭据交换（CXF）", value: "需要 iOS 26")
+                        Text("当前系统不支持凭据交换，请继续使用上方的 CSV、KeePass 或移动端备份。")
+                            .font(.footnote)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    }
                 }
             }
 
