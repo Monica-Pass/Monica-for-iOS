@@ -72,9 +72,7 @@
 		<string>_monica-sync._tcp</string>
 	</array>
 	<key>NSFaceIDUsageDescription</key>
-	<string>用于解锁保险库，不会上传或存储生物识别数据。</string>
-	<key>NSLocalNetworkUsageDescription</key>
-	<string>Monica 使用本地网络连接你的自托管同步服务器。</string>
+	<string>用于解锁保险库，以及在开启生物识别解锁时验证你的身份。生物识别数据由系统处理，不会上传或存储。</string>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>ASCredentialExchangeActivity</string>
