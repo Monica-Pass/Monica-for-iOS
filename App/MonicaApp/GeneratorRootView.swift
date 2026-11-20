@@ -1,8 +1,8 @@
 import MonicaCore
 import SwiftUI
-import UIKit
 
 struct GeneratorRootView: View {
+    @Bindable var session: AppSessionModel
     @Environment(\.dismiss) private var dismiss
     @State private var length = 128.0
     @State private var includeUppercase = true
@@ -104,8 +104,7 @@ struct GeneratorRootView: View {
                     .font(.headline.weight(.heavy))
                 Spacer()
                 Button {
-                    UIPasteboard.general.string = generatedPassword
-                    generatorState = String(localized: "已复制")
+                    generatorState = session.copySensitiveValueToPasteboard(generatedPassword).message
                 } label: {
                     Label("复制", systemImage: "doc.on.doc")
                         .font(.headline.weight(.heavy))
@@ -207,8 +206,7 @@ struct GeneratorRootView: View {
                         fill: AndroidParityPalette.surfaceVariant.opacity(0.55)
                     ) {
                         Button {
-                            UIPasteboard.general.string = item.value
-                            generatorState = String(localized: "已复制")
+                            generatorState = session.copySensitiveValueToPasteboard(item.value).message
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .font(.headline)

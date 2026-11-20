@@ -44,6 +44,8 @@
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
+		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
+		A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000012 /* SensitivePrivacySettingsView.swift */; };
 		A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */; };
 		A20000000000000000000001 /* MonicaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* MonicaWidget.swift */; };
 		A80000000000000000000001 /* MonicaControlCenterIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000011 /* MonicaControlCenterIntents.swift */; };
@@ -76,6 +78,7 @@
 		B71000000000000000000003 /* MonicaWidgetShared in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DD /* MonicaWidgetShared */; };
 		B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */; };
 		B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */; };
+		A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000013 /* SensitivePrivacyTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -156,6 +159,8 @@
 		A10000000000000000000026 /* LockScreenViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LockScreenViews.swift; sourceTree = "<group>"; };
 		A10000000000000000000028 /* ScannerAndStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerAndStatusViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* AndroidParityVaultHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityVaultHomeView.swift; sourceTree = "<group>"; };
+		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
+		A13000000000000000000012 /* SensitivePrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacySettingsView.swift; sourceTree = "<group>"; };
 		A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaShortcutsAppIntents.swift; sourceTree = "<group>"; };
 		A30000000000000000000011 /* AppShareExtensionInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShareExtensionInboxStore.swift; sourceTree = "<group>"; };
 		A10000000000000000000031 /* Monica.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Monica.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -188,6 +193,7 @@
 		F40000000000000000000002 /* AppStoreComplianceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreComplianceTests.swift; sourceTree = "<group>"; };
 		B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWidgetSnapshotSupport.swift; sourceTree = "<group>"; };
 		B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotReloadTests.swift; sourceTree = "<group>"; };
+		A13000000000000000000013 /* SensitivePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -286,6 +292,8 @@
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
+				A13000000000000000000011 /* SensitivePrivacyService.swift */,
+				A13000000000000000000012 /* SensitivePrivacySettingsView.swift */,
 				A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */,
 				A30000000000000000000011 /* AppShareExtensionInboxStore.swift */,
 				A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */,
@@ -348,6 +356,7 @@
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
+				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -664,6 +673,8 @@
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
+				A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */,
+				A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */,
 				A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */,
 				A80000000000000000000001 /* MonicaControlCenterIntents.swift in Sources */,
 				A10000000000000000000003 /* MonicaAppEnvironment.swift in Sources */,
@@ -690,6 +701,7 @@
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
+				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
