@@ -5,6 +5,7 @@ import MonicaStorage
 import MonicaSync
 import AVFoundation
 import AuthenticationServices
+import Combine
 import CoreImage
 import CoreImage.CIFilterBuiltins
 import CryptoKit
@@ -2344,6 +2345,8 @@ final class AppSessionModel {
     ]
 
     var selectedTab: MonicaAppTab = .passwords
+    /// 控制中心在锁定态点击后暂存的目标页面，解锁并进入主界面后再消费。
+    var pendingControlPage: MonicaControlPage?
     var passwordModule: PasswordModule = .login
     var passwordOtherKind: UnifiedVaultItemKind = .sshKey
     var vaultState: VaultState = .locked
@@ -2691,6 +2694,7 @@ final class AppSessionModel {
     private let keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator
     private let widgetSnapshotStore: AppWidgetSnapshotFileStore?
     private let shortcutSnapshotStore: AppShortcutSnapshotFileStore?
+    private let controlNavigationDefaults: UserDefaults?
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     private let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
     private let passwordGenerator: () throws -> String
@@ -2756,6 +2760,7 @@ final class AppSessionModel {
         keePassKdbx4WritebackCoordinator: any KeePassKdbx4WritebackCoordinator = DefaultKeePassKdbx4WritebackCoordinator(),
         widgetSnapshotStore: AppWidgetSnapshotFileStore? = nil,
         shortcutSnapshotStore: AppShortcutSnapshotFileStore? = nil,
+        controlNavigationDefaults: UserDefaults? = UserDefaults(suiteName: MonicaControlNavigationStore.appGroupIdentifier),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
         notificationPermissionStatusProvider: @escaping () -> AppPermissionStatusRow.State = { .checkable },
@@ -2810,6 +2815,7 @@ final class AppSessionModel {
         self.keePassKdbx4WritebackCoordinator = keePassKdbx4WritebackCoordinator
         self.widgetSnapshotStore = widgetSnapshotStore
         self.shortcutSnapshotStore = shortcutSnapshotStore
+        self.controlNavigationDefaults = controlNavigationDefaults
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
         self.passwordGenerator = passwordGenerator
@@ -3226,6 +3232,59 @@ final class AppSessionModel {
             vaultOperationState = .failed("快捷入口已失效，请重新选择条目。")
             return false
         }
+    }
+
+    /// 统一处理 `monica://` 深链：旧的条目快捷入口与控制中心页面入口共用同一条导航路径。
+    @discardableResult
+    func openDeepLinkURL(_ url: URL) -> Bool {
+        if openShortcutURL(url) {
+            return true
+        }
+        guard url.scheme == "monica",
+              url.host() == "open" else {
+            return false
+        }
+        let pathComponents = url.pathComponents.filter { $0 != "/" }
+        guard pathComponents.count == 1,
+              let page = MonicaControlPage(rawValue: pathComponents[0]) else {
+            vaultOperationState = .failed("快捷入口无效，请重新选择页面。")
+            return false
+        }
+        handleControlPage(page)
+        return true
+    }
+
+    /// 控制按钮与深链都会走这里；锁定态只记录页面，绝不提前读取或展示条目。
+    func handleControlPage(_ page: MonicaControlPage) {
+        pendingControlPage = page
+        consumePendingControlPageIfUnlocked()
+    }
+
+    /// 由视图在 vaultState 变为解锁时调用，覆盖首次创建、打开和生物识别解锁等所有路径。
+    func consumePendingControlPageIfUnlocked() {
+        guard vaultState == .unlocked,
+              let page = pendingControlPage else {
+            return
+        }
+        pendingControlPage = nil
+        applyControlPage(page)
+    }
+
+    /// 从 App Group 取走控制中心留下的页面；启动、回到前台或收到通知时调用。
+    func consumePendingControlNavigationIfAvailable() {
+        guard let url = MonicaControlNavigationStore.consume(from: controlNavigationDefaults) else {
+            return
+        }
+        _ = openDeepLinkURL(url)
+    }
+
+    private func applyControlPage(_ page: MonicaControlPage) {
+        recordUserActivity()
+        selectedTab = page.appTab
+        if page == .passwords {
+            passwordModule = .login
+        }
+        presentedDetailRoute = nil
     }
 
     private func allShortcutEntrySummaries() -> [AppShortcutEntrySummary] {
@@ -11828,6 +11887,7 @@ final class AppSessionModel {
 
     func lockLocalVault() {
         isPrivacyShieldVisible = false
+        pendingControlPage = nil
         if let activeVaultSession {
             vaultRepository.closeVault(for: activeVaultSession)
         }
@@ -13089,6 +13149,22 @@ enum MonicaAppTab: Hashable {
     }
 }
 
+extension MonicaControlPage {
+    /// 控制中心页面与固定四 Tab 共用同一套标题和图标。
+    var appTab: MonicaAppTab {
+        switch self {
+        case .passwords:
+            return .passwords
+        case .totp:
+            return .totp
+        case .wallet:
+            return .wallet
+        case .settings:
+            return .settings
+        }
+    }
+}
+
 /// 密码页的二级模块。
 ///
 /// `rawValue` 是 #63 布局自定义使用的稳定 ID：不能用中文标题或数组下标表达含义。
@@ -14005,17 +14081,28 @@ struct AppRootView: View {
                 restoreOneDriveAuthenticationSessionIfAvailable()
                 restoreBitwardenAuthenticationSessionIfAvailable()
                 importPendingExtensionInboxItems()
+                session.consumePendingControlNavigationIfAvailable()
+            }
+        }
+        .onChange(of: session.vaultState) { _, state in
+            if state == .unlocked {
+                session.consumePendingControlNavigationIfAvailable()
+                session.consumePendingControlPageIfUnlocked()
             }
         }
         .onOpenURL { url in
             if !session.handleOneDriveRedirectURL(url) {
-                _ = session.openShortcutURL(url)
+                _ = session.openDeepLinkURL(url)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: MonicaControlNavigationStore.didUpdateNotification)) { _ in
+            session.consumePendingControlNavigationIfAvailable()
         }
         .task {
             restoreOneDriveAuthenticationSessionIfAvailable()
             restoreBitwardenAuthenticationSessionIfAvailable()
             importPendingExtensionInboxItems()
+            session.consumePendingControlNavigationIfAvailable()
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(
