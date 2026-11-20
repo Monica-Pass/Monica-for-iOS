@@ -132,12 +132,13 @@ final class VaultSessionModelTests: XCTestCase {
         model.securityQuestion2ID = 3
         model.securityAnswer1 = "Tokyo"
         model.securityAnswer2 = "Blue"
-        try model.saveSecurityQuestions()
+        try await model.saveSecurityQuestions()
         model.lockLocalVault()
 
         model.showForgotPasswordGuidance()
         XCTAssertEqual(model.forgotPasswordRecoveryStep, .verifySecurityQuestions)
-        XCTAssertTrue(model.verifyForgotPasswordSecurityAnswers(answer1: " tokyo ", answer2: "BLUE"))
+        let verified = await model.verifyForgotPasswordSecurityAnswers(answer1: " tokyo ", answer2: "BLUE")
+        XCTAssertTrue(verified)
         model.forgotPasswordNewPassword = "new password"
         model.forgotPasswordConfirmPassword = "new password"
 
@@ -183,11 +184,12 @@ final class VaultSessionModelTests: XCTestCase {
         model.securityQuestion2ID = 3
         model.securityAnswer1 = "Tokyo"
         model.securityAnswer2 = "Blue"
-        try model.saveSecurityQuestions()
+        try await model.saveSecurityQuestions()
         model.lockLocalVault()
 
         model.showForgotPasswordGuidance()
-        XCTAssertFalse(model.verifyForgotPasswordSecurityAnswers(answer1: "Osaka", answer2: "Blue"))
+        let verified = await model.verifyForgotPasswordSecurityAnswers(answer1: "Osaka", answer2: "Blue")
+        XCTAssertFalse(verified)
 
         model.forgotPasswordNewPassword = "new password"
         model.forgotPasswordConfirmPassword = "new password"
@@ -205,6 +207,278 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(keychainService.loadRequests.isEmpty)
         XCTAssertTrue(engine.securityKeyOpenedVaults.isEmpty)
         XCTAssertTrue(engine.resetMasterPasswordCalls.isEmpty)
+    }
+
+    private func makeRememberedVaultModel(
+        securityQuestionStore: any SecurityQuestionRecoveryStore,
+        securityQuestionVerifier: SecurityQuestionAnswerVerifier = makeFastSecurityQuestionVerifier(),
+        securityQuestionClock: @escaping () -> Date = { Date() }
+    ) throws -> AppSessionModel {
+        let rememberedVaultStore = MemoryRememberedVaultStore()
+        try rememberedVaultStore.save(
+            RememberedVaultRecord(
+                fileURL: URL(fileURLWithPath: "/tmp/monica-app-tests/Mobile.mdbx"),
+                displayName: "Mobile",
+                vaultID: "created-vault"
+            )
+        )
+        return AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            rememberedVaultStore: rememberedVaultStore,
+            securityQuestionStore: securityQuestionStore,
+            securityQuestionVerifier: securityQuestionVerifier,
+            securityQuestionClock: securityQuestionClock
+        )
+    }
+
+    func testSecurityQuestionAnswersAreStoredAsSaltedKDFRecords() async throws {
+        let engine = RecordingVaultEngine()
+        engine.securityKeyOpenVaultID = "created-vault"
+        let store = MemorySecurityQuestionRecoveryStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            securityQuestionStore: store,
+            securityQuestionVerifier: makeFastSecurityQuestionVerifier()
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        model.securityQuestion1ID = 1
+        model.securityQuestion2ID = 3
+        model.securityAnswer1 = "Tokyo"
+        model.securityAnswer2 = "Blue"
+        try await model.saveSecurityQuestions()
+
+        let firstSetup = try XCTUnwrap(store.load(vaultID: "created-vault"))
+        guard case .kdf(let firstRecord) = firstSetup.answer1 else {
+            XCTFail("密保答案必须保存为 KDF 记录。")
+            return
+        }
+        XCTAssertEqual(firstRecord.salt.count, 16)
+        XCTAssertEqual(firstRecord.digest.count, 32)
+        XCTAssertFalse(
+            String(decoding: try JSONEncoder().encode(firstSetup), as: UTF8.self)
+                .lowercased()
+                .contains("tokyo")
+        )
+
+        model.securityAnswer1 = "Tokyo"
+        model.securityAnswer2 = "Blue"
+        try await model.saveSecurityQuestions()
+
+        let secondSetup = try XCTUnwrap(store.load(vaultID: "created-vault"))
+        guard case .kdf(let secondRecord) = secondSetup.answer1 else {
+            XCTFail("密保答案必须保存为 KDF 记录。")
+            return
+        }
+        XCTAssertNotEqual(firstRecord.salt, secondRecord.salt)
+        XCTAssertNotEqual(firstRecord.digest, secondRecord.digest)
+    }
+
+    func testLegacyUnsaltedAnswersMigrateTransparentlyAfterSuccessfulVerification() async throws {
+        let suiteName = "monica.tests.app.security-questions.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let legacyStore = UserDefaultsLegacySecurityQuestionRecoveryStore(userDefaults: defaults)
+        let primaryStore = MemorySecurityQuestionRecoveryStore()
+        let model = try makeRememberedVaultModel(
+            securityQuestionStore: MigratingSecurityQuestionRecoveryStore(
+                primary: primaryStore,
+                legacy: legacyStore
+            )
+        )
+        defaults.set(
+            try JSONSerialization.data(
+                withJSONObject: legacySecurityQuestionPayload(
+                    vaultID: "created-vault",
+                    answer1: "Tokyo",
+                    answer2: "Blue"
+                )
+            ),
+            forKey: UserDefaultsLegacySecurityQuestionRecoveryStore.keyPrefix + "created-vault"
+        )
+
+        model.showForgotPasswordGuidance()
+        XCTAssertEqual(model.forgotPasswordRecoveryStep, .verifySecurityQuestions)
+        let verified = await model.verifyForgotPasswordSecurityAnswers(answer1: " TOKYO ", answer2: "blue")
+        XCTAssertTrue(verified)
+        XCTAssertEqual(model.forgotPasswordRecoveryStep, .resetPassword)
+
+        let migrated = try XCTUnwrap(primaryStore.load(vaultID: "created-vault"))
+        XCTAssertFalse(migrated.containsLegacyAnswers)
+        XCTAssertNil(try legacyStore.load(vaultID: "created-vault"))
+        let verifier = makeFastSecurityQuestionVerifier()
+        XCTAssertTrue(verifier.verify("tokyo", against: migrated.answer1).isMatch)
+        XCTAssertTrue(verifier.verify("blue", against: migrated.answer2).isMatch)
+    }
+
+    func testLegacyAnswersAreNotMigratedWhenVerificationFails() async throws {
+        let suiteName = "monica.tests.app.security-questions.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let legacyStore = UserDefaultsLegacySecurityQuestionRecoveryStore(userDefaults: defaults)
+        let primaryStore = MemorySecurityQuestionRecoveryStore()
+        let model = try makeRememberedVaultModel(
+            securityQuestionStore: MigratingSecurityQuestionRecoveryStore(
+                primary: primaryStore,
+                legacy: legacyStore
+            )
+        )
+        defaults.set(
+            try JSONSerialization.data(
+                withJSONObject: legacySecurityQuestionPayload(
+                    vaultID: "created-vault",
+                    answer1: "Tokyo",
+                    answer2: "Blue"
+                )
+            ),
+            forKey: UserDefaultsLegacySecurityQuestionRecoveryStore.keyPrefix + "created-vault"
+        )
+
+        model.showForgotPasswordGuidance()
+        let verified = await model.verifyForgotPasswordSecurityAnswers(answer1: "Osaka", answer2: "Blue")
+        XCTAssertFalse(verified)
+
+        XCTAssertNil(try primaryStore.load(vaultID: "created-vault"))
+        XCTAssertNotNil(try legacyStore.load(vaultID: "created-vault"))
+        XCTAssertEqual(
+            primaryStore.loadThrottleState(vaultID: "created-vault").failureCount,
+            1
+        )
+    }
+
+    func testRepeatedFailedAnswersLockVerificationUntilClockAdvances() async throws {
+        let store = MemorySecurityQuestionRecoveryStore()
+        let verifier = makeFastSecurityQuestionVerifier()
+        try store.save(
+            SecurityQuestionRecoverySetup(
+                vaultID: "created-vault",
+                question1ID: 1,
+                question1Text: "第一题",
+                answer1: try verifier.makeCredential(for: "Tokyo"),
+                question2ID: 3,
+                question2Text: "第二题",
+                answer2: try verifier.makeCredential(for: "Blue")
+            )
+        )
+        var now = Date(timeIntervalSince1970: 1_802_000_000)
+        let model = try makeRememberedVaultModel(
+            securityQuestionStore: store,
+            securityQuestionVerifier: verifier,
+            securityQuestionClock: { now }
+        )
+
+        model.showForgotPasswordGuidance()
+        for attempt in 1...3 {
+            let verified = await model.verifyForgotPasswordSecurityAnswers(answer1: "Osaka", answer2: "Blue")
+            XCTAssertFalse(verified)
+            if attempt < 3 {
+                XCTAssertEqual(model.vaultOperationState, .failed("密保答案不正确。"))
+            }
+        }
+        XCTAssertEqual(model.forgotPasswordAttemptCount, 3)
+        XCTAssertEqual(model.forgotPasswordLockoutRemaining, 60)
+        XCTAssertEqual(
+            model.vaultOperationState,
+            .failed("密保答案错误次数过多，请在 60 秒后重试。")
+        )
+
+        let lockedAttempt = await model.verifyForgotPasswordSecurityAnswers(answer1: "Tokyo", answer2: "Blue")
+        XCTAssertFalse(lockedAttempt)
+        XCTAssertEqual(model.forgotPasswordAttemptCount, 3)
+
+        let relaunchedModel = try makeRememberedVaultModel(
+            securityQuestionStore: store,
+            securityQuestionVerifier: verifier,
+            securityQuestionClock: { now }
+        )
+        relaunchedModel.showForgotPasswordGuidance()
+        XCTAssertEqual(relaunchedModel.forgotPasswordLockoutRemaining, 60)
+        let relaunchedAttempt = await relaunchedModel.verifyForgotPasswordSecurityAnswers(
+            answer1: "Tokyo",
+            answer2: "Blue"
+        )
+        XCTAssertFalse(relaunchedAttempt)
+
+        now = now.addingTimeInterval(61)
+        let afterLockout = await relaunchedModel.verifyForgotPasswordSecurityAnswers(
+            answer1: "tokyo",
+            answer2: "BLUE"
+        )
+        XCTAssertTrue(afterLockout)
+        XCTAssertEqual(relaunchedModel.forgotPasswordRecoveryStep, .resetPassword)
+        XCTAssertEqual(relaunchedModel.forgotPasswordLockoutRemaining, 0)
+        XCTAssertEqual(store.loadThrottleState(vaultID: "created-vault"), .clear)
+    }
+
+    func testWeakerSecurityQuestionRecordsUpgradeAfterSuccessfulVerification() async throws {
+        let currentVerifier = makeFastSecurityQuestionVerifier()
+        let weakVerifier = SecurityQuestionAnswerVerifier(
+            hasher: SecurityQuestionAnswerHasher(parameters: .pbkdf2SHA256(iterations: 1_000))
+        )
+        let store = MemorySecurityQuestionRecoveryStore()
+        try store.save(
+            SecurityQuestionRecoverySetup(
+                vaultID: "created-vault",
+                question1ID: 1,
+                question1Text: "第一题",
+                answer1: try weakVerifier.makeCredential(for: "Tokyo"),
+                question2ID: 3,
+                question2Text: "第二题",
+                answer2: try weakVerifier.makeCredential(for: "Blue")
+            )
+        )
+        let model = try makeRememberedVaultModel(
+            securityQuestionStore: store,
+            securityQuestionVerifier: currentVerifier
+        )
+
+        model.showForgotPasswordGuidance()
+        let verified = await model.verifyForgotPasswordSecurityAnswers(answer1: "Tokyo", answer2: "Blue")
+        XCTAssertTrue(verified)
+
+        let upgraded = try XCTUnwrap(store.load(vaultID: "created-vault"))
+        guard case .kdf(let record) = upgraded.answer1 else {
+            XCTFail("迁移后应保存 KDF 记录。")
+            return
+        }
+        XCTAssertEqual(
+            record.parameters,
+            .argon2id(timeCost: 1, memoryKiB: 1024, parallelism: 1)
+        )
+    }
+
+    func testCorruptedSecurityQuestionRecordIsReportedWithoutLockingVault() throws {
+        let engine = RecordingVaultEngine()
+        let rememberedVaultStore = MemoryRememberedVaultStore()
+        try rememberedVaultStore.save(
+            RememberedVaultRecord(
+                fileURL: URL(fileURLWithPath: "/tmp/monica-app-tests/Mobile.mdbx"),
+                displayName: "Mobile",
+                vaultID: "created-vault"
+            )
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            rememberedVaultStore: rememberedVaultStore,
+            securityQuestionStore: CorruptSecurityQuestionRecoveryStore()
+        )
+
+        model.showForgotPasswordGuidance()
+        XCTAssertEqual(
+            model.vaultOperationState,
+            .failed(SecurityQuestionCredentialError.corruptedStoredRecord.localizedDescription)
+        )
+
+        model.vaultPassword = "old password"
+        try model.unlockRememberedVaultWithPassword(deviceID: "ios-app-test-device")
+        XCTAssertEqual(model.vaultState, .unlocked)
     }
 
     func testSessionDefaultsToLoginPasswordModule() {
@@ -14104,4 +14378,38 @@ final class InterfaceDensityTests: XCTestCase {
         // The original bytes are preserved for inspection instead of being silently erased.
         XCTAssertEqual(defaults.data(forKey: appearanceStoreKey), corrupt)
     }
+}
+
+private func makeFastSecurityQuestionVerifier() -> SecurityQuestionAnswerVerifier {
+    SecurityQuestionAnswerVerifier(
+        hasher: SecurityQuestionAnswerHasher(
+            parameters: .argon2id(timeCost: 1, memoryKiB: 1024, parallelism: 1)
+        )
+    )
+}
+
+private func legacySecurityQuestionPayload(
+    vaultID: String,
+    answer1: String,
+    answer2: String
+) -> [String: Any] {
+    [
+        "vaultID": vaultID,
+        "question1ID": 1,
+        "question1Text": "第一题",
+        "answer1Hash": SecurityQuestionAnswerVerifier.legacySHA256Hex(for: answer1),
+        "question2ID": 3,
+        "question2Text": "第二题",
+        "answer2Hash": SecurityQuestionAnswerVerifier.legacySHA256Hex(for: answer2)
+    ]
+}
+
+private final class CorruptSecurityQuestionRecoveryStore: SecurityQuestionRecoveryStore, @unchecked Sendable {
+    func save(_ setup: SecurityQuestionRecoverySetup) throws {}
+
+    func load(vaultID: String) throws -> SecurityQuestionRecoverySetup? {
+        throw SecurityQuestionCredentialError.corruptedStoredRecord
+    }
+
+    func delete(vaultID: String) throws {}
 }

@@ -1951,22 +1951,7 @@ private extension String {
     }
 }
 
-struct SecurityQuestionRecoverySetup: Sendable, Codable, Equatable {
-    let vaultID: String
-    let question1ID: Int
-    let question1Text: String
-    let answer1Hash: String
-    let question2ID: Int
-    let question2Text: String
-    let answer2Hash: String
-}
-
-protocol SecurityQuestionRecoveryStore {
-    func save(_ setup: SecurityQuestionRecoverySetup) throws
-    func load(vaultID: String) throws -> SecurityQuestionRecoverySetup?
-    func delete(vaultID: String) throws
-}
-
+// 密保记录、答案规范化与 KDF 验证由 MonicaSecurity 提供（#59）。
 enum ForgotPasswordRecoveryStep: Sendable, Equatable {
     case none
     case verifySecurityQuestions
@@ -2240,57 +2225,8 @@ enum SecurityQuestionRecoveryError: Error, Sendable, Equatable, LocalizedError {
     }
 }
 
-struct UserDefaultsSecurityQuestionRecoveryStore: SecurityQuestionRecoveryStore {
-    private let userDefaults: UserDefaults
-    private let keyPrefix = "monica.securityQuestions."
-
-    init(userDefaults: UserDefaults = .standard) {
-        self.userDefaults = userDefaults
-    }
-
-    func save(_ setup: SecurityQuestionRecoverySetup) throws {
-        let data = try JSONEncoder().encode(setup)
-        userDefaults.set(data, forKey: key(for: setup.vaultID))
-    }
-
-    func load(vaultID: String) throws -> SecurityQuestionRecoverySetup? {
-        guard let data = userDefaults.data(forKey: key(for: vaultID)) else {
-            return nil
-        }
-        return try JSONDecoder().decode(SecurityQuestionRecoverySetup.self, from: data)
-    }
-
-    func delete(vaultID: String) throws {
-        userDefaults.removeObject(forKey: key(for: vaultID))
-    }
-
-    private func key(for vaultID: String) -> String {
-        keyPrefix + vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-}
-
-final class MemorySecurityQuestionRecoveryStore: SecurityQuestionRecoveryStore {
-    private let lock = NSLock()
-    private var setups: [String: SecurityQuestionRecoverySetup] = [:]
-
-    func save(_ setup: SecurityQuestionRecoverySetup) throws {
-        lock.lock()
-        setups[setup.vaultID] = setup
-        lock.unlock()
-    }
-
-    func load(vaultID: String) throws -> SecurityQuestionRecoverySetup? {
-        lock.lock()
-        defer { lock.unlock() }
-        return setups[vaultID.trimmingCharacters(in: .whitespacesAndNewlines)]
-    }
-
-    func delete(vaultID: String) throws {
-        lock.lock()
-        setups.removeValue(forKey: vaultID.trimmingCharacters(in: .whitespacesAndNewlines))
-        lock.unlock()
-    }
-}
+// 旧 UserDefaults 密保记录由 MonicaSecurity 的 UserDefaultsLegacySecurityQuestionRecoveryStore
+// 读取，并在首次验证成功后迁移进钥匙串（#59）。
 
 final class UserDefaultsRememberedVaultStore: RememberedVaultStore, @unchecked Sendable {
     private let userDefaults: UserDefaults
@@ -2927,6 +2863,8 @@ final class AppSessionModel {
     var forgotPasswordAnswer1 = ""
     var forgotPasswordAnswer2 = ""
     var forgotPasswordAttemptCount = 0
+    var forgotPasswordLockoutRemaining: TimeInterval = 0
+    var isVerifyingForgotPasswordAnswers = false
     var forgotPasswordNewPassword = ""
     var forgotPasswordConfirmPassword = ""
     var isBiometricUnlockEnabled: Bool {
@@ -2948,6 +2886,9 @@ final class AppSessionModel {
     private let biometricUnlockAuthorizer: any BiometricUnlockAuthorizer
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
+    private let securityQuestionVerifier: SecurityQuestionAnswerVerifier
+    private let securityQuestionThrottle: SecurityQuestionVerificationThrottle
+    private let securityQuestionClock: () -> Date
     private let webDAVBackupService: any AppWebDAVBackupService
     private let operationTimelineStore: any AppOperationTimelineStore
     private let quickSetupStateStore: any AppQuickSetupStateStore
@@ -3013,7 +2954,10 @@ final class AppSessionModel {
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
         biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
-        securityQuestionStore: any SecurityQuestionRecoveryStore = UserDefaultsSecurityQuestionRecoveryStore(),
+        securityQuestionStore: any SecurityQuestionRecoveryStore = MigratingSecurityQuestionRecoveryStore(),
+        securityQuestionVerifier: SecurityQuestionAnswerVerifier = SecurityQuestionAnswerVerifier(),
+        securityQuestionThrottle: SecurityQuestionVerificationThrottle = .default,
+        securityQuestionClock: @escaping () -> Date = { Date() },
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
         operationTimelineStore: any AppOperationTimelineStore = MemoryAppOperationTimelineStore(),
         quickSetupStateStore: any AppQuickSetupStateStore = MemoryAppQuickSetupStateStore(),
@@ -3069,6 +3013,9 @@ final class AppSessionModel {
         self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
+        self.securityQuestionVerifier = securityQuestionVerifier
+        self.securityQuestionThrottle = securityQuestionThrottle
+        self.securityQuestionClock = securityQuestionClock
         self.webDAVBackupService = webDAVBackupService
         self.operationTimelineStore = operationTimelineStore
         self.quickSetupStateStore = quickSetupStateStore
@@ -5662,6 +5609,10 @@ final class AppSessionModel {
             }
             forgotPasswordQuestion1Text = setup.question1Text
             forgotPasswordQuestion2Text = setup.question2Text
+            forgotPasswordLockoutRemaining = securityQuestionThrottle.remainingLockout(
+                state: securityQuestionStore.loadThrottleState(vaultID: rememberedVaultID),
+                now: securityQuestionClock()
+            )
             forgotPasswordRecoveryStep = .verifySecurityQuestions
             vaultOperationState = .idle
         } catch {
@@ -5676,7 +5627,7 @@ final class AppSessionModel {
         return (try? securityQuestionStore.load(vaultID: activeVaultSession.handle.vaultID)) != nil
     }
 
-    func saveSecurityQuestions() throws {
+    func saveSecurityQuestions() async throws {
         recordUserActivity()
         do {
             guard let activeVaultSession else {
@@ -5685,24 +5636,35 @@ final class AppSessionModel {
             guard securityQuestion1ID != securityQuestion2ID else {
                 throw SecurityQuestionRecoveryError.duplicateQuestions
             }
-            let trimmedAnswer1 = securityAnswer1.trimmingCharacters(in: .whitespacesAndNewlines)
-            let trimmedAnswer2 = securityAnswer2.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmedAnswer1.isEmpty, !trimmedAnswer2.isEmpty else {
+            let answer1 = securityAnswer1.trimmingCharacters(in: .whitespacesAndNewlines)
+            let answer2 = securityAnswer2.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !answer1.isEmpty, !answer2.isEmpty else {
                 throw SecurityQuestionRecoveryError.missingAnswers
             }
+
+            securityQuestionState = .running
+            let verifier = securityQuestionVerifier
+            let credentials = try await Task.detached(priority: .userInitiated) {
+                (
+                    try verifier.makeCredential(for: answer1),
+                    try verifier.makeCredential(for: answer2)
+                )
+            }.value
 
             let setup = SecurityQuestionRecoverySetup(
                 vaultID: activeVaultSession.handle.vaultID,
                 question1ID: securityQuestion1ID,
                 question1Text: securityQuestionText(for: securityQuestion1ID),
-                answer1Hash: securityQuestionAnswerHash(trimmedAnswer1),
+                answer1: credentials.0,
                 question2ID: securityQuestion2ID,
                 question2Text: securityQuestionText(for: securityQuestion2ID),
-                answer2Hash: securityQuestionAnswerHash(trimmedAnswer2)
+                answer2: credentials.1
             )
             try securityQuestionStore.save(setup)
+            try? securityQuestionStore.saveThrottleState(.clear, vaultID: setup.vaultID)
             securityAnswer1 = ""
             securityAnswer2 = ""
+            forgotPasswordLockoutRemaining = 0
             securityQuestionState = .succeeded(String(localized: "密保问题已保存。"))
         } catch {
             securityQuestionState = .failed(error.localizedDescription)
@@ -5710,27 +5672,90 @@ final class AppSessionModel {
         }
     }
 
-    func verifyForgotPasswordSecurityAnswers(answer1: String, answer2: String) -> Bool {
-        guard let rememberedVaultID,
-              let setup = try? securityQuestionStore.load(vaultID: rememberedVaultID) else {
+    func verifyForgotPasswordSecurityAnswers(answer1: String, answer2: String) async -> Bool {
+        guard let rememberedVaultID else {
             vaultOperationState = .failed(SecurityQuestionRecoveryError.missingSecurityQuestions.localizedDescription)
             return false
         }
-        let isMatch = setup.answer1Hash == securityQuestionAnswerHash(answer1)
-            && setup.answer2Hash == securityQuestionAnswerHash(answer2)
-        if isMatch {
-            forgotPasswordRecoveryStep = .resetPassword
-            forgotPasswordAttemptCount = 0
-            vaultOperationState = .idle
-        } else {
-            forgotPasswordAttemptCount += 1
+        let setup: SecurityQuestionRecoverySetup
+        do {
+            guard let storedSetup = try securityQuestionStore.load(vaultID: rememberedVaultID) else {
+                vaultOperationState = .failed(
+                    SecurityQuestionRecoveryError.missingSecurityQuestions.localizedDescription
+                )
+                return false
+            }
+            setup = storedSetup
+        } catch {
+            vaultOperationState = .failed(error.localizedDescription)
+            return false
+        }
+
+        let now = securityQuestionClock()
+        let storedThrottleState = securityQuestionStore.loadThrottleState(vaultID: rememberedVaultID)
+        let remainingLockout = securityQuestionThrottle.remainingLockout(
+            state: storedThrottleState,
+            now: now
+        )
+        guard remainingLockout <= 0 else {
+            forgotPasswordLockoutRemaining = remainingLockout
+            vaultOperationState = .failed(forgotPasswordLockoutMessage(remaining: remainingLockout))
+            return false
+        }
+
+        isVerifyingForgotPasswordAnswers = true
+        let verifier = securityQuestionVerifier
+        let verdicts = await Task.detached(priority: .userInitiated) {
+            (
+                verifier.verify(answer1, against: setup.answer1),
+                verifier.verify(answer2, against: setup.answer2)
+            )
+        }.value
+        isVerifyingForgotPasswordAnswers = false
+
+        if let invalidReason = verdicts.0.invalidRecordReason ?? verdicts.1.invalidRecordReason {
+            vaultOperationState = .failed(forgotPasswordInvalidRecordMessage(invalidReason))
+            return false
+        }
+        guard verdicts.0.isMatch, verdicts.1.isMatch else {
+            let failedState = securityQuestionThrottle.stateAfterFailure(
+                state: storedThrottleState,
+                now: now
+            )
+            try? securityQuestionStore.saveThrottleState(failedState, vaultID: rememberedVaultID)
+            forgotPasswordAttemptCount = failedState.failureCount
+            let lockout = securityQuestionThrottle.remainingLockout(state: failedState, now: now)
+            forgotPasswordLockoutRemaining = lockout
             vaultOperationState = .failed(
-                forgotPasswordAttemptCount >= 3
-                    ? String(localized: "密保答案错误次数过多，请返回后重试。")
+                lockout > 0
+                    ? forgotPasswordLockoutMessage(remaining: lockout)
                     : String(localized: "密保答案不正确。")
             )
+            return false
         }
-        return isMatch
+
+        // 验证通过后才透明迁移旧记录或升级弱参数；迁移失败不影响本次找回，下次验证会重试。
+        if verdicts.0.requiresRehash || verdicts.1.requiresRehash {
+            let upgraded = try? await Task.detached(priority: .userInitiated) {
+                try verifier.upgradedSetup(
+                    for: setup,
+                    answer1: answer1,
+                    answer2: answer2,
+                    verdict1: verdicts.0,
+                    verdict2: verdicts.1
+                )
+            }.value
+            if let upgraded {
+                try? securityQuestionStore.save(upgraded)
+            }
+        }
+
+        try? securityQuestionStore.saveThrottleState(.clear, vaultID: rememberedVaultID)
+        forgotPasswordAttemptCount = 0
+        forgotPasswordLockoutRemaining = 0
+        forgotPasswordRecoveryStep = .resetPassword
+        vaultOperationState = .idle
+        return true
     }
 
     func resetForgottenPasswordWithVerifiedSecurityAnswers(deviceID: String) async throws {
@@ -5794,6 +5819,8 @@ final class AppSessionModel {
         forgotPasswordAnswer1 = ""
         forgotPasswordAnswer2 = ""
         forgotPasswordAttemptCount = 0
+        forgotPasswordLockoutRemaining = 0
+        isVerifyingForgotPasswordAnswers = false
         forgotPasswordNewPassword = ""
         forgotPasswordConfirmPassword = ""
     }
@@ -5802,11 +5829,13 @@ final class AppSessionModel {
         Self.securityQuestionOptions.first { $0.id == id }?.text ?? String(localized: "密保问题")
     }
 
-    private func securityQuestionAnswerHash(_ answer: String) -> String {
-        let normalized = answer.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        return SHA256.hash(data: Data(normalized.utf8))
-            .map { String(format: "%02x", $0) }
-            .joined()
+    private func forgotPasswordLockoutMessage(remaining: TimeInterval) -> String {
+        let seconds = max(1, Int(remaining.rounded(.up)))
+        return String(localized: "密保答案错误次数过多，请在 \(seconds) 秒后重试。")
+    }
+
+    private func forgotPasswordInvalidRecordMessage(_ reason: String) -> String {
+        "\(SecurityQuestionCredentialError.corruptedStoredRecord.localizedDescription)（\(reason)）"
     }
 
     func presentAddEditor(forItemKind itemKind: UnifiedVaultItemKind) {
