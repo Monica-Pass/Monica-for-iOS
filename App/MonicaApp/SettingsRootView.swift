@@ -107,6 +107,31 @@ struct SettingsRootView: View {
         }
     }
 
+    private func moveLayoutModule(_ module: PasswordLayoutModule, offset: Int) {
+        var preferences = session.vaultLayoutPreferences
+        var modules = preferences.orderedModules
+        guard let index = modules.firstIndex(of: module) else { return }
+        let destination = index + offset
+        guard modules.indices.contains(destination) else { return }
+        modules.swapAt(index, destination)
+        preferences.orderedModules = modules
+        session.updateVaultLayoutPreferences(preferences)
+    }
+
+    private func toggleLayoutModuleVisibility(_ module: PasswordLayoutModule) {
+        var preferences = session.vaultLayoutPreferences
+        preferences.setHidden(!preferences.isHidden(module), for: module)
+        session.updateVaultLayoutPreferences(preferences)
+    }
+
+    private func isFirstLayoutModule(_ module: PasswordLayoutModule) -> Bool {
+        session.vaultLayoutPreferences.orderedModules.first == module
+    }
+
+    private func isLastLayoutModule(_ module: PasswordLayoutModule) -> Bool {
+        session.vaultLayoutPreferences.orderedModules.last == module
+    }
+
     var body: some View {
         AndroidParityScreen {
             AndroidParitySection(title: String(localized: "应用")) {
@@ -209,6 +234,67 @@ struct SettingsRootView: View {
                         session.presentExtensions()
                     } label: {
                         Label("扩展功能", systemImage: "square.grid.2x2")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                }
+            }
+
+            AndroidParitySection(title: String(localized: "布局")) {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    Text(String(localized: "密码页模块"))
+                        .font(.headline.weight(.heavy))
+                    Text(String(localized: "调整二级模块的顺序与显隐；隐藏的模块仍可从「更多」进入。卡片密度与字段显隐在「应用」中设置。"))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                    AndroidParityDivider()
+                    ForEach(session.vaultLayoutPreferences.orderedModules) { module in
+                        HStack(spacing: 12) {
+                            Image(systemName: module.systemImage)
+                                .frame(width: 22)
+                                .foregroundStyle(AndroidParityPalette.primary)
+                            Text(module.title)
+                                .font(.subheadline.weight(.heavy))
+                            Spacer()
+                            Button {
+                                moveLayoutModule(module, offset: -1)
+                            } label: {
+                                Image(systemName: "chevron.up")
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isFirstLayoutModule(module))
+                            .accessibilityLabel(String(localized: "上移"))
+                            Button {
+                                moveLayoutModule(module, offset: 1)
+                            } label: {
+                                Image(systemName: "chevron.down")
+                            }
+                            .buttonStyle(.plain)
+                            .disabled(isLastLayoutModule(module))
+                            .accessibilityLabel(String(localized: "下移"))
+                            Button {
+                                toggleLayoutModuleVisibility(module)
+                            } label: {
+                                Image(
+                                    systemName: session.vaultLayoutPreferences.isHidden(module)
+                                        ? "eye.slash"
+                                        : "eye"
+                                )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(
+                                session.vaultLayoutPreferences.isHidden(module)
+                                    ? String(localized: "显示")
+                                    : String(localized: "隐藏")
+                            )
+                        }
+                        .padding(.vertical, 4)
+                    }
+                    AndroidParityDivider()
+                    Button {
+                        session.restoreDefaultVaultLayoutPreferences()
+                    } label: {
+                        Label(String(localized: "恢复默认布局"), systemImage: "arrow.counterclockwise")
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
