@@ -31,6 +31,10 @@
 		A10000000000000000000019 /* MonicaStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DB /* MonicaStorage */; };
 		A1000000000000000000001A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* Assets.xcassets */; };
 		A1000000000000000000001B /* AndroidParityDesign.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001C /* AndroidParityDesign.swift */; };
+		A160F4681630C21C4CC995BF /* AppItemIconPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1600A078213C5B14E40912D /* AppItemIconPickerView.swift */; };
+		A160B4B6709933A64862B828 /* AppAppearanceCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */; };
+		A1602E56E6AD5DE24618A55C /* AppAlternateAppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */; };
+		A160FB2E8832B7A04DE28D61 /* AppThemeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */; };
 		A1000000000000000000001D /* GeneratorRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* GeneratorRootView.swift */; };
 		A1000000000000000000001F /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* SettingsRootView.swift */; };
 		A10000000000000000000103 /* AppDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000104 /* AppDiagnostics.swift */; };
@@ -144,6 +148,10 @@
 		A10000000000000000000016 /* MDBXRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBXRoundTripTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000018 /* VaultSessionModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSessionModelTests.swift; sourceTree = "<group>"; };
 		A1000000000000000000001C /* AndroidParityDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityDesign.swift; sourceTree = "<group>"; };
+		A1600A078213C5B14E40912D /* AppItemIconPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppItemIconPickerView.swift; sourceTree = "<group>"; };
+		A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearanceCompatibility.swift; sourceTree = "<group>"; };
+		A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAlternateAppIcon.swift; sourceTree = "<group>"; };
+		A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeSettingsView.swift; sourceTree = "<group>"; };
 		A1000000000000000000001E /* GeneratorRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000104 /* AppDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiagnostics.swift; sourceTree = "<group>"; };
@@ -283,6 +291,10 @@
 				AC0000000000000000000002 /* AppCredentialExchange.swift */,
 				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
 				A1000000000000000000001C /* AndroidParityDesign.swift */,
+				A1600A078213C5B14E40912D /* AppItemIconPickerView.swift */,
+				A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */,
+				A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */,
+				A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
 				A10000000000000000000104 /* AppDiagnostics.swift */,
@@ -666,6 +678,10 @@
 				A60000000000000000000001 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */,
 				A70000000000000000000001 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */,
 				A1000000000000000000001B /* AndroidParityDesign.swift in Sources */,
+				A160F4681630C21C4CC995BF /* AppItemIconPickerView.swift in Sources */,
+				A160B4B6709933A64862B828 /* AppAppearanceCompatibility.swift in Sources */,
+				A1602E56E6AD5DE24618A55C /* AppAlternateAppIcon.swift in Sources */,
+				A160FB2E8832B7A04DE28D61 /* AppThemeSettingsView.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
 				A10000000000000000000103 /* AppDiagnostics.swift in Sources */,
@@ -881,6 +897,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconMidnight AppIconAurora";
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/MonicaApp/MonicaApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
@@ -909,6 +927,8 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIconMidnight AppIconAurora";
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
 				CODE_SIGN_ENTITLEMENTS = App/MonicaApp/MonicaApp.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;

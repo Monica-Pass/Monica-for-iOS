@@ -13902,6 +13902,360 @@
         }
       }
     }
+,
+    "主题与图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme & Icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题与图标"
+          }
+        }
+      }
+    },
+    "好": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OK"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "好"
+          }
+        }
+      }
+    },
+    "恢复预设强调色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Preset Accent"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复预设强调色"
+          }
+        }
+      }
+    },
+    "恢复默认图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Default Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复默认图标"
+          }
+        }
+      }
+    },
+    "无法切换 App 图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't Change App Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法切换 App 图标"
+          }
+        }
+      }
+    },
+    "请稍后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请稍后再试。"
+          }
+        }
+      }
+    },
+    "当前强调色与背景的对比度为 %@:1，低于 4.5:1，正文可能不易阅读。建议选择更深的颜色。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current accent has a contrast ratio of %@:1 against the background, below 4.5:1, so body text may be hard to read. Pick a darker color."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前强调色与背景的对比度为 %@:1，低于 4.5:1，正文可能不易阅读。建议选择更深的颜色。"
+          }
+        }
+      }
+    },
+    "当前强调色与背景的对比度为 %@:1，符合 4.5:1 的正文可读性要求。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The current accent has a contrast ratio of %@:1 against the background, which meets the 4.5:1 bar for body text."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前强调色与背景的对比度为 %@:1，符合 4.5:1 的正文可读性要求。"
+          }
+        }
+      }
+    },
+    "当前设备或模拟器不支持备用 App 图标。请以真机安装后的系统行为为准。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device or simulator does not support alternate app icons. Check the behavior on a device build."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前设备或模拟器不支持备用 App 图标。请以真机安装后的系统行为为准。"
+          }
+        }
+      }
+    },
+    "系统没有找到图标 %@。请确认图标集已随 App 一起打包。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system could not find icon %@. Make sure the icon set ships inside the app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统没有找到图标 %@。请确认图标集已随 App 一起打包。"
+          }
+        }
+      }
+    },
+    "分类图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Category Icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分类图标"
+          }
+        }
+      }
+    },
+    "更多符号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More Symbols"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更多符号"
+          }
+        }
+      }
+    },
+    "条目图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Item Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条目图标"
+          }
+        }
+      }
+    },
+    "按条目类型自动选择（登录条目使用钥匙）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Chosen automatically by item type (logins use a key)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按条目类型自动选择（登录条目使用钥匙）。"
+          }
+        }
+      }
+    },
+    "默认图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认图标"
+          }
+        }
+      }
+    },
+    "App 图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App Icon"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 图标"
+          }
+        }
+      }
+    },
+    "主题预设": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Theme Presets"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主题预设"
+          }
+        }
+      }
+    },
+    "备用图标通过系统 API 立即切换，恢复默认同样即时生效。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alternate icons switch immediately through the system API, and restoring the default is just as instant."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备用图标通过系统 API 立即切换，恢复默认同样即时生效。"
+          }
+        }
+      }
+    },
+    "当前设备或模拟器不支持备用 App 图标，真机安装后可在本页切换。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device or simulator does not support alternate app icons; switch them on a device build."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前设备或模拟器不支持备用 App 图标，真机安装后可在本页切换。"
+          }
+        }
+      }
+    },
+    "预设提供深浅两套配色；对比度在增强对比度开启时会自动提高。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every preset ships light and dark palettes; contrast rises automatically when Increase Contrast is on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "预设提供深浅两套配色；对比度在增强对比度开启时会自动提高。"
+          }
+        }
+      }
+    },
+    "自定义强调色": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Custom Accent Color"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自定义强调色"
+          }
+        }
+      }
+    }
+,
+    "iOS 不允许 App 在运行时修改显示名称；备用图标只通过系统的 App 图标 API 切换，名称与默认图标仍由 Xcode 工程配置决定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS does not let apps change their display name at runtime. Alternate icons switch only through the system app-icon API; the name and default icon still come from the Xcode project configuration."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不允许 App 在运行时修改显示名称；备用图标只通过系统的 App 图标 API 切换，名称与默认图标仍由 Xcode 工程配置决定。"
+          }
+        }
+      }
+    }
   },
   "version": "1.0"
 }
