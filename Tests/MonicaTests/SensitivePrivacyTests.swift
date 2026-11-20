@@ -257,7 +257,7 @@ final class SensitivePrivacyTests: XCTestCase {
             .deletingLastPathComponent()
             .deletingLastPathComponent()
             .deletingLastPathComponent()
-            .appendingPathComponent("App/MonicaApp/AppRootView.swift")
+            .appendingPathComponent("App/MonicaApp/AppRoot/AppSessionModel.swift")
         let source = try String(contentsOf: url, encoding: .utf8)
 
         let lockFunction = try XCTUnwrap(source.range(of: "func lockLocalVault()"))
