@@ -111,7 +111,9 @@ jobs:
           for path in \
             Scripts/bootstrap.sh \
             Scripts/build-mdbx-xcframework.sh \
-            Scripts/generate-mdbx-swift-bindings.sh
+            Scripts/generate-mdbx-swift-bindings.sh \
+            Scripts/uniffi-version.sh \
+            Scripts/update-msal.sh
           do
             [ -x "$path" ] || { echo "::error::$path must be executable"; exit 1; }
           done
@@ -123,6 +125,12 @@ jobs:
           do
             [ -e "$path" ] || { echo "::error::$path is missing"; exit 1; }
           done
+
+      - name: Verify vendored MSAL
+        run: |
+          set -euo pipefail
+          # vendored binary 无法靠 SwiftPM 校验，改由 pin 文件 + 脚本比对版本/slice/privacy manifest。
+          Scripts/update-msal.sh --verify
 
       - name: Reject tracked build artifacts
         run: |
@@ -168,10 +176,14 @@ jobs:
         run: |
           set -euo pipefail
           tooling="$({
+            shasum Scripts/mdbx-common.sh
+            shasum Scripts/uniffi-version.sh
+            shasum Scripts/uniffi-version.txt
             shasum Scripts/build-mdbx-xcframework.sh
             shasum Scripts/generate-mdbx-swift-bindings.sh
             shasum SwiftPackages/MonicaMDBX/Package.swift
             shasum Scripts/select-xcode.sh
+            MONICA_MDBX_DIR="$PWD/mdbx" Scripts/uniffi-version.sh --print
             xcodebuild -version
             rustc -Vv
           } | shasum | cut -d' ' -f1)"
@@ -188,11 +200,13 @@ jobs:
           restore-keys: cargo-${{ runner.os }}-
 
       - name: Install UniFFI CLI
+        env:
+          MONICA_MDBX_DIR: ${{ github.workspace }}/mdbx
         run: |
           set -euo pipefail
-          if ! command -v uniffi-bindgen-swift >/dev/null 2>&1; then
-            cargo install uniffi --version 0.31.1 --locked --features cli
-          fi
+          # 版本来自上游 Cargo.lock（不是这里写死的常量）：上游 bump uniffi 时，
+          # 本步骤会因为版本不符而重装，不会沿用 cache 里的旧 CLI。
+          Scripts/uniffi-version.sh --install
 
       - uses: actions/cache@v4
         id: artifact-cache
@@ -202,6 +216,16 @@ jobs:
             SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated
           key: mdbx-artifact-${{ steps.key.outputs.cache-key }}
 
+      - name: Print UniFFI toolchain
+        env:
+          MONICA_MDBX_DIR: ${{ github.workspace }}/mdbx
+        run: |
+          set -euo pipefail
+          # 记录最终选中的生成器与上游 pin：runner 预装旧版本时，排障不需要再猜。
+          Scripts/uniffi-version.sh --print
+          Scripts/uniffi-version.sh --check
+          grep -n '^uniffi' mdbx/crates/mdbx-ffi/Cargo.toml
+
       - name: Build XCFramework
         if: steps.artifact-cache.outputs.cache-hit != 'true'
         env:
@@ -210,11 +234,14 @@ jobs:
         run: Scripts/build-mdbx-xcframework.sh
 
       - name: Verify artifact
+        env:
+          MONICA_MDBX_DIR: ${{ github.workspace }}/mdbx
         run: |
           set -euo pipefail
           test -d Artifacts/MDBX/MonicaMDBXGenerated.xcframework
           test -f SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated/mdbx_ffi.swift
           plutil -lint Artifacts/MDBX/MonicaMDBXGenerated.xcframework/Info.plist
+          Scripts/uniffi-version.sh --check
 
       - name: Pack
         run: |
