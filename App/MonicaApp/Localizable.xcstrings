@@ -12829,6 +12829,470 @@
           }
         }
       }
+    },
+    "已复制，%lld 秒后尝试清除剪贴板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copied; Monica will try to clear the clipboard in %lld seconds."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复制，%lld 秒后尝试清除剪贴板"
+          }
+        }
+      }
+    },
+    "没有可复制的内容": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to copy."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可复制的内容"
+          }
+        }
+      }
+    },
+    "银行卡号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Card number"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行卡号"
+          }
+        }
+      }
+    },
+    "安全码 CVV": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Security code (CVV)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全码 CVV"
+          }
+        }
+      }
+    },
+    "笔记正文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note body"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔记正文"
+          }
+        }
+      }
+    },
+    "其它敏感字段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Other sensitive fields"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其它敏感字段"
+          }
+        }
+      }
+    },
+    "登录密码与 Wi-Fi 密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Login and Wi-Fi passwords"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录密码与 Wi-Fi 密码"
+          }
+        }
+      }
+    },
+    "动态验证码与 TOTP 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One-time codes and TOTP secrets"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "动态验证码与 TOTP 密钥"
+          }
+        }
+      }
+    },
+    "银行卡号完整数字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Full card numbers"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行卡号完整数字"
+          }
+        }
+      }
+    },
+    "银行卡背面的安全码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The security code on the back of a card"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行卡背面的安全码"
+          }
+        }
+      }
+    },
+    "笔记与 Send 的正文预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note and Send body previews"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔记与 Send 的正文预览"
+          }
+        }
+      }
+    },
+    "证件号、API Token、私钥引用等": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "ID numbers, API tokens, private key references and more"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "证件号、API Token、私钥引用等"
+          }
+        }
+      }
+    },
+    "敏感隐私": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sensitive privacy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "敏感隐私"
+          }
+        }
+      }
+    },
+    "复制后自动清除剪贴板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the clipboard after copying"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制后自动清除剪贴板"
+          }
+        }
+      }
+    },
+    "15 秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 seconds"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "15 秒"
+          }
+        }
+      }
+    },
+    "30 秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 seconds"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 秒"
+          }
+        }
+      }
+    },
+    "60 秒": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60 seconds"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "60 秒"
+          }
+        }
+      }
+    },
+    "Monica 只清除自己写入且未被其它 App 替换的内容。iOS 会在 App 进入后台后暂停计时，因此只在 App 内计时，并在回到 App 时补做检查；系统不保证后台精确到秒，也不会读取或覆盖其它 App 的剪贴板。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica only clears content it wrote itself and that no other app has replaced. iOS pauses timers once the app is in the background, so the countdown runs only while Monica is active and the check is repeated when you return; the system does not guarantee second-level precision in the background, and Monica never reads or overwrites another app's clipboard."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 只清除自己写入且未被其它 App 替换的内容。iOS 会在 App 进入后台后暂停计时，因此只在 App 内计时，并在回到 App 时补做检查；系统不保证后台精确到秒，也不会读取或覆盖其它 App 的剪贴板。"
+          }
+        }
+      }
+    },
+    "有一次复制等待自动清除；回到 App 或到期后会再次核对剪贴板。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "One copy is waiting to be cleared; Monica checks the clipboard again on expiry or when you return to the app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有一次复制等待自动清除；回到 App 或到期后会再次核对剪贴板。"
+          }
+        }
+      }
+    },
+    "立即清除剪贴板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the clipboard now"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即清除剪贴板"
+          }
+        }
+      }
+    },
+    "密码、验证码、银行卡号与 CVV 在列表、搜索结果和详情里默认显示为掩码；详情页的「显示敏感字段」只对下面允许的类别生效，并且锁库后立即恢复掩码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwords, verification codes, card numbers and CVVs are masked by default in lists, search results and details. The Show sensitive fields switch in details only works for the categories allowed below and masks everything again as soon as the vault locks."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码、验证码、银行卡号与 CVV 在列表、搜索结果和详情里默认显示为掩码；详情页的「显示敏感字段」只对下面允许的类别生效，并且锁库后立即恢复掩码。"
+          }
+        }
+      }
+    },
+    "始终遮蔽敏感预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always mask sensitive previews"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终遮蔽敏感预览"
+          }
+        }
+      }
+    },
+    "开启后连详情页的临时显示也会失效，适合演示或录屏。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When enabled, even the temporary reveal in details stops working, which suits demos and screen recordings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后连详情页的临时显示也会失效，适合演示或录屏。"
+          }
+        }
+      }
+    },
+    "允许显示只影响详情页里手动打开的「显示敏感字段」；列表与搜索结果始终掩码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allowing a category only affects the manual Show sensitive fields switch in details; lists and search results are always masked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "允许显示只影响详情页里手动打开的「显示敏感字段」；列表与搜索结果始终掩码。"
+          }
+        }
+      }
+    },
+    "已清除 Monica 写入的剪贴板内容。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cleared the clipboard content written by Monica."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已清除 Monica 写入的剪贴板内容。"
+          }
+        }
+      }
+    },
+    "剪贴板已被其它 App 更新，Monica 没有覆盖它。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The clipboard was updated by another app, so Monica left it untouched."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "剪贴板已被其它 App 更新，Monica 没有覆盖它。"
+          }
+        }
+      }
+    },
+    "没有待清除的复制记录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There is no copy record waiting to be cleared."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有待清除的复制记录。"
+          }
+        }
+      }
+    },
+    "在「设置 › 敏感隐私」中允许显示后可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available after you allow it in Settings › Sensitive privacy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「设置 › 敏感隐私」中允许显示后可用"
+          }
+        }
+      }
+    },
+    "复制 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制 %@"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
