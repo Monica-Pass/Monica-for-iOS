@@ -422,7 +422,7 @@ extension AppSessionModel {
             plusEntitlementStore: environment.plusEntitlementStore,
             widgetSnapshotStore: widgetSnapshotStore,
             shortcutSnapshotStore: shortcutSnapshotStore,
-            widgetReloadScheduler: widgetReloadScheduler
+            widgetReloadScheduler: widgetReloadScheduler,
             sensitivePasteboard: MonicaSensitivePasteboard(pasteboard: SystemSensitivePasteboard()),
             sensitivePreviewPreferenceStore: UserDefaultsSensitivePreviewPreferenceStore(),
             sensitiveClipboardPreferenceStore: UserDefaultsSensitiveClipboardPreferenceStore()
