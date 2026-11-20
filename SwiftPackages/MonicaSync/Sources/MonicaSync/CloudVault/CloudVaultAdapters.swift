@@ -788,7 +788,8 @@ public struct CloudFileCloudVaultRemoteStore: CloudVaultRemoteStore {
             return notFound
         case .conflict:
             return CloudVaultError.preconditionFailed(remoteRevision: nil)
-        case .unsupportedOperation:
+        case .unsupportedOperation, .invalidDirectoryName:
+            // 目录名由设置界面校验；走到这里说明持久化数据异常，按供应商不支持处理。
             return CloudVaultError.unsupportedProvider(kind)
         }
     }
