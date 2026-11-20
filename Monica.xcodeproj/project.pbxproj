@@ -70,6 +70,11 @@
 		F10000000000000000000008 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000003 /* InfoPlist.strings */; };
 		F50000000000000000000001 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000001 /* LocalizationTests.swift */; };
 		F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000002 /* AppStoreComplianceTests.swift */; };
+		B71000000000000000000001 /* MonicaWidgetShared in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DC /* MonicaWidgetShared */; };
+		B71000000000000000000002 /* MonicaWidgetShared in Frameworks */ = {isa = PBXBuildFile; productRef = A200000000000000000000DC /* MonicaWidgetShared */; };
+		B71000000000000000000003 /* MonicaWidgetShared in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DD /* MonicaWidgetShared */; };
+		B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */; };
+		B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -179,6 +184,8 @@
 		F20000000000000000000009 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "Extensions/MonicaWidgetExtension/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
 		F40000000000000000000001 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
 		F40000000000000000000002 /* AppStoreComplianceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreComplianceTests.swift; sourceTree = "<group>"; };
+		B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWidgetSnapshotSupport.swift; sourceTree = "<group>"; };
+		B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotReloadTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -191,6 +198,7 @@
 				A10000000000000000000008 /* MonicaSecurity in Frameworks */,
 				A10000000000000000000009 /* MonicaStorage in Frameworks */,
 				A1000000000000000000000A /* MonicaSync in Frameworks */,
+				B71000000000000000000001 /* MonicaWidgetShared in Frameworks */,
 				A50000000000000000000002 /* MSAL in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -211,6 +219,7 @@
 			files = (
 				A10000000000000000000010 /* MonicaMDBX in Frameworks */,
 				A10000000000000000000019 /* MonicaStorage in Frameworks */,
+				B71000000000000000000003 /* MonicaWidgetShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -218,6 +227,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B71000000000000000000002 /* MonicaWidgetShared in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -257,6 +267,7 @@
 				A10000000000000000000011 /* MonicaApp.swift */,
 				BA0000000000000000000001 /* PrivacyInfo.xcprivacy */,
 				A10000000000000000000012 /* AppRootView.swift */,
+				B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */,
 				AC0000000000000000000002 /* AppCredentialExchange.swift */,
 				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
 				A1000000000000000000001C /* AndroidParityDesign.swift */,
@@ -333,6 +344,7 @@
 				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
+				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -429,6 +441,7 @@
 				A100000000000000000000D3 /* MonicaSecurity */,
 				A100000000000000000000D4 /* MonicaStorage */,
 				A100000000000000000000D5 /* MonicaSync */,
+				A100000000000000000000DC /* MonicaWidgetShared */,
 				A500000000000000000000D1 /* MSAL */,
 			);
 			productName = Monica;
@@ -473,6 +486,7 @@
 			packageProductDependencies = (
 				A100000000000000000000DA /* MonicaMDBX */,
 				A100000000000000000000DB /* MonicaStorage */,
+				A100000000000000000000DD /* MonicaWidgetShared */,
 			);
 			productName = MonicaTests;
 			productReference = A10000000000000000000033 /* MonicaTests.xctest */;
@@ -492,6 +506,7 @@
 			);
 			name = MonicaWidgetExtension;
 			packageProductDependencies = (
+				A200000000000000000000DC /* MonicaWidgetShared */,
 			);
 			productName = MonicaWidgetExtension;
 			productReference = A20000000000000000000014 /* MonicaWidgetExtension.appex */;
@@ -560,6 +575,7 @@
 				A100000000000000000000E3 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaSecurity" */,
 				A100000000000000000000E4 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaStorage" */,
 				A100000000000000000000E5 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaSync" */,
+				A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaWidgetShared" */,
 				A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */,
 			);
 			productRefGroup = A10000000000000000000077 /* Products */;
@@ -647,6 +663,7 @@
 				A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */,
 				A80000000000000000000001 /* MonicaControlCenterIntents.swift in Sources */,
 				A10000000000000000000003 /* MonicaAppEnvironment.swift in Sources */,
+				B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -668,6 +685,7 @@
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
+				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1193,6 +1211,10 @@
 			isa = XCLocalSwiftPackageReference;
 			relativePath = SwiftPackages/MSAL;
 		};
+		A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaWidgetShared" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = SwiftPackages/MonicaWidgetShared;
+		};
 /* End XCLocalSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1250,6 +1272,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A500000000000000000000E1 /* XCLocalSwiftPackageReference "SwiftPackages/MSAL" */;
 			productName = MSAL;
+		};
+		A100000000000000000000DC /* MonicaWidgetShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaWidgetShared" */;
+			productName = MonicaWidgetShared;
+		};
+		A200000000000000000000DC /* MonicaWidgetShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaWidgetShared" */;
+			productName = MonicaWidgetShared;
+		};
+		A100000000000000000000DD /* MonicaWidgetShared */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A100000000000000000000E6 /* XCLocalSwiftPackageReference "SwiftPackages/MonicaWidgetShared" */;
+			productName = MonicaWidgetShared;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
