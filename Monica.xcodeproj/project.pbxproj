@@ -68,6 +68,7 @@
 		F10000000000000000000007 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000004 /* InfoPlist.strings */; };
 		F10000000000000000000008 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000003 /* InfoPlist.strings */; };
 		F50000000000000000000001 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000001 /* LocalizationTests.swift */; };
+		F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000002 /* AppStoreComplianceTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -175,6 +176,7 @@
 		F20000000000000000000008 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "Extensions/MonicaWidgetExtension/en.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
 		F20000000000000000000009 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "Extensions/MonicaWidgetExtension/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
 		F40000000000000000000001 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
+		F40000000000000000000002 /* AppStoreComplianceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppStoreComplianceTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -324,6 +326,7 @@
 		A10000000000000000000078 /* MonicaTests */ = {
 			isa = PBXGroup;
 			children = (
+				F40000000000000000000002 /* AppStoreComplianceTests.swift */,
 				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
@@ -657,6 +660,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */,
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,

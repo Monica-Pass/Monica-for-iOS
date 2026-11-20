@@ -1,4 +1,4 @@
 "CFBundleDisplayName" = "Monica";
 "NSCameraUsageDescription" = "用于扫描 TOTP 设置二维码。";
-"NSFaceIDUsageDescription" = "用于解锁保险库，不会上传或存储生物识别数据。";
-"NSLocalNetworkUsageDescription" = "Monica 使用本地网络连接你的自托管同步服务器。";
+"NSFaceIDUsageDescription" = "用于解锁保险库，以及在开启生物识别解锁时验证你的身份。生物识别数据由系统处理，不会上传或存储。";
+"NSLocalNetworkUsageDescription" = "用于在同一个 Wi-Fi 或热点下发现并连接你自己发起的 Monica 设备，通过端到端加密在两台设备之间同步保险库条目。只会在你主动发起或加入同步时使用。";
