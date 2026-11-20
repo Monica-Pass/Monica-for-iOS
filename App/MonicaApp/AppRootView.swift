@@ -342,160 +342,6 @@ enum PasswordLayoutModule: String, Sendable, Codable, Equatable, CaseIterable, I
 }
 
 
-enum AppAppearanceColorScheme: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
-    case system
-    case light
-    case dark
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .system:
-            String(localized: "跟随系统")
-        case .light:
-            String(localized: "浅色")
-        case .dark:
-            String(localized: "深色")
-        }
-    }
-
-    var swiftUIColorScheme: ColorScheme? {
-        switch self {
-        case .system:
-            nil
-        case .light:
-            .light
-        case .dark:
-            .dark
-        }
-    }
-}
-
-enum AppAppearanceAccentColor: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
-    case monica
-    case green
-    case blue
-    case orange
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .monica:
-            "Monica"
-        case .green:
-            String(localized: "绿色")
-        case .blue:
-            String(localized: "蓝色")
-        case .orange:
-            String(localized: "橙色")
-        }
-    }
-
-    var swiftUIColor: Color {
-        switch self {
-        case .monica:
-            AndroidParityPalette.primary
-        case .green:
-            .green
-        case .blue:
-            .blue
-        case .orange:
-            .orange
-        }
-    }
-}
-
-enum AppPasswordListIconStyle: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
-    case color
-    case monochrome
-    case hidden
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .color:
-            String(localized: "彩色")
-        case .monochrome:
-            String(localized: "单色")
-        case .hidden:
-            String(localized: "隐藏")
-        }
-    }
-}
-
-struct AppAppearancePreferences: Sendable, Codable, Equatable {
-    static let `default` = AppAppearancePreferences(
-        colorScheme: .system,
-        accentColor: .monica,
-        passwordListIconStyle: .color
-    )
-
-    var colorScheme: AppAppearanceColorScheme
-    var accentColor: AppAppearanceAccentColor
-    var passwordListIconStyle: AppPasswordListIconStyle
-    /// Global interface density (default / compact / loose). Defaults are
-    /// backward compatible: old saved JSON without this key decodes to `.default`.
-    var interfaceDensity: AppInterfaceDensity = .default
-
-    private enum CodingKeys: String, CodingKey {
-        case colorScheme
-        case accentColor
-        case passwordListIconStyle
-        case interfaceDensity
-    }
-
-    var swiftUIColorScheme: ColorScheme? {
-        colorScheme.swiftUIColorScheme
-    }
-
-    var swiftUIAccentColor: Color {
-        accentColor.swiftUIColor
-    }
-
-    var showsPasswordListIcon: Bool {
-        passwordListIconStyle != .hidden
-    }
-
-    var passwordListIconFill: Color {
-        switch passwordListIconStyle {
-        case .color:
-            AndroidParityPalette.primaryContainer
-        case .monochrome:
-            AndroidParityPalette.surface
-        case .hidden:
-            .clear
-        }
-    }
-
-    var passwordListIconTint: Color {
-        switch passwordListIconStyle {
-        case .color:
-            AndroidParityPalette.primary
-        case .monochrome:
-            AndroidParityPalette.textSecondary
-        case .hidden:
-            .clear
-        }
-    }
-}
-
-// The custom decoder lives in an extension so Swift still synthesizes the
-// memberwise initializer (with a default for `interfaceDensity`). That keeps
-// existing three-argument `AppAppearancePreferences(...)` call sites compiling
-// while tolerating JSON saved before interface density existed.
-extension AppAppearancePreferences {
-    init(from decoder: any Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        colorScheme = (try? container.decode(AppAppearanceColorScheme.self, forKey: .colorScheme)) ?? .system
-        accentColor = (try? container.decode(AppAppearanceAccentColor.self, forKey: .accentColor)) ?? .monica
-        passwordListIconStyle = (try? container.decode(AppPasswordListIconStyle.self, forKey: .passwordListIconStyle)) ?? .color
-        interfaceDensity = (try? container.decode(AppInterfaceDensity.self, forKey: .interfaceDensity)) ?? .default
-    }
-}
-
 struct AppVaultDisplayPreferenceRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
@@ -2280,6 +2126,8 @@ final class AppSessionModel {
     var loginUsername = ""
     var loginPassword = ""
     var loginURL = ""
+    /// 新建登录条目时选择的图标（稳定资源 ID，`sf:…` / `catalog:…`）。
+    var loginIcon: String?
     var loginSearchQuery = ""
     var showFavoriteLoginEntriesOnly = false
     var isLoginStackedGroupModeEnabled = false
@@ -2297,6 +2145,7 @@ final class AppSessionModel {
     var editingLoginUsername = ""
     var editingLoginPassword = ""
     var editingLoginURL = ""
+    var editingLoginIcon: String?
     var editingLoginFavorite = false
     var noteTitle = ""
     var noteBody = ""
@@ -2818,6 +2667,8 @@ final class AppSessionModel {
             )
             self.rememberedVaultID = remembered.vaultID
         }
+        // 首帧渲染之前就把主题快照交给动态调色板，避免先闪一帧默认配色。
+        AppThemeRuntime.shared.update(appearancePreferences)
     }
 
     var filteredLoginEntries: [LocalLoginEntry] {
@@ -4370,6 +4221,7 @@ final class AppSessionModel {
     func updateAppearancePreferences(_ preferences: AppAppearancePreferences) {
         appearancePreferences = preferences
         appearancePreferenceStore.savePreferences(preferences)
+        AppThemeRuntime.shared.update(preferences)
         recordUserActivity()
     }
 
@@ -5909,6 +5761,9 @@ final class AppSessionModel {
     }
 
     func presentAddEditor(forItemKind itemKind: UnifiedVaultItemKind) {
+        if itemKind == .login {
+            loginIcon = nil
+        }
         presentedEditorMode = .add(itemKind)
     }
 
@@ -6150,7 +6005,7 @@ final class AppSessionModel {
                 project = try entryRepository.createProject(title: projectTitle)
                 activeProject = project
             }
-            let entry = try entryRepository.createLoginEntry(
+            var entry = try entryRepository.createLoginEntry(
                 projectID: project.id,
                 draft: LocalLoginEntryDraft(
                     title: loginTitle,
@@ -6159,6 +6014,13 @@ final class AppSessionModel {
                     url: loginURL
                 )
             )
+            if let loginIcon {
+                entry = try entryRepository.setLoginEntryIcon(
+                    projectID: project.id,
+                    entryID: entry.id,
+                    icon: loginIcon
+                )
+            }
             loginPassword = ""
             loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
@@ -6195,6 +6057,7 @@ final class AppSessionModel {
         editingLoginUsername = entry.username
         editingLoginPassword = entry.password
         editingLoginURL = entry.url
+        editingLoginIcon = entry.icon
         editingLoginFavorite = entry.favorite
     }
 
@@ -6210,7 +6073,7 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
-            let entry = try entryRepository.updateLoginEntry(
+            var entry = try entryRepository.updateLoginEntry(
                 projectID: projectID,
                 entryID: entryID,
                 draft: LocalLoginEntryDraft(
@@ -6220,6 +6083,13 @@ final class AppSessionModel {
                     url: editingLoginURL
                 )
             )
+            if entry.icon != editingLoginIcon {
+                entry = try entryRepository.setLoginEntryIcon(
+                    projectID: projectID,
+                    entryID: entryID,
+                    icon: editingLoginIcon
+                )
+            }
             loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             selectLoginEntryForEditing(entry)
@@ -15187,7 +15057,7 @@ struct AppRootView: View {
                 PrivacyShieldView()
             }
         }
-        .tint(session.appearancePreferences.swiftUIAccentColor)
+        .tint(session.appearancePreferences.themeAccentColor)
         .preferredColorScheme(session.appearancePreferences.swiftUIColorScheme)
         .environment(\.paritySpacingScale, paritySpacingScale)
         .environment(\.parityLineSpacingDelta, parityLineSpacingDelta)

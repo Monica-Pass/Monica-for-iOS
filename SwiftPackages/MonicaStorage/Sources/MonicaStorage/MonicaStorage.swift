@@ -7883,6 +7883,13 @@ public protocol LocalVaultEngine {
         favorite: Bool
     ) throws -> LocalLoginEntry
 
+    func setLoginEntryIcon(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        icon: String?
+    ) throws -> LocalLoginEntry
+
     func deleteLoginEntry(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -8446,6 +8453,8 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
     public let url: String
     public let notes: String
     public let favorite: Bool
+    /// 条目图标的稳定资源 ID（`sf:…` / `catalog:…`）；`nil` 表示按条目类型使用默认图标。
+    public let icon: String?
 
     public init(
         id: String,
@@ -8455,7 +8464,8 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         password: String,
         url: String,
         notes: String = "",
-        favorite: Bool = false
+        favorite: Bool = false,
+        icon: String? = nil
     ) {
         self.id = id
         self.projectID = projectID
@@ -8465,6 +8475,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         self.url = url
         self.notes = notes
         self.favorite = favorite
+        self.icon = icon
     }
 }
 
@@ -10031,6 +10042,19 @@ public struct LocalVaultEntryRepository {
         )
     }
 
+    public func setLoginEntryIcon(
+        projectID: String,
+        entryID: String,
+        icon: String?
+    ) throws -> LocalLoginEntry {
+        try engine.setLoginEntryIcon(
+            in: session.handle,
+            projectID: projectID,
+            entryID: entryID,
+            icon: icon
+        )
+    }
+
     public func deleteLoginEntry(projectID: String, entryID: String) throws {
         try engine.deleteLoginEntry(
             in: session.handle,
@@ -10980,6 +11004,21 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             projectID: projectID,
             entryID: entryID,
             favorite: favorite
+        )
+        return LocalLoginEntry(entry)
+    }
+
+    /// 写入登录条目图标；`nil` 表示恢复默认图标。
+    public func setLoginEntryIcon(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        icon: String?
+    ) throws -> LocalLoginEntry {
+        let entry = try vault(for: handle).setLoginEntryIcon(
+            projectID: projectID,
+            entryID: entryID,
+            icon: icon
         )
         return LocalLoginEntry(entry)
     }
@@ -11982,7 +12021,8 @@ private extension LocalLoginEntry {
             password: entry.password,
             url: entry.url,
             notes: entry.notes,
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            icon: entry.icon
         )
     }
 }

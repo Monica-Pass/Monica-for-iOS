@@ -1294,7 +1294,7 @@ private struct AndroidPasswordListCard: View {
             HStack(alignment: .top, spacing: displayPreferences.cardDensity == .compact ? 12 : 18) {
                 if appearancePreferences.showsPasswordListIcon {
                     AndroidParityIconTile(
-                        systemImage: "lock.fill",
+                        systemImage: loginIconSymbol(for: entry),
                         fill: appearancePreferences.passwordListIconFill,
                         tint: appearancePreferences.passwordListIconTint
                     )
@@ -1320,6 +1320,11 @@ private struct AndroidPasswordListCard: View {
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
         }
+    }
+
+    /// 存储的是稳定资源 ID；解析失败（未知 / 损坏）时回退到登录条目的默认符号。
+    private func loginIconSymbol(for entry: LocalLoginEntry) -> String {
+        AppItemIconResolver.symbol(storedValue: entry.icon)
     }
 }
 
@@ -1435,7 +1440,7 @@ private struct AndroidBankCardListCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("持卡人")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.primary.opacity(0.8))
+                        .foregroundStyle(AndroidParityPalette.onPrimaryDeep.opacity(0.8))
                     Text(entry.cardholderName.isEmpty ? "-" : entry.cardholderName)
                         .font(.subheadline.weight(.semibold))
                 }
@@ -1443,7 +1448,7 @@ private struct AndroidBankCardListCard: View {
                 VStack(alignment: .trailing, spacing: 6) {
                     Text("有效期")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.primary.opacity(0.8))
+                        .foregroundStyle(AndroidParityPalette.onPrimaryDeep.opacity(0.8))
                     Text("\(entry.expiryMonth)/\(entry.expiryYear)")
                         .font(.subheadline.weight(.semibold))
                 }
@@ -1452,7 +1457,7 @@ private struct AndroidBankCardListCard: View {
         .padding(22)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(AndroidParityPalette.primaryDeep, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
-        .foregroundStyle(AndroidParityPalette.primary)
+        .foregroundStyle(AndroidParityPalette.onPrimaryDeep)
     }
 
     private func maskedCardNumber(_ value: String) -> String {
@@ -1744,6 +1749,7 @@ struct AddEditVaultItemView: View {
     @State private var isSendFileImporterPresented = false
     @State private var isAttachmentImporterPresented = false
     @State private var sendLinkCopyFeedback: String?
+    @State private var isIconPickerPresented = false
 
     var body: some View {
         ZStack(alignment: .bottomTrailing) {
@@ -1864,7 +1870,7 @@ struct AddEditVaultItemView: View {
                     .font(.subheadline.weight(.semibold))
                 Text("\(activeVaultName) · 未分类")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AndroidParityPalette.primary.opacity(0.86))
+                    .foregroundStyle(AndroidParityPalette.onPrimaryDeep.opacity(0.86))
             }
             Spacer()
             Image(systemName: "chevron.up.chevron.down")
@@ -1872,7 +1878,7 @@ struct AddEditVaultItemView: View {
         }
         .padding(18)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .foregroundStyle(AndroidParityPalette.primary)
+        .foregroundStyle(AndroidParityPalette.onPrimaryDeep)
         .background(AndroidParityPalette.primaryDeep, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
     }
 
@@ -1979,9 +1985,64 @@ struct AddEditVaultItemView: View {
         return route.entryID
     }
 
+    private var loginIconBinding: Binding<String?> {
+        mode.isAdding ? $session.loginIcon : $session.editingLoginIcon
+    }
+
+    private var loginIconSymbol: String {
+        AppItemIconResolver.symbol(storedValue: loginIconBinding.wrappedValue)
+    }
+
+    private var loginIconLabel: String {
+        guard let stored = loginIconBinding.wrappedValue,
+              let icon = ItemIcon(storageValue: stored) else {
+            return String(localized: "默认图标")
+        }
+        switch icon {
+        case .catalog(let id):
+            return ItemIconCatalog.entry(id: id)?.displayName ?? id
+        case .symbol(let name):
+            return name
+        }
+    }
+
+    private var iconRow: some View {
+        Button {
+            isIconPickerPresented = true
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: loginIconSymbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.primary)
+                    .frame(minWidth: 34)
+                Text("条目图标")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                Spacer()
+                Text(loginIconLabel)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .lineLimit(1)
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
+            .padding(.horizontal, 18)
+            .frame(minHeight: 58)
+            .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1.2) }
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $isIconPickerPresented) {
+            AppItemIconPickerView(icon: loginIconBinding)
+                .presentationDetents([.large])
+        }
+    }
+
     private var loginFields: some View {
         VStack(spacing: 18) {
             field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.loginTitle : $session.editingLoginTitle)
+            iconRow
             field(icon: "globe", title: String(localized: "网站/网址"), text: mode.isAdding ? $session.loginURL : $session.editingLoginURL)
             HStack(spacing: 14) {
                 Button("+ 添加 URL") {}

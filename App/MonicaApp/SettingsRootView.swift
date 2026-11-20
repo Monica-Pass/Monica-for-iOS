@@ -117,36 +117,6 @@ struct SettingsRootView: View {
         }
     }
 
-    private var colorSchemeSelection: Binding<AppAppearanceColorScheme> {
-        Binding {
-            session.appearancePreferences.colorScheme
-        } set: { colorScheme in
-            var preferences = session.appearancePreferences
-            preferences.colorScheme = colorScheme
-            session.updateAppearancePreferences(preferences)
-        }
-    }
-
-    private var accentColorSelection: Binding<AppAppearanceAccentColor> {
-        Binding {
-            session.appearancePreferences.accentColor
-        } set: { accentColor in
-            var preferences = session.appearancePreferences
-            preferences.accentColor = accentColor
-            session.updateAppearancePreferences(preferences)
-        }
-    }
-
-    private var passwordListIconStyleSelection: Binding<AppPasswordListIconStyle> {
-        Binding {
-            session.appearancePreferences.passwordListIconStyle
-        } set: { iconStyle in
-            var preferences = session.appearancePreferences
-            preferences.passwordListIconStyle = iconStyle
-            session.updateAppearancePreferences(preferences)
-        }
-    }
-
     private var interfaceDensitySelection: Binding<AppInterfaceDensity> {
         Binding {
             session.appearancePreferences.interfaceDensity
@@ -213,6 +183,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            AppThemeSettingsView(session: session)
 
             AndroidParitySection(title: String(localized: "应用")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -233,28 +204,6 @@ struct SettingsRootView: View {
                             Text(policy.label).tag(policy)
                         }
                     }
-                    Picker("颜色模式", selection: colorSchemeSelection) {
-                        ForEach(AppAppearanceColorScheme.allCases) { colorScheme in
-                            Text(colorScheme.label).tag(colorScheme)
-                        }
-                    }
-                    Picker("强调色", selection: accentColorSelection) {
-                        ForEach(AppAppearanceAccentColor.allCases) { accentColor in
-                            HStack(spacing: 8) {
-                                Circle()
-                                    .fill(accentColor.swiftUIColor)
-                                    .frame(width: 12, height: 12)
-                                Text(accentColor.label)
-                            }
-                            .tag(accentColor)
-                        }
-                    }
-                    Picker("密码列表图标", selection: passwordListIconStyleSelection) {
-                        ForEach(AppPasswordListIconStyle.allCases) { iconStyle in
-                            Text(iconStyle.label).tag(iconStyle)
-                        }
-                    }
-                    AndroidParityDivider()
                     Picker("卡片密度", selection: cardDensitySelection) {
                         ForEach(VaultDisplayCardDensity.allCases) { density in
                             Text(density.label).tag(density)

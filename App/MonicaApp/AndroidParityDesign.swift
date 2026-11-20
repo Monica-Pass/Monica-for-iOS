@@ -1,3 +1,4 @@
+import MonicaCore
 import MonicaStorage
 import SwiftUI
 
@@ -75,60 +76,6 @@ extension UnifiedVaultItemKind {
     }
 }
 
-// MARK: - Interface density (issue #61)
-
-/// Global, user-selectable interface density. Adjusts spacing / line height only —
-/// never font sizes, icon sizes, corner radii, or the 44pt minimum touch target.
-/// Fonts scale through system text styles; this enum only tunes the whitespace
-/// between them, so it is safe to combine with the largest accessibility sizes.
-enum AppInterfaceDensity: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
-    case `default`
-    case compact
-    case loose
-
-    var id: String { rawValue }
-
-    var label: String {
-        switch self {
-        case .default: String(localized: "默认")
-        case .compact: String(localized: "紧凑")
-        case .loose: String(localized: "宽松")
-        }
-    }
-
-    var detail: String {
-        switch self {
-        case .default: String(localized: "标准间距与行高。")
-        case .compact: String(localized: "收紧间距与行高，一屏显示更多内容。")
-        case .loose: String(localized: "放宽间距与行高，内容更疏朗易读。")
-        }
-    }
-
-    /// Multiplies every shared-component spacing/padding value.
-    var spacingScale: CGFloat {
-        switch self {
-        case .default: 1.0
-        case .compact: 0.8
-        case .loose: 1.3
-        }
-    }
-
-    /// Extra points of line spacing applied to screen content.
-    var lineSpacingDelta: CGFloat {
-        switch self {
-        case .default, .compact: 0
-        case .loose: 3
-        }
-    }
-
-    static let minimumTouchTarget: CGFloat = 44
-
-    /// Touch targets never shrink below the accessibility minimum, regardless of density.
-    func touchTarget(_ base: CGFloat) -> CGFloat {
-        max(Self.minimumTouchTarget, base)
-    }
-}
-
 private struct ParitySpacingScaleKey: EnvironmentKey {
     static let defaultValue: CGFloat = 1
 }
@@ -154,17 +101,44 @@ extension EnvironmentValues {
 // MARK: - Android parity palette
 
 enum AndroidParityPalette {
-    static let background = Color(red: 0.06, green: 0.06, blue: 0.06)
-    static let surface = Color(red: 0.15, green: 0.15, blue: 0.15)
-    static let surfaceVariant = Color(red: 0.20, green: 0.21, blue: 0.20)
-    static let primary = Color(red: 0.53, green: 0.86, blue: 0.80)
-    static let primaryDeep = Color(red: 0.00, green: 0.38, blue: 0.33)
-    static let primaryContainer = Color(red: 0.00, green: 0.38, blue: 0.33)
-    static let secondaryContainer = Color(red: 0.12, green: 0.24, blue: 0.22)
-    static let tertiaryContainer = Color(red: 0.27, green: 0.27, blue: 0.26)
-    static let outline = Color.white.opacity(0.14)
-    static let textPrimary = Color(red: 0.92, green: 0.92, blue: 0.92)
-    static let textSecondary = Color(red: 0.76, green: 0.76, blue: 0.76)
+    // 所有颜色都是动态颜色：深浅色、增强对比度来自 UITraitCollection，
+    // 主题预设 / 自定义强调色来自 `AppThemeRuntime` 的加锁快照。
+    // 这样 400+ 个既有调用点无需改动就能跟随主题。
+
+    static var background: Color { dynamic { $0.background } }
+    static var surface: Color { dynamic { $0.surface } }
+    static var surfaceVariant: Color { dynamic { $0.surfaceVariant } }
+    static var surfaceElevated: Color { dynamic { $0.surfaceElevated } }
+    static var primary: Color { dynamic { $0.accent } }
+    /// 强调色上可读的前景色（填充按钮、徽章）。
+    static var onPrimary: Color { dynamic { $0.onAccent } }
+    /// 始终偏暗的强调色底板（信用卡、编辑器头部）。
+    static var primaryDeep: Color {
+        dynamic { $0.accent.blended(with: .ink, amount: 0.62) }
+    }
+    /// `primaryDeep` 上的正文颜色。
+    static var onPrimaryDeep: Color {
+        Color(UIColor { traits in
+            let palette = AppThemeRuntime.shared.palette(for: traits)
+            let color = traits.userInterfaceStyle == .light ? AppearanceColor.snow : palette.textPrimary
+            return color.uiColor
+        })
+    }
+    static var primaryContainer: Color { dynamic { $0.accentContainer } }
+    static var secondaryContainer: Color {
+        dynamic { $0.surfaceVariant.blended(with: $0.accent, amount: 0.08) }
+    }
+    static var tertiaryContainer: Color { dynamic { $0.surfaceElevated } }
+    static var outline: Color { dynamic { $0.outline } }
+    static var textPrimary: Color { dynamic { $0.textPrimary } }
+    static var textSecondary: Color { dynamic { $0.textSecondary } }
+    static var danger: Color { dynamic { $0.danger } }
+
+    private static func dynamic(_ body: @escaping (ThemePalette) -> AppearanceColor) -> Color {
+        Color(UIColor { traits in
+            body(AppThemeRuntime.shared.palette(for: traits)).uiColor
+        })
+    }
 }
 
 enum AndroidParityTypography {
@@ -329,7 +303,7 @@ struct AndroidParityButtonStyle: ButtonStyle {
     private var foreground: Color {
         switch tone {
         case .filled:
-            return AndroidParityPalette.textPrimary
+            return AndroidParityPalette.onPrimary
         case .outlined:
             return AndroidParityPalette.primary
         case .destructiveOutlined:
