@@ -1455,6 +1455,34 @@ struct SettingsRootView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            AndroidParitySection(title: "云端保险库") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
+                    NavigationLink {
+                        AppCloudVaultSyncSettingsView(session: session)
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "externaldrive.badge.icloud")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.primary)
+                                .frame(width: 28, height: 28)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("加密保险库上传与还原")
+                                    .font(.subheadline.weight(.heavy))
+                                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                                Text("WebDAV / OneDrive · 手动 Push/Pull · 版本冲突三选一")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .fileImporter(
             isPresented: $isCSVImporterPresented,
