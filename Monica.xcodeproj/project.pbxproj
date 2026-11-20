@@ -91,6 +91,7 @@
 		AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000F /* AppNavigationTypes.swift */; };
 		AA0000000000000000000012 /* AppOperationTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* AppOperationTimeline.swift */; };
 		AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* AppQuickSetupSupport.swift */; };
+		AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000015 /* AppShortcutEntrySummary.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -218,6 +219,7 @@
 		AA000000000000000000000F /* AppNavigationTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppNavigationTypes.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000011 /* AppOperationTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppOperationTimeline.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000013 /* AppQuickSetupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppQuickSetupSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000015 /* AppShortcutEntrySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppShortcutEntrySummary.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -346,6 +348,7 @@
 				AA000000000000000000000F /* AppNavigationTypes.swift */,
 				AA0000000000000000000011 /* AppOperationTimeline.swift */,
 				AA0000000000000000000013 /* AppQuickSetupSupport.swift */,
+				AA0000000000000000000015 /* AppShortcutEntrySummary.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -735,6 +738,7 @@
 				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
 				AA0000000000000000000012 /* AppOperationTimeline.swift in Sources */,
 				AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */,
+				AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
