@@ -23,7 +23,7 @@ struct AppSystemPasskeyRegistrationResult: Sendable, Equatable {
             credentialID: credentialID.base64EncodedString(),
             publicKeyCOSE: publicKeyCOSE.base64EncodedString(),
             privateKeyReference: privateKeyReference,
-            notes: "由系统通行密钥注册创建。临时验证数据不会写入保险库。"
+            notes: String(localized: "由系统通行密钥注册创建。临时验证数据不会写入保险库。")
         )
     }
 }

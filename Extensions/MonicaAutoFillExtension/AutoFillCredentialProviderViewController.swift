@@ -72,7 +72,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             // the device owner (UV) first, so hand the request back to the system UI.
             configurePasskeyStatusView(
                 relyingPartyID: relyingPartyID(for: passkeyRequest),
-                status: "需要验证设备所有者后才能使用通行密钥"
+                status: String(localized: "需要验证设备所有者后才能使用通行密钥")
             )
             cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
             return
@@ -99,19 +99,19 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             } catch {
                 configurePasskeyStatusView(
                     relyingPartyID: relyingPartyID(for: passkeyRequest),
-                    status: "Passkey 身份不可用，请回到 Monica 检查凭据状态"
+                    status: String(localized: "Passkey 身份不可用，请回到 Monica 检查凭据状态")
                 )
                 cancelRequest(code: ASExtensionError.Code.credentialIdentityNotFound)
             }
             return
         }
 
-        configureStatusView(title: "Monica", status: "此凭据请求需要在 Monica 中完成")
+        configureStatusView(title: "Monica", status: String(localized: "此凭据请求需要在 Monica 中完成"))
     }
 
     override func prepareInterface(forPasskeyRegistration registrationRequest: any ASCredentialRequest) {
         guard let passkeyRequest = registrationRequest as? ASPasskeyCredentialRequest else {
-            configureStatusView(title: "Monica Passkey", status: "Passkey 注册请求已收到")
+            configureStatusView(title: "Monica Passkey", status: String(localized: "Passkey 注册请求已收到"))
             return
         }
 
@@ -122,7 +122,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             )
             configurePasskeyStatusView(
                 relyingPartyID: relyingPartyID,
-                status: "此站点要求的签名算法不受支持"
+                status: String(localized: "此站点要求的签名算法不受支持")
             )
             cancelRequest(code: ASExtensionError.Code.failed)
             return
@@ -137,11 +137,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     ) {
         configurePasskeyStatusView(
             relyingPartyID: relyingPartyID,
-            status: "正在验证设备所有者"
+            status: String(localized: "正在验证设备所有者")
         )
         Task { @MainActor [weak self] in
             let verification = await self?.verifyDeviceOwnerAfterAppearing(
-                reason: "为 \(relyingPartyID) 创建 Monica 通行密钥"
+                reason: String(localized: "为 \(relyingPartyID) 创建 Monica 通行密钥")
             ) ?? .unavailable
             guard let self, verification != .cancelled else {
                 Self.logPasskeyDiagnostic("registration aborted verification=\(verification)")
@@ -154,7 +154,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                 Self.logPasskeyDiagnostic("registration rejected excluded-credential")
                 self.configurePasskeyStatusView(
                     relyingPartyID: relyingPartyID,
-                    status: "此账号已有通行密钥，无需重复创建"
+                    status: String(localized: "此账号已有通行密钥，无需重复创建")
                 )
                 self.cancelRequest(code: ASExtensionError.Code.failed)
                 return
@@ -194,7 +194,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
         let statusLabel = UILabel()
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = "保险库已锁定"
+        statusLabel.text = String(localized: "保险库已锁定")
         statusLabel.font = .preferredFont(forTextStyle: .body)
         statusLabel.textColor = .secondaryLabel
         statusLabel.adjustsFontForContentSizeCategory = true
@@ -221,7 +221,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         preferredRecordIdentifier: String? = nil,
         emptyStatus: String? = nil
     ) {
-        configureStatusView(title: "Monica", status: "正在解锁自动填充")
+        configureStatusView(title: "Monica", status: String(localized: "正在解锁自动填充"))
         loadTask?.cancel()
         loadTask = Task { [appGroupIdentifier] in
             do {
@@ -299,7 +299,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         )
         let keyMaterial = try await keychainManager.loadKeyMaterialAfterAuthentication(
             vaultID: encryptedIndex.vaultID,
-            reason: "解锁 Monica 自动填充"
+            reason: String(localized: "解锁 Monica 自动填充")
         )
         let key = try AutoFillIndexEncryptionKey(rawValue: keyMaterial.keyMaterial)
         let unlockedIndex = try AutoFillCredentialIndexUnlocker().unlock(
@@ -438,7 +438,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         } catch {
             configurePasskeyStatusView(
                 relyingPartyID: relyingPartyID(for: request),
-                status: "Passkey 注册失败，请回到 Monica 检查凭据状态"
+                status: String(localized: "Passkey 注册失败，请回到 Monica 检查凭据状态")
             )
             cancelRequest(code: ASExtensionError.Code.failed)
         }
@@ -453,7 +453,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         let relyingPartyID = requestParameters.relyingPartyIdentifier
         configurePasskeyStatusView(
             relyingPartyID: relyingPartyID,
-            status: "正在读取通行密钥"
+            status: String(localized: "正在读取通行密钥")
         )
 
         let allowedCredentialIDs = Set(requestParameters.allowedCredentials)
@@ -496,8 +496,8 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             )
             guard !candidates.isEmpty else {
                 let emptyStatus = passkeyIdentities.isEmpty
-                    ? "Monica 中没有该站点的通行密钥，可改用密码或重新注册。"
-                    : "此站点的通行密钥不在 Monica 中（可能保存在 iCloud 钥匙串），可改用密码或重新注册。"
+                    ? String(localized: "Monica 中没有该站点的通行密钥，可改用密码或重新注册。")
+                    : String(localized: "此站点的通行密钥不在 Monica 中（可能保存在 iCloud 钥匙串），可改用密码或重新注册。")
                 self.loadMatchingCredentialIndexRecords(
                     for: fallbackServiceIdentifiers,
                     emptyStatus: emptyStatus
@@ -506,7 +506,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             }
 
             let note = allowedMatches.isEmpty
-                ? "网站请求的凭据不在 Monica 中，以下为该站点的其他通行密钥。"
+                ? String(localized: "网站请求的凭据不在 Monica 中，以下为该站点的其他通行密钥。")
                 : nil
             self.configurePasskeyCredentialList(
                 candidates,
@@ -601,11 +601,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         let relyingPartyID = identity.relyingPartyIdentifier
         configurePasskeyStatusView(
             relyingPartyID: relyingPartyID,
-            status: "正在验证设备所有者"
+            status: String(localized: "正在验证设备所有者")
         )
         Task { @MainActor [weak self] in
             let verification = await self?.verifyDeviceOwnerAfterAppearing(
-                reason: "使用 Monica 通行密钥登录 \(relyingPartyID)"
+                reason: String(localized: "使用 Monica 通行密钥登录 \(relyingPartyID)")
             ) ?? .unavailable
             guard let self, verification != .cancelled else {
                 Self.logPasskeyDiagnostic("assertion aborted verification=\(verification)")
@@ -658,7 +658,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             )
             configurePasskeyStatusView(
                 relyingPartyID: identity.relyingPartyIdentifier,
-                status: "Passkey 认证失败，请回到 Monica 检查凭据状态"
+                status: String(localized: "Passkey 认证失败，请回到 Monica 检查凭据状态")
             )
             cancelRequest(code: ASExtensionError.Code.credentialIdentityNotFound)
         }
@@ -760,7 +760,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             try inboxStore.saveIncomingRequest(request)
             configureStatusView(
                 title: "Monica",
-                status: "自动填充保存请求已交给 Monica"
+                status: String(localized: "自动填充保存请求已交给 Monica")
             )
             if allowsCompletion {
                 extensionContext.completeSavePasswordRequest(completionHandler: nil)
@@ -768,7 +768,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         } catch {
             configureStatusView(
                 title: "Monica",
-                status: "自动填充保存失败，请稍后在 Monica 中重试"
+                status: String(localized: "自动填充保存失败，请稍后在 Monica 中重试")
             )
             cancelRequest(code: ASExtensionError.Code.failed)
         }
@@ -782,7 +782,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         guard !records.isEmpty || !searchQuery.isEmpty else {
             configureStatusView(
                 title: "Monica",
-                status: emptyStatus ?? "没有匹配的凭据"
+                status: emptyStatus ?? String(localized: "没有匹配的凭据")
             )
             return
         }
@@ -797,7 +797,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
         let searchBar = UISearchBar()
         searchBar.translatesAutoresizingMaskIntoConstraints = false
-        searchBar.placeholder = "搜索"
+        searchBar.placeholder = String(localized: "搜索")
         searchBar.searchTextField.text = searchQuery
         searchBar.delegate = self
 
@@ -809,7 +809,7 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
         if records.isEmpty {
             let emptyLabel = UILabel()
-            emptyLabel.text = "无结果"
+            emptyLabel.text = String(localized: "无结果")
             emptyLabel.font = .preferredFont(forTextStyle: .body)
             emptyLabel.textColor = .secondaryLabel
             emptyLabel.textAlignment = .center
@@ -972,15 +972,15 @@ private enum AutoFillExtensionError: Error, LocalizedError {
     var errorDescription: String? {
         switch self {
         case .appGroupUnavailable:
-            return "无法访问共享数据，请重新打开 Monica 后再试。"
+            return String(localized: "无法访问共享数据，请重新打开 Monica 后再试。")
         case .indexUnavailable:
-            return "自动填充索引不可用。"
+            return String(localized: "自动填充索引不可用。")
         case .credentialSecretsUnavailable:
-            return "自动填充凭据密钥不可用。"
+            return String(localized: "自动填充凭据密钥不可用。")
         case .credentialSecretUnavailable:
-            return "自动填充凭据密钥不可用。"
+            return String(localized: "自动填充凭据密钥不可用。")
         case .passkeyIdentityUnavailable:
-            return "Passkey 身份不可用。"
+            return String(localized: "Passkey 身份不可用。")
         }
     }
 }

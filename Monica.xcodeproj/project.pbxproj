@@ -48,6 +48,15 @@
 		A60000000000000000000002 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */; };
 		A70000000000000000000001 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */; };
 		A70000000000000000000002 /* AppSystemPasskeyRegistrationInboxStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */; };
+		F10000000000000000000001 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Localizable.xcstrings */; };
+		F10000000000000000000002 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Localizable.xcstrings */; };
+		F10000000000000000000003 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Localizable.xcstrings */; };
+		F10000000000000000000004 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = F20000000000000000000001 /* Localizable.xcstrings */; };
+		F10000000000000000000005 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000001 /* InfoPlist.strings */; };
+		F10000000000000000000006 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000002 /* InfoPlist.strings */; };
+		F10000000000000000000007 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000004 /* InfoPlist.strings */; };
+		F10000000000000000000008 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = F30000000000000000000003 /* InfoPlist.strings */; };
+		F50000000000000000000001 /* LocalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F40000000000000000000001 /* LocalizationTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -135,6 +144,16 @@
 		A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OneDriveMSALAuthenticationService.swift; sourceTree = "<group>"; };
 		A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillCredentialSaveInboxStore.swift; sourceTree = "<group>"; };
 		A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSystemPasskeyRegistrationInboxStore.swift; sourceTree = "<group>"; };
+		F20000000000000000000001 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = Localizable.xcstrings; sourceTree = "<group>"; };
+		F20000000000000000000002 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		F20000000000000000000003 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = "zh-Hans"; path = "zh-Hans.lproj/InfoPlist.strings"; sourceTree = "<group>"; };
+		F20000000000000000000004 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "Extensions/MonicaAutoFillExtension/en.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000005 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "Extensions/MonicaAutoFillExtension/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000006 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "Extensions/MonicaShareExtension/en.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000007 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "Extensions/MonicaShareExtension/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000008 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = "Extensions/MonicaWidgetExtension/en.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		F20000000000000000000009 /* zh-Hans */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = zh-Hans; path = "Extensions/MonicaWidgetExtension/zh-Hans.lproj/InfoPlist.strings"; sourceTree = SOURCE_ROOT; };
+		F40000000000000000000001 /* LocalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizationTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -208,6 +227,8 @@
 		A10000000000000000000072 /* MonicaApp */ = {
 			isa = PBXGroup;
 			children = (
+				F20000000000000000000001 /* Localizable.xcstrings */,
+				F30000000000000000000001 /* InfoPlist.strings */,
 				A10000000000000000000011 /* MonicaApp.swift */,
 				BA0000000000000000000001 /* PrivacyInfo.xcprivacy */,
 				A10000000000000000000012 /* AppRootView.swift */,
@@ -243,6 +264,7 @@
 		A10000000000000000000075 /* MonicaAutoFillExtension */ = {
 			isa = PBXGroup;
 			children = (
+				F30000000000000000000002 /* InfoPlist.strings */,
 				A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */,
 				BA0000000000000000000002 /* PrivacyInfo.xcprivacy */,
 				A10000000000000000000022 /* Info.plist */,
@@ -274,6 +296,7 @@
 		A10000000000000000000078 /* MonicaTests */ = {
 			isa = PBXGroup;
 			children = (
+				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
 			);
@@ -283,6 +306,7 @@
 		A20000000000000000000016 /* MonicaWidgetExtension */ = {
 			isa = PBXGroup;
 			children = (
+				F30000000000000000000004 /* InfoPlist.strings */,
 				A20000000000000000000011 /* MonicaWidget.swift */,
 				BA0000000000000000000004 /* PrivacyInfo.xcprivacy */,
 				A20000000000000000000012 /* Info.plist */,
@@ -294,6 +318,7 @@
 		A30000000000000000000016 /* MonicaShareExtension */ = {
 			isa = PBXGroup;
 			children = (
+				F30000000000000000000003 /* InfoPlist.strings */,
 				A30000000000000000000012 /* ShareViewController.swift */,
 				BA0000000000000000000003 /* PrivacyInfo.xcprivacy */,
 				A30000000000000000000013 /* Info.plist */,
@@ -303,6 +328,45 @@
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
+/* Begin PBXVariantGroup section */
+		F30000000000000000000001 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F20000000000000000000002 /* en */,
+				F20000000000000000000003 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		F30000000000000000000002 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F20000000000000000000004 /* en */,
+				F20000000000000000000005 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		F30000000000000000000003 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F20000000000000000000006 /* en */,
+				F20000000000000000000007 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+		F30000000000000000000004 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				F20000000000000000000008 /* en */,
+				F20000000000000000000009 /* zh-Hans */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
 
 /* Begin PBXNativeTarget section */
 		A10000000000000000000061 /* Monica */ = {
@@ -479,6 +543,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10000000000000000000001 /* Localizable.xcstrings in Resources */,
+				F10000000000000000000005 /* InfoPlist.strings in Resources */,
 				A1000000000000000000001A /* Assets.xcassets in Resources */,
 				B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */,
 			);
@@ -488,6 +554,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10000000000000000000002 /* Localizable.xcstrings in Resources */,
+				F10000000000000000000006 /* InfoPlist.strings in Resources */,
 				B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -496,6 +564,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10000000000000000000003 /* Localizable.xcstrings in Resources */,
+				F10000000000000000000008 /* InfoPlist.strings in Resources */,
 				B90000000000000000000003 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -504,6 +574,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F10000000000000000000004 /* Localizable.xcstrings in Resources */,
+				F10000000000000000000007 /* InfoPlist.strings in Resources */,
 				B90000000000000000000004 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -546,6 +618,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 			);
@@ -790,6 +863,7 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -817,6 +891,7 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -894,6 +969,7 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -921,6 +997,7 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -948,6 +1025,7 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};
@@ -975,6 +1053,7 @@
 				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
 				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 6.0;
 				TARGETED_DEVICE_FAMILY = 1;
 			};

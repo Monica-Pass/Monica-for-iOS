@@ -14,7 +14,7 @@ final class ShareViewController: UIViewController {
     private func configureView() {
         view.backgroundColor = .systemBackground
         statusLabel.translatesAutoresizingMaskIntoConstraints = false
-        statusLabel.text = "正在导入到 Monica"
+        statusLabel.text = String(localized: "正在导入到 Monica")
         statusLabel.textAlignment = .center
         statusLabel.textColor = .label
         statusLabel.font = .preferredFont(forTextStyle: .headline)
@@ -92,7 +92,7 @@ final class ShareViewController: UIViewController {
         guard let containerURL = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: appGroupIdentifier
         ) else {
-            cancelRequest("无法访问共享数据，请重新打开 Monica 后再试。")
+            cancelRequest(String(localized: "无法访问共享数据，请重新打开 Monica 后再试。"))
             return
         }
 
