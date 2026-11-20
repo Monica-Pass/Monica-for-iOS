@@ -39,7 +39,50 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
         guard let account = try currentAccount(application: application) else {
             return nil
         }
-        return AppOneDriveAuthenticationSession(accountLabel: redactedAccountLabel(for: account))
+        return AppOneDriveAuthenticationSession(
+            accountLabel: redactedAccountLabel(for: account),
+            accountIdentifier: canonicalAccountIdentifier(for: account) ?? ""
+        )
+    }
+
+    func availableAccounts() async throws -> [AppOneDriveAuthenticationSession] {
+        let application = try makeApplication()
+        return try application.allAccounts()
+            .compactMap { account in
+                guard let identifier = canonicalAccountIdentifier(for: account) else {
+                    return nil
+                }
+                return AppOneDriveAuthenticationSession(
+                    accountLabel: redactedAccountLabel(for: account),
+                    accountIdentifier: identifier
+                )
+            }
+            .sorted { lhs, rhs in
+                lhs.accountLabel.localizedCaseInsensitiveCompare(rhs.accountLabel) == .orderedAscending
+            }
+    }
+
+    func switchAccount(identifier: String) async throws -> AppOneDriveAuthenticationSession {
+        let application = try makeApplication()
+        let accounts = try application.allAccounts()
+        guard let account = accounts.first(where: { accountMatches($0, identifier: identifier) }) else {
+            throw AppOneDriveAuthenticationError.accountUnavailable
+        }
+        // Validate the cached token before changing the persisted current account so a
+        // broken account cannot silently take over the app state.
+        let parameters = MSALSilentTokenParameters(scopes: configuration.scopes, account: account)
+        let result = try await acquireTokenSilent(application: application, parameters: parameters)
+        guard !result.accessToken.isEmpty else {
+            throw AppOneDriveAuthenticationError.tokenUnavailable
+        }
+        guard let canonicalIdentifier = canonicalAccountIdentifier(for: account) else {
+            throw AppOneDriveAuthenticationError.tokenUnavailable
+        }
+        saveAccountIdentifier(canonicalIdentifier)
+        return AppOneDriveAuthenticationSession(
+            accountLabel: redactedAccountLabel(for: account),
+            accountIdentifier: canonicalIdentifier
+        )
     }
 
     func signIn() async throws -> AppOneDriveAuthenticationSession {
@@ -60,7 +103,10 @@ final class DefaultAppOneDriveMSALAuthenticationService: AppOneDriveAuthenticati
             throw AppOneDriveAuthenticationError.tokenUnavailable
         }
         saveAccountIdentifier(accountIdentifier)
-        return AppOneDriveAuthenticationSession(accountLabel: redactedAccountLabel(for: account))
+        return AppOneDriveAuthenticationSession(
+            accountLabel: redactedAccountLabel(for: account),
+            accountIdentifier: accountIdentifier
+        )
     }
 
     func signOut() async throws {
