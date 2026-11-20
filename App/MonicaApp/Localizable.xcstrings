@@ -13901,6 +13901,86 @@
           }
         }
       }
+    },
+    "当前正在被录制或共享": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screen recording or sharing is in progress"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前正在被录制或共享"
+          }
+        }
+      }
+    },
+    "敏感内容已隐藏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sensitive content is hidden"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "敏感内容已隐藏"
+          }
+        }
+      }
+    },
+    "已检测到截屏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Screenshot detected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已检测到截屏"
+          }
+        }
+      }
+    },
+    "截图可能包含当前屏幕内容，请注意保护。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The screenshot may show what was on screen. Handle it with care."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "截图可能包含当前屏幕内容，请注意保护。"
+          }
+        }
+      }
+    },
+    "录制或共享期间无法显示敏感字段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sensitive fields can't be shown while recording or sharing"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "录制或共享期间无法显示敏感字段"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
