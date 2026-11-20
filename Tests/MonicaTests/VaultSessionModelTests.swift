@@ -158,6 +158,242 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.vaultPassword, "")
     }
 
+    func testChangeMasterPasswordVerifiesOldPasswordAndRewrapsVaultKey() async throws {
+        let engine = RecordingVaultEngine()
+        let keychainService = RecordingAppVaultKeychainService()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: keychainService,
+            vaultWrappedKeyProvider: { session in
+                WrappedVaultKey(
+                    vaultID: session.handle.vaultID,
+                    wrappedKeyMaterial: Data(repeating: 0x2A, count: 32),
+                    keyAlgorithm: .keychainProtectedData,
+                    createdAt: Date(timeIntervalSince1970: 1_801_200_000)
+                )
+            },
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        let directory = URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true)
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(in: directory, deviceID: "ios-app-test-device")
+
+        model.currentMasterPassword = "old password"
+        model.newMasterPassword = "new password 123!"
+        model.confirmNewMasterPassword = "new password 123!"
+        XCTAssertTrue(model.canSubmitMasterPasswordChange)
+
+        try await model.changeMasterPassword()
+
+        XCTAssertEqual(engine.verifiedMasterPasswords.count, 1)
+        XCTAssertEqual(engine.verifiedMasterPasswords.first?.password, "old password")
+        XCTAssertEqual(engine.verifiedMasterPasswords.first?.deviceID, "ios-app-test-device")
+        XCTAssertEqual(engine.resetMasterPasswordCalls, [
+            .init(vaultID: "created-vault", newPassword: "new password 123!")
+        ])
+        XCTAssertEqual(model.masterPasswordChangeState, .succeeded("主密码已更新，请使用新主密码解锁。"))
+        XCTAssertEqual(model.vaultState, .unlocked)
+        XCTAssertEqual(model.currentMasterPassword, "")
+        XCTAssertEqual(model.newMasterPassword, "")
+        XCTAssertEqual(model.confirmNewMasterPassword, "")
+    }
+
+    func testChangeMasterPasswordRejectsWrongOldPasswordAndKeepsVaultUsable() async throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: RecordingAppVaultKeychainService(),
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        engine.verifyMasterPasswordError = LocalVaultRepositoryError.currentPasswordMismatch
+
+        model.currentMasterPassword = "wrong password"
+        model.newMasterPassword = "new password 123!"
+        model.confirmNewMasterPassword = "new password 123!"
+        do {
+            try await model.changeMasterPassword()
+            XCTFail("修改主密码应当拒绝错误的当前主密码。")
+        } catch {
+            XCTAssertEqual(error as? LocalVaultRepositoryError, .currentPasswordMismatch)
+        }
+
+        XCTAssertEqual(engine.resetMasterPasswordCalls, [])
+        XCTAssertEqual(model.masterPasswordChangeState, .failed("当前主密码不正确。"))
+        XCTAssertEqual(model.vaultState, .unlocked)
+        XCTAssertEqual(model.activeVaultName, "Mobile")
+        XCTAssertEqual(model.currentMasterPassword, "wrong password")
+        XCTAssertEqual(model.newMasterPassword, "new password 123!")
+    }
+
+    func testChangeMasterPasswordRejectsMismatchedConfirmation() async throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: RecordingAppVaultKeychainService(),
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.currentMasterPassword = "old password"
+        model.newMasterPassword = "new password 123!"
+        model.confirmNewMasterPassword = "different password 123!"
+        XCTAssertFalse(model.canSubmitMasterPasswordChange)
+        do {
+            try await model.changeMasterPassword()
+            XCTFail("两次输入不一致时不应提交。")
+        } catch {
+            XCTAssertEqual(error as? MasterPasswordChangeError, .confirmationMismatch)
+        }
+
+        XCTAssertTrue(engine.verifiedMasterPasswords.isEmpty)
+        XCTAssertEqual(engine.resetMasterPasswordCalls, [])
+        XCTAssertEqual(model.masterPasswordChangeState, .failed("两次输入的新主密码不一致。"))
+    }
+
+    func testChangeMasterPasswordRejectsShortNewPasswordBeforeTouchingVault() async throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: RecordingAppVaultKeychainService(),
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+
+        model.currentMasterPassword = "old password"
+        model.newMasterPassword = "short12"
+        model.confirmNewMasterPassword = "short12"
+        XCTAssertFalse(model.canSubmitMasterPasswordChange)
+        XCTAssertEqual(model.masterPasswordStrength.level, .weak)
+        do {
+            try await model.changeMasterPassword()
+            XCTFail("过短的新主密码不应提交。")
+        } catch {
+            XCTAssertEqual(error as? MasterPasswordChangeError, .insufficientStrength)
+        }
+
+        XCTAssertTrue(engine.verifiedMasterPasswords.isEmpty)
+        XCTAssertEqual(engine.resetMasterPasswordCalls, [])
+        XCTAssertEqual(model.masterPasswordChangeState, .failed("新主密码至少需要 8 个字符。"))
+    }
+
+    func testChangeMasterPasswordKeepsRegisteredKeychainUnlockMaterial() async throws {
+        let engine = RecordingVaultEngine()
+        let keychainService = RecordingAppVaultKeychainService()
+        let wrappedKey = WrappedVaultKey(
+            vaultID: "created-vault",
+            wrappedKeyMaterial: Data(repeating: 0x2A, count: 32),
+            keyAlgorithm: .keychainProtectedData,
+            createdAt: Date(timeIntervalSince1970: 1_801_200_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: keychainService,
+            vaultWrappedKeyProvider: { _ in wrappedKey },
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        try await model.prepareVaultKeychainUnlock()
+        XCTAssertEqual(keychainService.savedWrappedKeys.count, 1)
+
+        model.currentMasterPassword = "old password"
+        model.newMasterPassword = "new password 123!"
+        model.confirmNewMasterPassword = "new password 123!"
+        try await model.changeMasterPassword()
+
+        // vault_key 没有变化，安全密钥材料仍然在保险库注册，不应写入新条目。
+        XCTAssertEqual(keychainService.savedWrappedKeys.count, 1)
+        XCTAssertEqual(model.vaultKeychainState, .saved("created-vault"))
+        XCTAssertEqual(model.masterPasswordChangeState, .succeeded("主密码已更新，请使用新主密码解锁。"))
+    }
+
+    func testChangeMasterPasswordKeepsRememberedKeychainUnlockUsable() async throws {
+        let engine = RecordingVaultEngine()
+        engine.securityKeyOpenVaultID = "created-vault"
+        let keychainService = RecordingAppVaultKeychainService()
+        let wrappedKey = WrappedVaultKey(
+            vaultID: "created-vault",
+            wrappedKeyMaterial: Data(repeating: 0x2A, count: 32),
+            keyAlgorithm: .keychainProtectedData,
+            createdAt: Date(timeIntervalSince1970: 1_801_200_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: keychainService,
+            vaultWrappedKeyProvider: { _ in wrappedKey },
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        try await model.prepareVaultKeychainUnlock()
+        XCTAssertEqual(keychainService.loadedWrappedKey, wrappedKey)
+
+        model.currentMasterPassword = "old password"
+        model.newMasterPassword = "new password 123!"
+        model.confirmNewMasterPassword = "new password 123!"
+        try await model.changeMasterPassword()
+        model.lockLocalVault()
+
+        try await model.unlockRememberedVaultWithKeychain(deviceID: "ios-app-test-device")
+
+        XCTAssertEqual(model.vaultState, .unlocked)
+        XCTAssertEqual(
+            engine.securityKeyOpenedVaults.last?.keyMaterial,
+            Data(repeating: 0x2A, count: 32)
+        )
+    }
+
+    func testLockingVaultClearsMasterPasswordChangeInput() async throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            vaultKeychainService: RecordingAppVaultKeychainService(),
+            securityQuestionStore: MemorySecurityQuestionRecoveryStore()
+        )
+        model.vaultName = "Mobile"
+        model.vaultPassword = "old password"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        model.currentMasterPassword = "old password"
+        model.newMasterPassword = "new password 123!"
+        model.confirmNewMasterPassword = "new password 123!"
+
+        model.lockLocalVault()
+
+        XCTAssertEqual(model.currentMasterPassword, "")
+        XCTAssertEqual(model.newMasterPassword, "")
+        XCTAssertEqual(model.confirmNewMasterPassword, "")
+        XCTAssertEqual(model.masterPasswordChangeState, .idle)
+    }
+
     func testSecurityQuestionRecoveryRejectsIncorrectAnswersWithoutOpeningVault() async throws {
         let engine = RecordingVaultEngine()
         let keychainService = RecordingAppVaultKeychainService()
@@ -12213,9 +12449,12 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var securityKeyOpenedVaults: [RecordedSecurityKeyVaultCall] = []
     private(set) var securityKeySetups: [RecordedSecurityKeySetupCall] = []
     private(set) var resetMasterPasswordCalls: [RecordedResetMasterPasswordCall] = []
+    private(set) var verifiedMasterPasswords: [RecordedVaultCall] = []
     var createVaultError: Error?
     var openVaultError: Error?
+    var verifyMasterPasswordError: Error?
     var openVaultID = "opened-vault"
+    var verifyMasterPasswordVaultID = "created-vault"
     var securityKeyOpenVaultID = "security-key-opened-vault"
     private(set) var createdProjects: [RecordedProjectCall] = []
     private(set) var renamedProjects: [RecordedRenamedProjectCall] = []
@@ -12337,6 +12576,20 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             throw openVaultError
         }
         return LocalVaultHandle(vaultID: securityKeyOpenVaultID, deviceID: deviceID)
+    }
+
+    func verifyMasterPassword(
+        at fileURL: URL,
+        password: String,
+        deviceID: String
+    ) throws -> LocalVaultHandle {
+        verifiedMasterPasswords.append(
+            .init(fileURL: fileURL, password: password, deviceID: deviceID)
+        )
+        if let verifyMasterPasswordError {
+            throw verifyMasterPasswordError
+        }
+        return LocalVaultHandle(vaultID: verifyMasterPasswordVaultID, deviceID: deviceID)
     }
 
     func setupLocalSecurityKeyUnlock(

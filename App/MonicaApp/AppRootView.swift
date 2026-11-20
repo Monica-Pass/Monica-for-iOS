@@ -2968,6 +2968,11 @@ final class AppSessionModel {
     var securityAnswer1 = ""
     var securityAnswer2 = ""
     var securityQuestionState: VaultOperationState = .idle
+    var currentMasterPassword = ""
+    var newMasterPassword = ""
+    var confirmNewMasterPassword = ""
+    var masterPasswordChangeState: VaultOperationState = .idle
+    private var isChangingMasterPassword = false
     var forgotPasswordRecoveryStep: ForgotPasswordRecoveryStep = .none
     var forgotPasswordQuestion1Text = ""
     var forgotPasswordQuestion2Text = ""
@@ -5843,6 +5848,98 @@ final class AppSessionModel {
             securityQuestionState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    var masterPasswordStrength: MasterPasswordStrength {
+        MasterPasswordPolicy.strength(of: newMasterPassword)
+    }
+
+    var canSubmitMasterPasswordChange: Bool {
+        vaultState == .unlocked
+            && activeVaultSession != nil
+            && !isChangingMasterPassword
+            && !currentMasterPassword.isEmpty
+            && !newMasterPassword.isEmpty
+            && newMasterPassword == confirmNewMasterPassword
+            && MasterPasswordPolicy.isAcceptable(newMasterPassword)
+    }
+
+    /// 修改主密码。
+    ///
+    /// 流程：本地校验 → `LocalVaultRepository.changeMasterPassword`（旧口令在独立临时连接上
+    /// 验证，再由引擎在单个事务里重新包裹 vault key）→ 成功后清空输入并同步钥匙串解锁状态。
+    /// 任何一步失败都保留原会话和旧口令，用户仍然可以用旧主密码解锁。
+    func changeMasterPassword() async throws {
+        recordUserActivity()
+
+        guard !isChangingMasterPassword else {
+            return
+        }
+        guard let activeVaultSession, vaultState == .unlocked else {
+            let error = LocalVaultRepositoryError.vaultUnavailable
+            masterPasswordChangeState = .failed(error.localizedDescription)
+            throw error
+        }
+        guard newMasterPassword == confirmNewMasterPassword else {
+            let error = MasterPasswordChangeError.confirmationMismatch
+            masterPasswordChangeState = .failed(error.localizedDescription)
+            throw error
+        }
+        guard MasterPasswordPolicy.isAcceptable(newMasterPassword) else {
+            let error = MasterPasswordChangeError.insufficientStrength
+            masterPasswordChangeState = .failed(error.localizedDescription)
+            throw error
+        }
+
+        let currentPassword = currentMasterPassword
+        let replacementPassword = newMasterPassword
+        isChangingMasterPassword = true
+        masterPasswordChangeState = .running
+        defer { isChangingMasterPassword = false }
+
+        do {
+            try vaultRepository.changeMasterPassword(
+                for: activeVaultSession,
+                currentPassword: currentPassword,
+                newPassword: replacementPassword
+            )
+        } catch {
+            masterPasswordChangeState = .failed(readableMasterPasswordChangeError(error))
+            throw error
+        }
+
+        currentMasterPassword = ""
+        newMasterPassword = ""
+        confirmNewMasterPassword = ""
+        if vaultState == .unlocked, case .running = masterPasswordChangeState {
+            confirmKeychainUnlockAfterMasterPasswordChange(session: activeVaultSession)
+            masterPasswordChangeState = .succeeded(String(localized: "主密码已更新，请使用新主密码解锁。"))
+        }
+    }
+
+    private func clearMasterPasswordChangeInput() {
+        currentMasterPassword = ""
+        newMasterPassword = ""
+        confirmNewMasterPassword = ""
+        masterPasswordChangeState = .idle
+        isChangingMasterPassword = false
+    }
+
+    private func readableMasterPasswordChangeError(_ error: Error) -> String {
+        if let repositoryError = error as? LocalVaultRepositoryError {
+            return repositoryError.localizedDescription
+        }
+        return error.localizedDescription
+    }
+
+    /// 主密码只改变 `unlock_key`，`vault_key` 与钥匙串里的安全密钥材料都不变，
+    /// 所以钥匙串解锁条目**不需要**重写：重写会写入一份未在保险库注册的新材料，
+    /// 反而让下一次钥匙串解锁失败。这里只同步展示状态。
+    private func confirmKeychainUnlockAfterMasterPasswordChange(session: LocalVaultSession) {
+        guard isBiometricUnlockEnabled, vaultKeychainService != nil else {
+            return
+        }
+        vaultKeychainState = .saved(session.handle.vaultID)
     }
 
     func verifyForgotPasswordSecurityAnswers(answer1: String, answer2: String) async -> Bool {
@@ -13106,6 +13203,7 @@ final class AppSessionModel {
 
     private func clearUnlockedVaultSession() {
         vaultPassword = ""
+        clearMasterPasswordChangeInput()
         vaultState = .locked
         activeVaultName = nil
         activeVaultSession = nil
@@ -13154,6 +13252,7 @@ final class AppSessionModel {
     private func clearVaultAccessAfterFailure() {
         isPrivacyShieldVisible = false
         vaultPassword = ""
+        clearMasterPasswordChangeInput()
         guard activeVaultSession == nil else {
             return
         }
@@ -14860,6 +14959,20 @@ enum AppVaultKeychainError: Error, Sendable, Equatable, LocalizedError {
             return String(localized: "没有可通过钥匙串解锁的已记住保险库。")
         case .vaultMismatch:
             return String(localized: "已保存的保险库密钥与当前保险库不匹配。")
+        }
+    }
+}
+
+enum MasterPasswordChangeError: Error, Sendable, Equatable, LocalizedError {
+    case confirmationMismatch
+    case insufficientStrength
+
+    var errorDescription: String? {
+        switch self {
+        case .confirmationMismatch:
+            return "两次输入的新主密码不一致。"
+        case .insufficientStrength:
+            return "新主密码至少需要 \(MasterPasswordPolicy.minimumLength) 个字符。"
         }
     }
 }

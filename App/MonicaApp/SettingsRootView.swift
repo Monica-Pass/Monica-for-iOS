@@ -415,6 +415,61 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: "主密码") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    Text("修改主密码会重新包裹保险库密钥，条目、附件与 TOTP 数据保持不变。旧主密码将在更新成功后立即失效。")
+                        .font(.footnote)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                    SecureField("当前主密码", text: $session.currentMasterPassword)
+                        .textContentType(.password)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    SecureField("新主密码", text: $session.newMasterPassword)
+                        .textContentType(.newPassword)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    SecureField("再次输入新主密码", text: $session.confirmNewMasterPassword)
+                        .textContentType(.newPassword)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    if !session.newMasterPassword.isEmpty {
+                        Text("强度：\(session.masterPasswordStrength.level.label)")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(masterPasswordStrengthColor)
+                        if !session.masterPasswordStrength.hint.isEmpty {
+                            Text(session.masterPasswordStrength.hint)
+                                .font(.caption)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if let message = masterPasswordChangeMessage {
+                        Text(message)
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(masterPasswordChangeColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Button {
+                        Task {
+                            do {
+                                try await session.changeMasterPassword()
+                            } catch {
+                                // AppSessionModel owns user-visible failure state.
+                            }
+                        }
+                    } label: {
+                        Label("更新主密码", systemImage: "key.horizontal")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    .disabled(!session.canSubmitMasterPasswordChange)
+                }
+            }
+
             AndroidParitySection(title: String(localized: "密保问题")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(
@@ -1952,6 +2007,40 @@ struct SettingsRootView: View {
             return .red
         case .idle, .running, .succeeded:
             return AndroidParityPalette.textSecondary
+        }
+    }
+
+    /// `.label` 对 `.succeeded` 返回的是创建保险库的文案，这里自己解析状态。
+    private var masterPasswordChangeMessage: String? {
+        switch session.masterPasswordChangeState {
+        case .idle:
+            return nil
+        case .running:
+            return "正在更新主密码…"
+        case .succeeded(let message), .failed(let message):
+            return message
+        }
+    }
+
+    private var masterPasswordChangeColor: Color {
+        switch session.masterPasswordChangeState {
+        case .failed:
+            return .red
+        case .succeeded:
+            return .green
+        case .idle, .running:
+            return AndroidParityPalette.textSecondary
+        }
+    }
+
+    private var masterPasswordStrengthColor: Color {
+        switch session.masterPasswordStrength.level {
+        case .weak:
+            return .red
+        case .fair:
+            return .orange
+        case .good, .strong:
+            return .green
         }
     }
 }
