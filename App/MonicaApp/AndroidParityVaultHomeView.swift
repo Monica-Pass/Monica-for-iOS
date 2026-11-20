@@ -8,6 +8,7 @@ import UniformTypeIdentifiers
 
 struct AndroidParityVaultHomeView: View {
     @Bindable var session: AppSessionModel
+    @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
     /// 是否为密码 Tab 根页：为 true 时显示二级模块 Picker，列表随 `session.passwordModule` 切换。
     let isPasswordRoot: Bool
     /// 非密码根页时固定的条目类型（验证器 / 银行卡）。
@@ -2276,6 +2277,7 @@ private extension UnifiedVaultItemKind {
 private struct VaultItemDetailView: View {
     @Bindable var session: AppSessionModel
     let route: VaultItemRoute
+    @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
     @State private var copyFeedback: String?
 
     var body: some View {
@@ -2307,9 +2309,16 @@ private struct VaultItemDetailView: View {
                     .font(.subheadline.weight(.semibold))
                     .tint(AndroidParityPalette.primary)
                     .disabled(!session.canTemporarilyRevealSensitiveFieldsInDetail)
+                    // 录制/共享期间强制掩码，用户无法临时打开；停止后开关回到用户原设置。
+                    .disabled(isSceneCaptured)
                 if !session.canTemporarilyRevealSensitiveFieldsInDetail {
                     Text("在「设置 › 敏感隐私」中允许显示后可用")
                         .font(.caption2)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+                if isSceneCaptured {
+                    Label("录制或共享期间无法显示敏感字段", systemImage: "eye.slash")
+                        .font(.caption2.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
                 }
             }
@@ -2402,10 +2411,26 @@ private struct VaultItemDetailView: View {
         [row("missing", String(localized: "状态"), String(localized: "条目不可用"))]
     }
 
+    private var isSceneCaptured: Bool {
+        screenPrivacyMonitor?.isSceneCaptured == true
+    }
+
+    /// 录制/共享期间一律掩码，压过用户在详情里的临时显示；停止后回落到 #58 的类别偏好。
+    private var masksSensitiveFields: Bool {
+        SensitiveFieldMaskingPolicy.isMasked(
+            isSceneCaptured: isSceneCaptured,
+            userRequestedReveal: session.isSensitivePreviewRevealed(entryID: route.entryID)
+        )
+    }
+
     private var revealBinding: Binding<Bool> {
         Binding(
-            get: { session.isSensitivePreviewRevealed(entryID: route.entryID) },
-            set: { session.setSensitivePreviewRevealed($0, entryID: route.entryID) }
+            // 录制/共享期间开关显示为关闭且不可用；停止后回到用户原本的临时显示状态。
+            get: { !isSceneCaptured && session.isSensitivePreviewRevealed(entryID: route.entryID) },
+            set: { revealed in
+                guard !isSceneCaptured else { return }
+                session.setSensitivePreviewRevealed(revealed, entryID: route.entryID)
+            }
         )
     }
 
@@ -2448,7 +2473,9 @@ private struct VaultItemDetailView: View {
     }
 
     private func sensitive(_ value: String, _ category: SensitivePreviewCategory) -> String {
-        session.sensitivePreviewValue(value, category: category, entryID: route.entryID)
+        guard !value.isEmpty else { return String(localized: "空") }
+        if masksSensitiveFields { return AppSessionModel.sensitivePreviewMaskPlaceholder }
+        return session.sensitivePreviewValue(value, category: category, entryID: route.entryID)
     }
 
     private func redactedURL(_ value: String) -> String {

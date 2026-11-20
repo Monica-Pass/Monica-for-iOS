@@ -13808,27 +13808,33 @@ final class AppSessionModel {
     }
 
     func handleScenePhaseChange(_ phase: ScenePhase) {
+        // 遮罩范围与会话锁定规则集中在 MonicaCore.ScreenPrivacyPolicy：
+        // 非 active 阶段（含 App Switcher 手势先进入的 inactive）一律遮罩，
+        // 只有后台阶段才真正锁定 Vault。
+        let decision = ScreenPrivacyPolicy.decision(
+            for: ScreenPrivacyPhase(phase),
+            isVaultUnlocked: vaultState == .unlocked
+        )
         switch phase {
         case .active:
-            isPrivacyShieldVisible = false
+            isPrivacyShieldVisible = decision.showsShield
             refreshNotificationPermissionStatus()
             refreshSystemAutoFillProviderStatus()
             lockIfIdle()
             // 挂起期间计时器不会运行，回到前台补做到期检查并重启前台轮询。
             resumeSensitivePasteboardExpiryMonitoringIfNeeded()
         case .inactive:
-            isPrivacyShieldVisible = vaultState == .unlocked
+            isPrivacyShieldVisible = decision.showsShield
         case .background:
             widgetReloadScheduler?.flushPendingReload()
             sensitivePasteboardExpiryTask?.cancel()
             sensitivePasteboardExpiryTask = nil
-            guard vaultState == .unlocked else {
-                return
+            if decision.locksVault {
+                lockLocalVault()
             }
-            lockLocalVault()
-            isPrivacyShieldVisible = true
+            isPrivacyShieldVisible = decision.showsShield
         @unknown default:
-            break
+            isPrivacyShieldVisible = decision.showsShield
         }
     }
 
@@ -15122,6 +15128,8 @@ struct AppRootView: View {
     private let mdbxInfo = MonicaMDBXBridgeInfo()
     @Environment(\.scenePhase) private var scenePhase
     @State private var session: AppSessionModel
+    /// 录屏/共享状态与 App Switcher 遮罩的宿主状态；实际决策见 MonicaCore。
+    @State private var screenPrivacyMonitor: ScreenPrivacyMonitor
 
     /// A body-relative metric turns the user's Dynamic Type size into a spacing
     /// ratio (16pt at the default size). Combined with the chosen density it is
@@ -15144,6 +15152,7 @@ struct AppRootView: View {
     init(environment: MonicaAppEnvironment) {
         self.environment = environment
         _session = State(initialValue: AppSessionModel.production(environment: environment))
+        _screenPrivacyMonitor = State(initialValue: ScreenPrivacyMonitor())
     }
 
     var body: some View {
@@ -15189,6 +15198,8 @@ struct AppRootView: View {
         }
         .tint(session.appearancePreferences.swiftUIAccentColor)
         .preferredColorScheme(session.appearancePreferences.swiftUIColorScheme)
+        // 放在 `.sheet` 之前注入，详情页/快速设置等 sheet 才能读到录制状态。
+        .environment(\.screenPrivacyMonitor, screenPrivacyMonitor)
         .environment(\.paritySpacingScale, paritySpacingScale)
         .environment(\.parityLineSpacingDelta, parityLineSpacingDelta)
         .simultaneousGesture(
@@ -15205,6 +15216,7 @@ struct AppRootView: View {
                 session.consumePendingControlNavigationIfAvailable()
             }
         }
+        .modifier(AppScreenPrivacyHost(monitor: screenPrivacyMonitor))
         .onChange(of: session.vaultState) { _, state in
             if state == .unlocked {
                 session.consumePendingControlNavigationIfAvailable()
