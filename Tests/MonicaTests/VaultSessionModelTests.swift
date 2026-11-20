@@ -4,6 +4,7 @@ import CryptoKit
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
+import MonicaWidgetShared
 import SwiftUI
 import UIKit
 import XCTest
@@ -830,7 +831,10 @@ final class VaultSessionModelTests: XCTestCase {
 
         let snapshot = try store.loadSnapshot()
         XCTAssertEqual(snapshot?.vaultState, .unlocked)
-        XCTAssertEqual(snapshot?.entries.map(\.kind), [.login, .note, .totp])
+        XCTAssertEqual(
+            snapshot?.entries.compactMap { UnifiedVaultItemKind(rawValue: $0.kind) },
+            [.login, .note, .totp]
+        )
         XCTAssertEqual(snapshot?.entries.first?.title, "GitHub")
         XCTAssertEqual(snapshot?.entries.first?.subtitle, "alice@example.com / github.com")
         XCTAssertEqual(snapshot?.entries.first?.openURL.absoluteString, "monica://shortcut/login/entry-1")
@@ -1188,7 +1192,10 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(snapshot.totpItems.first?.issuer, "GitHub")
         XCTAssertEqual(snapshot.totpItems.first?.accountName, "alice@example.com")
         XCTAssertEqual(snapshot.totpItems.first?.secondsRemaining, 13)
-        XCTAssertEqual(snapshot.shortcutItems.map(\.kind), [.login, .note, .totp])
+        XCTAssertEqual(
+            snapshot.shortcutItems.compactMap { UnifiedVaultItemKind(rawValue: $0.kind) },
+            [.login, .note, .totp]
+        )
         XCTAssertEqual(snapshot.shortcutItems.first?.title, "GitHub Login")
 
         let widgetText = snapshot.redactedDebugSummary
@@ -1250,7 +1257,10 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(snapshot.totalEntryCount, 3)
         XCTAssertEqual(snapshot.totpItems.first?.title, "GitHub TOTP")
         XCTAssertEqual(snapshot.totpItems.first?.secondsRemaining, 13)
-        XCTAssertEqual(snapshot.shortcutItems.map(\.kind), [.login, .note, .totp])
+        XCTAssertEqual(
+            snapshot.shortcutItems.compactMap { UnifiedVaultItemKind(rawValue: $0.kind) },
+            [.login, .note, .totp]
+        )
     }
 
     func testPlusResourceButtonActivatesAndroidCompatiblePlusWithoutPurchase() async throws {
@@ -11851,6 +11861,59 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(visibleText.contains("access-token-secret"))
         XCTAssertFalse(visibleText.contains("refresh-token-secret"))
     }
+
+    func testWidgetReloadCoalescesMutationBurstsAndLockReloadsImmediately() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-widget-reload-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+        }
+
+        let widgetStore = AppWidgetSnapshotFileStore(containerURL: directory)
+        let shortcutStore = AppShortcutSnapshotFileStore(containerURL: directory)
+        let counter = WidgetReloadCounter()
+        let scheduler = MonicaWidgetReloadScheduler(coalescingInterval: .milliseconds(40)) {
+            counter.increment()
+        }
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: RecordingVaultEngine()),
+            widgetSnapshotStore: widgetStore,
+            shortcutSnapshotStore: shortcutStore,
+            widgetReloadScheduler: scheduler
+        )
+
+        try unlockNewVault(model)
+        XCTAssertEqual(counter.count, 1)
+        XCTAssertEqual(try widgetStore.loadSnapshot()?.vaultState, .unlocked)
+
+        for title in ["Alpha", "Beta", "Gamma"] {
+            model.loginTitle = title
+            model.loginUsername = "\(title.lowercased())@example.com"
+            model.loginPassword = "secret-\(title)"
+            model.loginURL = "https://example.com/\(title.lowercased())"
+            try model.createLoginEntry(projectTitle: "Personal")
+        }
+
+        // Unlock reloaded immediately; the burst only scheduled one more request.
+        XCTAssertEqual(counter.count, 1)
+        await scheduler.waitForPendingReload()
+        XCTAssertEqual(counter.count, 2)
+        XCTAssertEqual(try widgetStore.loadSnapshot()?.totalEntryCount, 3)
+        XCTAssertEqual(try shortcutStore.loadSnapshot()?.entries.count, 3)
+        XCTAssertNil(model.widgetSnapshotSyncError)
+
+        // Locking is privacy-critical: it must reload immediately, not after the window.
+        model.lockLocalVault()
+        XCTAssertEqual(counter.count, 3)
+        let lockedWidget = try widgetStore.loadSnapshot()
+        XCTAssertEqual(lockedWidget?.vaultState, .locked)
+        XCTAssertEqual(lockedWidget?.totalEntryCount, 0)
+        XCTAssertEqual(lockedWidget?.shortcutItems.count, 0)
+        let lockedShortcuts = try shortcutStore.loadSnapshot()
+        XCTAssertEqual(lockedShortcuts?.vaultState, .locked)
+        XCTAssertEqual(lockedShortcuts?.entries.count, 0)
+    }
 }
 
 private final class RecordingAppAutoFillIndexKeyMaterialStore: AppAutoFillIndexKeyMaterialStore {
@@ -11984,6 +12047,7 @@ private final class RecordingAppVaultKeychainService: AppVaultKeychainService, @
         }
         return loadedWrappedKey
     }
+
 }
 
 private final class RecordingBiometricUnlockAuthorizer: BiometricUnlockAuthorizer, @unchecked Sendable {
@@ -12441,6 +12505,7 @@ private final class RecordingKeePassDatabaseReader: KeePassDatabaseReader, @unch
         }
         return snapshot
     }
+
 }
 
 private final class RecordingVaultEngine: LocalVaultEngine {
@@ -15168,4 +15233,14 @@ private final class CorruptSecurityQuestionRecoveryStore: SecurityQuestionRecove
     }
 
     func delete(vaultID: String) throws {}
+}
+
+
+@MainActor
+private final class WidgetReloadCounter {
+    private(set) var count = 0
+
+    func increment() {
+        count += 1
+    }
 }

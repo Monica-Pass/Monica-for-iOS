@@ -1,53 +1,7 @@
 import Foundation
+import MonicaWidgetShared
 import SwiftUI
 import WidgetKit
-
-private let monicaWidgetAppGroupIdentifier = "group.com.monicapass.monica"
-private let monicaWidgetSnapshotFileName = "widget-snapshot-v1.json"
-
-private enum MonicaWidgetVaultState: String, Codable {
-    case locked
-    case unlocked
-
-    var label: String {
-        switch self {
-        case .locked:
-            return String(localized: "已锁定")
-        case .unlocked:
-            return String(localized: "已解锁")
-        }
-    }
-}
-
-private struct MonicaWidgetTotpItem: Codable, Identifiable {
-    let id: String
-    let title: String
-    let issuer: String
-    let accountName: String
-    let secondsRemaining: Int
-}
-
-private struct MonicaWidgetShortcutItem: Codable, Identifiable {
-    let id: String
-    let kind: String
-    let title: String
-    let subtitle: String
-    let searchableText: String
-}
-
-private struct MonicaWidgetSnapshot: Codable {
-    let vaultState: MonicaWidgetVaultState
-    let totalEntryCount: Int
-    let totpItems: [MonicaWidgetTotpItem]
-    let shortcutItems: [MonicaWidgetShortcutItem]
-
-    static let locked = MonicaWidgetSnapshot(
-        vaultState: .locked,
-        totalEntryCount: 0,
-        totpItems: [],
-        shortcutItems: []
-    )
-}
 
 private struct MonicaWidgetEntry: TimelineEntry {
     let date: Date
@@ -57,17 +11,13 @@ private struct MonicaWidgetEntry: TimelineEntry {
 private struct MonicaWidgetSnapshotReader {
     func loadSnapshot() -> MonicaWidgetSnapshot {
         guard let containerURL = FileManager.default.containerURL(
-            forSecurityApplicationGroupIdentifier: monicaWidgetAppGroupIdentifier
+            forSecurityApplicationGroupIdentifier: MonicaWidgetConstants.appGroupIdentifier
         ) else {
             return .locked
         }
-        let url = containerURL.appendingPathComponent(monicaWidgetSnapshotFileName)
-        guard let data = try? Data(contentsOf: url),
-              let snapshot = try? JSONDecoder().decode(MonicaWidgetSnapshot.self, from: data)
-        else {
-            return .locked
-        }
-        return snapshot
+        // Corrupt, missing, and newer-than-supported payloads all degrade to `.locked`, so
+        // the widget never renders stale project data.
+        return MonicaWidgetSnapshotFileStore(containerURL: containerURL).loadSnapshotOrFallback()
     }
 }
 
@@ -94,6 +44,9 @@ private struct MonicaWidgetProvider: TimelineProvider {
         )
     }
 
+    /// The app pushes a reload after every vault mutation, so the timeline only needs a
+    /// cheap fallback poll: as soon as the widget can show a TOTP countdown it refreshes
+    /// when that countdown changes, otherwise at most every five minutes.
     private func nextRefreshDate(now: Date, snapshot: MonicaWidgetSnapshot) -> Date {
         let nextTotpRefresh = snapshot.totpItems
             .map(\.secondsRemaining)
@@ -162,7 +115,7 @@ private struct MonicaWidgetEntryView: View {
 }
 
 struct MonicaWidget: Widget {
-    let kind = "MonicaWidget"
+    let kind = MonicaWidgetConstants.widgetKind
 
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: kind, provider: MonicaWidgetProvider()) { entry in
