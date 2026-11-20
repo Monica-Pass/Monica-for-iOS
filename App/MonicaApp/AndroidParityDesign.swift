@@ -75,6 +75,84 @@ extension UnifiedVaultItemKind {
     }
 }
 
+// MARK: - Interface density (issue #61)
+
+/// Global, user-selectable interface density. Adjusts spacing / line height only —
+/// never font sizes, icon sizes, corner radii, or the 44pt minimum touch target.
+/// Fonts scale through system text styles; this enum only tunes the whitespace
+/// between them, so it is safe to combine with the largest accessibility sizes.
+enum AppInterfaceDensity: String, Sendable, Codable, Equatable, CaseIterable, Identifiable {
+    case `default`
+    case compact
+    case loose
+
+    var id: String { rawValue }
+
+    var label: String {
+        switch self {
+        case .default: String(localized: "默认")
+        case .compact: String(localized: "紧凑")
+        case .loose: String(localized: "宽松")
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .default: String(localized: "标准间距与行高。")
+        case .compact: String(localized: "收紧间距与行高，一屏显示更多内容。")
+        case .loose: String(localized: "放宽间距与行高，内容更疏朗易读。")
+        }
+    }
+
+    /// Multiplies every shared-component spacing/padding value.
+    var spacingScale: CGFloat {
+        switch self {
+        case .default: 1.0
+        case .compact: 0.8
+        case .loose: 1.3
+        }
+    }
+
+    /// Extra points of line spacing applied to screen content.
+    var lineSpacingDelta: CGFloat {
+        switch self {
+        case .default, .compact: 0
+        case .loose: 3
+        }
+    }
+
+    static let minimumTouchTarget: CGFloat = 44
+
+    /// Touch targets never shrink below the accessibility minimum, regardless of density.
+    func touchTarget(_ base: CGFloat) -> CGFloat {
+        max(Self.minimumTouchTarget, base)
+    }
+}
+
+private struct ParitySpacingScaleKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 1
+}
+
+private struct ParityLineSpacingDeltaKey: EnvironmentKey {
+    static let defaultValue: CGFloat = 0
+}
+
+extension EnvironmentValues {
+    /// Combined Dynamic Type ratio × density spacing multiplier (1 = unchanged).
+    var paritySpacingScale: CGFloat {
+        get { self[ParitySpacingScaleKey.self] }
+        set { self[ParitySpacingScaleKey.self] = newValue }
+    }
+
+    /// Extra line spacing from the loose density, scaled by Dynamic Type (0 = unchanged).
+    var parityLineSpacingDelta: CGFloat {
+        get { self[ParityLineSpacingDeltaKey.self] }
+        set { self[ParityLineSpacingDeltaKey.self] = newValue }
+    }
+}
+
+// MARK: - Android parity palette
+
 enum AndroidParityPalette {
     static let background = Color(red: 0.06, green: 0.06, blue: 0.06)
     static let surface = Color(red: 0.15, green: 0.15, blue: 0.15)
@@ -90,25 +168,60 @@ enum AndroidParityPalette {
 }
 
 enum AndroidParityTypography {
+    // Baseline point sizes are kept as the single source of truth and are asserted
+    // by `VaultSessionModelTests.testAndroidParityTypographyUsesCompactIOSSizing()`.
     static let screenTitleSize: CGFloat = 34
     static let generatorTitleSize: CGFloat = 34
     static let editorTitleSize: CGFloat = 24
     static let prominentValueSize: CGFloat = 26
     static let controlIconSize: CGFloat = 22
     static let tileIconSize: CGFloat = 18
+
+    // Dynamic Type factories: text styles scale automatically with the user's
+    // content size, unlike the fixed `.system(size:)` fonts they replace.
+    static func displayTitle(weight: Font.Weight = .heavy) -> Font {
+        Font.system(.largeTitle, design: .rounded, weight: weight)
+    }
+
+    static func prominentTitle(weight: Font.Weight = .heavy) -> Font {
+        Font.system(.title2, design: .rounded, weight: weight)
+    }
+
+    static func controlIcon(weight: Font.Weight = .heavy) -> Font {
+        Font.system(.title2, design: .default, weight: weight)
+    }
+
+    static func largeIcon(weight: Font.Weight = .semibold) -> Font {
+        Font.system(.largeTitle, design: .default, weight: weight)
+    }
+
+    static func smallIcon(weight: Font.Weight = .semibold) -> Font {
+        Font.system(.body, design: .default, weight: weight)
+    }
+
+    static func roundedBody(weight: Font.Weight = .heavy) -> Font {
+        Font.system(.body, design: .rounded, weight: weight)
+    }
+
+    static func monospacedValue(weight: Font.Weight = .medium) -> Font {
+        Font.system(.body, design: .monospaced, weight: weight)
+    }
 }
 
 struct AndroidParityScreen<Content: View>: View {
     @ViewBuilder var content: Content
+    @Environment(\.paritySpacingScale) private var spacingScale
+    @Environment(\.parityLineSpacingDelta) private var lineSpacingDelta
 
     var body: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12) {
+            LazyVStack(alignment: .leading, spacing: 12 * spacingScale) {
                 content
+                    .lineSpacing(lineSpacingDelta)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 24)
+            .padding(.horizontal, 16 * spacingScale)
+            .padding(.top, 8 * spacingScale)
+            .padding(.bottom, 24 * spacingScale)
         }
         .background(AndroidParityPalette.background.ignoresSafeArea())
         .foregroundStyle(AndroidParityPalette.textPrimary)
@@ -118,14 +231,15 @@ struct AndroidParityScreen<Content: View>: View {
 struct AndroidParitySection<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
+    @Environment(\.paritySpacingScale) private var spacingScale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 8 * spacingScale) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.primary)
-                .padding(.horizontal, 4)
-                .padding(.top, 8)
+                .padding(.horizontal, 4 * spacingScale)
+                .padding(.top, 8 * spacingScale)
             content
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -136,12 +250,13 @@ struct AndroidParityCard<Content: View>: View {
     var fill = AndroidParityPalette.surface
     var cornerRadius: CGFloat = 12
     @ViewBuilder var content: Content
+    @Environment(\.paritySpacingScale) private var spacingScale
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 12 * spacingScale) {
             content
         }
-        .padding(16)
+        .padding(16 * spacingScale)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(fill, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
         .overlay {
@@ -159,18 +274,20 @@ struct AndroidParityIconTile: View {
 
     var body: some View {
         Image(systemName: systemImage)
-            .font(.system(size: AndroidParityTypography.tileIconSize, weight: .semibold))
+            .font(AndroidParityTypography.smallIcon(weight: .semibold))
             .foregroundStyle(tint)
-            .frame(width: 40, height: 40)
+            .frame(minWidth: 40, minHeight: 40)
             .background(fill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 }
 
 struct AndroidParityTextFieldStyle: TextFieldStyle {
+    @Environment(\.paritySpacingScale) private var spacingScale
+
     func _body(configuration: TextField<Self._Label>) -> some View {
         configuration
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, 14 * spacingScale)
+            .padding(.vertical, 12 * spacingScale)
             .background(AndroidParityPalette.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -188,13 +305,15 @@ enum AndroidParityButtonTone {
 struct AndroidParityButtonStyle: ButtonStyle {
     let tone: AndroidParityButtonTone
     @Environment(\.isEnabled) private var isEnabled
+    @Environment(\.paritySpacingScale) private var spacingScale
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.semibold))
             .labelStyle(.titleAndIcon)
-            .padding(.horizontal, 16)
-            .frame(minHeight: 44)
+            .padding(.horizontal, 16 * spacingScale)
+            // 44pt minimum touch target is intentionally NOT scaled by density.
+            .frame(minHeight: AppInterfaceDensity.minimumTouchTarget)
             .foregroundStyle(foreground)
             .frame(maxWidth: .infinity)
             .background(background, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
@@ -244,19 +363,21 @@ struct AndroidParityButtonStyle: ButtonStyle {
 struct AndroidParityInfoRow: View {
     let title: String
     let value: String
+    @Environment(\.paritySpacingScale) private var spacingScale
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .firstTextBaseline, spacing: 12 * spacingScale) {
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(AndroidParityPalette.textPrimary)
-            Spacer(minLength: 16)
+            Spacer(minLength: 16 * spacingScale)
             Text(value)
                 .font(.footnote)
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .multilineTextAlignment(.trailing)
         }
-        .frame(minHeight: 32)
+        // 32pt row height is a content floor, not a touch target — scale it.
+        .frame(minHeight: 32 * spacingScale)
     }
 }
 
@@ -277,12 +398,13 @@ struct AndroidParityEntryCard<Trailing: View>: View {
     var iconFill = AndroidParityPalette.primaryContainer
     var iconTint = AndroidParityPalette.primary
     @ViewBuilder var trailing: Trailing
+    @Environment(\.paritySpacingScale) private var spacingScale
 
     var body: some View {
-        HStack(alignment: .center, spacing: 16) {
+        HStack(alignment: .center, spacing: 16 * spacingScale) {
             AndroidParityIconTile(systemImage: icon, fill: iconFill, tint: iconTint)
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+            VStack(alignment: .leading, spacing: 6 * spacingScale) {
+                HStack(spacing: 6 * spacingScale) {
                     Text(title.isEmpty ? String(localized: "未命名") : title)
                         .font(.subheadline.weight(.semibold))
                         .lineLimit(1)
@@ -306,10 +428,10 @@ struct AndroidParityEntryCard<Trailing: View>: View {
                         .lineLimit(1)
                 }
             }
-            Spacer(minLength: 8)
+            Spacer(minLength: 8 * spacingScale)
             trailing
         }
-        .padding(16)
+        .padding(16 * spacingScale)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(fill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay {
@@ -345,10 +467,11 @@ extension AndroidParityEntryCard where Trailing == Image {
 struct AndroidParityEmptyCard: View {
     let title: String
     let systemImage: String
+    @Environment(\.paritySpacingScale) private var spacingScale
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-            HStack(spacing: 16) {
+            HStack(spacing: 16 * spacingScale) {
                 AndroidParityIconTile(
                     systemImage: systemImage,
                     fill: AndroidParityPalette.surface,

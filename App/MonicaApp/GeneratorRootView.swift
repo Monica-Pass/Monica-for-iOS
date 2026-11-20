@@ -40,22 +40,23 @@ struct GeneratorRootView: View {
         HStack(alignment: .center) {
             Button(action: { dismiss() }) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .font(AndroidParityTypography.controlIcon(weight: .heavy))
                     .foregroundStyle(AndroidParityPalette.textPrimary)
-                    .frame(width: 44, height: 56)
+                    .frame(minWidth: AppInterfaceDensity.minimumTouchTarget, minHeight: 56)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("返回")
             Text("生成器")
-                .font(.system(size: AndroidParityTypography.generatorTitleSize, weight: .heavy, design: .rounded))
+                .font(AndroidParityTypography.displayTitle(weight: .heavy))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
-                .minimumScaleFactor(0.8)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
             Spacer()
             Button(action: generate) {
                 Image(systemName: "clock.arrow.circlepath")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .font(AndroidParityTypography.controlIcon(weight: .heavy))
                     .foregroundStyle(AndroidParityPalette.primary)
-                    .frame(width: 56, height: 56)
+                    .frame(minWidth: 56, minHeight: 56)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("重新生成")
@@ -86,7 +87,7 @@ struct GeneratorRootView: View {
             } label: {
                 Image(systemName: "chevron.down")
                     .font(.headline.weight(.semibold))
-                    .frame(width: 64, height: 56)
+                    .frame(minWidth: 64, minHeight: 56)
                     .foregroundStyle(AndroidParityPalette.primary)
                     .background(AndroidParityPalette.primaryContainer, in: UnevenRoundedRectangle(bottomTrailingRadius: 28, topTrailingRadius: 28))
             }
@@ -115,7 +116,7 @@ struct GeneratorRootView: View {
             .foregroundStyle(AndroidParityPalette.primary)
 
             Text(generatedPassword.isEmpty ? String(localized: "点击刷新生成密码") : generatedPassword)
-                .font(.system(size: 16, weight: .medium, design: .monospaced))
+                .font(AndroidParityTypography.monospacedValue(weight: .medium))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
                 .textSelection(.enabled)
                 .lineLimit(5)
@@ -147,7 +148,7 @@ struct GeneratorRootView: View {
         ZStack(alignment: .trailing) {
             VStack(alignment: .leading, spacing: 26) {
                 Text("\(generatorMode.title)生成器")
-                    .font(.system(size: AndroidParityTypography.editorTitleSize, weight: .heavy, design: .rounded))
+                    .font(AndroidParityTypography.prominentTitle(weight: .heavy))
                 Text("\(generatorMode.lengthLabel)：\(Int(length))")
                     .font(.headline.weight(.heavy))
                 Slider(value: $length, in: generatorMode.lengthRange, step: 1)
@@ -183,9 +184,9 @@ struct GeneratorRootView: View {
 
             Button(action: generate) {
                 Image(systemName: "arrow.clockwise")
-                    .font(.system(size: AndroidParityTypography.controlIconSize, weight: .heavy))
+                    .font(AndroidParityTypography.controlIcon(weight: .heavy))
                     .foregroundStyle(AndroidParityPalette.primary)
-                    .frame(width: 74, height: 74)
+                    .frame(minWidth: 74, minHeight: 74)
                     .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             }
             .buttonStyle(.plain)

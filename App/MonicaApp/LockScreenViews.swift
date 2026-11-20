@@ -9,7 +9,7 @@ struct PrivacyShieldView: View {
                 .ignoresSafeArea()
             VStack(spacing: 12) {
                 Image(systemName: "lock.shield.fill")
-                    .font(.system(size: 34, weight: .semibold))
+                    .font(AndroidParityTypography.largeIcon(weight: .semibold))
                     .foregroundStyle(.primary)
                 Text("Monica 已锁定")
                     .font(.headline)
@@ -58,10 +58,10 @@ struct MonicaLockScreen: View {
     private var lockScreenHeader: some View {
         VStack(spacing: 18) {
             Text("Monica")
-                .font(.system(size: 36, weight: .heavy, design: .rounded))
+                .font(AndroidParityTypography.displayTitle(weight: .heavy))
                 .foregroundStyle(AndroidParityPalette.primary)
             Text(lockScreenPrompt)
-                .font(.system(size: 18, weight: .heavy, design: .rounded))
+                .font(AndroidParityTypography.roundedBody(weight: .heavy))
                 .foregroundStyle(AndroidParityPalette.textPrimary)
         }
         .multilineTextAlignment(.center)
@@ -95,8 +95,8 @@ struct MonicaLockScreen: View {
                     isPasswordVisible.toggle()
                 } label: {
                     Image(systemName: isPasswordVisible ? "eye" : "eye.slash")
-                        .font(.system(size: AndroidParityTypography.controlIconSize, weight: .semibold))
-                        .frame(width: 44, height: 44)
+                        .font(AndroidParityTypography.controlIcon(weight: .semibold))
+                        .frame(minWidth: AppInterfaceDensity.minimumTouchTarget, minHeight: AppInterfaceDensity.minimumTouchTarget)
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(AndroidParityPalette.textSecondary)

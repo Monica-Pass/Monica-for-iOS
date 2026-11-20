@@ -260,6 +260,18 @@ enum VaultDisplayCardDensity: String, Sendable, Codable, Equatable, CaseIterable
             14
         }
     }
+
+    /// Dynamic Type-aware font for the card accessory icon (replaces the fixed
+    /// `.system(size:)` at the list-card call site). Kept distinct from the
+    /// `verticalSpacing` / `iconSize` layout values above.
+    var iconFont: Font {
+        switch self {
+        case .comfortable:
+            AndroidParityTypography.smallIcon(weight: .semibold)
+        case .compact:
+            Font.system(.footnote, design: .default, weight: .semibold)
+        }
+    }
 }
 
 struct VaultDisplayPreferences: Sendable, Codable, Equatable {
@@ -557,6 +569,16 @@ struct AppAppearancePreferences: Sendable, Codable, Equatable {
     var colorScheme: AppAppearanceColorScheme
     var accentColor: AppAppearanceAccentColor
     var passwordListIconStyle: AppPasswordListIconStyle
+    /// Global interface density (default / compact / loose). Defaults are
+    /// backward compatible: old saved JSON without this key decodes to `.default`.
+    var interfaceDensity: AppInterfaceDensity = .default
+
+    private enum CodingKeys: String, CodingKey {
+        case colorScheme
+        case accentColor
+        case passwordListIconStyle
+        case interfaceDensity
+    }
 
     var swiftUIColorScheme: ColorScheme? {
         colorScheme.swiftUIColorScheme
@@ -590,6 +612,20 @@ struct AppAppearancePreferences: Sendable, Codable, Equatable {
         case .hidden:
             .clear
         }
+    }
+}
+
+// The custom decoder lives in an extension so Swift still synthesizes the
+// memberwise initializer (with a default for `interfaceDensity`). That keeps
+// existing three-argument `AppAppearancePreferences(...)` call sites compiling
+// while tolerating JSON saved before interface density existed.
+extension AppAppearancePreferences {
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        colorScheme = (try? container.decode(AppAppearanceColorScheme.self, forKey: .colorScheme)) ?? .system
+        accentColor = (try? container.decode(AppAppearanceAccentColor.self, forKey: .accentColor)) ?? .monica
+        passwordListIconStyle = (try? container.decode(AppPasswordListIconStyle.self, forKey: .passwordListIconStyle)) ?? .color
+        interfaceDensity = (try? container.decode(AppInterfaceDensity.self, forKey: .interfaceDensity)) ?? .default
     }
 }
 
@@ -4395,6 +4431,13 @@ final class AppSessionModel {
                 value: appearancePreferences.passwordListIconStyle.label,
                 detail: String(localized: "控制密码列表图标的显示方式。"),
                 systemImage: "app.badge"
+            ),
+            AppAppearancePreferenceRow(
+                id: "interface-density",
+                title: String(localized: "界面密度"),
+                value: appearancePreferences.interfaceDensity.label,
+                detail: String(localized: "调整间距与行高；字号始终跟随系统动态字体，触控区域不小于 44pt。"),
+                systemImage: "square.resize"
             )
         ]
     }
@@ -4403,6 +4446,12 @@ final class AppSessionModel {
         appearancePreferences = preferences
         appearancePreferenceStore.savePreferences(preferences)
         recordUserActivity()
+    }
+
+    func restoreDefaultInterfaceDensity() {
+        var preferences = appearancePreferences
+        preferences.interfaceDensity = .default
+        updateAppearancePreferences(preferences)
     }
 
     var plusEntitlementStatusRow: AppPlusEntitlementStatusRow {
@@ -14252,6 +14301,24 @@ struct AppRootView: View {
     @Environment(\.scenePhase) private var scenePhase
     @State private var session: AppSessionModel
 
+    /// A body-relative metric turns the user's Dynamic Type size into a spacing
+    /// ratio (16pt at the default size). Combined with the chosen density it is
+    /// injected into the shared `AndroidParity*` components so the whole layout —
+    /// not just the text — responds to accessibility text sizes. No `scaleEffect`
+    /// is applied to the root view: SwiftUI layout sizes stay truthful, so tap
+    /// targets never drift away from their visual positions.
+    @ScaledMetric(relativeTo: .body) private var paritySpacingBase: CGFloat = 16
+
+    private var paritySpacingScale: CGFloat {
+        let dynamicTypeRatio = paritySpacingBase / 16
+        return dynamicTypeRatio * session.appearancePreferences.interfaceDensity.spacingScale
+    }
+
+    private var parityLineSpacingDelta: CGFloat {
+        let dynamicTypeRatio = paritySpacingBase / 16
+        return session.appearancePreferences.interfaceDensity.lineSpacingDelta * dynamicTypeRatio
+    }
+
     init(environment: MonicaAppEnvironment) {
         self.environment = environment
         _session = State(initialValue: AppSessionModel.production(environment: environment))
@@ -14300,6 +14367,8 @@ struct AppRootView: View {
         }
         .tint(session.appearancePreferences.swiftUIAccentColor)
         .preferredColorScheme(session.appearancePreferences.swiftUIColorScheme)
+        .environment(\.paritySpacingScale, paritySpacingScale)
+        .environment(\.parityLineSpacingDelta, parityLineSpacingDelta)
         .simultaneousGesture(
             TapGesture().onEnded {
                 session.recordUserActivity()
