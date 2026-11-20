@@ -1056,10 +1056,10 @@ struct SettingsRootView: View {
 
             AndroidParitySection(title: "OneDrive") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(title: String(localized: "账号", value: session.oneDriveAuthenticationState.label)
-                    AndroidParityInfoRow(title: String(localized: "文件", value: session.cloudFileState.label)
-                    AndroidParityInfoRow(title: String(localized: "备份目录", value: session.oneDriveBackupPreferences.displayPath)
-                    AndroidParityInfoRow(title: String(localized: "目录状态", value: session.oneDriveBackupDirectoryState.label)
+                    AndroidParityInfoRow(title: String(localized: "账号"), value: session.oneDriveAuthenticationState.label)
+                    AndroidParityInfoRow(title: String(localized: "文件"), value: session.cloudFileState.label)
+                    AndroidParityInfoRow(title: String(localized: "备份目录"), value: session.oneDriveBackupPreferences.displayPath)
+                    AndroidParityInfoRow(title: String(localized: "目录状态"), value: session.oneDriveBackupDirectoryState.label)
                     if session.oneDriveBackupDirectoryState.isMissing {
                         Text("备份目录已不存在。请重建目录，或改用默认位置。")
                             .font(.footnote)
@@ -1669,10 +1669,6 @@ struct SettingsRootView: View {
                     } label: {
                         HStack(alignment: .top, spacing: 12) {
                             Image(systemName: "wifi")
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(AndroidParityPalette.primary)
-                                .frame(width: 28, height: 28)
-                            VStack(alignment: .leading, spacing: 4) {
                                 .font(.headline.weight(.bold))
                                 .foregroundStyle(AndroidParityPalette.primary)
                                 .frame(width: 28, height: 28)
