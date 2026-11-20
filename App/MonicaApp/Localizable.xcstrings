@@ -13901,6 +13901,214 @@
           }
         }
       }
+    },
+    "锁屏倒计时（试点）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lock Screen countdown (pilot)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁屏倒计时（试点）"
+          }
+        }
+      }
+    },
+    "只显示条目别名和倒计时，不显示验证码正文。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shows only the entry's alias and a countdown — never the verification code itself."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只显示条目别名和倒计时，不显示验证码正文。"
+          }
+        }
+      }
+    },
+    "进行中": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Active"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进行中"
+          }
+        }
+      }
+    },
+    "暂无可显示的验证码条目。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No verification code entry to show yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无可显示的验证码条目。"
+          }
+        }
+      }
+    },
+    "选择显示的条目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose an entry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择显示的条目"
+          }
+        }
+      }
+    },
+    "在锁屏显示倒计时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show countdown on Lock Screen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在锁屏显示倒计时"
+          }
+        }
+      }
+    },
+    "正在锁屏显示：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Showing on Lock Screen: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在锁屏显示：%@"
+          }
+        }
+      }
+    },
+    "验证码倒计时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification code countdown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码倒计时"
+          }
+        }
+      }
+    },
+    "结束锁屏倒计时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "End Lock Screen countdown"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "结束锁屏倒计时"
+          }
+        }
+      }
+    },
+    "锁屏倒计时由系统调度：本试点开始后约 30 分钟自动结束，单次 Live Activity 最长约 8 小时；App 退到后台后不会持续刷新验证码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The Lock Screen countdown is scheduled by the system. This pilot ends automatically about 30 minutes after it starts, and a single Live Activity lasts at most about 8 hours. The app does not keep refreshing codes in the background."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁屏倒计时由系统调度：本试点开始后约 30 分钟自动结束，单次 Live Activity 最长约 8 小时；App 退到后台后不会持续刷新验证码。"
+          }
+        }
+      }
+    },
+    "实时活动当前不可用（设备不支持或已在系统设置中关闭）。你仍可以在这里查看验证码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Live Activities are unavailable right now (unsupported device or turned off in system settings). You can still view your codes here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "实时活动当前不可用（设备不支持或已在系统设置中关闭）。你仍可以在这里查看验证码。"
+          }
+        }
+      }
+    },
+    "无法开始锁屏倒计时，请稍后重试。你仍可以在这里查看验证码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn’t start the Lock Screen countdown. Please try again later — you can still view your codes here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法开始锁屏倒计时，请稍后重试。你仍可以在这里查看验证码。"
+          }
+        }
+      }
+    },
+    "本次锁屏倒计时已结束，需要时请重新开始。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Lock Screen countdown has ended. Start a new one whenever you need it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本次锁屏倒计时已结束，需要时请重新开始。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
