@@ -4563,19 +4563,30 @@ import MonicaStorage
     #expect(updated.password == "new-password")
     #expect(updated.url == "https://github.com/settings/profile")
     #expect(entries == [updated])
-    #expect(engine.updatedLoginEntries == [
-        .init(
-            vaultID: session.handle.vaultID,
-            projectID: project.id,
-            entryID: created.id,
-            draft: LocalLoginEntryDraft(
-                title: "GitHub Work",
-                username: "alice@example.com",
-                password: "new-password",
-                url: "https://github.com/settings/profile"
-            )
+    let recordedUpdate = try #require(engine.updatedLoginEntries.first)
+    #expect(recordedUpdate.vaultID == session.handle.vaultID)
+    #expect(recordedUpdate.projectID == project.id)
+    #expect(recordedUpdate.entryID == created.id)
+    // 改密码时仓库层会追加一条历史；历史条目带随机 id 与时间，单独断言密码内容。
+    #expect(recordedUpdate.draft.passwordHistory?.map(\.password) == ["old-password"])
+    #expect(
+        LocalLoginEntryDraft(
+            title: recordedUpdate.draft.title,
+            username: recordedUpdate.draft.username,
+            password: recordedUpdate.draft.password,
+            url: recordedUpdate.draft.url,
+            notes: recordedUpdate.draft.notes,
+            urls: recordedUpdate.draft.urls,
+            appBundleID: recordedUpdate.draft.appBundleID,
+            appName: recordedUpdate.draft.appName
+        ) == LocalLoginEntryDraft(
+            title: "GitHub Work",
+            username: "alice@example.com",
+            password: "new-password",
+            url: "https://github.com/settings/profile",
+            urls: ["https://github.com/settings/profile"]
         )
-    ])
+    )
 }
 
 @Test func loginEntryRepositorySetsFavoriteWithoutChangingPayloadFields() throws {
@@ -6042,7 +6053,11 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             username: draft.username,
             password: draft.password,
             url: draft.url,
-            notes: draft.notes
+            notes: draft.notes,
+            urls: draft.urls,
+            appBundleID: draft.appBundleID,
+            appName: draft.appName,
+            passwordHistory: draft.passwordHistory ?? []
         )
         createdLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
@@ -6071,7 +6086,13 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             username: draft.username,
             password: draft.password,
             url: draft.url,
-            notes: draft.notes
+            notes: draft.notes,
+            urls: draft.urls,
+            appBundleID: draft.appBundleID,
+            appName: draft.appName,
+            passwordHistory: draft.passwordHistory
+                ?? loginEntries[projectID, default: []].first(where: { $0.id == entryID })?.passwordHistory
+                ?? []
         )
         updatedLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)

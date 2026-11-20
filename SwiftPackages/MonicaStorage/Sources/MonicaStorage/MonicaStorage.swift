@@ -8426,21 +8426,40 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
     public let title: String
     public let username: String
     public let password: String
+    /// 主 URL：AutoFill 关联只使用它。
     public let url: String
     public let notes: String
+    /// 完整有序 URL 列表（含主 URL）；为空时按 `[url]` 处理。
+    public let urls: [String]
+    /// 应用绑定 metadata：仅用于展示与筛选，不参与系统 AutoFill 关联。
+    public let appBundleID: String
+    public let appName: String
+    /// 上一份密码历史，最新的一条在最前面。
+    ///
+    /// `nil` 表示「沿用仓库里已有的历史，并在密码变化时自动追加」；
+    /// 显式传入数组表示「用这份列表替换历史」（UI 删除单条/清空时使用）。
+    public let passwordHistory: [LocalLoginPasswordHistoryEntry]?
 
     public init(
         title: String,
         username: String,
         password: String,
         url: String,
-        notes: String = ""
+        notes: String = "",
+        urls: [String] = [],
+        appBundleID: String = "",
+        appName: String = "",
+        passwordHistory: [LocalLoginPasswordHistoryEntry]? = nil
     ) {
         self.title = title
         self.username = username
         self.password = password
         self.url = url
         self.notes = notes
+        self.urls = urls
+        self.appBundleID = appBundleID
+        self.appName = appName
+        self.passwordHistory = passwordHistory
     }
 }
 
@@ -8450,11 +8469,19 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
     public let title: String
     public let username: String
     public let password: String
+    /// 主 URL：AutoFill 关联只使用它。
     public let url: String
     public let notes: String
     public let favorite: Bool
     /// 条目图标的稳定资源 ID（`sf:…` / `catalog:…`）；`nil` 表示按条目类型使用默认图标。
     public let icon: String?
+    /// 完整有序 URL 列表（含主 URL）；旧库没有该字段时回退为 `[url]`。
+    public let urls: [String]
+    /// 应用绑定 metadata：仅用于展示与筛选，不参与系统 AutoFill 关联。
+    public let appBundleID: String
+    public let appName: String
+    /// 上一份密码历史，最新的一条在最前面。
+    public let passwordHistory: [LocalLoginPasswordHistoryEntry]
 
     public init(
         id: String,
@@ -8465,7 +8492,11 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         url: String,
         notes: String = "",
         favorite: Bool = false,
-        icon: String? = nil
+        icon: String? = nil,
+        urls: [String] = [],
+        appBundleID: String = "",
+        appName: String = "",
+        passwordHistory: [LocalLoginPasswordHistoryEntry] = []
     ) {
         self.id = id
         self.projectID = projectID
@@ -8476,6 +8507,15 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         self.notes = notes
         self.favorite = favorite
         self.icon = icon
+        self.urls = urls
+        self.appBundleID = appBundleID
+        self.appName = appName
+        self.passwordHistory = passwordHistory
+    }
+
+    /// 完整 URL 列表：旧数据只有单个 `url` 时等价于 `[url]`。
+    public var effectiveURLs: [String] {
+        urls.isEmpty ? (url.isEmpty ? [] : [url]) : urls
     }
 }
 
@@ -10021,11 +10061,26 @@ public struct LocalVaultEntryRepository {
         draft: LocalLoginEntryDraft
     ) throws -> LocalLoginEntry {
         let normalizedDraft = try normalizedLoginEntryDraft(draft)
+        // 只有密码确实变化时才把上一份密文追加成一条历史；UI 传回的历史会保留删除/清空结果。
+        let existingEntry = try? engine.listLoginEntries(
+            in: session.handle,
+            projectID: projectID
+        ).first(where: { $0.id == entryID })
+        let history: [LocalLoginPasswordHistoryEntry]
+        if let existingEntry {
+            history = LoginPasswordHistoryPolicy.appending(
+                previousPassword: existingEntry.password,
+                newPassword: normalizedDraft.password,
+                history: normalizedDraft.passwordHistory ?? existingEntry.passwordHistory
+            )
+        } else {
+            history = normalizedDraft.passwordHistory ?? []
+        }
         return try engine.updateLoginEntry(
             in: session.handle,
             projectID: projectID,
             entryID: entryID,
-            draft: normalizedDraft
+            draft: normalizedDraft.withPasswordHistory(history)
         )
     }
 
@@ -10586,12 +10641,18 @@ public struct LocalVaultEntryRepository {
         guard !normalizedTitle.isEmpty else {
             throw LocalVaultRepositoryError.emptyEntryTitle
         }
+        // 旧数据只有一个 `url`；新数据用有序去重列表，首项永远作为主 URL。
+        let normalizedURLs = LoginEntryURLRules.normalizedURLs(primary: draft.url, additional: draft.urls)
         return LocalLoginEntryDraft(
             title: normalizedTitle,
             username: draft.username,
             password: draft.password,
-            url: draft.url,
-            notes: draft.notes
+            url: normalizedURLs.first ?? "",
+            notes: draft.notes,
+            urls: normalizedURLs,
+            appBundleID: draft.appBundleID.trimmingCharacters(in: .whitespacesAndNewlines),
+            appName: draft.appName.trimmingCharacters(in: .whitespacesAndNewlines),
+            passwordHistory: draft.passwordHistory.map(LoginPasswordHistoryPolicy.sanitizedHistory)
         )
     }
 
@@ -10954,7 +11015,11 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             username: draft.username,
             password: draft.password,
             url: draft.url,
-            notes: draft.notes
+            notes: draft.notes,
+            urls: draft.urls,
+            appBundleID: draft.appBundleID,
+            appName: draft.appName,
+            passwordHistory: (draft.passwordHistory ?? []).map(MonicaMDBXLoginPasswordHistoryEntry.init)
         )
         return LocalLoginEntry(entry)
     }
@@ -10981,7 +11046,11 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             username: draft.username,
             password: draft.password,
             url: draft.url,
-            notes: draft.notes
+            notes: draft.notes,
+            urls: draft.urls,
+            appBundleID: draft.appBundleID,
+            appName: draft.appName,
+            passwordHistory: (draft.passwordHistory ?? []).map(MonicaMDBXLoginPasswordHistoryEntry.init)
         )
         return LocalLoginEntry(entry)
     }
@@ -12022,8 +12091,24 @@ private extension LocalLoginEntry {
             url: entry.url,
             notes: entry.notes,
             favorite: entry.favorite,
-            icon: entry.icon
+            icon: entry.icon,
+            urls: entry.urls,
+            appBundleID: entry.appBundleID,
+            appName: entry.appName,
+            passwordHistory: entry.passwordHistory.map(LocalLoginPasswordHistoryEntry.init)
         )
+    }
+}
+
+private extension LocalLoginPasswordHistoryEntry {
+    init(_ entry: MonicaMDBXLoginPasswordHistoryEntry) {
+        self.init(id: entry.id, changedAt: entry.changedAt, password: entry.password)
+    }
+}
+
+private extension MonicaMDBXLoginPasswordHistoryEntry {
+    init(_ entry: LocalLoginPasswordHistoryEntry) {
+        self.init(id: entry.id, changedAt: entry.changedAt, password: entry.password)
     }
 }
 
