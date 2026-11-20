@@ -43,6 +43,7 @@
 		A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000011 /* AppVaultLayoutPreferences.swift */; };
 		A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000011 /* AppUpdateCheckView.swift */; };
 		A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */; };
+		A93000000000000000000001 /* MonicaAuthenticatorLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93000000000000000000011 /* MonicaAuthenticatorLiveActivityWidget.swift */; };
 		A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FC /* AppCloudVaultSyncView.swift */; };
 		A10000000000000000000025 /* LockScreenViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000026 /* LockScreenViews.swift */; };
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
@@ -157,6 +158,7 @@
 		A90000000000000000000011 /* AppVaultLayoutPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultLayoutPreferences.swift; sourceTree = "<group>"; };
 		A91000000000000000000011 /* AppUpdateCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckView.swift; sourceTree = "<group>"; };
 		A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAuthenticatorLiveActivity.swift; sourceTree = "<group>"; };
+		A93000000000000000000011 /* MonicaAuthenticatorLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaAuthenticatorLiveActivityWidget.swift; sourceTree = "<group>"; };
 		A100000000000000000000FC /* AppCloudVaultSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSyncView.swift; sourceTree = "<group>"; };
 		A10000000000000000000021 /* AutoFillCredentialProviderViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillCredentialProviderViewController.swift; sourceTree = "<group>"; };
 		A10000000000000000000022 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -378,6 +380,7 @@
 				A80000000000000000000011 /* MonicaControlCenterIntents.swift */,
 				A80000000000000000000012 /* MonicaControlCenterWidget.swift */,
 				A80000000000000000000013 /* MonicaWidgetBundle.swift */,
+				A93000000000000000000011 /* MonicaAuthenticatorLiveActivityWidget.swift */,
 				BA0000000000000000000004 /* PrivacyInfo.xcprivacy */,
 				A20000000000000000000012 /* Info.plist */,
 				A20000000000000000000013 /* MonicaWidgetExtension.entitlements */,
@@ -725,6 +728,7 @@
 				A80000000000000000000002 /* MonicaControlCenterIntents.swift in Sources */,
 				A80000000000000000000003 /* MonicaControlCenterWidget.swift in Sources */,
 				A80000000000000000000004 /* MonicaWidgetBundle.swift in Sources */,
+				A93000000000000000000001 /* MonicaAuthenticatorLiveActivityWidget.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
