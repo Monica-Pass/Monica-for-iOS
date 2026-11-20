@@ -126,6 +126,9 @@ struct AndroidParityVaultHomeView: View {
                     }
                 }
             },
+            onOpenGlobalSearch: session.vaultState == .unlocked
+                ? { session.isGlobalSearchPresented = true }
+                : nil,
             batchBar: { batchActionBar }
         ) {
             if session.vaultState == .unlocked {
@@ -139,6 +142,9 @@ struct AndroidParityVaultHomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $isGeneratorPresented) {
             GeneratorRootView(session: session)
+        }
+        .navigationDestination(isPresented: $session.isGlobalSearchPresented) {
+            AppGlobalSearchView(session: session)
         }
         .fileImporter(
             isPresented: $isVaultImporterPresented,
@@ -741,7 +747,7 @@ struct AndroidParityVaultHomeView: View {
 
     private var presentedDetailBinding: Binding<Bool> {
         Binding(
-            get: { session.presentedDetailRoute != nil },
+            get: { session.presentedDetailRoute != nil && !session.isGlobalSearchPresented },
             set: { isPresented in
                 if !isPresented {
                     session.dismissDetail()
@@ -1127,6 +1133,8 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
     let showsMoreMenu: Bool
     let moreMenuModules: [PasswordLayoutModule]
     let onSelectMoreModule: (PasswordLayoutModule) -> Void
+    /// 为 nil 时（例如锁库状态）不展示全局搜索入口。
+    var onOpenGlobalSearch: (() -> Void)? = nil
     @ViewBuilder var batchBar: BatchBar
     @ViewBuilder var content: Content
 
@@ -1135,6 +1143,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     header
+                    globalSearchEntry
                     sectionBar
                     categoryBar
                     quickFilterStrip
@@ -1214,6 +1223,40 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             .padding(.horizontal, 24)
             .frame(minHeight: 64)
             .background(AndroidParityPalette.surfaceVariant, in: Capsule(style: .continuous))
+        }
+    }
+
+    @ViewBuilder
+    private var globalSearchEntry: some View {
+        if let onOpenGlobalSearch {
+            Button(action: onOpenGlobalSearch) {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .font(.headline.weight(.heavy))
+                        .foregroundStyle(AndroidParityPalette.primary)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("全局搜索")
+                            .font(.subheadline.weight(.heavy))
+                            .foregroundStyle(AndroidParityPalette.textPrimary)
+                        Text("密码、笔记、卡片、验证码")
+                            .font(.caption)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 8)
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(
+                    AndroidParityPalette.surfaceVariant.opacity(0.56),
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("global-search-entry")
         }
     }
 
@@ -2273,7 +2316,7 @@ private extension UnifiedVaultItemKind {
     }
 }
 
-private struct VaultItemDetailView: View {
+struct VaultItemDetailView: View {
     @Bindable var session: AppSessionModel
     let route: VaultItemRoute
     @State private var copyFeedback: String?
