@@ -1423,6 +1423,38 @@ struct SettingsRootView: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            AndroidParitySection(title: "局域网同步") {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
+                    NavigationLink {
+                        AppLanSyncSettingsView(session: session)
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            Image(systemName: "wifi")
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.primary)
+                                .frame(width: 28, height: 28)
+                            VStack(alignment: .leading, spacing: 4) {
+                                .font(.headline.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.primary)
+                                .frame(width: 28, height: 28)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("在两台 iPhone 之间同步")
+                                    .font(.subheadline.weight(.heavy))
+                                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                                Text("同一 Wi-Fi / 热点 · 配对码 + 验证码 · 端到端加密")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                            }
+                            Spacer(minLength: 8)
+                            Image(systemName: "chevron.right")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
         .fileImporter(
             isPresented: $isCSVImporterPresented,
