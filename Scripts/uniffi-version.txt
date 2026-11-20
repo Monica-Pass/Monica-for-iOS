@@ -1,0 +1,7 @@
+# UniFFI 版本（本仓库生成的 Swift 绑定与上游 `crates/mdbx-ffi` 编译时使用的
+# uniffi 必须是同一版本，否则 ABI/contract 校验会失败）。
+#
+# 权威来源是上游 workspace 的 Cargo.lock；本文件只作为“最后一次验证过的配对”
+# 记录，供没有上游 checkout 的场景（例如 `Scripts/uniffi-version.sh --print`）
+# 与代码审阅时对照。上游升级 uniffi 后，必须在同一批改动里重新生成绑定并更新本文件。
+0.31.1

@@ -320,6 +320,10 @@ SWIFT_CLASS("_TtC4MSAL19MSALNativeAuthError")
 @property (nonatomic, readonly, copy) NSArray<NSNumber *> * _Nonnull errorCodes;
 /// Error uri that can be followed to get more information about the error returned by the server
 @property (nonatomic, readonly, copy) NSString * _Nullable errorUri;
+/// Indicates whether the error can only be resolved by falling back to the browser-based interactive flow.
+@property (nonatomic, readonly) BOOL isBrowserRequired;
+/// Indicates whether the error is an unclassified or unexpected error with no more specific handling.
+@property (nonatomic, readonly) BOOL isGeneralError;
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
 @end
@@ -329,8 +333,6 @@ SWIFT_CLASS("_TtC4MSAL26MSALNativeAuthGenericError")
 @interface MSALNativeAuthGenericError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 /// Class that defines the structure and type of an Attributes Required error
@@ -424,8 +426,6 @@ SWIFT_CLASS("_TtC4MSAL24MFARequestChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the strong authentication method selected has been blocked. Reach out to customer support  to seek assistance.
 @property (nonatomic, readonly) BOOL isAuthMethodBlocked;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 @protocol MFASubmitChallengeDelegate;
@@ -472,8 +472,6 @@ SWIFT_CLASS("_TtC4MSAL23MFASubmitChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the challenge introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidChallenge;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 /// MSALAuthMethod represents a user’s authentication methods.
@@ -481,6 +479,135 @@ SWIFT_CLASS("_TtC4MSAL14MSALAuthMethod")
 @interface MSALAuthMethod : NSObject
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+enum MSALNativeAuthFlowScenario : NSInteger;
+@class MSALNativeAuthFlowError;
+/// Shared base delegate for all Native Auth V2 (server-driven) flows.
+/// Unlike V1 - which exposes a different delegate protocol per step - V2 uses one
+/// family of delegates for sign up, sign in and reset password. The SDK drives the flow and
+/// reports back through these callbacks; the app reacts and continues the flow by
+/// calling methods directly on the <code>MSALNativeAuthState</code> it is handed.
+/// This base protocol declares only the two terminal callbacks (<code>onFlowCompleted(result:scenario:)</code>
+/// and <code>onFlowError(error:scenario:)</code>) that every flow reports. Each server-driven state is
+/// delivered through its own per-state delegate protocol (e.g. <code>MSALNativeAuthCodeRequiredDelegate</code>)
+/// that extends this base and adds a single strongly-typed, required callback. The app conforms to
+/// the per-state protocols for the states it wants to handle; if it does not conform to a state’s
+/// protocol, <code>onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// All callbacks are invoked on the main actor.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL26MSALNativeAuthFlowDelegate_")
+@protocol MSALNativeAuthFlowDelegate
+/// The flow completed successfully and the user now has tokens.
+/// \param result The authenticated user account result.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onFlowCompletedWithResult:(MSALNativeAuthUserAccountResult * _Nonnull)result scenario:(enum MSALNativeAuthFlowScenario)scenario;
+/// The flow encountered an error.
+/// \param error The error that occurred. The app decides whether it can retry by
+/// inspecting the error (e.g. <code>error.isInvalidCode</code> / <code>error.isInvalidPassword</code>) and calling
+/// the appropriate method again on the state it is currently handling.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onFlowErrorWithError:(MSALNativeAuthFlowError * _Nonnull)error scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+@class MSALNativeAuthAttributesRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthAttributesRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL40MSALNativeAuthAttributesRequiredDelegate_")
+@protocol MSALNativeAuthAttributesRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires additional user attributes.
+/// Continue with <code>MSALNativeAuthAttributesRequiredState/submitAttributes(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The required-attributes state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onAttributesRequiredWithState:(MSALNativeAuthAttributesRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// Base type for states the server can request during a Native Auth V2 (server-driven) flow.
+/// In V2 the server drives the flow: at each step the SDK reports a concrete
+/// <code>MSALNativeAuthState</code> subclass through its dedicated <code>MSALNativeAuthFlowDelegate</code> callback
+/// (e.g. <code>MSALNativeAuthCodeRequiredDelegate/onCodeRequired(state:scenario:)</code>). The app then continues the flow by
+/// calling the method(s) exposed on that concrete state - each state exposes only the
+/// continuations valid for its step, so invalid calls are impossible.
+/// This is an abstract base class - the SDK always hands back one of its concrete subclasses to the
+/// matching state-specific delegate callback, so apps never need to downcast the state.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL19MSALNativeAuthState")
+@interface MSALNativeAuthState : NSObject
+- (nonnull instancetype)init SWIFT_UNAVAILABLE;
++ (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+@class MSALNativeAuthRequiredAttribute;
+/// The server requires additional user attributes.
+/// Continue with <code>submitAttributes(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL37MSALNativeAuthAttributesRequiredState")
+@interface MSALNativeAuthAttributesRequiredState : MSALNativeAuthState
+/// The attributes the server requires.
+@property (nonatomic, readonly, copy) NSArray<MSALNativeAuthRequiredAttribute *> * _Nonnull attributes;
+/// Submit user attributes.
+- (void)submitAttributes:(NSDictionary<NSString *, id> * _Nonnull)attributes delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthAuthMethodSelectionRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthAuthMethodSelectionRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL49MSALNativeAuthAuthMethodSelectionRequiredDelegate_")
+@protocol MSALNativeAuthAuthMethodSelectionRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to select an authentication method.
+/// This callback can be raised by primary sign-in, sign-in MFA, and password-reset flows.
+/// Existing-account sign-in discovered during sign-up reports the <code>signIn</code> scenario.
+/// Continue with <code>MSALNativeAuthAuthMethodSelectionRequiredState/selectAuthMethod(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The authentication-method-selection state (available auth methods).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onAuthMethodSelectionRequiredWithState:(MSALNativeAuthAuthMethodSelectionRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to select an authentication method.
+/// This state can be emitted for primary sign-in, sign-in MFA, and password-reset flows.
+/// Primary sign-in includes existing-account sign-in discovered during sign-up.
+/// Continue with <code>selectAuthMethod(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL46MSALNativeAuthAuthMethodSelectionRequiredState")
+@interface MSALNativeAuthAuthMethodSelectionRequiredState : MSALNativeAuthState
+/// The authentication methods available for selection.
+@property (nonatomic, readonly, copy) NSArray<MSALAuthMethod *> * _Nonnull authMethods;
+/// Select an authentication method.
+/// If password input is required after selection, provide it through
+/// <code>MSALNativeAuthPasswordRequiredState/submitPassword(_:delegate:)</code>.
+/// \param method The authentication method selected from <code>authMethods</code>.
+///
+/// \param delegate The delegate that receives the next flow callback.
+///
+- (void)selectAuthMethod:(MSALAuthMethod * _Nonnull)method delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
 @end
 
 SWIFT_CLASS("_TtC4MSAL43MSALNativeAuthChallengeAuthMethodParameters")
@@ -503,9 +630,166 @@ SWIFT_CLASS("_TtC4MSAL25MSALNativeAuthChannelType")
 @property (nonatomic, readonly) BOOL isEmailType;
 /// Returns <code>true</code> if the channel is SMS.
 @property (nonatomic, readonly) BOOL isSMSType;
+/// Returns <code>true</code> if the channel is password.
+@property (nonatomic, readonly) BOOL isPasswordType;
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
 @end
+
+@class MSALNativeAuthCodeRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthCodeRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL34MSALNativeAuthCodeRequiredDelegate_")
+@protocol MSALNativeAuthCodeRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to verify a one-time code.
+/// Continue with <code>MSALNativeAuthCodeRequiredState/submitCode(_:delegate:)</code> (or request a new
+/// code with <code>MSALNativeAuthCodeRequiredState/resendCode(delegate:)</code>).
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The code-required state (destination, channel, expected length) that
+/// also exposes the continuation methods.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onCodeRequiredWithState:(MSALNativeAuthCodeRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to verify a one-time code.
+/// Continue with <code>submitCode(_:delegate:)</code> or request a new code with <code>resendCode(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL31MSALNativeAuthCodeRequiredState")
+@interface MSALNativeAuthCodeRequiredState : MSALNativeAuthState
+/// A masked destination the code was sent to (e.g. a partially obfuscated email).
+@property (nonatomic, readonly, copy) NSString * _Nonnull sentTo;
+/// The channel the code was sent through.
+@property (nonatomic, readonly, strong) MSALNativeAuthChannelType * _Nonnull channel;
+/// The expected length of the code.
+@property (nonatomic, readonly) NSInteger codeLength;
+/// Submit a one-time verification code.
+- (void)submitCode:(NSString * _Nonnull)code delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Request the server to resend the one-time code.
+- (void)resendCodeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthExistingAccountCodeRequiredState;
+/// Handles existing-account email verification discovered during V2 sign-up.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL49MSALNativeAuthExistingAccountCodeRequiredDelegate_")
+@protocol MSALNativeAuthExistingAccountCodeRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// Collect the existing account’s email code and submit it through the state.
+/// \param state The sign-in code state, including destination, channel, length, submit and resend operations.
+///
+/// \param scenario Always <code>signIn</code>, even though the flow started with sign-up.
+///
+- (void)onExistingAccountCodeRequiredWithState:(MSALNativeAuthExistingAccountCodeRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// Sign-up found an existing account and sent an email code to sign it in, not to create an account.
+/// Use the inherited <code>submitCode(_:delegate:)</code> to continue sign-in, including any MFA or enrollment steps.
+/// An invalid code can be retried on this state. <code>resendCode(delegate:)</code> returns another
+/// existing-account code state with the fresh code’s destination and length.
+/// Callbacks use the <code>signIn</code> scenario.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL46MSALNativeAuthExistingAccountCodeRequiredState")
+@interface MSALNativeAuthExistingAccountCodeRequiredState : MSALNativeAuthCodeRequiredState
+/// Resend the sign-in code, retaining the existing-account callback for the fresh code state.
+/// Errors, browser fallback and enrollment outcomes retain their ordinary sign-in handling.
+- (void)resendCodeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthExistingAccountPasswordRequiredState;
+/// Handles existing-account password collection discovered during V2 sign-up.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL53MSALNativeAuthExistingAccountPasswordRequiredDelegate_")
+@protocol MSALNativeAuthExistingAccountPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// Collect the existing account’s current password and submit it through the state.
+/// \param state The state used to submit the existing account’s password.
+///
+/// \param scenario Always <code>signIn</code>, even though the flow started with sign-up.
+///
+- (void)onExistingAccountPasswordRequiredWithState:(MSALNativeAuthExistingAccountPasswordRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to enter their password.
+/// Continue with <code>submitPassword(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL35MSALNativeAuthPasswordRequiredState")
+@interface MSALNativeAuthPasswordRequiredState : MSALNativeAuthState
+/// Submit a password.
+- (void)submitPassword:(NSString * _Nonnull)password delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+/// Sign-up found an existing account and requires its current password, not a new password.
+/// Use the inherited <code>submitPassword(_:delegate:)</code> to continue sign-in, including MFA or enrollment.
+/// An invalid password can be retried on this state. The proposed sign-up password is not submitted
+/// automatically. Callbacks use the <code>signIn</code> scenario.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL50MSALNativeAuthExistingAccountPasswordRequiredState")
+@interface MSALNativeAuthExistingAccountPasswordRequiredState : MSALNativeAuthPasswordRequiredState
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+/// Unified error type surfaced by the Native Auth V2 (server-driven) flows.
+/// A single error type is used across all V2 flows so that an app’s
+/// <code>MSALNativeAuthFlowDelegate</code> has only one error shape to inspect, mirroring
+/// the unified delegate contract described in the V2 interface.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL23MSALNativeAuthFlowError")
+@interface MSALNativeAuthFlowError : MSALNativeAuthError
+/// Describes why an error occurred and provides more information about the error.
+@property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
+/// Whether the delegate that produced this error is not implemented yet.
+@property (nonatomic, readonly) BOOL isNotImplemented;
+/// Whether the username was not found in the directory.
+@property (nonatomic, readonly) BOOL isUserNotFound;
+/// Whether the submitted one-time code was invalid.
+@property (nonatomic, readonly) BOOL isInvalidCode;
+/// Whether the submitted password was incorrect during sign in or did not satisfy the server’s
+/// policy during sign up or password reset.
+@property (nonatomic, readonly) BOOL isInvalidPassword;
+/// Whether the server rejected one or more non-password attributes.
+@property (nonatomic, readonly) BOOL isInvalidAttributes;
+/// Whether the username supplied to the SDK failed local validation.
+@property (nonatomic, readonly) BOOL isInvalidUsername;
+/// Whether the submitted MFA or strong-auth registration code was invalid.
+@property (nonatomic, readonly) BOOL isInvalidChallenge;
+/// Whether the input supplied for a strong authentication registration step was invalid.
+@property (nonatomic, readonly) BOOL isInvalidInput;
+@end
+
+/// Identifies which Native Auth V2 (server-driven) flow a <code>MSALNativeAuthFlowDelegate</code> callback
+/// belongs to.
+/// Because V2 uses a single unified delegate for sign in, sign up and password reset, every delegate
+/// callback also reports the <code>scenario</code> that triggered it so the app can react appropriately without
+/// tracking the originating flow itself.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+typedef SWIFT_ENUM(NSInteger, MSALNativeAuthFlowScenario, open) {
+/// The scenario could not be determined. This is the default value and should not normally be
+/// reported to the app; it acts as a safe placeholder until a concrete flow scenario is resolved.
+  MSALNativeAuthFlowScenarioUnknown = 0,
+/// The callback originated from a sign up flow.
+  MSALNativeAuthFlowScenarioSignUp = 1,
+/// The callback originated from a sign in flow.
+  MSALNativeAuthFlowScenarioSignIn = 2,
+/// The callback originated from a password reset flow.
+  MSALNativeAuthFlowScenarioPasswordReset = 3,
+};
 
 @class MSALClaimsRequest;
 /// Encapsulates the parameters passed to the getAccessToken method of MSALNativeAuthUserAccountResult
@@ -525,6 +809,101 @@ SWIFT_CLASS("_TtC4MSAL38MSALNativeAuthGetAccessTokenParameters")
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end
 
+@class MSALNativeAuthMFAVerificationRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthMFAVerificationRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL45MSALNativeAuthMFAVerificationRequiredDelegate_")
+@protocol MSALNativeAuthMFAVerificationRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server sent an MFA challenge. The user must enter the verification code.
+/// Continue with <code>MSALNativeAuthMFAVerificationRequiredState/submitChallenge(_:delegate:)</code>
+/// or request another challenge with <code>MSALNativeAuthMFAVerificationRequiredState/resendChallenge(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The MFA verification state (destination, channel, expected length).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onMFAVerificationRequiredWithState:(MSALNativeAuthMFAVerificationRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server sent an MFA challenge. The user must enter the verification code.
+/// Continue with <code>submitChallenge(_:delegate:)</code> or request another challenge with <code>resendChallenge(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL42MSALNativeAuthMFAVerificationRequiredState")
+@interface MSALNativeAuthMFAVerificationRequiredState : MSALNativeAuthState
+/// A masked destination the code was sent to (e.g. a partially obfuscated email).
+@property (nonatomic, readonly, copy) NSString * _Nonnull sentTo;
+/// The channel the code was sent through.
+@property (nonatomic, readonly, strong) MSALNativeAuthChannelType * _Nonnull channel;
+/// The expected length of the code.
+@property (nonatomic, readonly) NSInteger codeLength;
+/// Submit the MFA challenge response.
+- (void)submitChallenge:(NSString * _Nonnull)challenge delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Request another MFA challenge using the server-provided resend link.
+/// The delegate can receive another MFA verification state or a strong-auth registration state,
+/// a browser fallback, or an error if resending is unavailable.
+- (void)resendChallengeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthNewPasswordRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthNewPasswordRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL41MSALNativeAuthNewPasswordRequiredDelegate_")
+@protocol MSALNativeAuthNewPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to enter a new password (self-service password reset).
+/// Continue with <code>MSALNativeAuthNewPasswordRequiredState/submitNewPassword(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The new-password-required state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onNewPasswordRequiredWithState:(MSALNativeAuthNewPasswordRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to enter a new password (self-service password reset).
+/// Continue with <code>submitNewPassword(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL38MSALNativeAuthNewPasswordRequiredState")
+@interface MSALNativeAuthNewPasswordRequiredState : MSALNativeAuthState
+/// Submit a new password (self-service password reset).
+- (void)submitNewPassword:(NSString * _Nonnull)password delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+/// Per-state delegate for the <code>MSALNativeAuthPasswordRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL38MSALNativeAuthPasswordRequiredDelegate_")
+@protocol MSALNativeAuthPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to enter their password.
+/// Continue with <code>MSALNativeAuthPasswordRequiredState/submitPassword(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The password-required state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onPasswordRequiredWithState:(MSALNativeAuthPasswordRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
 @class MSALNativeAuthPublicClientApplicationConfig;
 @class MSALPublicClientApplicationConfig;
 @class MSALNativeAuthSignUpParameters;
@@ -533,6 +912,8 @@ SWIFT_CLASS("_TtC4MSAL38MSALNativeAuthGetAccessTokenParameters")
 @protocol SignInStartDelegate;
 @class MSALNativeAuthResetPasswordParameters;
 @protocol ResetPasswordStartDelegate;
+@class MSALNativeAuthSignUpParametersV2;
+@class MSALNativeAuthResetPasswordParametersV2;
 /// <pre>
 ///     do {
 ///         let config = try MSALNativeAuthPublicClientApplicationConfig(
@@ -589,12 +970,28 @@ SWIFT_CLASS("_TtC4MSAL37MSALNativeAuthPublicClientApplication")
 /// \param delegate Delegate that receives callbacks for the Sign In flow.
 ///
 - (void)signInParameters:(MSALNativeAuthSignInParameters * _Nonnull)parameters delegate:(id <SignInStartDelegate> _Nonnull)delegate;
-/// Reset the password using parameters
+/// Reset the password using parameters.
 /// \param parameters Parameters used for the Reset Password flow.
 ///
 /// \param delegate Delegate that receives callbacks for the Reset Password flow.
 ///
 - (void)resetPasswordWithParameters:(MSALNativeAuthResetPasswordParameters * _Nonnull)parameters delegate:(id <ResetPasswordStartDelegate> _Nonnull)delegate;
+/// Sign up a user using the server-driven (V2) flow.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+/// \param parameters Parameters used for the Sign Up flow.
+///
+/// \param delegate Unified delegate that receives callbacks for the flow.
+///
+- (void)signUpV2WithParameters:(MSALNativeAuthSignUpParametersV2 * _Nonnull)parameters delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Reset the password using the server-driven (V2) flow.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+/// \param parameters Parameters used for the Reset Password flow.
+///
+/// \param delegate Unified delegate that receives callbacks for the flow.
+///
+- (void)resetPasswordV2WithParameters:(MSALNativeAuthResetPasswordParametersV2 * _Nonnull)parameters delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
 /// Retrieve the current signed in account from the cache.
 /// \param correlationId Optional. UUID to correlate this request with the server for debugging.
 ///
@@ -700,6 +1097,26 @@ SWIFT_CLASS("_TtC4MSAL37MSALNativeAuthResetPasswordParameters")
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
 @end
 
+/// Encapsulates the parameters passed to the resetPasswordV2 method of MSALNativeAuthPublicClientApplication.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL39MSALNativeAuthResetPasswordParametersV2")
+@interface MSALNativeAuthResetPasswordParametersV2 : NSObject
+/// username of the account to reset password.
+@property (nonatomic, copy) NSString * _Nonnull username;
+/// Permissions you want included in the access token received once the account is signed in
+/// at the end of the reset password flow.
+/// Not all scopes are guaranteed to be included in the access token returned.
+@property (nonatomic, copy) NSArray<NSString *> * _Nullable scopes;
+/// The claims parameter sent to the service.
+@property (nonatomic, strong) MSALClaimsRequest * _Nullable claimsRequest;
+/// UUID to correlate this request with the server for debugging.
+@property (nonatomic, copy) NSUUID * _Nullable correlationId;
+- (nonnull instancetype)initWithUsername:(NSString * _Nonnull)username OBJC_DESIGNATED_INITIALIZER;
+- (nonnull instancetype)init SWIFT_UNAVAILABLE;
++ (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
 /// Encapsulates the parameters passed to the signIn method after resetPassword
 SWIFT_CLASS("_TtC4MSAL48MSALNativeAuthSignInAfterResetPasswordParameters")
 @interface MSALNativeAuthSignInAfterResetPasswordParameters : NSObject
@@ -711,6 +1128,38 @@ SWIFT_CLASS("_TtC4MSAL48MSALNativeAuthSignInAfterResetPasswordParameters")
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end
 
+@class MSALNativeAuthSignInAfterResetPasswordState;
+/// Per-state delegate for the <code>MSALNativeAuthSignInAfterResetPasswordState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL54MSALNativeAuthSignInAfterResetPasswordRequiredDelegate_")
+@protocol MSALNativeAuthSignInAfterResetPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The self-service password reset completed and the account can now be signed in.
+/// Continue with <code>MSALNativeAuthSignInAfterResetPasswordState/signIn(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The sign-in-after-reset-password state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onSignInAfterResetPasswordRequiredWithState:(MSALNativeAuthSignInAfterResetPasswordState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The self-service password reset completed. Sign the account in by calling
+/// <code>signIn(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL43MSALNativeAuthSignInAfterResetPasswordState")
+@interface MSALNativeAuthSignInAfterResetPasswordState : MSALNativeAuthState
+/// Sign in after a successful self-service password reset.
+- (void)signInDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
 /// Encapsulates the parameters passed to the signIn method after signUp
 SWIFT_CLASS("_TtC4MSAL41MSALNativeAuthSignInAfterSignUpParameters")
 @interface MSALNativeAuthSignInAfterSignUpParameters : NSObject
@@ -720,6 +1169,38 @@ SWIFT_CLASS("_TtC4MSAL41MSALNativeAuthSignInAfterSignUpParameters")
 /// The claims parameter that needs to be sent to the service.
 @property (nonatomic, strong) MSALClaimsRequest * _Nullable claimsRequest;
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
+@end
+
+@class MSALNativeAuthSignInAfterSignUpState;
+/// Per-state delegate for the <code>MSALNativeAuthSignInAfterSignUpState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL47MSALNativeAuthSignInAfterSignUpRequiredDelegate_")
+@protocol MSALNativeAuthSignInAfterSignUpRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The sign up completed and the new account can now be signed in.
+/// Continue with <code>MSALNativeAuthSignInAfterSignUpState/signIn(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The sign-in-after-sign-up state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onSignInAfterSignUpRequiredWithState:(MSALNativeAuthSignInAfterSignUpState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The sign-up completed. Sign the new account in by calling
+/// <code>signIn(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL36MSALNativeAuthSignInAfterSignUpState")
+@interface MSALNativeAuthSignInAfterSignUpState : MSALNativeAuthState
+/// Sign in after a successful sign up.
+- (void)signInDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
 @end
 
 /// Encapsulates the parameters passed to the signIn method of MSALNativeAuthPublicClientApplication
@@ -755,6 +1236,121 @@ SWIFT_CLASS("_TtC4MSAL30MSALNativeAuthSignUpParameters")
 - (nonnull instancetype)initWithUsername:(NSString * _Nonnull)username OBJC_DESIGNATED_INITIALIZER;
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+/// Encapsulates the parameters passed to the signUpV2 method of MSALNativeAuthPublicClientApplication.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL32MSALNativeAuthSignUpParametersV2")
+@interface MSALNativeAuthSignUpParametersV2 : NSObject
+/// username of the account to sign up.
+@property (nonatomic, copy) NSString * _Nonnull username;
+/// user attributes to be used during account creation.
+@property (nonatomic, copy) NSDictionary<NSString *, id> * _Nullable attributes;
+/// Permissions you want included in the access token received once the account is signed in
+/// at the end of the sign up flow.
+/// Not all scopes are guaranteed to be included in the access token returned.
+@property (nonatomic, copy) NSArray<NSString *> * _Nullable scopes;
+/// The claims parameter sent to the service.
+@property (nonatomic, strong) MSALClaimsRequest * _Nullable claimsRequest;
+/// UUID to correlate this request with the server for debugging.
+@property (nonatomic, copy) NSUUID * _Nullable correlationId;
+- (nonnull instancetype)initWithUsername:(NSString * _Nonnull)username OBJC_DESIGNATED_INITIALIZER;
+- (nonnull instancetype)init SWIFT_UNAVAILABLE;
++ (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+@class MSALNativeAuthStrongAuthRegistrationRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthStrongAuthRegistrationRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL52MSALNativeAuthStrongAuthRegistrationRequiredDelegate_")
+@protocol MSALNativeAuthStrongAuthRegistrationRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires strong authentication registration (JIT); the user must select an auth method.
+/// Continue with <code>MSALNativeAuthStrongAuthRegistrationRequiredState/selectAuthMethod(_:verificationContact:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The strong-auth registration state (available auth methods).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onStrongAuthRegistrationRequiredWithState:(MSALNativeAuthStrongAuthRegistrationRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires strong authentication registration (JIT); the user must select an auth method.
+/// Continue with <code>selectAuthMethod(_:verificationContact:delegate:)</code>.
+/// V2 registration is server-driven and does not require configuring application capabilities.
+/// Registration can interrupt sign-in, sign-up, or password reset; the original flow is preserved.
+/// SMS and email options are surfaced when offered by the server.
+/// After enrollment, the strong-auth verification state prompts for the code used to activate the selected method.
+/// After activation, the flow resumes with the server’s next step, including MFA when required.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL49MSALNativeAuthStrongAuthRegistrationRequiredState")
+@interface MSALNativeAuthStrongAuthRegistrationRequiredState : MSALNativeAuthState
+/// The recognized authentication methods offered by the server.
+@property (nonatomic, readonly, copy) NSArray<MSALAuthMethod *> * _Nonnull authMethods;
+/// Select an authentication method for strong-auth registration.
+/// \param method An entry from <code>authMethods</code>; its ID is opaque and scoped to this state.
+///
+/// \param verificationContact The phone number (including its country calling code) or email address to register.
+/// A nonempty contact is required.
+///
+/// \param delegate Receives the strong-auth verification state or a flow error.
+/// An unoffered method or a missing/blank contact produces an <code>invalidInput</code> error.
+///
+- (void)selectAuthMethod:(MSALAuthMethod * _Nonnull)method verificationContact:(NSString * _Nullable)verificationContact delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Select an authentication method for strong-auth registration, without an explicit
+/// verification contact.
+/// Enrollment requires a contact, so this overload reports an <code>invalidInput</code> flow error.
+- (void)selectAuthMethod:(MSALAuthMethod * _Nonnull)method delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthStrongAuthVerificationRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthStrongAuthVerificationRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL52MSALNativeAuthStrongAuthVerificationRequiredDelegate_")
+@protocol MSALNativeAuthStrongAuthVerificationRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server sent a JIT challenge; the user must enter the verification code.
+/// Continue with <code>MSALNativeAuthStrongAuthVerificationRequiredState/submitChallenge(_:delegate:)</code>
+/// or request another challenge with <code>MSALNativeAuthStrongAuthVerificationRequiredState/resendChallenge(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The strong-auth verification state (destination, channel, expected length).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onStrongAuthVerificationRequiredWithState:(MSALNativeAuthStrongAuthVerificationRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server sent a JIT challenge; the user must enter the verification code.
+/// Continue with <code>submitChallenge(_:delegate:)</code> or request another challenge with <code>resendChallenge(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL49MSALNativeAuthStrongAuthVerificationRequiredState")
+@interface MSALNativeAuthStrongAuthVerificationRequiredState : MSALNativeAuthState
+/// A masked destination the code was sent to (e.g. a partially obfuscated email).
+@property (nonatomic, readonly, copy) NSString * _Nonnull sentTo;
+/// The channel the code was sent through.
+@property (nonatomic, readonly, strong) MSALNativeAuthChannelType * _Nonnull channel;
+/// The server-provided code length, for display only. The SDK does not enforce it.
+@property (nonatomic, readonly) NSInteger codeLength;
+/// Submit the strong-auth (JIT) challenge response.
+- (void)submitChallenge:(NSString * _Nonnull)challenge delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Request another strong-auth (JIT) challenge using the server-provided resend link.
+/// The delegate receives another strong-auth verification state, or an error if resending is unavailable.
+- (void)resendChallengeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
 @end
 
 @class NSDate;
@@ -799,8 +1395,6 @@ SWIFT_CLASS("_TtC4MSAL21PasswordRequiredError")
 @interface PasswordRequiredError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the password is not valid.
 @property (nonatomic, readonly) BOOL isInvalidPassword;
 @end
@@ -845,8 +1439,6 @@ SWIFT_CLASS("_TtC4MSAL32RegisterStrongAuthChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the input introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidInput;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the verification contact provided has been blocked. Try using another email or phone number, or select an alternative authentication method.
 @property (nonatomic, readonly) BOOL isVerificationContactBlocked;
 @end
@@ -894,8 +1486,6 @@ SWIFT_CLASS("_TtC4MSAL38RegisterStrongAuthSubmitChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the challenge introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidChallenge;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 SWIFT_CLASS("_TtC4MSAL43RegisterStrongAuthVerificationRequiredState")
@@ -1040,8 +1630,6 @@ SWIFT_CLASS("_TtC4MSAL23ResetPasswordStartError")
 @interface ResetPasswordStartError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> if the user does not have a password.
 @property (nonatomic, readonly) BOOL isUserDoesNotHavePassword;
 /// Returns <code>true</code> if the user that is trying to reset their password cannot be found.
@@ -1075,8 +1663,6 @@ SWIFT_CLASS("_TtC4MSAL24RetrieveAccessTokenError")
 @interface RetrieveAccessTokenError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> if the refresh token has expired.
 @property (nonatomic, readonly) BOOL isRefreshTokenExpired;
 /// Returns <code>true</code> if the scope list is empty.
@@ -1337,8 +1923,6 @@ SWIFT_CLASS("_TtC4MSAL16SignInStartError")
 @interface SignInStartError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> if the user that is trying to sign in cannot be found.
 @property (nonatomic, readonly) BOOL isUserNotFound;
 /// Returns <code>true</code> when the credentials are not valid.
@@ -1543,8 +2127,6 @@ SWIFT_CLASS("_TtC4MSAL16SignUpStartError")
 @interface SignUpStartError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the user is trying to register an existing username.
 @property (nonatomic, readonly) BOOL isUserAlreadyExists;
 /// Returns <code>true</code> when the password is not valid.
@@ -1590,8 +2172,6 @@ SWIFT_CLASS("_TtC4MSAL15VerifyCodeError")
 @interface VerifyCodeError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the code introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidCode;
 @end
@@ -1926,6 +2506,10 @@ SWIFT_CLASS("_TtC4MSAL19MSALNativeAuthError")
 @property (nonatomic, readonly, copy) NSArray<NSNumber *> * _Nonnull errorCodes;
 /// Error uri that can be followed to get more information about the error returned by the server
 @property (nonatomic, readonly, copy) NSString * _Nullable errorUri;
+/// Indicates whether the error can only be resolved by falling back to the browser-based interactive flow.
+@property (nonatomic, readonly) BOOL isBrowserRequired;
+/// Indicates whether the error is an unclassified or unexpected error with no more specific handling.
+@property (nonatomic, readonly) BOOL isGeneralError;
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
 @end
@@ -1935,8 +2519,6 @@ SWIFT_CLASS("_TtC4MSAL26MSALNativeAuthGenericError")
 @interface MSALNativeAuthGenericError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 /// Class that defines the structure and type of an Attributes Required error
@@ -2030,8 +2612,6 @@ SWIFT_CLASS("_TtC4MSAL24MFARequestChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the strong authentication method selected has been blocked. Reach out to customer support  to seek assistance.
 @property (nonatomic, readonly) BOOL isAuthMethodBlocked;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 @protocol MFASubmitChallengeDelegate;
@@ -2078,8 +2658,6 @@ SWIFT_CLASS("_TtC4MSAL23MFASubmitChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the challenge introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidChallenge;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 /// MSALAuthMethod represents a user’s authentication methods.
@@ -2087,6 +2665,135 @@ SWIFT_CLASS("_TtC4MSAL14MSALAuthMethod")
 @interface MSALAuthMethod : NSObject
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+enum MSALNativeAuthFlowScenario : NSInteger;
+@class MSALNativeAuthFlowError;
+/// Shared base delegate for all Native Auth V2 (server-driven) flows.
+/// Unlike V1 - which exposes a different delegate protocol per step - V2 uses one
+/// family of delegates for sign up, sign in and reset password. The SDK drives the flow and
+/// reports back through these callbacks; the app reacts and continues the flow by
+/// calling methods directly on the <code>MSALNativeAuthState</code> it is handed.
+/// This base protocol declares only the two terminal callbacks (<code>onFlowCompleted(result:scenario:)</code>
+/// and <code>onFlowError(error:scenario:)</code>) that every flow reports. Each server-driven state is
+/// delivered through its own per-state delegate protocol (e.g. <code>MSALNativeAuthCodeRequiredDelegate</code>)
+/// that extends this base and adds a single strongly-typed, required callback. The app conforms to
+/// the per-state protocols for the states it wants to handle; if it does not conform to a state’s
+/// protocol, <code>onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// All callbacks are invoked on the main actor.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL26MSALNativeAuthFlowDelegate_")
+@protocol MSALNativeAuthFlowDelegate
+/// The flow completed successfully and the user now has tokens.
+/// \param result The authenticated user account result.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onFlowCompletedWithResult:(MSALNativeAuthUserAccountResult * _Nonnull)result scenario:(enum MSALNativeAuthFlowScenario)scenario;
+/// The flow encountered an error.
+/// \param error The error that occurred. The app decides whether it can retry by
+/// inspecting the error (e.g. <code>error.isInvalidCode</code> / <code>error.isInvalidPassword</code>) and calling
+/// the appropriate method again on the state it is currently handling.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onFlowErrorWithError:(MSALNativeAuthFlowError * _Nonnull)error scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+@class MSALNativeAuthAttributesRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthAttributesRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL40MSALNativeAuthAttributesRequiredDelegate_")
+@protocol MSALNativeAuthAttributesRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires additional user attributes.
+/// Continue with <code>MSALNativeAuthAttributesRequiredState/submitAttributes(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The required-attributes state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onAttributesRequiredWithState:(MSALNativeAuthAttributesRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// Base type for states the server can request during a Native Auth V2 (server-driven) flow.
+/// In V2 the server drives the flow: at each step the SDK reports a concrete
+/// <code>MSALNativeAuthState</code> subclass through its dedicated <code>MSALNativeAuthFlowDelegate</code> callback
+/// (e.g. <code>MSALNativeAuthCodeRequiredDelegate/onCodeRequired(state:scenario:)</code>). The app then continues the flow by
+/// calling the method(s) exposed on that concrete state - each state exposes only the
+/// continuations valid for its step, so invalid calls are impossible.
+/// This is an abstract base class - the SDK always hands back one of its concrete subclasses to the
+/// matching state-specific delegate callback, so apps never need to downcast the state.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL19MSALNativeAuthState")
+@interface MSALNativeAuthState : NSObject
+- (nonnull instancetype)init SWIFT_UNAVAILABLE;
++ (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+@class MSALNativeAuthRequiredAttribute;
+/// The server requires additional user attributes.
+/// Continue with <code>submitAttributes(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL37MSALNativeAuthAttributesRequiredState")
+@interface MSALNativeAuthAttributesRequiredState : MSALNativeAuthState
+/// The attributes the server requires.
+@property (nonatomic, readonly, copy) NSArray<MSALNativeAuthRequiredAttribute *> * _Nonnull attributes;
+/// Submit user attributes.
+- (void)submitAttributes:(NSDictionary<NSString *, id> * _Nonnull)attributes delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthAuthMethodSelectionRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthAuthMethodSelectionRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL49MSALNativeAuthAuthMethodSelectionRequiredDelegate_")
+@protocol MSALNativeAuthAuthMethodSelectionRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to select an authentication method.
+/// This callback can be raised by primary sign-in, sign-in MFA, and password-reset flows.
+/// Existing-account sign-in discovered during sign-up reports the <code>signIn</code> scenario.
+/// Continue with <code>MSALNativeAuthAuthMethodSelectionRequiredState/selectAuthMethod(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The authentication-method-selection state (available auth methods).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onAuthMethodSelectionRequiredWithState:(MSALNativeAuthAuthMethodSelectionRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to select an authentication method.
+/// This state can be emitted for primary sign-in, sign-in MFA, and password-reset flows.
+/// Primary sign-in includes existing-account sign-in discovered during sign-up.
+/// Continue with <code>selectAuthMethod(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL46MSALNativeAuthAuthMethodSelectionRequiredState")
+@interface MSALNativeAuthAuthMethodSelectionRequiredState : MSALNativeAuthState
+/// The authentication methods available for selection.
+@property (nonatomic, readonly, copy) NSArray<MSALAuthMethod *> * _Nonnull authMethods;
+/// Select an authentication method.
+/// If password input is required after selection, provide it through
+/// <code>MSALNativeAuthPasswordRequiredState/submitPassword(_:delegate:)</code>.
+/// \param method The authentication method selected from <code>authMethods</code>.
+///
+/// \param delegate The delegate that receives the next flow callback.
+///
+- (void)selectAuthMethod:(MSALAuthMethod * _Nonnull)method delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
 @end
 
 SWIFT_CLASS("_TtC4MSAL43MSALNativeAuthChallengeAuthMethodParameters")
@@ -2109,9 +2816,166 @@ SWIFT_CLASS("_TtC4MSAL25MSALNativeAuthChannelType")
 @property (nonatomic, readonly) BOOL isEmailType;
 /// Returns <code>true</code> if the channel is SMS.
 @property (nonatomic, readonly) BOOL isSMSType;
+/// Returns <code>true</code> if the channel is password.
+@property (nonatomic, readonly) BOOL isPasswordType;
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
 @end
+
+@class MSALNativeAuthCodeRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthCodeRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL34MSALNativeAuthCodeRequiredDelegate_")
+@protocol MSALNativeAuthCodeRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to verify a one-time code.
+/// Continue with <code>MSALNativeAuthCodeRequiredState/submitCode(_:delegate:)</code> (or request a new
+/// code with <code>MSALNativeAuthCodeRequiredState/resendCode(delegate:)</code>).
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The code-required state (destination, channel, expected length) that
+/// also exposes the continuation methods.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onCodeRequiredWithState:(MSALNativeAuthCodeRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to verify a one-time code.
+/// Continue with <code>submitCode(_:delegate:)</code> or request a new code with <code>resendCode(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL31MSALNativeAuthCodeRequiredState")
+@interface MSALNativeAuthCodeRequiredState : MSALNativeAuthState
+/// A masked destination the code was sent to (e.g. a partially obfuscated email).
+@property (nonatomic, readonly, copy) NSString * _Nonnull sentTo;
+/// The channel the code was sent through.
+@property (nonatomic, readonly, strong) MSALNativeAuthChannelType * _Nonnull channel;
+/// The expected length of the code.
+@property (nonatomic, readonly) NSInteger codeLength;
+/// Submit a one-time verification code.
+- (void)submitCode:(NSString * _Nonnull)code delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Request the server to resend the one-time code.
+- (void)resendCodeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthExistingAccountCodeRequiredState;
+/// Handles existing-account email verification discovered during V2 sign-up.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL49MSALNativeAuthExistingAccountCodeRequiredDelegate_")
+@protocol MSALNativeAuthExistingAccountCodeRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// Collect the existing account’s email code and submit it through the state.
+/// \param state The sign-in code state, including destination, channel, length, submit and resend operations.
+///
+/// \param scenario Always <code>signIn</code>, even though the flow started with sign-up.
+///
+- (void)onExistingAccountCodeRequiredWithState:(MSALNativeAuthExistingAccountCodeRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// Sign-up found an existing account and sent an email code to sign it in, not to create an account.
+/// Use the inherited <code>submitCode(_:delegate:)</code> to continue sign-in, including any MFA or enrollment steps.
+/// An invalid code can be retried on this state. <code>resendCode(delegate:)</code> returns another
+/// existing-account code state with the fresh code’s destination and length.
+/// Callbacks use the <code>signIn</code> scenario.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL46MSALNativeAuthExistingAccountCodeRequiredState")
+@interface MSALNativeAuthExistingAccountCodeRequiredState : MSALNativeAuthCodeRequiredState
+/// Resend the sign-in code, retaining the existing-account callback for the fresh code state.
+/// Errors, browser fallback and enrollment outcomes retain their ordinary sign-in handling.
+- (void)resendCodeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthExistingAccountPasswordRequiredState;
+/// Handles existing-account password collection discovered during V2 sign-up.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL53MSALNativeAuthExistingAccountPasswordRequiredDelegate_")
+@protocol MSALNativeAuthExistingAccountPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// Collect the existing account’s current password and submit it through the state.
+/// \param state The state used to submit the existing account’s password.
+///
+/// \param scenario Always <code>signIn</code>, even though the flow started with sign-up.
+///
+- (void)onExistingAccountPasswordRequiredWithState:(MSALNativeAuthExistingAccountPasswordRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to enter their password.
+/// Continue with <code>submitPassword(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL35MSALNativeAuthPasswordRequiredState")
+@interface MSALNativeAuthPasswordRequiredState : MSALNativeAuthState
+/// Submit a password.
+- (void)submitPassword:(NSString * _Nonnull)password delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+/// Sign-up found an existing account and requires its current password, not a new password.
+/// Use the inherited <code>submitPassword(_:delegate:)</code> to continue sign-in, including MFA or enrollment.
+/// An invalid password can be retried on this state. The proposed sign-up password is not submitted
+/// automatically. Callbacks use the <code>signIn</code> scenario.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL50MSALNativeAuthExistingAccountPasswordRequiredState")
+@interface MSALNativeAuthExistingAccountPasswordRequiredState : MSALNativeAuthPasswordRequiredState
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+/// Unified error type surfaced by the Native Auth V2 (server-driven) flows.
+/// A single error type is used across all V2 flows so that an app’s
+/// <code>MSALNativeAuthFlowDelegate</code> has only one error shape to inspect, mirroring
+/// the unified delegate contract described in the V2 interface.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL23MSALNativeAuthFlowError")
+@interface MSALNativeAuthFlowError : MSALNativeAuthError
+/// Describes why an error occurred and provides more information about the error.
+@property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
+/// Whether the delegate that produced this error is not implemented yet.
+@property (nonatomic, readonly) BOOL isNotImplemented;
+/// Whether the username was not found in the directory.
+@property (nonatomic, readonly) BOOL isUserNotFound;
+/// Whether the submitted one-time code was invalid.
+@property (nonatomic, readonly) BOOL isInvalidCode;
+/// Whether the submitted password was incorrect during sign in or did not satisfy the server’s
+/// policy during sign up or password reset.
+@property (nonatomic, readonly) BOOL isInvalidPassword;
+/// Whether the server rejected one or more non-password attributes.
+@property (nonatomic, readonly) BOOL isInvalidAttributes;
+/// Whether the username supplied to the SDK failed local validation.
+@property (nonatomic, readonly) BOOL isInvalidUsername;
+/// Whether the submitted MFA or strong-auth registration code was invalid.
+@property (nonatomic, readonly) BOOL isInvalidChallenge;
+/// Whether the input supplied for a strong authentication registration step was invalid.
+@property (nonatomic, readonly) BOOL isInvalidInput;
+@end
+
+/// Identifies which Native Auth V2 (server-driven) flow a <code>MSALNativeAuthFlowDelegate</code> callback
+/// belongs to.
+/// Because V2 uses a single unified delegate for sign in, sign up and password reset, every delegate
+/// callback also reports the <code>scenario</code> that triggered it so the app can react appropriately without
+/// tracking the originating flow itself.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+typedef SWIFT_ENUM(NSInteger, MSALNativeAuthFlowScenario, open) {
+/// The scenario could not be determined. This is the default value and should not normally be
+/// reported to the app; it acts as a safe placeholder until a concrete flow scenario is resolved.
+  MSALNativeAuthFlowScenarioUnknown = 0,
+/// The callback originated from a sign up flow.
+  MSALNativeAuthFlowScenarioSignUp = 1,
+/// The callback originated from a sign in flow.
+  MSALNativeAuthFlowScenarioSignIn = 2,
+/// The callback originated from a password reset flow.
+  MSALNativeAuthFlowScenarioPasswordReset = 3,
+};
 
 @class MSALClaimsRequest;
 /// Encapsulates the parameters passed to the getAccessToken method of MSALNativeAuthUserAccountResult
@@ -2131,6 +2995,101 @@ SWIFT_CLASS("_TtC4MSAL38MSALNativeAuthGetAccessTokenParameters")
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end
 
+@class MSALNativeAuthMFAVerificationRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthMFAVerificationRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL45MSALNativeAuthMFAVerificationRequiredDelegate_")
+@protocol MSALNativeAuthMFAVerificationRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server sent an MFA challenge. The user must enter the verification code.
+/// Continue with <code>MSALNativeAuthMFAVerificationRequiredState/submitChallenge(_:delegate:)</code>
+/// or request another challenge with <code>MSALNativeAuthMFAVerificationRequiredState/resendChallenge(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The MFA verification state (destination, channel, expected length).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onMFAVerificationRequiredWithState:(MSALNativeAuthMFAVerificationRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server sent an MFA challenge. The user must enter the verification code.
+/// Continue with <code>submitChallenge(_:delegate:)</code> or request another challenge with <code>resendChallenge(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL42MSALNativeAuthMFAVerificationRequiredState")
+@interface MSALNativeAuthMFAVerificationRequiredState : MSALNativeAuthState
+/// A masked destination the code was sent to (e.g. a partially obfuscated email).
+@property (nonatomic, readonly, copy) NSString * _Nonnull sentTo;
+/// The channel the code was sent through.
+@property (nonatomic, readonly, strong) MSALNativeAuthChannelType * _Nonnull channel;
+/// The expected length of the code.
+@property (nonatomic, readonly) NSInteger codeLength;
+/// Submit the MFA challenge response.
+- (void)submitChallenge:(NSString * _Nonnull)challenge delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Request another MFA challenge using the server-provided resend link.
+/// The delegate can receive another MFA verification state or a strong-auth registration state,
+/// a browser fallback, or an error if resending is unavailable.
+- (void)resendChallengeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthNewPasswordRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthNewPasswordRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL41MSALNativeAuthNewPasswordRequiredDelegate_")
+@protocol MSALNativeAuthNewPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to enter a new password (self-service password reset).
+/// Continue with <code>MSALNativeAuthNewPasswordRequiredState/submitNewPassword(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The new-password-required state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onNewPasswordRequiredWithState:(MSALNativeAuthNewPasswordRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires the user to enter a new password (self-service password reset).
+/// Continue with <code>submitNewPassword(_:delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL38MSALNativeAuthNewPasswordRequiredState")
+@interface MSALNativeAuthNewPasswordRequiredState : MSALNativeAuthState
+/// Submit a new password (self-service password reset).
+- (void)submitNewPassword:(NSString * _Nonnull)password delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+/// Per-state delegate for the <code>MSALNativeAuthPasswordRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL38MSALNativeAuthPasswordRequiredDelegate_")
+@protocol MSALNativeAuthPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires the user to enter their password.
+/// Continue with <code>MSALNativeAuthPasswordRequiredState/submitPassword(_:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The password-required state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onPasswordRequiredWithState:(MSALNativeAuthPasswordRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
 @class MSALNativeAuthPublicClientApplicationConfig;
 @class MSALPublicClientApplicationConfig;
 @class MSALNativeAuthSignUpParameters;
@@ -2139,6 +3098,8 @@ SWIFT_CLASS("_TtC4MSAL38MSALNativeAuthGetAccessTokenParameters")
 @protocol SignInStartDelegate;
 @class MSALNativeAuthResetPasswordParameters;
 @protocol ResetPasswordStartDelegate;
+@class MSALNativeAuthSignUpParametersV2;
+@class MSALNativeAuthResetPasswordParametersV2;
 /// <pre>
 ///     do {
 ///         let config = try MSALNativeAuthPublicClientApplicationConfig(
@@ -2195,12 +3156,28 @@ SWIFT_CLASS("_TtC4MSAL37MSALNativeAuthPublicClientApplication")
 /// \param delegate Delegate that receives callbacks for the Sign In flow.
 ///
 - (void)signInParameters:(MSALNativeAuthSignInParameters * _Nonnull)parameters delegate:(id <SignInStartDelegate> _Nonnull)delegate;
-/// Reset the password using parameters
+/// Reset the password using parameters.
 /// \param parameters Parameters used for the Reset Password flow.
 ///
 /// \param delegate Delegate that receives callbacks for the Reset Password flow.
 ///
 - (void)resetPasswordWithParameters:(MSALNativeAuthResetPasswordParameters * _Nonnull)parameters delegate:(id <ResetPasswordStartDelegate> _Nonnull)delegate;
+/// Sign up a user using the server-driven (V2) flow.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+/// \param parameters Parameters used for the Sign Up flow.
+///
+/// \param delegate Unified delegate that receives callbacks for the flow.
+///
+- (void)signUpV2WithParameters:(MSALNativeAuthSignUpParametersV2 * _Nonnull)parameters delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Reset the password using the server-driven (V2) flow.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+/// \param parameters Parameters used for the Reset Password flow.
+///
+/// \param delegate Unified delegate that receives callbacks for the flow.
+///
+- (void)resetPasswordV2WithParameters:(MSALNativeAuthResetPasswordParametersV2 * _Nonnull)parameters delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
 /// Retrieve the current signed in account from the cache.
 /// \param correlationId Optional. UUID to correlate this request with the server for debugging.
 ///
@@ -2306,6 +3283,26 @@ SWIFT_CLASS("_TtC4MSAL37MSALNativeAuthResetPasswordParameters")
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
 @end
 
+/// Encapsulates the parameters passed to the resetPasswordV2 method of MSALNativeAuthPublicClientApplication.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL39MSALNativeAuthResetPasswordParametersV2")
+@interface MSALNativeAuthResetPasswordParametersV2 : NSObject
+/// username of the account to reset password.
+@property (nonatomic, copy) NSString * _Nonnull username;
+/// Permissions you want included in the access token received once the account is signed in
+/// at the end of the reset password flow.
+/// Not all scopes are guaranteed to be included in the access token returned.
+@property (nonatomic, copy) NSArray<NSString *> * _Nullable scopes;
+/// The claims parameter sent to the service.
+@property (nonatomic, strong) MSALClaimsRequest * _Nullable claimsRequest;
+/// UUID to correlate this request with the server for debugging.
+@property (nonatomic, copy) NSUUID * _Nullable correlationId;
+- (nonnull instancetype)initWithUsername:(NSString * _Nonnull)username OBJC_DESIGNATED_INITIALIZER;
+- (nonnull instancetype)init SWIFT_UNAVAILABLE;
++ (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
 /// Encapsulates the parameters passed to the signIn method after resetPassword
 SWIFT_CLASS("_TtC4MSAL48MSALNativeAuthSignInAfterResetPasswordParameters")
 @interface MSALNativeAuthSignInAfterResetPasswordParameters : NSObject
@@ -2317,6 +3314,38 @@ SWIFT_CLASS("_TtC4MSAL48MSALNativeAuthSignInAfterResetPasswordParameters")
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
 @end
 
+@class MSALNativeAuthSignInAfterResetPasswordState;
+/// Per-state delegate for the <code>MSALNativeAuthSignInAfterResetPasswordState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL54MSALNativeAuthSignInAfterResetPasswordRequiredDelegate_")
+@protocol MSALNativeAuthSignInAfterResetPasswordRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The self-service password reset completed and the account can now be signed in.
+/// Continue with <code>MSALNativeAuthSignInAfterResetPasswordState/signIn(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The sign-in-after-reset-password state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onSignInAfterResetPasswordRequiredWithState:(MSALNativeAuthSignInAfterResetPasswordState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The self-service password reset completed. Sign the account in by calling
+/// <code>signIn(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL43MSALNativeAuthSignInAfterResetPasswordState")
+@interface MSALNativeAuthSignInAfterResetPasswordState : MSALNativeAuthState
+/// Sign in after a successful self-service password reset.
+- (void)signInDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
 /// Encapsulates the parameters passed to the signIn method after signUp
 SWIFT_CLASS("_TtC4MSAL41MSALNativeAuthSignInAfterSignUpParameters")
 @interface MSALNativeAuthSignInAfterSignUpParameters : NSObject
@@ -2326,6 +3355,38 @@ SWIFT_CLASS("_TtC4MSAL41MSALNativeAuthSignInAfterSignUpParameters")
 /// The claims parameter that needs to be sent to the service.
 @property (nonatomic, strong) MSALClaimsRequest * _Nullable claimsRequest;
 - (nonnull instancetype)init OBJC_DESIGNATED_INITIALIZER;
+@end
+
+@class MSALNativeAuthSignInAfterSignUpState;
+/// Per-state delegate for the <code>MSALNativeAuthSignInAfterSignUpState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL47MSALNativeAuthSignInAfterSignUpRequiredDelegate_")
+@protocol MSALNativeAuthSignInAfterSignUpRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The sign up completed and the new account can now be signed in.
+/// Continue with <code>MSALNativeAuthSignInAfterSignUpState/signIn(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The sign-in-after-sign-up state.
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onSignInAfterSignUpRequiredWithState:(MSALNativeAuthSignInAfterSignUpState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The sign-up completed. Sign the new account in by calling
+/// <code>signIn(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL36MSALNativeAuthSignInAfterSignUpState")
+@interface MSALNativeAuthSignInAfterSignUpState : MSALNativeAuthState
+/// Sign in after a successful sign up.
+- (void)signInDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
 @end
 
 /// Encapsulates the parameters passed to the signIn method of MSALNativeAuthPublicClientApplication
@@ -2361,6 +3422,121 @@ SWIFT_CLASS("_TtC4MSAL30MSALNativeAuthSignUpParameters")
 - (nonnull instancetype)initWithUsername:(NSString * _Nonnull)username OBJC_DESIGNATED_INITIALIZER;
 - (nonnull instancetype)init SWIFT_UNAVAILABLE;
 + (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+/// Encapsulates the parameters passed to the signUpV2 method of MSALNativeAuthPublicClientApplication.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL32MSALNativeAuthSignUpParametersV2")
+@interface MSALNativeAuthSignUpParametersV2 : NSObject
+/// username of the account to sign up.
+@property (nonatomic, copy) NSString * _Nonnull username;
+/// user attributes to be used during account creation.
+@property (nonatomic, copy) NSDictionary<NSString *, id> * _Nullable attributes;
+/// Permissions you want included in the access token received once the account is signed in
+/// at the end of the sign up flow.
+/// Not all scopes are guaranteed to be included in the access token returned.
+@property (nonatomic, copy) NSArray<NSString *> * _Nullable scopes;
+/// The claims parameter sent to the service.
+@property (nonatomic, strong) MSALClaimsRequest * _Nullable claimsRequest;
+/// UUID to correlate this request with the server for debugging.
+@property (nonatomic, copy) NSUUID * _Nullable correlationId;
+- (nonnull instancetype)initWithUsername:(NSString * _Nonnull)username OBJC_DESIGNATED_INITIALIZER;
+- (nonnull instancetype)init SWIFT_UNAVAILABLE;
++ (nonnull instancetype)new SWIFT_UNAVAILABLE_MSG("-init is unavailable");
+@end
+
+@class MSALNativeAuthStrongAuthRegistrationRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthStrongAuthRegistrationRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL52MSALNativeAuthStrongAuthRegistrationRequiredDelegate_")
+@protocol MSALNativeAuthStrongAuthRegistrationRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server requires strong authentication registration (JIT); the user must select an auth method.
+/// Continue with <code>MSALNativeAuthStrongAuthRegistrationRequiredState/selectAuthMethod(_:verificationContact:delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The strong-auth registration state (available auth methods).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onStrongAuthRegistrationRequiredWithState:(MSALNativeAuthStrongAuthRegistrationRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server requires strong authentication registration (JIT); the user must select an auth method.
+/// Continue with <code>selectAuthMethod(_:verificationContact:delegate:)</code>.
+/// V2 registration is server-driven and does not require configuring application capabilities.
+/// Registration can interrupt sign-in, sign-up, or password reset; the original flow is preserved.
+/// SMS and email options are surfaced when offered by the server.
+/// After enrollment, the strong-auth verification state prompts for the code used to activate the selected method.
+/// After activation, the flow resumes with the server’s next step, including MFA when required.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL49MSALNativeAuthStrongAuthRegistrationRequiredState")
+@interface MSALNativeAuthStrongAuthRegistrationRequiredState : MSALNativeAuthState
+/// The recognized authentication methods offered by the server.
+@property (nonatomic, readonly, copy) NSArray<MSALAuthMethod *> * _Nonnull authMethods;
+/// Select an authentication method for strong-auth registration.
+/// \param method An entry from <code>authMethods</code>; its ID is opaque and scoped to this state.
+///
+/// \param verificationContact The phone number (including its country calling code) or email address to register.
+/// A nonempty contact is required.
+///
+/// \param delegate Receives the strong-auth verification state or a flow error.
+/// An unoffered method or a missing/blank contact produces an <code>invalidInput</code> error.
+///
+- (void)selectAuthMethod:(MSALAuthMethod * _Nonnull)method verificationContact:(NSString * _Nullable)verificationContact delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Select an authentication method for strong-auth registration, without an explicit
+/// verification contact.
+/// Enrollment requires a contact, so this overload reports an <code>invalidInput</code> flow error.
+- (void)selectAuthMethod:(MSALAuthMethod * _Nonnull)method delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
+@end
+
+@class MSALNativeAuthStrongAuthVerificationRequiredState;
+/// Per-state delegate for the <code>MSALNativeAuthStrongAuthVerificationRequiredState</code> step of a Native Auth V2 flow.
+/// Conform to this protocol (in addition to the terminal callbacks inherited from
+/// <code>MSALNativeAuthFlowDelegate</code>) to handle this state. Conforming is opt-in per state, but the
+/// callback is required once you conform.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_PROTOCOL("_TtP4MSAL52MSALNativeAuthStrongAuthVerificationRequiredDelegate_")
+@protocol MSALNativeAuthStrongAuthVerificationRequiredDelegate <MSALNativeAuthFlowDelegate>
+/// The server sent a JIT challenge; the user must enter the verification code.
+/// Continue with <code>MSALNativeAuthStrongAuthVerificationRequiredState/submitChallenge(_:delegate:)</code>
+/// or request another challenge with <code>MSALNativeAuthStrongAuthVerificationRequiredState/resendChallenge(delegate:)</code>.
+/// note:
+/// If the app’s delegate does not conform to this protocol, then
+/// <code>MSALNativeAuthFlowDelegate/onFlowError(error:scenario:)</code> is called with error type <code>notImplemented</code>.
+/// \param state The strong-auth verification state (destination, channel, expected length).
+///
+/// \param scenario The flow that produced this callback.
+///
+- (void)onStrongAuthVerificationRequiredWithState:(MSALNativeAuthStrongAuthVerificationRequiredState * _Nonnull)state scenario:(enum MSALNativeAuthFlowScenario)scenario;
+@end
+
+/// The server sent a JIT challenge; the user must enter the verification code.
+/// Continue with <code>submitChallenge(_:delegate:)</code> or request another challenge with <code>resendChallenge(delegate:)</code>.
+/// warning:
+/// This API is experimental. It may be changed in the future without notice. Do not use in production applications.
+SWIFT_CLASS("_TtC4MSAL49MSALNativeAuthStrongAuthVerificationRequiredState")
+@interface MSALNativeAuthStrongAuthVerificationRequiredState : MSALNativeAuthState
+/// A masked destination the code was sent to (e.g. a partially obfuscated email).
+@property (nonatomic, readonly, copy) NSString * _Nonnull sentTo;
+/// The channel the code was sent through.
+@property (nonatomic, readonly, strong) MSALNativeAuthChannelType * _Nonnull channel;
+/// The server-provided code length, for display only. The SDK does not enforce it.
+@property (nonatomic, readonly) NSInteger codeLength;
+/// Submit the strong-auth (JIT) challenge response.
+- (void)submitChallenge:(NSString * _Nonnull)challenge delegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+/// Request another strong-auth (JIT) challenge using the server-provided resend link.
+/// The delegate receives another strong-auth verification state, or an error if resending is unavailable.
+- (void)resendChallengeWithDelegate:(id <MSALNativeAuthFlowDelegate> _Nonnull)delegate;
+@property (nonatomic, readonly, copy) NSString * _Nonnull description;
 @end
 
 @class NSDate;
@@ -2405,8 +3581,6 @@ SWIFT_CLASS("_TtC4MSAL21PasswordRequiredError")
 @interface PasswordRequiredError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the password is not valid.
 @property (nonatomic, readonly) BOOL isInvalidPassword;
 @end
@@ -2451,8 +3625,6 @@ SWIFT_CLASS("_TtC4MSAL32RegisterStrongAuthChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the input introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidInput;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the verification contact provided has been blocked. Try using another email or phone number, or select an alternative authentication method.
 @property (nonatomic, readonly) BOOL isVerificationContactBlocked;
 @end
@@ -2500,8 +3672,6 @@ SWIFT_CLASS("_TtC4MSAL38RegisterStrongAuthSubmitChallengeError")
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
 /// Returns <code>true</code> when the challenge introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidChallenge;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 @end
 
 SWIFT_CLASS("_TtC4MSAL43RegisterStrongAuthVerificationRequiredState")
@@ -2646,8 +3816,6 @@ SWIFT_CLASS("_TtC4MSAL23ResetPasswordStartError")
 @interface ResetPasswordStartError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> if the user does not have a password.
 @property (nonatomic, readonly) BOOL isUserDoesNotHavePassword;
 /// Returns <code>true</code> if the user that is trying to reset their password cannot be found.
@@ -2681,8 +3849,6 @@ SWIFT_CLASS("_TtC4MSAL24RetrieveAccessTokenError")
 @interface RetrieveAccessTokenError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> if the refresh token has expired.
 @property (nonatomic, readonly) BOOL isRefreshTokenExpired;
 /// Returns <code>true</code> if the scope list is empty.
@@ -2943,8 +4109,6 @@ SWIFT_CLASS("_TtC4MSAL16SignInStartError")
 @interface SignInStartError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> if the user that is trying to sign in cannot be found.
 @property (nonatomic, readonly) BOOL isUserNotFound;
 /// Returns <code>true</code> when the credentials are not valid.
@@ -3149,8 +4313,6 @@ SWIFT_CLASS("_TtC4MSAL16SignUpStartError")
 @interface SignUpStartError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the user is trying to register an existing username.
 @property (nonatomic, readonly) BOOL isUserAlreadyExists;
 /// Returns <code>true</code> when the password is not valid.
@@ -3196,8 +4358,6 @@ SWIFT_CLASS("_TtC4MSAL15VerifyCodeError")
 @interface VerifyCodeError : MSALNativeAuthError
 /// Describes why an error occurred and provides more information about the error.
 @property (nonatomic, readonly, copy) NSString * _Nullable errorDescription;
-/// Returns <code>true</code> if a browser is required to continue the operation.
-@property (nonatomic, readonly) BOOL isBrowserRequired;
 /// Returns <code>true</code> when the code introduced is not valid.
 @property (nonatomic, readonly) BOOL isInvalidCode;
 @end

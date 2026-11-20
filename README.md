@@ -68,8 +68,13 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 ├── Tests/
 │   └── MonicaTests/
 ├── Scripts/
+│   ├── bootstrap.sh
 │   ├── build-mdbx-xcframework.sh
-│   └── generate-mdbx-swift-bindings.sh
+│   ├── generate-mdbx-swift-bindings.sh
+│   ├── mdbx-common.sh
+│   ├── uniffi-version.sh
+│   ├── uniffi-version.txt
+│   └── update-msal.sh
 ├── Artifacts/
 │   ├── MDBX/
 │   └── MSAL/
@@ -109,8 +114,13 @@ mdbx/crates/mdbx-ffi
 Scripts/bootstrap.sh
 ```
 
-脚本会自动检查前置条件、安装缺失的 Rust target 与 UniFFI CLI，并生成 xcframework。
-产物已存在时直接跳过；强制重生成用 `Scripts/bootstrap.sh --force`。
+脚本会自动检查前置条件、补齐缺失的 Rust target、安装与上游版本匹配的 UniFFI CLI，
+并生成 xcframework。产物已存在时直接跳过（此时不需要任何 Rust 工具链）；
+强制重生成用 `Scripts/bootstrap.sh --force`。
+
+要求 rustup 管理的 toolchain：Homebrew 版 rust 只带 host std，`rustup target list
+--installed` 会声称 iOS target 已装，但 sysroot 里没有，构建会在链接阶段失败。
+脚本直接检查 sysroot，缺 target 时给出可执行的修复命令。
 
 前置条件——上游 MDBX workspace 必须与本仓库同级：
 
@@ -146,14 +156,43 @@ Scripts/generate-mdbx-swift-bindings.sh   # 生成 Swift binding
 Scripts/build-mdbx-xcframework.sh        # 打包 xcframework（约 1–2 分钟）
 ```
 
-需要的 Rust target 与 UniFFI CLI 版本：
+需要的 Rust target 与 UniFFI CLI：
 
 ```bash
-rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios
-cargo install uniffi --version 0.31.1 --locked --features cli
+rustup target add aarch64-apple-ios aarch64-apple-ios-sim x86_64-apple-ios aarch64-apple-darwin
+Scripts/uniffi-version.sh --install
 ```
 
+UniFFI 版本不是本仓库写死的常量：`Scripts/uniffi-version.sh` 默认从上游
+`mdbx/Cargo.lock` 里解析 `uniffi` 的版本（`Scripts/uniffi-version.txt` 只在找不到
+上游 workspace 时作为 fallback），因此上游升级 uniffi 后重新跑
+`Scripts/bootstrap.sh --force` 就会用同一个版本重新生成绑定。
+
+> UniFFI 会把自己的 contract version 与接口校验和编进生成产物，**生成器与 Rust
+> crate 的版本必须完全一致**。不要只升级 Swift 侧生成器，也不要手改生成的绑定。
+
 注意：不要把 `Scripts/build-mdbx-xcframework.sh` 和 Xcode build 并行运行。脚本会替换 `MonicaMDBXGenerated.xcframework`，Xcode 在替换期间读取产物可能失败。
+
+### MSAL（OneDrive 登录）
+
+MSAL 以 vendored binary framework 的形式入库（`Artifacts/MSAL/MSAL.xcframework`），
+没有 SwiftPM 版本号可以 pin，所以版本、下载地址与 sha256 统一由
+`Scripts/update-msal.sh` 声明：
+
+| 项目 | 值 |
+| --- | --- |
+| 版本 | 2.18.1（`AzureAD/microsoft-authentication-library-for-objc` 官方 release） |
+| slice | `ios-arm64`、`ios-arm64_x86_64-simulator`、`macos-arm64_x86_64` |
+| 版本校验 | `Scripts/update-msal.sh --verify`（CI lint job 会跑） |
+
+升级步骤：改脚本里的 `MSAL_VERSION` / `MSAL_SHA256`，执行
+`Scripts/update-msal.sh --update`（下载 → 校验 sha256 → 用 `xcodebuild
+-create-xcframework` 重新打包），再按新 framework 的最低版本同步
+`SwiftPackages/MSAL/Package.swift` 的平台下限。
+
+说明：vendored 产物是官方 zip 重新打包的结果（只保留 App 实际链接的三个 slice，
+官方 zip 还带两片 visionOS），因此 xcframework 级别不再有官方 `_CodeSignature`；
+framework 内的二进制保持官方原样，App 构建时由 Xcode 重新签名。
 
 ### 验证命令
 

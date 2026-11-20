@@ -1,91 +1,56 @@
 #!/usr/bin/env bash
+#
+# 为 iOS 设备 / iOS 模拟器 / macOS 三个平台编译 mdbx-ffi 静态库，并打包成
+# Artifacts/MDBX/MonicaMDBXGenerated.xcframework；同时把 Swift 绑定同步进
+# SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated/（入库副本）。
+#
+# 上游 workspace 定位见 Scripts/mdbx-common.sh（MONICA_MDBX_DIR 优先）。
+#
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-IOS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-REPO_ROOT="$(cd "$IOS_DIR/.." && pwd)"
-# 上游 MDBX workspace 定位：
-#   1. MONICA_MDBX_DIR 环境变量（CI 用；checkout 到任意位置）
-#   2. 同级目录 $REPO_ROOT/mdbx（本地开发的默认布局）
-#   3. 仓库内子目录 $IOS_DIR/mdbx（CI 单次 checkout 的默认布局）
-if [ -n "${MONICA_MDBX_DIR:-}" ]; then
-  MDBX_DIR="$MONICA_MDBX_DIR"
-elif [ -d "$REPO_ROOT/mdbx/crates/mdbx-ffi" ]; then
-  MDBX_DIR="$REPO_ROOT/mdbx"
-elif [ -d "$IOS_DIR/mdbx/crates/mdbx-ffi" ]; then
-  MDBX_DIR="$IOS_DIR/mdbx"
-else
-  MDBX_DIR="$REPO_ROOT/mdbx"
-fi
-GENERATED_DIR="$IOS_DIR/Generated/MDBXUniFFI"
-BUILD_DIR="$IOS_DIR/Build/MDBX"
-HEADERS_DIR="$BUILD_DIR/Headers"
-ARTIFACTS_DIR="$IOS_DIR/Artifacts/MDBX"
-XCFRAMEWORK_PATH="$ARTIFACTS_DIR/MonicaMDBXGenerated.xcframework"
-SWIFTPM_BINDINGS_DIR="$IOS_DIR/SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated"
+# shellcheck source=Scripts/mdbx-common.sh
+source "$SCRIPT_DIR/mdbx-common.sh"
 
-DEVICE_TARGET="aarch64-apple-ios"
-SIM_ARM64_TARGET="aarch64-apple-ios-sim"
-SIM_X86_64_TARGET="x86_64-apple-ios"
-MACOS_ARM64_TARGET="aarch64-apple-darwin"
+require_mdbx_workspace
+
+GENERATED_DIR="$REPO_DIR/Generated/MDBXUniFFI"
+BUILD_DIR="$REPO_DIR/Build/MDBX"
+HEADERS_DIR="$BUILD_DIR/Headers"
+ARTIFACTS_DIR="$REPO_DIR/Artifacts/MDBX"
+XCFRAMEWORK_PATH="$ARTIFACTS_DIR/MonicaMDBXGenerated.xcframework"
+SWIFTPM_BINDINGS_DIR="$REPO_DIR/SwiftPackages/MonicaMDBX/Sources/MonicaMDBX/Generated"
+
+# target 列表定义在 Scripts/mdbx-common.sh（bootstrap.sh 的 std 校验共用同一份）。
+DEVICE_TARGET="$MDBX_DEVICE_TARGET"
+SIM_ARM64_TARGET="$MDBX_SIM_ARM64_TARGET"
+SIM_X86_64_TARGET="$MDBX_SIM_X86_64_TARGET"
+MACOS_ARM64_TARGET="$MDBX_MACOS_ARM64_TARGET"
 MIN_IOS_VERSION="17.0"
 # macOS slice 让 MonicaStorage / MonicaMDBX 能在 macOS 上直接 swift test。
 # 缺它时新版 SwiftPM 会因 binaryTarget 无此平台而在解析/构建阶段报错。
 MACOS_DEPLOYMENT_VERSION="13.0"
 
-find_tool() {
-  local name="$1"
-  if [ -x "/opt/homebrew/opt/rustup/bin/$name" ]; then
-    echo "/opt/homebrew/opt/rustup/bin/$name"
-    return 0
-  fi
-  if command -v "$name" >/dev/null 2>&1; then
-    command -v "$name"
-    return 0
-  fi
-  if [ -x "$HOME/.cargo/bin/$name" ]; then
-    echo "$HOME/.cargo/bin/$name"
-    return 0
-  fi
-  return 1
-}
-
-CARGO="$(find_tool cargo || true)"
-RUSTC="$(find_tool rustc || true)"
-
-if [ -z "$CARGO" ] || [ -z "$RUSTC" ]; then
-  echo "cargo and rustc are required to build MonicaMDBXGenerated.xcframework." >&2
-  exit 1
+if ! CARGO="$(find_tool cargo)"; then
+  monica_fail "找不到 cargo，无法构建 MonicaMDBXGenerated.xcframework。请安装 Rust：https://rustup.rs"
+fi
+if ! RUSTC="$(find_tool rustc)"; then
+  monica_fail "找不到 rustc，无法构建 MonicaMDBXGenerated.xcframework。请安装 Rust：https://rustup.rs"
 fi
 
-export PATH="$(dirname "$CARGO"):$PATH"
+cargo_dir="$(dirname "$CARGO")"
+export PATH="$cargo_dir:$PATH"
 
 for tool in xcrun xcodebuild; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "$tool is required to build MonicaMDBXGenerated.xcframework." >&2
-    exit 1
+    monica_fail "$tool 是构建 MonicaMDBXGenerated.xcframework 的必需项（需要完整 Xcode）。"
   fi
 done
 
-target_has_std() {
-  local target="$1"
-  local rustlib_dir
-  rustlib_dir="$("$RUSTC" --print sysroot)/lib/rustlib/$target/lib"
-  compgen -G "$rustlib_dir/libcore-*.rlib" >/dev/null
-}
-
-missing_targets=()
-for target in "$DEVICE_TARGET" "$SIM_ARM64_TARGET" "$SIM_X86_64_TARGET" "$MACOS_ARM64_TARGET"; do
-  if ! target_has_std "$target"; then
-    missing_targets+=("$target")
-  fi
-done
-
-if [ "${#missing_targets[@]}" -gt 0 ]; then
-  echo "Rust standard library is missing for: ${missing_targets[*]}" >&2
-  echo "Install a rustup-managed toolchain and run:" >&2
-  echo "  rustup target add ${missing_targets[*]}" >&2
-  echo "Then re-run: Monica for iOS/Scripts/build-mdbx-xcframework.sh" >&2
+if ! require_std_targets \
+  "$RUSTC" \
+  "$SCRIPT_DIR/build-mdbx-xcframework.sh" \
+  "${MDBX_TARGETS[@]}"; then
   exit 2
 fi
 
@@ -165,6 +130,7 @@ echo "Created XCFramework: $XCFRAMEWORK_PATH"
 echo "Swift binding source: $GENERATED_DIR/mdbx_ffi.swift"
 
 mkdir -p "$SWIFTPM_BINDINGS_DIR"
+tmp_binding="$(mktemp "$SWIFTPM_BINDINGS_DIR/.mdbx_ffi.swift.XXXXXX")"
 {
   # 用 canImport 守卫而非 os(iOS)：守卫条件必须与 MonicaMDBX.swift 一致，
   # 否则 iOS 之外（如 macOS slice 存在时）会出现类型不可见的编译错误。
@@ -172,5 +138,7 @@ mkdir -p "$SWIFTPM_BINDINGS_DIR"
   echo "#if canImport(mdbx_ffiFFI)"
   cat "$GENERATED_DIR/mdbx_ffi.swift"
   printf "\n#endif\n"
-} > "$SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"
+} > "$tmp_binding"
+# 原子替换：Xcode 并行读取该文件时不会看到半个文件。
+mv "$tmp_binding" "$SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"
 echo "Synced SwiftPM binding source: $SWIFTPM_BINDINGS_DIR/mdbx_ffi.swift"

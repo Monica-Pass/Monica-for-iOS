@@ -12,7 +12,7 @@
 # $ARCHIVE_PATH/Products/dSYMs，需要时可单独上传。
 #
 # 前置条件：
-#   1. Apple Developer Program 有效（team ID 见 $MONICA_TEAM_ID）
+#   1. Apple Developer Program 有效（team ID 见 ${MONICA_TEAM_ID}）
 #   2. Xcode 已登录该账号（Settings → Accounts），或设置 App Store Connect API Key
 #   3. 门户中已为该 team 创建下列 App ID 与 App Group：
 #        com.monicapass.monica
@@ -72,7 +72,7 @@ VERSION_ARGS=()
 [ -n "$VERSION" ] && VERSION_ARGS+=("MARKETING_VERSION=$VERSION")
 [ -n "$BUILD_NUMBER" ] && VERSION_ARGS+=("CURRENT_PROJECT_VERSION=$BUILD_NUMBER")
 
-info "归档（team $MONICA_TEAM_ID）"
+info "归档（team ${MONICA_TEAM_ID}）"
 xcodebuild archive \
   -project Monica.xcodeproj \
   -scheme Monica \
