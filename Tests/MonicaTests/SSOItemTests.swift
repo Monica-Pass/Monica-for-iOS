@@ -10,6 +10,14 @@ final class SSOItemTests: XCTestCase {
         "monica-sso-\(UUID().uuidString)"
     }
 
+    /// MDBX 不会自动创建父目录，测试固定目录必须先建出来。
+    private func vaultDirectory() throws -> URL {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-sso-app-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+        return url
+    }
+
     func testSSOEntrySurvivesVaultReopenWithLinkedLogin() throws {
         let repository = LocalVaultRepository()
         let directory = FileManager.default.temporaryDirectory
@@ -139,8 +147,10 @@ final class SSOItemTests: XCTestCase {
         let vaultName = temporaryVaultName()
         model.vaultName = vaultName
         model.vaultPassword = vaultPassword
+        let directory = try vaultDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
         try model.createLocalVault(
-            in: URL(fileURLWithPath: "/tmp/monica-sso-app-tests", isDirectory: true),
+            in: directory,
             deviceID: "ios-sso-app-test-device"
         )
         defer { model.lockLocalVault() }
@@ -189,8 +199,10 @@ final class SSOItemTests: XCTestCase {
         let vaultName = temporaryVaultName()
         model.vaultName = vaultName
         model.vaultPassword = vaultPassword
+        let directory = try vaultDirectory()
+        defer { try? FileManager.default.removeItem(at: directory) }
         try model.createLocalVault(
-            in: URL(fileURLWithPath: "/tmp/monica-sso-app-tests", isDirectory: true),
+            in: directory,
             deviceID: "ios-sso-app-test-device"
         )
         defer { model.lockLocalVault() }
