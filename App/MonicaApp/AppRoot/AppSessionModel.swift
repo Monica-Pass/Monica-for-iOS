@@ -70,6 +70,8 @@ final class AppSessionModel {
     var loginUsername = ""
     var loginPassword = ""
     var loginURL = ""
+    /// 新建登录条目的图标（`sf:…` / `catalog:…` 稳定 id），`nil` 表示使用默认图标。
+    var loginIcon: String?
     var loginSearchQuery = ""
     var showFavoriteLoginEntriesOnly = false
     var isLoginStackedGroupModeEnabled = false
@@ -88,6 +90,8 @@ final class AppSessionModel {
     var editingLoginPassword = ""
     var editingLoginURL = ""
     var editingLoginFavorite = false
+    /// 编辑中の登录条目图标稳定 id。
+    var editingLoginIcon: String?
     var noteTitle = ""
     var noteBody = ""
     var noteSearchQuery = ""
@@ -3707,6 +3711,10 @@ final class AppSessionModel {
     }
 
     func presentAddEditor(forItemKind itemKind: UnifiedVaultItemKind) {
+        // 图标属于「上一次选择」的残留状态，新建不同条目时必须清掉。
+        if itemKind == .login {
+            loginIcon = nil
+        }
         presentedEditorMode = .add(itemKind)
     }
 
@@ -3949,7 +3957,7 @@ final class AppSessionModel {
                 project = try entryRepository.createProject(title: projectTitle)
                 activeProject = project
             }
-            let entry = try entryRepository.createLoginEntry(
+            var entry = try entryRepository.createLoginEntry(
                 projectID: project.id,
                 draft: LocalLoginEntryDraft(
                     title: loginTitle,
@@ -3958,6 +3966,13 @@ final class AppSessionModel {
                     url: loginURL
                 )
             )
+            if let loginIcon {
+                entry = try entryRepository.setLoginEntryIcon(
+                    projectID: project.id,
+                    entryID: entry.id,
+                    icon: loginIcon
+                )
+            }
             loginPassword = ""
             loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
@@ -3995,6 +4010,7 @@ final class AppSessionModel {
         editingLoginPassword = entry.password
         editingLoginURL = entry.url
         editingLoginFavorite = entry.favorite
+        editingLoginIcon = entry.icon
     }
 
     func updateSelectedLoginEntry() throws {
@@ -4009,7 +4025,7 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
-            let entry = try entryRepository.updateLoginEntry(
+            var entry = try entryRepository.updateLoginEntry(
                 projectID: projectID,
                 entryID: entryID,
                 draft: LocalLoginEntryDraft(
@@ -4019,6 +4035,14 @@ final class AppSessionModel {
                     url: editingLoginURL
                 )
             )
+            // 图标不属于编辑表单字段：只有用户显式改过才回写，避免把旧值当成变更。
+            if entry.icon != editingLoginIcon {
+                entry = try entryRepository.setLoginEntryIcon(
+                    projectID: projectID,
+                    entryID: entryID,
+                    icon: editingLoginIcon
+                )
+            }
             loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
             selectLoginEntryForEditing(entry)
@@ -11700,27 +11724,33 @@ final class AppSessionModel {
     }
 
     func handleScenePhaseChange(_ phase: ScenePhase) {
+        // 遮罩范围与会话锁定规则集中在 MonicaCore.ScreenPrivacyPolicy：
+        // 非 active 阶段（含 App Switcher 手势先进入的 inactive）一律遮罩，
+        // 只有后台阶段才真正锁定 Vault。
+        let decision = ScreenPrivacyPolicy.decision(
+            for: ScreenPrivacyPhase(phase),
+            isVaultUnlocked: vaultState == .unlocked
+        )
         switch phase {
         case .active:
-            isPrivacyShieldVisible = false
+            isPrivacyShieldVisible = decision.showsShield
             refreshNotificationPermissionStatus()
             refreshSystemAutoFillProviderStatus()
             lockIfIdle()
             // 挂起期间计时器不会运行，回到前台补做到期检查并重启前台轮询。
             resumeSensitivePasteboardExpiryMonitoringIfNeeded()
         case .inactive:
-            isPrivacyShieldVisible = vaultState == .unlocked
+            isPrivacyShieldVisible = decision.showsShield
         case .background:
             widgetReloadScheduler?.flushPendingReload()
             sensitivePasteboardExpiryTask?.cancel()
             sensitivePasteboardExpiryTask = nil
-            guard vaultState == .unlocked else {
-                return
+            if decision.locksVault {
+                lockLocalVault()
             }
-            lockLocalVault()
-            isPrivacyShieldVisible = true
+            isPrivacyShieldVisible = decision.showsShield
         @unknown default:
-            break
+            isPrivacyShieldVisible = decision.showsShield
         }
     }
 
