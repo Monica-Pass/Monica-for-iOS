@@ -33433,6 +33433,482 @@
           }
         }
       }
+    },
+    "证书信任": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certificate trust"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "证书信任"
+          }
+        }
+      }
+    },
+    "自签名证书信任（TOFU）": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Self-signed certificate trust (TOFU)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自签名证书信任（TOFU）"
+          }
+        }
+      }
+    },
+    "首次连接自签名或私有 CA 的 WebDAV 服务器时，请核对下方 SHA-256 指纹后再信任。系统信任的证书无需确认；指纹一旦变化，连接会被阻止。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When you connect to a WebDAV server with a self-signed or private-CA certificate for the first time, check the SHA-256 fingerprint below before trusting it. System-trusted certificates need no confirmation, and once a fingerprint changes the connection is blocked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首次连接自签名或私有 CA 的 WebDAV 服务器时，请核对下方 SHA-256 指纹后再信任。系统信任的证书无需确认；指纹一旦变化，连接会被阻止。"
+          }
+        }
+      }
+    },
+    "已信任的服务器": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trusted servers"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已信任的服务器"
+          }
+        }
+      }
+    },
+    "尚未信任任何服务器证书。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No server certificate has been trusted yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未信任任何服务器证书。"
+          }
+        }
+      }
+    },
+    "刷新信任列表": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh trust list"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新信任列表"
+          }
+        }
+      }
+    },
+    "撤销后，下次连接需要重新确认指纹。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After revoking, the next connection asks you to confirm the fingerprint again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销后，下次连接需要重新确认指纹。"
+          }
+        }
+      }
+    },
+    "撤销信任": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoke trust"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "撤销信任"
+          }
+        }
+      }
+    },
+    "指纹已变更": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fingerprint changed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指纹已变更"
+          }
+        }
+      }
+    },
+    "待确认": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Awaiting confirmation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待确认"
+          }
+        }
+      }
+    },
+    "自签名或私有 CA 证书": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Self-signed or private-CA certificate"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自签名或私有 CA 证书"
+          }
+        }
+      }
+    },
+    "服务器": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Server"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器"
+          }
+        }
+      }
+    },
+    "证书主体": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Certificate subject"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "证书主体"
+          }
+        }
+      }
+    },
+    "颁发者": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issuer"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "颁发者"
+          }
+        }
+      }
+    },
+    "SHA-256 指纹": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SHA-256 fingerprint"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SHA-256 指纹"
+          }
+        }
+      }
+    },
+    "原指纹": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Previous fingerprint"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原指纹"
+          }
+        }
+      }
+    },
+    "服务器证书与已确认的指纹不一致。请确认服务器确实更换过证书后再更新；更新前不会发送任何数据。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The server certificate does not match the confirmed fingerprint. Only update after you have verified that the server certificate really was replaced; nothing is sent before you update."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "服务器证书与已确认的指纹不一致。请确认服务器确实更换过证书后再更新；更新前不会发送任何数据。"
+          }
+        }
+      }
+    },
+    "更新指纹并信任": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Update fingerprint and trust"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更新指纹并信任"
+          }
+        }
+      }
+    },
+    "信任并继续": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trust and continue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "信任并继续"
+          }
+        }
+      }
+    },
+    "已信任": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trusted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已信任"
+          }
+        }
+      }
+    },
+    "已撤销": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revoked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已撤销"
+          }
+        }
+      }
+    },
+    "首次信任": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "First trusted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首次信任"
+          }
+        }
+      }
+    },
+    "无法保存 WebDAV 证书指纹，请稍后重试。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not save the WebDAV certificate fingerprint. Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法保存 WebDAV 证书指纹，请稍后重试。"
+          }
+        }
+      }
+    },
+    "无法撤销 WebDAV 证书信任，请稍后重试。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not revoke WebDAV certificate trust. Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法撤销 WebDAV 证书信任，请稍后重试。"
+          }
+        }
+      }
+    },
+    "WebDAV 服务器证书尚未信任，请在下方查看 SHA-256 指纹并确认信任。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The WebDAV server certificate is not trusted yet. Check the SHA-256 fingerprint below and confirm it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV 服务器证书尚未信任，请在下方查看 SHA-256 指纹并确认信任。"
+          }
+        }
+      }
+    },
+    "WebDAV 服务器证书指纹已变更，连接已被阻止，请确认新指纹后再信任。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The WebDAV server certificate fingerprint has changed, so the connection was blocked. Confirm the new fingerprint before trusting it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV 服务器证书指纹已变更，连接已被阻止，请确认新指纹后再信任。"
+          }
+        }
+      }
+    },
+    "无法读取 WebDAV 证书信任记录，已阻止连接。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the WebDAV certificate trust records, so the connection was blocked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取 WebDAV 证书信任记录，已阻止连接。"
+          }
+        }
+      }
+    },
+    "无法读取 WebDAV 服务器证书，已阻止连接。": {
+      "extractionState": "manual",
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Could not read the WebDAV server certificate, so the connection was blocked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取 WebDAV 服务器证书，已阻止连接。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
