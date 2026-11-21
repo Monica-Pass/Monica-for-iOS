@@ -32649,6 +32649,70 @@
           }
         }
       }
+    },
+    "到期自动复制下一个验证码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-copy the next code on expiry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "到期自动复制下一个验证码"
+          }
+        }
+      }
+    },
+    "复制过一次验证码后，当前验证码剩余 3 秒以内时，会把下一个验证码写入剪贴板。只在验证页处于前台、且密码库已解锁时生效；锁屏或切到后台不会写入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After you copy a code once, Monica writes the next code to the clipboard during the last 3 seconds of the current one. Only while the authenticator page is in the foreground and the vault is unlocked; nothing is written when the device is locked or the app is in the background."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制过一次验证码后，当前验证码剩余 3 秒以内时，会把下一个验证码写入剪贴板。只在验证页处于前台、且密码库已解锁时生效；锁屏或切到后台不会写入。"
+          }
+        }
+      }
+    },
+    "只支持基于时间的验证码（TOTP）；计数器验证码（HOTP）不会自动复制。写入同样遵循「敏感隐私」里的自动清除时长。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Time-based codes (TOTP) only; counter-based codes (HOTP) are never auto-copied. Writes also follow the auto-clear duration under Sensitive privacy."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只支持基于时间的验证码（TOTP）；计数器验证码（HOTP）不会自动复制。写入同样遵循「敏感隐私」里的自动清除时长。"
+          }
+        }
+      }
+    },
+    "还没有可续写的条目：先手动复制一次验证码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to refresh yet: copy a code manually first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有可续写的条目：先手动复制一次验证码。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -652,6 +652,8 @@ struct SettingsRootView: View {
 
             SensitivePrivacySettingsSection(session: session)
 
+            TotpAutoCopySettingsSection(session: session)
+
             AndroidParitySection(title: "Timeline") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     Picker("类型", selection: Binding(
