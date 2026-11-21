@@ -31543,6 +31543,742 @@
           }
         }
       }
+    },
+    "系统导入凭据": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统导入凭据"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import from system"
+          }
+        }
+      }
+    },
+    "导出到其他密码管理器": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出到其他密码管理器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export to another password manager"
+          }
+        }
+      }
+    },
+    "没有待导出的条目。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有待导出的条目。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to export."
+          }
+        }
+      }
+    },
+    "可导出": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可导出"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available to export"
+          }
+        }
+      }
+    },
+    "TOTP": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TOTP"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TOTP"
+          }
+        }
+      }
+    },
+    "无效数据": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无效数据"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid data"
+          }
+        }
+      }
+    },
+    "暂不支持": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂不支持"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not supported yet"
+          }
+        }
+      }
+    },
+    "重复跳过": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重复跳过"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicates skipped"
+          }
+        }
+      }
+    },
+    "无法导出": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法导出"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot export"
+          }
+        }
+      }
+    },
+    "开始导出": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开始导出"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start export"
+          }
+        }
+      }
+    },
+    "没有可导入的凭据": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可导入的凭据"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No credentials to import"
+          }
+        }
+      }
+    },
+    "正在从系统读取凭据…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在从系统读取凭据…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reading credentials from the system…"
+          }
+        }
+      }
+    },
+    "本地保险库没有发生任何改动。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本地保险库没有发生任何改动。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Your vault was not changed."
+          }
+        }
+      }
+    },
+    "取消后不会写入任何数据。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消后不会写入任何数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing is written if you cancel."
+          }
+        }
+      }
+    },
+    "导入已完成。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入已完成。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import complete."
+          }
+        }
+      }
+    },
+    "导出已完成。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出已完成。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export complete."
+          }
+        }
+      }
+    },
+    "其余条目已写入当前保险库。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其余条目已写入当前保险库。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The remaining items were added to your vault."
+          }
+        }
+      }
+    },
+    "以下条目会被跳过": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下条目会被跳过"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These items will be skipped"
+          }
+        }
+      }
+    },
+    "以下条目未能导入": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下条目未能导入"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These items could not be imported"
+          }
+        }
+      }
+    },
+    "以下通行密钥无法导出": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下通行密钥无法导出"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These passkeys cannot be exported"
+          }
+        }
+      }
+    },
+    "以下通行密钥未能导出": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以下通行密钥未能导出"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These passkeys were not exported"
+          }
+        }
+      }
+    },
+    "通行密钥私钥只写入系统钥匙串（随系统加密），不会写入日志或偏好设置。导入会在当前保险库中新建「凭据交换」项目，且重复条目会自动跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通行密钥私钥只写入系统钥匙串（随系统加密），不会写入日志或偏好设置。导入会在当前保险库中新建「凭据交换」项目，且重复条目会自动跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passkey private keys are stored only in the system keychain (protected by system encryption) and are never written to logs or preferences. Importing creates a “Credential Exchange” project in the current vault, and duplicate items are skipped automatically."
+          }
+        }
+      }
+    },
+    "条目数据不完整或格式无效，已跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条目数据不完整或格式无效，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item is incomplete or malformed, so it was skipped."
+          }
+        }
+      }
+    },
+    "找不到对应的私钥，已跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到对应的私钥，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching private key was found, so this item was skipped."
+          }
+        }
+      }
+    },
+    "系统拒绝了安全存储访问，已跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统拒绝了安全存储访问，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system denied access to secure storage, so this item was skipped."
+          }
+        }
+      }
+    },
+    "安全存储操作失败，已跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全存储操作失败，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A secure storage operation failed, so this item was skipped."
+          }
+        }
+      }
+    },
+    "与保险库中已有条目重复，已跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与保险库中已有条目重复，已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item duplicates one already in the vault, so it was skipped."
+          }
+        }
+      }
+    },
+    "%lld 条（需设备确认）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld 条（需设备确认）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld (device confirmation required)"
+          }
+        }
+      }
+    },
+    "有 %lld 条条目密钥无效或重复，已跳过，不会写入导出数据。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %lld 条条目密钥无效或重复，已跳过，不会写入导出数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld item(s) had invalid keys or were duplicates and were skipped, so they are not part of the export."
+          }
+        }
+      }
+    },
+    "下一步会由系统选择接收方 App。导出前需要生物识别或设备密码确认；备注、卡片、身份等类型不会导出。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一步会由系统选择接收方 App。导出前需要生物识别或设备密码确认；备注、卡片、身份等类型不会导出。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system will ask which app receives the data next. You will confirm with biometrics or your device passcode before export; notes, cards, and identities are not exported."
+          }
+        }
+      }
+    },
+    "已导入 %lld 项。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入 %lld 项。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported %lld item(s)."
+          }
+        }
+      }
+    },
+    "已导入 %lld 项，另有 %lld 项已跳过。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入 %lld 项，另有 %lld 项已跳过。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported %lld item(s); %lld more were skipped."
+          }
+        }
+      }
+    },
+    "导出通行密钥前需要确认你的身份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出通行密钥前需要确认你的身份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirm your identity before exporting passkeys"
+          }
+        }
+      }
+    },
+    "未通过设备确认，未导出任何数据。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未通过设备确认，未导出任何数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device confirmation failed, so nothing was exported."
+          }
+        }
+      }
+    },
+    "没有可导出的密码、TOTP 或通行密钥；另有 %lld 条条目无效。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可导出的密码、TOTP 或通行密钥；另有 %lld 条条目无效。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are no passwords, TOTP secrets, or passkeys to export; %lld item(s) were invalid."
+          }
+        }
+      }
+    },
+    "没有可导出的密码、TOTP 或通行密钥。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可导出的密码、TOTP 或通行密钥。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are no passwords, TOTP secrets, or passkeys to export."
+          }
+        }
+      }
+    },
+    "已导出 %lld 条密码、%lld 条 TOTP、%lld 条通行密钥。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导出 %lld 条密码、%lld 条 TOTP、%lld 条通行密钥。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exported %lld password(s), %lld TOTP secret(s), and %lld passkey(s)."
+          }
+        }
+      }
+    },
+    "没有找到可导入的密码、TOTP 或通行密钥，本地保险库未做改动。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有找到可导入的密码、TOTP 或通行密钥，本地保险库未做改动。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No passwords, TOTP secrets, or passkeys were found; your vault was not changed."
+          }
+        }
+      }
+    },
+    "系统提供的条目暂不支持迁移，本地保险库未做改动。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统提供的条目暂不支持迁移，本地保险库未做改动。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The provided items are not supported yet; your vault was not changed."
+          }
+        }
+      }
+    },
+    "通过系统凭据交换，从其他密码管理器导入密码、TOTP 与通行密钥，或导出给支持 CXF 的 App。导出通行密钥前需要生物识别或设备密码确认。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过系统凭据交换，从其他密码管理器导入密码、TOTP 与通行密钥，或导出给支持 CXF 的 App。导出通行密钥前需要生物识别或设备密码确认。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Use system credential exchange to import passwords, TOTP secrets, and passkeys from another password manager, or export them to an app that supports CXF. Exporting passkeys requires biometric or device passcode confirmation."
+          }
+        }
+      }
+    },
+    "导入 %lld 项": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入 %lld 项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import %lld item(s)"
+          }
+        }
+      }
+    },
+    "凭据已导入 %lld 项": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据已导入 %lld 项"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported %lld item(s)"
+          }
+        }
+      }
+    },
+    "不支持的凭据交换版本 %@。本地保险库未做改动。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持的凭据交换版本 %@。本地保险库未做改动。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported credential exchange version %@. Your vault was not changed."
+          }
+        }
+      }
+    },
+    "接收方请求了不支持的版本 %@。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "接收方请求了不支持的版本 %@。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The receiving app requested an unsupported version %@."
+          }
+        }
+      }
+    },
+    "凭据交换需要 iOS 26 或更新版本。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "凭据交换需要 iOS 26 或更新版本。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Credential exchange requires iOS 26 or later."
+          }
+        }
+      }
+    },
+    "请先解锁保险库再导出。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先解锁保险库再导出。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock your vault before exporting."
+          }
+        }
+      }
     }
   },
   "version": "1.0"
