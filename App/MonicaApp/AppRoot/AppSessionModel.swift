@@ -452,7 +452,8 @@ final class AppSessionModel {
     var vaultLayoutPreferences: VaultLayoutPreferences
     /// #155：验证码卡片进度条（统一进度条 / 线性环形 / 平滑动画）偏好。
     var totpCardPreferences: TotpProgressPreferences
-    /// #58：剪贴板自动清除时长与敏感预览掩码偏好。
+    /// #149：条目图标全局体系（总开关 / 分页面开关 / 未匹配策略 / 来源优先级）。
+    var itemIconPreferences: ItemIconPreferences    /// #58：剪贴板自动清除时长与敏感预览掩码偏好。
     var sensitiveClipboardTTL: SensitiveClipboardTTL
     var sensitivePreviewPreferences: SensitivePreviewPreferences
     /// 本次解锁会话内的「显示敏感字段」状态；锁库立即清空，不持久化。
@@ -625,7 +626,8 @@ final class AppSessionModel {
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
     let searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore
     private let totpCardPreferenceStore: any TotpProgressPreferenceStore    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
-    private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
+    private let itemIconPreferenceStore: any AppItemIconPreferenceStore
+    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore    private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
     private let sensitivePasteboard: MonicaSensitivePasteboard
     private let totpAutoCopyPreferenceStore: any TotpAutoCopyPreferenceStore
     /// #148：自动续写下一码的控制器；写入同样经过 #58 的敏感剪贴板与 TTL。
@@ -721,8 +723,9 @@ final class AppSessionModel {
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
         searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore = MemoryAppSearchAutoFocusPreferenceStore(),
-        totpCardPreferenceStore: any TotpProgressPreferenceStore = MemoryTotpProgressPreferenceStore(),        biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
-        deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
+        totpCardPreferenceStore: any TotpProgressPreferenceStore = MemoryTotpProgressPreferenceStore(),
+biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
+        itemIconPreferenceStore: any AppItemIconPreferenceStore = MemoryAppItemIconPreferenceStore(),        deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
         passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
             privateKeyStore: KeychainPasskeyPrivateKeyStore()
         ),
@@ -802,7 +805,8 @@ final class AppSessionModel {
         self.vaultLayoutPreferenceStore = vaultLayoutPreferenceStore
         self.searchAutoFocusPreferenceStore = searchAutoFocusPreferenceStore
         self.totpCardPreferenceStore = totpCardPreferenceStore        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
-        self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
+        self.itemIconPreferenceStore = itemIconPreferenceStore
+        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer        self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
         self.passkeyExchangeService = passkeyExchangeService
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
@@ -872,7 +876,8 @@ final class AppSessionModel {
         self.vaultLayoutPreferences = vaultLayoutPreferenceStore.loadPreferences()
         self.isSearchAutoFocusOnLaunchEnabled = searchAutoFocusPreferenceStore.loadIsSearchAutoFocusEnabled()
         self.totpCardPreferences = totpCardPreferenceStore.loadPreferences()        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
-        self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
+        self.itemIconPreferences = itemIconPreferenceStore.loadPreferences()
+        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore        self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
         self.sensitiveClipboardPreferenceStore = sensitiveClipboardPreferenceStore
         self.sensitiveClipboardTTL = sensitiveClipboardPreferenceStore.loadTTL()
         self.sensitivePasteboard = sensitivePasteboard
@@ -2871,6 +2876,20 @@ final class AppSessionModel {
 
     func restoreDefaultVaultLayoutPreferences() {
         updateVaultLayoutPreferences(.default)
+    }
+
+    /// #149：写入条目图标偏好。先归一化（保证来源优先级是完整排列）再落盘，
+    /// 存储独立于保险库，不触发任何数据迁移。
+    func updateItemIconPreferences(_ preferences: ItemIconPreferences) {
+        let normalized = preferences.normalized()
+        guard normalized != itemIconPreferences else { return }
+        itemIconPreferences = normalized
+        itemIconPreferenceStore.savePreferences(normalized)
+        recordUserActivity()
+    }
+
+    func restoreDefaultItemIconPreferences() {
+        updateItemIconPreferences(.default)
     }
 
     var appearancePreferenceRows: [AppAppearancePreferenceRow] {

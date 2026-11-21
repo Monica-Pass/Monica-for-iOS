@@ -333,7 +333,8 @@ struct AndroidParityVaultHomeView: View {
                     Button { session.loginSearchQuery = group.title } label: {
                         AndroidPasswordStackedGroupCard(
                             group: group,
-                            appearancePreferences: session.appearancePreferences
+                            appearancePreferences: session.appearancePreferences,
+                            iconPreferences: session.itemIconPreferences
                         )
                     }
                     .buttonStyle(.plain)
@@ -348,7 +349,8 @@ struct AndroidParityVaultHomeView: View {
                             AndroidPasswordListCard(
                                 entry: entry,
                                 displayPreferences: session.vaultDisplayPreferences,
-                                appearancePreferences: session.appearancePreferences
+                                appearancePreferences: session.appearancePreferences,
+                                iconPreferences: session.itemIconPreferences
                             )
                         }
                     }
@@ -465,9 +467,10 @@ struct AndroidParityVaultHomeView: View {
                             entry: entry,
                             code: session.maskedSensitivePreview(totpCode(for: entry)),
                             remaining: session.totpTimeRemaining(for: entry, at: now),
-                            iconSystemName: session.totpIconSystemName(for: entry),
-                            haptics: session.haptics
-                            stylePolicy: totpProgressPolicy                        )
+                            haptics: session.haptics,
+                            stylePolicy: totpProgressPolicy,
+                            iconPreferences: session.itemIconPreferences
+                        )
                     }
                 }
                 .contextMenu {
@@ -735,7 +738,10 @@ struct AndroidParityVaultHomeView: View {
             ForEach(session.filteredPasskeyEntries) { entry in
                 batchAwareButton(id: entry.id, kind: .passkey) {
                     batchSelectableCard(id: entry.id) {
-                        AndroidPasskeyListCard(entry: entry)
+                        AndroidPasskeyListCard(
+                            entry: entry,
+                            iconPreferences: session.itemIconPreferences
+                        )
                     }
                 }
             }
@@ -1996,13 +2002,18 @@ private struct AndroidPasswordListCard: View {
     let entry: LocalLoginEntry
     let displayPreferences: VaultDisplayPreferences
     let appearancePreferences: AppAppearancePreferences
+    let iconPreferences: ItemIconPreferences
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
             HStack(alignment: .top, spacing: displayPreferences.cardDensity == .compact ? 12 : 18) {
                 if appearancePreferences.showsPasswordListIcon {
-                    AndroidParityIconTile(
-                        systemImage: loginIconSymbol(for: entry),
+                    // 固定 40×40 槽位：关闭图标 / 未匹配隐藏时渲染透明占位，行高不跳动。
+                    AppItemIconAvatarView(
+                        avatar: ItemIconAvatarResolver.avatar(
+                            for: .login(entry),
+                            preferences: iconPreferences
+                        ),
                         fill: appearancePreferences.passwordListIconFill,
                         tint: appearancePreferences.passwordListIconTint
                     )
@@ -2034,23 +2045,27 @@ private struct AndroidPasswordListCard: View {
             }
         }
     }
-
-    /// 存储的是稳定资源 ID；解析失败（未知 / 损坏）时回退到登录条目的默认符号。
-    private func loginIconSymbol(for entry: LocalLoginEntry) -> String {
-        AppItemIconResolver.symbol(storedValue: entry.icon)
-    }
 }
 
 private struct AndroidPasswordStackedGroupCard: View {
     let group: AppLoginStackedGroup
     let appearancePreferences: AppAppearancePreferences
+    let iconPreferences: ItemIconPreferences
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
             HStack(alignment: .top, spacing: 18) {
                 if appearancePreferences.showsPasswordListIcon {
-                    AndroidParityIconTile(
-                        systemImage: group.systemImage,
+                    AppItemIconAvatarView(
+                        avatar: ItemIconAvatarResolver.avatar(
+                            for: ItemIconRequest(
+                                page: .password,
+                                kindID: "login",
+                                title: group.title,
+                                symbolOverride: group.systemImage
+                            ),
+                            preferences: iconPreferences
+                        ),
                         fill: appearancePreferences.passwordListIconFill,
                         tint: appearancePreferences.passwordListIconTint
                     )
@@ -2092,10 +2107,10 @@ private struct AndroidTotpListCard: View {
     let entry: LocalTotpEntry
     let code: String
     let remaining: Int
-    let iconSystemName: String
     let haptics: AppHaptics
     /// 进度条样式、统一进度条与平滑动画策略（#155）。
     let stylePolicy: TotpCardStylePolicy
+    let iconPreferences: ItemIconPreferences
     private var isCounterBased: Bool {
         OtpType(storageValue: entry.otpType) == .hotp
     }
@@ -2112,7 +2127,13 @@ private struct AndroidTotpListCard: View {
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
             HStack(alignment: .center, spacing: 18) {
-                AndroidParityIconTile(systemImage: iconSystemName, fill: AndroidParityPalette.primaryContainer)
+                AppItemIconAvatarView(
+                    avatar: ItemIconAvatarResolver.avatar(
+                        for: .totp(entry),
+                        preferences: iconPreferences
+                    ),
+                    fill: AndroidParityPalette.primaryContainer
+                )
                 VStack(alignment: .leading, spacing: 8) {
                     Text(entry.title.isEmpty ? entry.issuer : entry.title)
                         .font(.subheadline.weight(.semibold))
@@ -2260,12 +2281,20 @@ private struct AndroidNoteListCard: View {
 
 private struct AndroidPasskeyListCard: View {
     let entry: LocalPasskeyEntry
+    let iconPreferences: ItemIconPreferences
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surface.opacity(0.92), cornerRadius: 22) {
             HStack(spacing: 20) {
-                AndroidParityIconTile(systemImage: providerIcon, fill: providerFill, tint: providerTint)
-                    .frame(width: 54, height: 54)
+                AppItemIconAvatarView(
+                    avatar: ItemIconAvatarResolver.avatar(
+                        for: .passkey(entry, providerSymbol: providerIcon),
+                        preferences: iconPreferences
+                    ),
+                    size: ItemIconSlotMetrics.passkeySize,
+                    fill: providerFill,
+                    tint: providerTint
+                )
                 VStack(alignment: .leading, spacing: 6) {
                     Text(entry.title.isEmpty ? entry.username : entry.title)
                         .font(.subheadline.weight(.semibold))

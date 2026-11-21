@@ -35213,6 +35213,278 @@
           }
         }
       }
+    },
+    "显示条目图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show item icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示条目图标"
+          }
+        }
+      }
+    },
+    "关闭后列表保留同样大小的空位，行高与留白不会跳动。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When off, rows keep an empty slot of the same size so row height and spacing stay put."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "关闭后列表保留同样大小的空位，行高与留白不会跳动。"
+          }
+        }
+      }
+    },
+    "分页面": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pages"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分页面"
+          }
+        }
+      }
+    },
+    "密码页图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password list icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码页图标"
+          }
+        }
+      }
+    },
+    "验证码页图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码页图标"
+          }
+        }
+      }
+    },
+    "通行密钥页图标": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passkey icons"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通行密钥页图标"
+          }
+        }
+      }
+    },
+    "未匹配时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When nothing matches"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未匹配时"
+          }
+        }
+      }
+    },
+    "所有来源都没有命中时如何显示：默认图标按条目类型取符号，首字母取标题 / 域名的第一个字，隐藏只留空位。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "How items without a match are drawn: Default icon uses the item type symbol, Initial uses the first character of the title or domain, Hide leaves only the empty slot."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有来源都没有命中时如何显示：默认图标按条目类型取符号，首字母取标题 / 域名的第一个字，隐藏只留空位。"
+          }
+        }
+      }
+    },
+    "首字母": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Initial"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "首字母"
+          }
+        }
+      }
+    },
+    "来源优先级": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source priority"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "来源优先级"
+          }
+        }
+      }
+    },
+    "从上到下依次尝试；条目自己选择的图标始终优先，不会被调序覆盖。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tried from top to bottom. An icon chosen on the entry itself always wins and is never overridden by this order."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从上到下依次尝试；条目自己选择的图标始终优先，不会被调序覆盖。"
+          }
+        }
+      }
+    },
+    "内置目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Built-in catalog"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内置目录"
+          }
+        }
+      }
+    },
+    "按域名与标题关键词匹配内置目录，完全本地，不抓取网站图标。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Matches the built-in catalog by domain and title keywords, entirely on device; no website icons are fetched."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按域名与标题关键词匹配内置目录，完全本地，不抓取网站图标。"
+          }
+        }
+      }
+    },
+    "条目里选择的系统符号，以及通行密钥的服务商符号。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The SF Symbol chosen on the entry, plus the provider symbol for passkeys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条目里选择的系统符号，以及通行密钥的服务商符号。"
+          }
+        }
+      }
+    },
+    "兜底槽位，按上面的「未匹配时」策略渲染。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fallback slot rendered with the “When nothing matches” policy above."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "兜底槽位，按上面的「未匹配时」策略渲染。"
+          }
+        }
+      }
+    },
+    "图标设置保存在本机偏好中（UserDefaults），不随备份文件迁移；恢复备份或换机后需要重新调整。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Icon settings live in this device’s preferences (UserDefaults) and are not carried by backup files; re-adjust them after restoring a backup or switching devices."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图标设置保存在本机偏好中（UserDefaults），不随备份文件迁移；恢复备份或换机后需要重新调整。"
+          }
+        }
+      }
+    },
+    "恢复默认图标设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore default icon settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复默认图标设置"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
