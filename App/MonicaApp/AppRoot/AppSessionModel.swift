@@ -455,6 +455,7 @@ final class AppSessionModel {
     private let vaultKeychainService: (any AppVaultKeychainService)?
     private let vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)?
     private let rememberedVaultStore: any RememberedVaultStore
+    let vaultRegistryStore: any AppVaultRegistryStore
     private let biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore
     private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
@@ -512,6 +513,11 @@ final class AppSessionModel {
     var activeProject: LocalVaultProject?
     private var rememberedVaultDescriptor: LocalVaultDescriptor?
     private var rememberedVaultID: String?
+    /// 本地多库注册表：只存名称/路径/时间/默认标记，绝不存主密码或密钥。
+    var vaultRegistry: LocalVaultRegistry
+    var vaultRegistryOperationState: VaultOperationState = .idle
+    /// 从多库列表里新建库时，锁屏需要先让用户设置主密码；这个字段只记录待创建的库名。
+    var pendingVaultCreationName: String?
     private var lastUserActivityAt: Date?
     private var pendingAndroidEncryptedBackupData: Data?
     private var keePassLastSuccessfulUnlockCredentials: KeePassUnlockCredentials?
@@ -531,6 +537,7 @@ final class AppSessionModel {
         vaultKeychainService: (any AppVaultKeychainService)? = nil,
         vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)? = nil,
         rememberedVaultStore: any RememberedVaultStore = MemoryRememberedVaultStore(),
+        vaultRegistryStore: any AppVaultRegistryStore = MemoryAppVaultRegistryStore(),
         biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore = MemoryBiometricUnlockPreferenceStore(),
         vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore = MemoryVaultDisplayPreferenceStore(),
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
@@ -598,6 +605,8 @@ final class AppSessionModel {
         self.vaultKeychainService = vaultKeychainService
         self.vaultWrappedKeyProvider = vaultWrappedKeyProvider
         self.rememberedVaultStore = rememberedVaultStore
+        self.vaultRegistryStore = vaultRegistryStore
+        self.vaultRegistry = (try? vaultRegistryStore.load()) ?? LocalVaultRegistry()
         self.biometricUnlockPreferenceStore = biometricUnlockPreferenceStore
         self.vaultDisplayPreferenceStore = vaultDisplayPreferenceStore
         self.appearancePreferenceStore = appearancePreferenceStore
@@ -676,6 +685,7 @@ final class AppSessionModel {
             )
             self.rememberedVaultID = remembered.vaultID
         }
+        bootstrapVaultRegistry()
     }
 
     var filteredLoginEntries: [LocalLoginEntry] {
@@ -11058,15 +11068,59 @@ final class AppSessionModel {
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
-        rememberedVaultDescriptor = session.descriptor
+        let entry = registerVaultInRegistry(session)
+        let displayName = entry?.displayName ?? session.descriptor.displayName
+        let descriptor = LocalVaultDescriptor(
+            fileURL: session.descriptor.fileURL,
+            displayName: displayName
+        )
+        rememberedVaultDescriptor = descriptor
         rememberedVaultID = session.handle.vaultID
+        activeVaultName = displayName
+        activeVaultSession = LocalVaultSession(
+            descriptor: descriptor,
+            handle: session.handle,
+            state: session.state
+        )
+        pendingVaultCreationName = nil
         try? rememberedVaultStore.save(
             RememberedVaultRecord(
-                fileURL: session.descriptor.fileURL,
-                displayName: session.descriptor.displayName,
+                fileURL: descriptor.fileURL,
+                displayName: displayName,
                 vaultID: session.handle.vaultID
             )
         )
+    }
+
+    /// 当前记住的库身份（路径 + 显示名 + MDBX 库 ID），供多库逻辑读写。
+    var rememberedVaultIdentity: (fileURL: URL, displayName: String, vaultID: String)? {
+        guard let descriptor = rememberedVaultDescriptor, let rememberedVaultID else {
+            return nil
+        }
+        return (descriptor.fileURL, descriptor.displayName, rememberedVaultID)
+    }
+
+    var rememberedVaultFileURL: URL? {
+        rememberedVaultDescriptor?.fileURL
+    }
+
+    /// 只改写「上次打开库」指针，不碰任何密钥材料。
+    func storeRememberedVault(fileURL: URL, displayName: String, vaultID: String) {
+        rememberedVaultDescriptor = LocalVaultDescriptor(fileURL: fileURL, displayName: displayName)
+        rememberedVaultID = vaultID
+        try? rememberedVaultStore.save(
+            RememberedVaultRecord(
+                fileURL: fileURL,
+                displayName: displayName,
+                vaultID: vaultID
+            )
+        )
+    }
+
+    func discardRememberedVault() {
+        rememberedVaultDescriptor = nil
+        rememberedVaultID = nil
+        try? rememberedVaultStore.delete()
     }
 
     private func resolvedRememberedVaultDescriptor(
