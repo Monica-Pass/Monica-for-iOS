@@ -2494,59 +2494,48 @@ struct AddEditVaultItemView: View {
             Text("附件")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.primary)
-            if session.isPlusActive {
-                Button {
-                    isAttachmentImporterPresented = true
-                } label: {
-                    Label("添加附件", systemImage: "paperclip.badge.plus")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-                ForEach(nonIdentityPhotoAttachments) { attachment in
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "paperclip")
-                            .foregroundStyle(AndroidParityPalette.primary)
-                            .frame(width: 28)
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(attachment.fileName)
-                                .font(.subheadline.weight(.semibold))
-                                .lineLimit(1)
-                            Text("\(attachment.downloadState) · \(attachment.storedSize) 字节")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(AndroidParityPalette.textSecondary)
-                        }
-                        Spacer()
-                        Button {
-                            try? session.presentAttachmentQuickLookPreview(attachment)
-                        } label: {
-                            Image(systemName: "eye")
-                                .frame(width: 32, height: 32)
-                        }
-                        .buttonStyle(.plain)
-                        Button(role: .destructive) {
-                            try? session.deleteAttachmentEntry(attachment)
-                        } label: {
-                            Image(systemName: "trash")
-                                .frame(width: 32, height: 32)
-                        }
-                        .buttonStyle(.plain)
+            // 附件编辑永久免费；Monica Plus 不再参与这里的可用性判断。
+            Button {
+                isAttachmentImporterPresented = true
+            } label: {
+                Label("添加附件", systemImage: "paperclip.badge.plus")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            ForEach(session.attachmentEntries(for: currentEntryID)) { attachment in
+                HStack(alignment: .top, spacing: 10) {
+                    Image(systemName: "paperclip")
+                        .foregroundStyle(AndroidParityPalette.primary)
+                        .frame(width: 28)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(attachment.fileName)
+                            .font(.subheadline.weight(.semibold))
+                            .lineLimit(1)
+                        Text("\(attachment.downloadState) · \(attachment.storedSize) 字节")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
+                    Spacer()
+                    Button {
+                        try? session.presentAttachmentQuickLookPreview(attachment)
+                    } label: {
+                        Image(systemName: "eye")
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    Button(role: .destructive) {
+                        try? session.deleteAttachmentEntry(attachment)
+                    } label: {
+                        Image(systemName: "trash")
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
                 }
-                if nonIdentityPhotoAttachments.isEmpty {
-                    Text("暂无附件")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.textSecondary)
-                }
-            } else {
-                AndroidParityInfoRow(title: "Plus", value: String(localized: "附件编辑需要解锁"))
-                Button {
-                    Task { try? await session.activatePlusFromResource() }
-                } label: {
-                    Label("解锁 Plus", systemImage: "checkmark.seal")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(AndroidParityButtonStyle(tone: .filled))
-                .disabled(!session.canActivatePlusFromResource)
+            }
+            if nonIdentityPhotoAttachments.isEmpty {
+                Text("暂无附件")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
             }
         }
     }

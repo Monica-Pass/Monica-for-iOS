@@ -133,6 +133,8 @@
 		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
 		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
 		AA000000000000000000000A /* AppPlusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* AppPlusSupport.swift */; };
+		AA0000000000000000000024 /* AppPlusStoreKit.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000023 /* AppPlusStoreKit.swift */; };
+		AA0000000000000000000026 /* AppPlusStoreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000025 /* AppPlusStoreView.swift */; };
 		AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* AppAppearancePreferences.swift */; };
 		AA000000000000000000000E /* AppUnlockSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000D /* AppUnlockSupport.swift */; };
 		AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000F /* AppNavigationTypes.swift */; };
@@ -326,6 +328,8 @@
 		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000009 /* AppPlusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000023 /* AppPlusStoreKit.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusStoreKit.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000025 /* AppPlusStoreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusStoreView.swift"; sourceTree = "<group>"; };
 		AA000000000000000000000B /* AppAppearancePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAppearancePreferences.swift"; sourceTree = "<group>"; };
 		AA000000000000000000000D /* AppUnlockSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppUnlockSupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000000F /* AppNavigationTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppNavigationTypes.swift"; sourceTree = "<group>"; };
@@ -493,6 +497,8 @@
 				A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */,
 				A70000000000000000000011 /* AppSystemPasskeyRegistrationInboxStore.swift */,
 				A10000000000000000000013 /* MonicaAppEnvironment.swift */,
+				AA0000000000000000000023 /* AppPlusStoreKit.swift */,
+				AA0000000000000000000025 /* AppPlusStoreView.swift */,
 				A10000000000000000000014 /* Info.plist */,
 				A10000000000000000000015 /* MonicaApp.entitlements */,
 				A10000000000000000000024 /* Assets.xcassets */,
@@ -963,6 +969,8 @@
 				B56000000000000000000002 /* AppSecurityInsightsSupport.swift in Sources */,
 				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
 				AA000000000000000000000A /* AppPlusSupport.swift in Sources */,
+				AA0000000000000000000024 /* AppPlusStoreKit.swift in Sources */,
+				AA0000000000000000000026 /* AppPlusStoreView.swift in Sources */,
 				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
 				AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */,
 				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
