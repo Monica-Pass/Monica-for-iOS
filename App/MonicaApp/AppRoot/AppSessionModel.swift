@@ -4459,7 +4459,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
             var entry = try entryRepository.createLoginEntry(
@@ -4774,7 +4774,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
 
@@ -5035,7 +5035,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
             let entry = try entryRepository.createNoteEntry(
@@ -5201,7 +5201,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
             let entry = try entryRepository.createTotpEntry(
@@ -5506,7 +5506,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
             let entry = try entryRepository.createCardEntry(
@@ -5698,7 +5698,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
             let entry = try entryRepository.createIdentityEntry(
@@ -5886,7 +5886,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
             let entry = try entryRepository.createPasskeyEntry(
@@ -5934,7 +5934,7 @@ final class AppSessionModel {
             if let activeProject {
                 project = activeProject
             } else {
-                project = try entryRepository.createProject(title: projectTitle)
+                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
                 activeProject = project
             }
 
@@ -10583,7 +10583,7 @@ final class AppSessionModel {
                 if let existing = projects.first(where: { $0.title == title }) {
                     project = existing
                 } else {
-                    project = try entryRepository.createProject(title: title)
+                    project = try createOrReuseVaultProject(title: title, entryRepository: entryRepository)
                     projects.append(project)
                 }
                 projectIDByFolderRemoteID[folder.remoteID] = project.id
@@ -12131,6 +12131,27 @@ final class AppSessionModel {
         )
     }
 
+    /// 新建分类时优先写成文件夹记录，保证重启后仍能从文件夹侧表恢复；
+    /// 同级同名文件夹存在时直接复用，避免导入流程产生重复分类。
+    func createOrReuseVaultProject(
+        title: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> LocalVaultProject {
+        guard let folderRepository = vaultFolderRepository(entryRepository: entryRepository) else {
+            return try entryRepository.createProject(title: title)
+        }
+        let parentID = activeVaultFolder?.id
+        let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let tree = try? folderRepository.tree(),
+           let existing = tree.folders.first(where: {
+               $0.parentID == parentID && $0.title.caseInsensitiveCompare(normalizedTitle) == .orderedSame
+           }) {
+            return LocalVaultProject(id: existing.id, title: existing.title)
+        }
+        let node = try folderRepository.createFolder(title: title, parentID: parentID)
+        return LocalVaultProject(id: node.id, title: node.title)
+    }
+
     /// 解锁/新建后自动进入第一个文件夹（分类），让用户看到条目而不是空白页。
     /// 旧库没有文件夹记录时退回项目列表，保持既有行为。
     private func activateInitialVaultCategoryIfNeeded(
@@ -12167,7 +12188,7 @@ final class AppSessionModel {
         if let activeProject {
             return activeProject
         }
-        let project = try entryRepository.createProject(title: projectTitle)
+        let project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
         activeProject = project
         if !vaultProjects.contains(where: { $0.id == project.id }) {
             vaultProjects.append(project)
@@ -12184,7 +12205,7 @@ final class AppSessionModel {
         if let project = vaultProjects.first(where: { $0.title == title }) {
             return project
         }
-        let project = try entryRepository.createProject(title: title)
+        let project = try createOrReuseVaultProject(title: title, entryRepository: entryRepository)
         vaultProjects.append(project)
         return project
     }
