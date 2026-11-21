@@ -1056,6 +1056,8 @@ public extension LocalVaultEntryRepository {
             return try (deleted ? listDeletedSSOEntries(projectID: projectID) : listSSOEntries(projectID: projectID)).map(\.id)
         case .steam:
             return try (deleted ? listDeletedSteamEntries(projectID: projectID) : listSteamEntries(projectID: projectID)).map(\.id)
+        case .barcode:
+            return try (deleted ? listDeletedBarcodeEntries(projectID: projectID) : listBarcodeEntries(projectID: projectID)).map(\.id)
         case .send:
             return try (deleted ? listDeletedSendEntries(projectID: projectID) : listSendEntries(projectID: projectID)).map(\.id)
         case .attachmentRef:
@@ -1090,6 +1092,8 @@ public extension LocalVaultEntryRepository {
             try deleteSSOEntry(projectID: projectID, entryID: entryID)
         case .steam:
             try deleteSteamEntry(projectID: projectID, entryID: entryID)
+        case .barcode:
+            try deleteBarcodeEntry(projectID: projectID, entryID: entryID)
         case .send:
             try deleteSendEntry(projectID: projectID, entryID: entryID)
         case .attachmentRef:

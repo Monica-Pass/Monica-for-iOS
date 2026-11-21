@@ -3424,7 +3424,8 @@ import MonicaStorage
         .sso,
         .send,
         .attachmentRef,
-        .steam
+        .steam,
+        .barcode
     ])
     #expect(UnifiedVaultItemKind.passkey.displayName == "通行密钥")
     #expect(UnifiedVaultItemKind.sshKey.displayName == "SSH 密钥")
@@ -6247,6 +6248,9 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     favorite: entry.favorite
                 )
             }
+        case .barcode:
+            // 录制用引擎只服务既有迁移测试；条码条目由真实 MDBX 引擎覆盖。
+            return LocalVaultMovedEntry(id: entryID, title: "条码", kind: kind)
         case .send:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &sendEntries, title: \.title) { entry, projectID in
                 LocalSendEntry(
