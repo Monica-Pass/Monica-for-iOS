@@ -356,6 +356,9 @@ struct AppRootView: View {
             setSelectedWifiFavorite: setSelectedWifiFavorite,
             deleteWifiEntry: deleteWifiEntry,
             restoreWifiEntry: restoreWifiEntry,
+            setSelectedBarcodeFavorite: setSelectedBarcodeFavorite,
+            deleteBarcodeEntry: deleteBarcodeEntry,
+            restoreBarcodeEntry: restoreBarcodeEntry,
             setSelectedSendFavorite: setSelectedSendFavorite,
             deleteSendEntry: deleteSendEntry,
             restoreSendEntry: restoreSendEntry,
@@ -786,6 +789,30 @@ struct AppRootView: View {
     private func restoreWifiEntry(_ entry: LocalWifiEntry) {
         do {
             try session.restoreWifiEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedBarcodeFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedBarcodeFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteBarcodeEntry() {
+        do {
+            try session.deleteSelectedBarcodeEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreBarcodeEntry(_ entry: LocalBarcodeEntry) {
+        do {
+            try session.restoreBarcodeEntry(entry)
         } catch {
             // AppSessionModel owns user-visible failure state.
         }

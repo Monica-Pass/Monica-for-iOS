@@ -73,7 +73,7 @@ final class VaultSessionModelTests: XCTestCase {
         )
         XCTAssertEqual(
             PasswordModule.otherKinds,
-            [.sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef]
+            [.sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef]
         )
     }
 
@@ -13072,6 +13072,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var apiTokenEntries: [String: [LocalApiTokenEntry]] = [:]
     private var ssoEntries: [String: [LocalSSOEntry]] = [:]
     private var deletedSSOEntries: [String: [LocalSSOEntry]] = [:]
+    private var barcodeEntries: [String: [LocalBarcodeEntry]] = [:]
+    private var deletedBarcodeEntries: [String: [LocalBarcodeEntry]] = [:]
     private var deletedApiTokens: [String: [LocalApiTokenEntry]] = [:]
     private var wifiEntries: [String: [LocalWifiEntry]] = [:]
     private var deletedWifi: [String: [LocalWifiEntry]] = [:]
@@ -13445,6 +13447,19 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     securityType: entry.securityType,
                     password: entry.password,
                     hidden: entry.hidden,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .barcode:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &barcodeEntries, title: \.title) { entry, projectID in
+                LocalBarcodeEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    symbology: entry.symbology,
+                    payload: entry.payload,
+                    label: entry.label,
                     notes: entry.notes,
                     favorite: entry.favorite
                 )
@@ -14650,6 +14665,97 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedSSOEntries[projectID, default: []].removeAll { $0.id == entryID }
         ssoEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalBarcodeEntryDraft
+    ) throws -> LocalBarcodeEntry {
+        let entry = LocalBarcodeEntry(
+            id: "barcode-\(barcodeEntries[projectID, default: []].count + 1)",
+            projectID: projectID,
+            draft: draft
+        )
+        barcodeEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listBarcodeEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBarcodeEntry] {
+        barcodeEntries[projectID, default: []]
+    }
+
+    func updateBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalBarcodeEntryDraft
+    ) throws -> LocalBarcodeEntry {
+        let currentFavorite = barcodeEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalBarcodeEntry(
+            id: entryID,
+            projectID: projectID,
+            draft: draft,
+            favorite: currentFavorite
+        )
+        barcodeEntries[projectID, default: []] = barcodeEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setBarcodeEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalBarcodeEntry {
+        guard let current = barcodeEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalBarcodeEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            symbology: current.symbology,
+            payload: current.payload,
+            label: current.label,
+            notes: current.notes,
+            favorite: favorite
+        )
+        barcodeEntries[projectID, default: []] = barcodeEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        guard let entry = barcodeEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        barcodeEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedBarcodeEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedBarcodeEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBarcodeEntry] {
+        deletedBarcodeEntries[projectID, default: []]
+    }
+
+    func restoreBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalBarcodeEntry {
+        guard let entry = deletedBarcodeEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedBarcodeEntries[projectID, default: []].removeAll { $0.id == entryID }
+        barcodeEntries[projectID, default: []].append(entry)
         return entry
     }
 
