@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F142000000000000000000A1 /* AppSettingsSearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = F142000000000000000000A2 /* AppSettingsSearch.swift */; };
+		F142000000000000000000A3 /* AppSettingsSearchTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F142000000000000000000A4 /* AppSettingsSearchTests.swift */; };
 		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
 		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
 		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
@@ -221,6 +223,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F142000000000000000000A2 /* AppSettingsSearch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSearch.swift; sourceTree = "<group>"; };
+		F142000000000000000000A4 /* AppSettingsSearchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsSearchTests.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
@@ -456,6 +460,7 @@
 			children = (
 				F20000000000000000000001 /* Localizable.xcstrings */,
 				F30000000000000000000001 /* InfoPlist.strings */,
+				F142000000000000000000A2 /* AppSettingsSearch.swift */,
 				A10000000000000000000011 /* MonicaApp.swift */,
 				BA0000000000000000000001 /* PrivacyInfo.xcprivacy */,
 				A10000000000000000000012 /* AppRootView.swift */,
@@ -627,6 +632,7 @@
 			children = (
 				F40000000000000000000002 /* AppStoreComplianceTests.swift */,
 				F40000000000000000000001 /* LocalizationTests.swift */,
+				F142000000000000000000A4 /* AppSettingsSearchTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
 				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
@@ -1046,6 +1052,7 @@
 				B9C100000000000000000001 /* AppGoogleDriveAuthenticationService.swift in Sources */,
 				B9C100000000000000000002 /* AppKeePassCloudSupport.swift in Sources */,
 				B9C100000000000000000003 /* AppKeePassCloudBrowserView.swift in Sources */,
+				F142000000000000000000A1 /* AppSettingsSearch.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1066,6 +1073,7 @@
 				F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */,
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */,
+				F142000000000000000000A3 /* AppSettingsSearchTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,

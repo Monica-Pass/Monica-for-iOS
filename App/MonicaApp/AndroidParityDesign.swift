@@ -194,23 +194,41 @@ enum AndroidParityTypography {
     }
 }
 
+/// 请求把 parity 页面滚动到某个锚点。`token` 让同一锚点可以重复触发。
+struct AndroidParityScrollRequest: Equatable {
+    var id: AnyHashable
+    var token: Int
+}
+
 struct AndroidParityScreen<Content: View>: View {
+    /// 非 nil 时滚动到 `id` 对应的锚点；默认不滚动，既有调用点无需改动。
+    var scrollRequest: AndroidParityScrollRequest? = nil
     @ViewBuilder var content: Content
     @Environment(\.paritySpacingScale) private var spacingScale
     @Environment(\.parityLineSpacingDelta) private var lineSpacingDelta
 
     var body: some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: 12 * spacingScale) {
-                content
-                    .lineSpacing(lineSpacingDelta)
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 12 * spacingScale) {
+                    content
+                        .lineSpacing(lineSpacingDelta)
+                }
+                .padding(.horizontal, 16 * spacingScale)
+                .padding(.top, 8 * spacingScale)
+                .padding(.bottom, 24 * spacingScale)
             }
-            .padding(.horizontal, 16 * spacingScale)
-            .padding(.top, 8 * spacingScale)
-            .padding(.bottom, 24 * spacingScale)
+            .background(AndroidParityPalette.background.ignoresSafeArea())
+            .foregroundStyle(AndroidParityPalette.textPrimary)
+            .task(id: scrollRequest) {
+                guard let scrollRequest else { return }
+                // 等页面切换 / LazyVStack 布局完成后再滚动，避免落在旧坐标系上。
+                try? await Task.sleep(for: .milliseconds(60))
+                withAnimation(.easeInOut(duration: 0.3)) {
+                    proxy.scrollTo(scrollRequest.id, anchor: .top)
+                }
+            }
         }
-        .background(AndroidParityPalette.background.ignoresSafeArea())
-        .foregroundStyle(AndroidParityPalette.textPrimary)
     }
 }
 
