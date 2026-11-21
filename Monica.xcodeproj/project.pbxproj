@@ -137,6 +137,10 @@
 		A97000000000000000000002 /* AppSSOSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97000000000000000000001 /* AppSSOSupport.swift */; };
 		B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000011 /* AppImportExportFormatsView.swift */; };
 		B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000001 /* AppImportExportFormatsSupport.swift */; };
+		B1270000000000000000A002 /* AppAccountTemplatesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1270000000000000000A001 /* AppAccountTemplatesView.swift */; };
+		B1270000000000000000A004 /* AppSessionModel+AccountTemplates.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1270000000000000000A003 /* AppSessionModel+AccountTemplates.swift */; };
+		B1270000000000000000A006 /* AppAccountTemplateSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1270000000000000000A005 /* AppAccountTemplateSupport.swift */; };
+		B1270000000000000000A008 /* AccountTemplateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1270000000000000000A007 /* AccountTemplateTests.swift */; };
 		B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */; };
 
 /* Begin PBXContainerItemProxy section */
@@ -309,6 +313,10 @@
 		AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CloudVaultSync.swift"; sourceTree = "<group>"; };
 		A97000000000000000000001 /* AppSSOSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSSOSupport.swift; sourceTree = "<group>"; };
 		B37000000000000000000011 /* AppImportExportFormatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppImportExportFormatsView.swift; sourceTree = "<group>"; };
+		B1270000000000000000A001 /* AppAccountTemplatesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccountTemplatesView.swift; sourceTree = "<group>"; };
+		B1270000000000000000A003 /* AppSessionModel+AccountTemplates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+AccountTemplates.swift"; sourceTree = "<group>"; };
+		B1270000000000000000A005 /* AppAccountTemplateSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAccountTemplateSupport.swift; sourceTree = "<group>"; };
+		B1270000000000000000A007 /* AccountTemplateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountTemplateTests.swift; sourceTree = "<group>"; };
 		B37000000000000000000001 /* AppImportExportFormatsSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportFormatsSupport.swift"; sourceTree = "<group>"; };
 		B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitwardenSyncMergeSummaryView.swift; sourceTree = "<group>"; };
 
@@ -425,6 +433,7 @@
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
 				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
 				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
+				B1270000000000000000A001 /* AppAccountTemplatesView.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
 				A100000000000000000000FC /* AppCloudVaultSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
@@ -479,6 +488,8 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */,
 			B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
 			AE1300000000000000000001 /* AppSteamGuardSupport.swift */,
+			B1270000000000000000A003 /* AppSessionModel+AccountTemplates.swift */,
+			B1270000000000000000A005 /* AppAccountTemplateSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -534,6 +545,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
 				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
+				B1270000000000000000A007 /* AccountTemplateTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
 				B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */,
@@ -871,6 +883,9 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */,
 				B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */,
 				B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */,
+				B1270000000000000000A002 /* AppAccountTemplatesView.swift in Sources */,
+				B1270000000000000000A004 /* AppSessionModel+AccountTemplates.swift in Sources */,
+				B1270000000000000000A006 /* AppAccountTemplateSupport.swift in Sources */,
 				A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */,
 				A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */,
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
@@ -938,6 +953,7 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
 				A97000000000000000000004 /* SSOItemTests.swift in Sources */,
+				B1270000000000000000A008 /* AccountTemplateTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
 				B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */,
