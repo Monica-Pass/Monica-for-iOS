@@ -6082,6 +6082,15 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         return entry
     }
 
+    func setLoginEntryIcon(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        icon: String?
+    ) throws -> LocalLoginEntry {
+        throw LocalVaultRepositoryError.vaultUnavailable
+    }
+
     func setLoginEntryFavorite(
         in handle: LocalVaultHandle,
         projectID: String,
