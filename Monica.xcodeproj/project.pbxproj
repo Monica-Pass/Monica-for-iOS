@@ -17,6 +17,10 @@
 		AF32000000000000000000B2 /* AppKeePassLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF32000000000000000000F2 /* AppKeePassLibraryView.swift */; };
 		A18100000000000000000003 /* CredentialExchangePasskeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */; };
 		A18100000000000000000001 /* AppCredentialExchangePasskeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18100000000000000000002 /* AppCredentialExchangePasskeys.swift */; };
+		B9C100000000000000000001 /* AppGoogleDriveAuthenticationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */; };
+		B9C100000000000000000002 /* AppKeePassCloudSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000002 /* AppKeePassCloudSupport.swift */; };
+		B9C100000000000000000003 /* AppKeePassCloudBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */; };
+		B9C100000000000000000004 /* AppKeePassCloudBrowserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */; };
 		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000002 /* PrivacyInfo.xcprivacy */; };
@@ -227,6 +231,10 @@
 		AF32000000000000000000F2 /* AppKeePassLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppKeePassLibraryView.swift"; sourceTree = "<group>"; };
 		A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialExchangePasskeyTests.swift; sourceTree = "<group>"; };
 		A18100000000000000000002 /* AppCredentialExchangePasskeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCredentialExchangePasskeys.swift; sourceTree = "<group>"; };
+		B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGoogleDriveAuthenticationService.swift; sourceTree = "<group>"; };
+		B9C200000000000000000002 /* AppKeePassCloudSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeePassCloudSupport.swift; sourceTree = "<group>"; };
+		B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeePassCloudBrowserView.swift; sourceTree = "<group>"; };
+		B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeePassCloudBrowserTests.swift; sourceTree = "<group>"; };
 		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		BA0000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -522,6 +530,9 @@
 				A10000000000000000000024 /* Assets.xcassets */,
 				AF32000000000000000000F1 /* AppKeePassLibraryModel.swift */,
 				AF32000000000000000000F2 /* AppKeePassLibraryView.swift */,
+				B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */,
+				B9C200000000000000000002 /* AppKeePassCloudSupport.swift */,
+				B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */,
 				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
@@ -629,6 +640,7 @@
 				AB2000000000000000000001 /* BillingItemsTests.swift */,
 				AA2B00000000000000000004 /* AppLanguageTests.swift */,
 				A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */,
+				B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -1031,6 +1043,9 @@
 				A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				AA1000000000000000000002 /* AppTotpAdvancedSupport.swift in Sources */,
 				AB1000000000000000000002 /* AppBillingSupport.swift in Sources */,
+				B9C100000000000000000001 /* AppGoogleDriveAuthenticationService.swift in Sources */,
+				B9C100000000000000000002 /* AppKeePassCloudSupport.swift in Sources */,
+				B9C100000000000000000003 /* AppKeePassCloudBrowserView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1063,6 +1078,7 @@
 				A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */,
 				AB2000000000000000000002 /* BillingItemsTests.swift in Sources */,
 				A18100000000000000000003 /* CredentialExchangePasskeyTests.swift in Sources */,
+				B9C100000000000000000004 /* AppKeePassCloudBrowserTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

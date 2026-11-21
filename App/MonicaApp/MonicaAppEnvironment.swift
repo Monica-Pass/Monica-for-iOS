@@ -17,6 +17,9 @@ struct MonicaAppEnvironment: Sendable {
     let oneDriveGraphTransport: any OneDriveGraphTransport
     let oneDriveBackupPreferencesStore: any AppOneDriveBackupPreferencesStore
     let plusPurchaseService: (any AppPlusPurchaseService)?
+    let googleDriveConfiguration: GoogleDriveConfiguration
+    let googleDriveAuthenticationService: any AppGoogleDriveAuthenticationService
+    let googleDriveTransport: any GoogleDriveHTTPTransport
     let plusEntitlementStore: any AppPlusEntitlementStore
     let appLanguageStore: any AppLanguageStore
 
@@ -28,6 +31,9 @@ struct MonicaAppEnvironment: Sendable {
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         oneDriveGraphTransport: any OneDriveGraphTransport = URLSessionOneDriveGraphTransport(),
         oneDriveBackupPreferencesStore: (any AppOneDriveBackupPreferencesStore)? = nil,
+        googleDriveConfiguration: GoogleDriveConfiguration = .fromBundle(),
+        googleDriveAuthenticationService: (any AppGoogleDriveAuthenticationService)? = nil,
+        googleDriveTransport: any GoogleDriveHTTPTransport = URLSessionGoogleDriveHTTPTransport(),
         plusPurchaseService: (any AppPlusPurchaseService)? = StoreKitAppPlusPurchaseService(),
         plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore(),
         appLanguageStore: any AppLanguageStore = UserDefaultsAppLanguageStore()
@@ -42,16 +48,45 @@ struct MonicaAppEnvironment: Sendable {
         self.oneDriveGraphTransport = oneDriveGraphTransport
         self.oneDriveBackupPreferencesStore = oneDriveBackupPreferencesStore ?? UserDefaultsAppOneDriveBackupPreferencesStore()
         self.plusPurchaseService = plusPurchaseService
+        self.googleDriveConfiguration = googleDriveConfiguration
+        self.googleDriveTransport = googleDriveTransport
+        self.googleDriveAuthenticationService = googleDriveAuthenticationService ?? DefaultAppGoogleDriveAuthenticationService(
+            configuration: googleDriveConfiguration,
+            transport: googleDriveTransport
+        )
         self.plusEntitlementStore = plusEntitlementStore
         self.appLanguageStore = appLanguageStore
     }
 
     var productionCloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] {
-        [
+        var providers: [CloudFileProviderKind: any CloudFileProvider] = [
             .oneDrive: OneDriveCloudFileProvider(
                 configuration: oneDriveConfiguration,
                 tokenProvider: oneDriveAuthenticationService,
                 graphTransport: oneDriveGraphTransport
+            )
+        ]
+        // 未配置 client ID 时 provider 仍然存在，但 connectionState/list 都会返回「未配置」，
+        // 因此 WebDAV 与 OneDrive 的路径不受影响。
+        providers[.googleDrive] = GoogleDriveCloudFileProvider(
+            configuration: googleDriveConfiguration,
+            tokenProvider: googleDriveAuthenticationService,
+            transport: googleDriveTransport
+        )
+        return providers
+    }
+
+    var productionCloudFileBrowsers: [CloudFileBrowserKind: any CloudFileBrowser] {
+        [
+            .oneDrive: OneDriveCloudFileBrowser(
+                configuration: oneDriveConfiguration,
+                tokenProvider: oneDriveAuthenticationService,
+                transport: oneDriveGraphTransport
+            ),
+            .googleDrive: GoogleDriveCloudFileBrowser(
+                configuration: googleDriveConfiguration,
+                tokenProvider: googleDriveAuthenticationService,
+                transport: googleDriveTransport
             )
         ]
     }

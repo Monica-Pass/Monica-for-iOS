@@ -30,6 +30,8 @@
 	<key>MonicaPlusProductIDs</key>
 	<array>
 	</array>
+	<key>GoogleDriveClientID</key>
+	<string></string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
