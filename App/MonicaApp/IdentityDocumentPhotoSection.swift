@@ -109,17 +109,6 @@ struct IdentityDocumentPhotoSection: View {
                     Text("照片保存在 Vault 加密附件中，不会写入相册或系统缩略图缓存。")
                         .font(.caption2)
                         .foregroundStyle(AndroidParityPalette.textSecondary)
-                    if allowsEditing, !session.isPlusActive {
-                        AndroidParityInfoRow(title: "Plus", value: String(localized: "证件照片需要解锁"))
-                        Button {
-                            Task { try? await session.activatePlusFromResource() }
-                        } label: {
-                            Label("解锁 Plus", systemImage: "checkmark.seal")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
-                        .disabled(!session.canActivatePlusFromResource)
-                    }
                     if isImporting {
                         HStack(spacing: 8) {
                             ProgressView()
@@ -235,11 +224,6 @@ struct IdentityDocumentPhotoSection: View {
 
     private func importPhoto(_ item: PhotosPickerItem, side: IdentityDocumentPhotoSide) {
         guard allowsEditing else { return }
-        guard session.isPlusActive else {
-            errorMessage = IdentityPhotoError.plusRequired.localizedDescription
-            selectedItem = nil
-            return
-        }
         isImporting = true
         errorMessage = nil
         Task { @MainActor in
