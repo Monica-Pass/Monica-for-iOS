@@ -12883,6 +12883,10 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedSends: [String: [LocalSendEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
+    private var billingAddressEntries: [String: [LocalBillingAddressEntry]] = [:]
+    private var deletedBillingAddressEntries: [String: [LocalBillingAddressEntry]] = [:]
+    private var paymentAccountEntries: [String: [LocalPaymentAccountEntry]] = [:]
+    private var deletedPaymentAccountEntries: [String: [LocalPaymentAccountEntry]] = [:]
 
     func seedAttachmentMetadata(_ metadata: LocalAttachmentMetadata, projectID: String) {
         attachmentMetadata[projectID, default: []].append(metadata)
@@ -13282,8 +13286,46 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     favorite: entry.favorite
                 )
             }
-        case .billingAddress, .paymentAccount:
-            throw LocalVaultRepositoryError.unsupportedEntryType(kind)
+        case .billingAddress:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &billingAddressEntries, title: \.title) { entry, projectID in
+                LocalBillingAddressEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    fullName: entry.fullName,
+                    streetAddress: entry.streetAddress,
+                    apartment: entry.apartment,
+                    city: entry.city,
+                    stateProvince: entry.stateProvince,
+                    postalCode: entry.postalCode,
+                    country: entry.country,
+                    phone: entry.phone,
+                    notes: entry.notes,
+                    linkedCardIDs: entry.linkedCardIDs,
+                    favorite: entry.favorite
+                )
+            }
+        case .paymentAccount:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &paymentAccountEntries, title: \.title) { entry, projectID in
+                LocalPaymentAccountEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    kind: entry.kind,
+                    provider: entry.provider,
+                    accountName: entry.accountName,
+                    accountHolderName: entry.accountHolderName,
+                    iban: entry.iban,
+                    swiftBIC: entry.swiftBIC,
+                    routingNumber: entry.routingNumber,
+                    accountNumber: entry.accountNumber,
+                    currency: entry.currency,
+                    notes: entry.notes,
+                    linkedCardID: entry.linkedCardID,
+                    billingAddressID: entry.billingAddressID,
+                    favorite: entry.favorite
+                )
+            }
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(
@@ -14441,6 +14483,246 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedSSOEntries[projectID, default: []].removeAll { $0.id == entryID }
         ssoEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalBillingAddressEntryDraft
+    ) throws -> LocalBillingAddressEntry {
+        let entry = LocalBillingAddressEntry(
+            id: UUID().uuidString,
+            projectID: projectID,
+            title: draft.title,
+            fullName: draft.fullName,
+            streetAddress: draft.streetAddress,
+            apartment: draft.apartment,
+            city: draft.city,
+            stateProvince: draft.stateProvince,
+            postalCode: draft.postalCode,
+            country: draft.country,
+            phone: draft.phone,
+            notes: draft.notes,
+            linkedCardIDs: draft.linkedCardIDs
+        )
+        billingAddressEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listBillingAddressEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBillingAddressEntry] {
+        billingAddressEntries[projectID, default: []]
+    }
+
+    func updateBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalBillingAddressEntryDraft
+    ) throws -> LocalBillingAddressEntry {
+        let currentFavorite = billingAddressEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalBillingAddressEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            fullName: draft.fullName,
+            streetAddress: draft.streetAddress,
+            apartment: draft.apartment,
+            city: draft.city,
+            stateProvince: draft.stateProvince,
+            postalCode: draft.postalCode,
+            country: draft.country,
+            phone: draft.phone,
+            notes: draft.notes,
+            linkedCardIDs: draft.linkedCardIDs,
+            favorite: currentFavorite
+        )
+        billingAddressEntries[projectID, default: []] = billingAddressEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setBillingAddressEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalBillingAddressEntry {
+        guard let current = billingAddressEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalBillingAddressEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            fullName: current.fullName,
+            streetAddress: current.streetAddress,
+            apartment: current.apartment,
+            city: current.city,
+            stateProvince: current.stateProvince,
+            postalCode: current.postalCode,
+            country: current.country,
+            phone: current.phone,
+            notes: current.notes,
+            linkedCardIDs: current.linkedCardIDs,
+            favorite: favorite
+        )
+        billingAddressEntries[projectID, default: []] = billingAddressEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        guard let entry = billingAddressEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        billingAddressEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedBillingAddressEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedBillingAddressEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBillingAddressEntry] {
+        deletedBillingAddressEntries[projectID, default: []]
+    }
+
+    func restoreBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalBillingAddressEntry {
+        guard let entry = deletedBillingAddressEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedBillingAddressEntries[projectID, default: []].removeAll { $0.id == entryID }
+        billingAddressEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createPaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalPaymentAccountEntryDraft
+    ) throws -> LocalPaymentAccountEntry {
+        let entry = LocalPaymentAccountEntry(
+            id: UUID().uuidString,
+            projectID: projectID,
+            title: draft.title,
+            kind: draft.kind,
+            provider: draft.provider,
+            accountName: draft.accountName,
+            accountHolderName: draft.accountHolderName,
+            iban: draft.iban,
+            swiftBIC: draft.swiftBIC,
+            routingNumber: draft.routingNumber,
+            accountNumber: draft.accountNumber,
+            currency: draft.currency,
+            notes: draft.notes,
+            linkedCardID: draft.linkedCardID,
+            billingAddressID: draft.billingAddressID
+        )
+        paymentAccountEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listPaymentAccountEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalPaymentAccountEntry] {
+        paymentAccountEntries[projectID, default: []]
+    }
+
+    func updatePaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalPaymentAccountEntryDraft
+    ) throws -> LocalPaymentAccountEntry {
+        let currentFavorite = paymentAccountEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalPaymentAccountEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            kind: draft.kind,
+            provider: draft.provider,
+            accountName: draft.accountName,
+            accountHolderName: draft.accountHolderName,
+            iban: draft.iban,
+            swiftBIC: draft.swiftBIC,
+            routingNumber: draft.routingNumber,
+            accountNumber: draft.accountNumber,
+            currency: draft.currency,
+            notes: draft.notes,
+            linkedCardID: draft.linkedCardID,
+            billingAddressID: draft.billingAddressID,
+            favorite: currentFavorite
+        )
+        paymentAccountEntries[projectID, default: []] = paymentAccountEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setPaymentAccountEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalPaymentAccountEntry {
+        guard let current = paymentAccountEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalPaymentAccountEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            kind: current.kind,
+            provider: current.provider,
+            accountName: current.accountName,
+            accountHolderName: current.accountHolderName,
+            iban: current.iban,
+            swiftBIC: current.swiftBIC,
+            routingNumber: current.routingNumber,
+            accountNumber: current.accountNumber,
+            currency: current.currency,
+            notes: current.notes,
+            linkedCardID: current.linkedCardID,
+            billingAddressID: current.billingAddressID,
+            favorite: favorite
+        )
+        paymentAccountEntries[projectID, default: []] = paymentAccountEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deletePaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        guard let entry = paymentAccountEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        paymentAccountEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedPaymentAccountEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedPaymentAccountEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalPaymentAccountEntry] {
+        deletedPaymentAccountEntries[projectID, default: []]
+    }
+
+    func restorePaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalPaymentAccountEntry {
+        guard let entry = deletedPaymentAccountEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedPaymentAccountEntries[projectID, default: []].removeAll { $0.id == entryID }
+        paymentAccountEntries[projectID, default: []].append(entry)
         return entry
     }
 
