@@ -16544,7 +16544,7 @@ final class VaultLayoutPreferencesTests: XCTestCase {
     func testLayoutModulesUseStableRawValueIDs() {
         XCTAssertEqual(
             PasswordLayoutModule.allCases.map(\.rawValue),
-            ["login", "note", "passkey", "generator"]
+            ["login", "note", "passkey", "generator", "keePass"]
         )
         XCTAssertEqual(VaultLayoutPreferences.currentVersion, 1)
         XCTAssertEqual(
@@ -16559,6 +16559,8 @@ final class VaultLayoutPreferencesTests: XCTestCase {
             [.login, .passkey, .note]
         )
         XCTAssertNil(PasswordLayoutModule.generator.passwordModule)
+        // issue #32：KeePass 库同样是工具页，不进入密码模块栏，但恒定出现在「更多」。
+        XCTAssertNil(PasswordLayoutModule.keePass.passwordModule)
     }
 
     func testFourRootTabsRemainFixedRegardlessOfLayout() {
@@ -16720,6 +16722,9 @@ final class VaultLayoutPreferencesTests: XCTestCase {
         XCTAssertTrue(more.contains(.generator))
         // 生成器恒定可达，菜单不会因布局变化而消失。
         XCTAssertEqual(more.filter { $0 == .generator }.count, 1)
+        // issue #32：KeePass 库与生成器一样恒定可达。
+        XCTAssertTrue(more.contains(.keePass))
+        XCTAssertEqual(more.filter { $0 == .keePass }.count, 1)
 
         var showGenerator = session.vaultLayoutPreferences
         showGenerator.setHidden(false, for: .generator)
