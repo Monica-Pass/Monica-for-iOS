@@ -1328,12 +1328,14 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             }
             .background(AndroidParityPalette.background.ignoresSafeArea())
             .foregroundStyle(AndroidParityPalette.textPrimary)
+            .appScrollEdgeEffectBottom()
 
             if addMenuKinds.isEmpty {
                 Button(action: onAdd) {
                     fabLabel
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("添加")
                 .padding(.trailing, 18)
                 .padding(.bottom, 26)
             } else {
@@ -1347,6 +1349,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                     fabLabel
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("添加")
                 .padding(.trailing, 18)
                 .padding(.bottom, 26)
             }
@@ -1358,7 +1361,11 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             .font(AndroidParityTypography.controlIcon(weight: .medium))
             .foregroundStyle(AndroidParityPalette.textPrimary)
             .frame(minWidth: 54, minHeight: 54)
-            .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .appFloatingControlSurface(
+                fill: AndroidParityPalette.primaryContainer,
+                outline: AndroidParityPalette.outline,
+                shape: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            )
     }
 
     private var header: some View {
@@ -1371,7 +1378,9 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 22) {
                 toolbarButton(.folder, icon: "folder.fill", action: onOpenVault)
+                    .accessibilityLabel("打开保险库")
                 toolbarButton(.search, icon: "magnifyingglass")
+                    .accessibilityLabel("搜索")
                 if showsMoreMenu, !moreMenuModules.isEmpty {
                     Menu {
                         ForEach(moreMenuModules) { module in
@@ -1393,7 +1402,11 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             }
             .padding(.horizontal, 24)
             .frame(minHeight: 64)
-            .background(AndroidParityPalette.surfaceVariant, in: Capsule(style: .continuous))
+            .appFloatingControlSurface(
+                fill: AndroidParityPalette.surfaceVariant,
+                outline: AndroidParityPalette.outline,
+                shape: Capsule(style: .continuous)
+            )
         }
     }
 
@@ -2723,6 +2736,10 @@ struct VaultItemDetailView: View {
                 customFields: session.presentedDetailExtras?.customFields ?? [],
                 relations: session.resolvedPresentedDetailRelations()
             )
+            if route.kind == .send,
+               let entry = session.sendEntries.first(where: { $0.id == route.entryID }) {
+                MonicaSendShareSection(session: session, entry: entry)
+            }
             if route.kind == .sso,
                let entry = session.ssoEntries.first(where: { $0.id == route.entryID }) {
                 SSOLoginLinkSection(session: session, entry: entry)
@@ -2867,7 +2884,7 @@ struct VaultItemDetailView: View {
             return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password, .password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
+            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt.isEmpty ? String(localized: "不过期") : entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
         case .billingAddress:
             guard let entry = session.billingAddressEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return session.billingAddressDetailRows(for: entry)

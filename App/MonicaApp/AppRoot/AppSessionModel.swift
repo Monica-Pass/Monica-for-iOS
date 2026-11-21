@@ -82,7 +82,15 @@ final class AppSessionModel {
     var isLoginStackedGroupModeEnabled = false
     var loginEntries: [LocalLoginEntry] = []
     var deletedLoginEntries: [LocalLoginEntry] = []
-    var breachedPasswordSHA256Fingerprints: Set<String> = []
+    /// 安全分析状态：只保存条目 ID → 密码修订的「疑似已泄露」手动标记，以及每日聚合趋势。
+    var securityInsightState: SecurityInsightState = .empty
+    /// 已从存储载入状态的 Vault；切换 Vault 后重新载入，避免串库。
+    var securityInsightLoadedVaultID: String?
+    @ObservationIgnored var securityInsightSaveTask: Task<Void, Never>?
+    /// 安全分析状态的持久化后端：默认内存实现，生产环境注入文件存储。
+    let securityInsightStore: any SecurityInsightPersisting
+    /// 审计“当前时间”的来源，测试可注入固定时钟。
+    let securityInsightNow: () -> Date
     var operationTimelineEvents: [AppOperationTimelineEvent] = []
     var operationTimelineFilterKind: UnifiedVaultItemKind?
     var operationTimelineFilterAction: AppOperationTimelineAction?
@@ -428,6 +436,8 @@ final class AppSessionModel {
     var presentedDetailExtras: VaultItemExtras?
     var isQuickSetupPresented = false
     var isExtensionsPresented = false
+    /// issue #36：Monica Send 分享包接收入口（URL scheme 或 `.send` 文件导入时填充）。
+    var monicaSendIncoming: MonicaSendIncoming?
     var expandedToolbarAction: AndroidParityToolbarAction?
     var securityQuestion1ID = AppSessionModel.securityQuestionOptions[0].id
     var securityQuestion2ID = AppSessionModel.securityQuestionOptions[1].id
@@ -552,6 +562,8 @@ final class AppSessionModel {
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
         operationTimelineStore: any AppOperationTimelineStore = MemoryAppOperationTimelineStore(),
         quickSetupStateStore: any AppQuickSetupStateStore = MemoryAppQuickSetupStateStore(),
+        securityInsightStore: any SecurityInsightPersisting = MemorySecurityInsightStore(),
+        securityInsightNow: @escaping () -> Date = Date.init,
         backgroundBackupScheduler: any AppBackgroundBackupScheduler = SystemAppBackgroundBackupScheduler(),
         cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] = [:],
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
@@ -617,6 +629,8 @@ final class AppSessionModel {
         self.webDAVBackupService = webDAVBackupService
         self.operationTimelineStore = operationTimelineStore
         self.quickSetupStateStore = quickSetupStateStore
+        self.securityInsightStore = securityInsightStore
+        self.securityInsightNow = securityInsightNow
         self.backgroundBackupScheduler = backgroundBackupScheduler
         self.cloudFileProviders = cloudFileProviders
         self.oneDriveAuthenticationService = oneDriveAuthenticationService
@@ -1126,6 +1140,10 @@ final class AppSessionModel {
     @discardableResult
     func openDeepLinkURL(_ url: URL) -> Bool {
         if openShortcutURL(url) {
+            return true
+        }
+        // issue #36：Monica Send 的本地分享凭据（monica://send/<id>#<code>）与 .send 文件导入。
+        if handleMonicaSendURL(url) {
             return true
         }
         guard url.scheme == "monica",
@@ -2646,17 +2664,52 @@ final class AppSessionModel {
         entryOperationState = .succeeded(String(localized: "自动填充规则已更新"))
     }
 
+    /// 已被忽略合并的条目 ID：这些条目不再参与“重复项”的统计，保证安全中心行、合并预览与仪表盘口径一致。
+    var ignoredDuplicateLoginEntryIDs: Set<String> {
+        loginEntries.reduce(into: Set<String>()) { ids, entry in
+            guard let key = DuplicateLoginEntryKey(entry: entry),
+                  ignoredDuplicateLoginKeys.contains(key) else {
+                return
+            }
+            ids.insert(entry.id)
+        }
+    }
+
+    /// 锁定态只给一行提示：不显示任何条目数量、分数或命中，避免从锁屏预览里读出仓库规模。
+    private static var lockedSecurityCenterRows: [AppSecurityCenterRow] {
+        [
+            AppSecurityCenterRow(
+                id: "security-center-locked",
+                title: String(localized: "安全中心"),
+                value: String(localized: "需解锁"),
+                detail: String(localized: "解锁后会在本机完成统计，数据不会离开设备。"),
+                systemImage: "lock.shield"
+            )
+        ]
+    }
+
     var securityCenterRows: [AppSecurityCenterRow] {
-        let weakPasswordCount = loginEntries.filter { Self.isWeakPassword($0.password) }.count
-        let reusedPasswordCount = reusedPasswordEntryCount(in: loginEntries)
-        let breachedPasswordCount = breachedPasswordEntryCount(in: loginEntries)
-        let duplicateLoginCount = duplicateLoginEntryCount(in: loginEntries)
+        guard vaultState == .unlocked else {
+            return Self.lockedSecurityCenterRows
+        }
+        let report = securityInsightReport
+        let breachMarkCount = securityInsightBreachMarkCount
+        let breachValue = (breachMarkCount == 0 && report.count(for: .flaggedBreach) == 0)
+            ? String(localized: "未标记")
+            : itemCountLabel(report.count(for: .flaggedBreach))
         return [
+            AppSecurityCenterRow(
+                id: "security-score",
+                title: String(localized: "安全评分"),
+                value: "\(report.score) / \(SecurityInsightScoring.maximumScore)",
+                detail: securityScoreDetail(for: report.score),
+                systemImage: "gauge.with.dots.needle.50percent"
+            ),
             AppSecurityCenterRow(
                 id: "weak-passwords",
                 title: String(localized: "弱密码"),
-                value: itemCountLabel(weakPasswordCount),
-                detail: weakPasswordCount == 0
+                value: itemCountLabel(report.count(for: .weakPassword)),
+                detail: report.count(for: .weakPassword) == 0
                     ? String(localized: "当前登录条目未发现明显弱密码。")
                     : String(localized: "建议优先为这些登录条目生成更长且包含多类字符的密码。"),
                 systemImage: "exclamationmark.shield"
@@ -2664,26 +2717,44 @@ final class AppSessionModel {
             AppSecurityCenterRow(
                 id: "reused-passwords",
                 title: String(localized: "复用密码"),
-                value: itemCountLabel(reusedPasswordCount),
-                detail: reusedPasswordCount == 0
+                value: itemCountLabel(report.count(for: .reusedPassword)),
+                detail: report.count(for: .reusedPassword) == 0
                     ? String(localized: "当前登录条目未发现密码复用。")
                     : String(localized: "建议为复用密码的登录条目分别设置唯一密码。"),
                 systemImage: "rectangle.2.swap"
             ),
             AppSecurityCenterRow(
+                id: "missing-two-factor",
+                title: String(localized: "未开启 2FA"),
+                value: itemCountLabel(report.count(for: .missingTwoFactor)),
+                detail: report.count(for: .missingTwoFactor) == 0
+                    ? String(localized: "本机每个登录条目都找到了匹配的验证器。")
+                    : String(localized: "这些条目在本机没有匹配的验证器条目，按本地规则推断为未开启 2FA。"),
+                systemImage: "lock.rotation"
+            ),
+            AppSecurityCenterRow(
+                id: "stale-passwords",
+                title: String(localized: "长期未改密码"),
+                value: itemCountLabel(report.count(for: .stalePassword)),
+                detail: report.count(for: .stalePassword) == 0
+                    ? String(localized: "未发现太久没有更换的密码。")
+                    : String(localized: "距离上次更换已超过一年；没有修改记录的条目不计入。"),
+                systemImage: "clock.badge.exclamationmark"
+            ),
+            AppSecurityCenterRow(
                 id: "breached-passwords",
-                title: String(localized: "泄露风险"),
-                value: itemCountLabel(breachedPasswordCount),
-                detail: breachedPasswordCount == 0
-                    ? String(localized: "当前登录条目未命中本地泄露指纹库。")
-                    : String(localized: "建议立即为命中泄露指纹的登录条目更换唯一密码。"),
+                title: String(localized: "泄露标记"),
+                value: breachValue,
+                detail: report.count(for: .flaggedBreach) == 0
+                    ? String(localized: "标记完全由你手动完成；本 App 不会联网查询泄露数据库。")
+                    : String(localized: "这些条目已被你标记为疑似泄露，建议立即更换密码。"),
                 systemImage: "bolt.shield"
             ),
             AppSecurityCenterRow(
                 id: "duplicate-logins",
                 title: String(localized: "重复项"),
-                value: itemCountLabel(duplicateLoginCount),
-                detail: duplicateLoginCount == 0
+                value: itemCountLabel(report.count(for: .duplicateEntry)),
+                detail: report.count(for: .duplicateEntry) == 0
                     ? String(localized: "当前登录条目未发现明显重复项。")
                     : String(localized: "建议检查这些登录条目，确认是否需要合并或保留。"),
                 systemImage: "doc.on.doc"
@@ -2691,11 +2762,30 @@ final class AppSessionModel {
         ]
     }
 
+    private func securityScoreDetail(for score: Int) -> String {
+        switch SecurityInsightScoreBand.band(for: score) {
+        case .excellent:
+            return String(localized: "当前没有需要立即处理的严重问题。")
+        case .good:
+            return String(localized: "整体不错，仍有少量问题可以优化。")
+        case .fair:
+            return String(localized: "建议集中处理下面的问题后再评估。")
+        case .atRisk:
+            return String(localized: "问题较多，建议优先处理泄露与弱密码。")
+        }
+    }
+
     var securityCenterRepairSuggestions: [AppSecurityCenterRepairSuggestion] {
-        let weakPasswordCount = loginEntries.filter { Self.isWeakPassword($0.password) }.count
-        let reusedPasswordCount = reusedPasswordEntryCount(in: loginEntries)
-        let breachedPasswordCount = breachedPasswordEntryCount(in: loginEntries)
-        let duplicateLoginCount = duplicateLoginEntryCount(in: loginEntries)
+        guard vaultState == .unlocked else {
+            return []
+        }
+        let report = securityInsightReport
+        let weakPasswordCount = report.count(for: .weakPassword)
+        let reusedPasswordCount = report.count(for: .reusedPassword)
+        let missingTwoFactorCount = report.count(for: .missingTwoFactor)
+        let stalePasswordCount = report.count(for: .stalePassword)
+        let breachedPasswordCount = report.count(for: .flaggedBreach)
+        let duplicateLoginCount = report.count(for: .duplicateEntry)
         var suggestions: [AppSecurityCenterRepairSuggestion] = []
 
         if weakPasswordCount > 0 {
@@ -2717,6 +2807,28 @@ final class AppSessionModel {
                     title: String(localized: "拆分复用密码"),
                     detail: String(localized: "逐个为复用密码条目设置不同密码，降低单点泄露影响。"),
                     systemImage: "rectangle.2.swap"
+                )
+            )
+        }
+        if missingTwoFactorCount > 0 {
+            suggestions.append(
+                AppSecurityCenterRepairSuggestion(
+                    id: "repair-missing-two-factor",
+                    relatedRowID: "missing-two-factor",
+                    title: String(localized: "补充验证器"),
+                    detail: String(localized: "为这些登录条目添加匹配的验证器，登录时多一道验证。"),
+                    systemImage: "lock.rotation"
+                )
+            )
+        }
+        if stalePasswordCount > 0 {
+            suggestions.append(
+                AppSecurityCenterRepairSuggestion(
+                    id: "repair-stale-passwords",
+                    relatedRowID: "stale-passwords",
+                    title: String(localized: "更新长期未改密码"),
+                    detail: String(localized: "为超过一年没有更换的密码生成新的唯一密码。"),
+                    systemImage: "clock.arrow.circlepath"
                 )
             )
         }
@@ -2778,59 +2890,8 @@ final class AppSessionModel {
         lastDuplicateLoginMergeUndo?.title
     }
 
-    private static func isWeakPassword(_ password: String) -> Bool {
-        let trimmed = password.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 12 else {
-            return true
-        }
-        let scalars = trimmed.unicodeScalars
-        let hasLowercase = scalars.contains { CharacterSet.lowercaseLetters.contains($0) }
-        let hasUppercase = scalars.contains { CharacterSet.uppercaseLetters.contains($0) }
-        let hasDigit = scalars.contains { CharacterSet.decimalDigits.contains($0) }
-        let hasSymbol = scalars.contains {
-            !CharacterSet.alphanumerics.contains($0)
-                && !CharacterSet.whitespacesAndNewlines.contains($0)
-        }
-        return !(hasLowercase && hasUppercase && hasDigit && hasSymbol)
-    }
-
-    private func reusedPasswordEntryCount(in entries: [LocalLoginEntry]) -> Int {
-        let grouped = Dictionary(grouping: entries) { entry in
-            entry.password.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        return grouped
-            .filter { password, entries in
-                !password.isEmpty && entries.count > 1
-            }
-            .reduce(0) { count, group in count + group.value.count }
-    }
-
-    private func breachedPasswordEntryCount(in entries: [LocalLoginEntry]) -> Int {
-        let fingerprints = Set(breachedPasswordSHA256Fingerprints.map { $0.lowercased() })
-        guard !fingerprints.isEmpty else {
-            return 0
-        }
-        return entries.filter { entry in
-            let password = entry.password.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !password.isEmpty else {
-                return false
-            }
-            return fingerprints.contains(Self.sha256Fingerprint(for: password))
-        }.count
-    }
-
-    private static func sha256Fingerprint(for value: String) -> String {
-        let digest = SHA256.hash(data: Data(value.utf8))
-        return digest.map { String(format: "%02x", $0) }.joined()
-    }
-
     private func sha256Hex(_ data: Data) -> String {
         Data(SHA256.hash(data: data)).map { String(format: "%02x", $0) }.joined()
-    }
-
-    private func duplicateLoginEntryCount(in entries: [LocalLoginEntry]) -> Int {
-        duplicateLoginGroups(in: entries)
-            .reduce(0) { count, group in count + group.entries.count }
     }
 
     private func duplicateLoginGroups(
