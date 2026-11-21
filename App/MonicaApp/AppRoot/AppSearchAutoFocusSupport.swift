@@ -106,10 +106,12 @@ extension AppSessionModel {
         guard vaultState == .unlocked, !didHandleLaunchSearchAutoFocus else {
             return false
         }
-        didHandleLaunchSearchAutoFocus = true
+        // 先按当前状态判定，再记录“已结算”。反过来会把自己写进决策上下文
+        // （hasAlreadyHandledLaunch == true），导致本次启动永远不聚焦。
         guard shouldFocusSearchOnLaunch(isPasswordRoot: isPasswordRoot, allowsForcedKeyboard: allowsForcedKeyboard) else {
             return false
         }
+        didHandleLaunchSearchAutoFocus = true
         expandedToolbarAction = .search
         isSearchAutoFocusPendingForPasswordPage = true
         return true
