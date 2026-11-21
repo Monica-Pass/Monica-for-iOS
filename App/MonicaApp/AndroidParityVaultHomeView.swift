@@ -122,6 +122,8 @@ struct AndroidParityVaultHomeView: View {
                 switch module {
                 case .generator:
                     isGeneratorPresented = true
+                case .keePass:
+                    session.isKeePassLibraryPresented = true
                 default:
                     if let listModule = module.passwordModule {
                         session.passwordModule = listModule

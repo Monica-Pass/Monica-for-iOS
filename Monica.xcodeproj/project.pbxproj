@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF32000000000000000000B1 /* AppKeePassLibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF32000000000000000000F1 /* AppKeePassLibraryModel.swift */; };
+		AF32000000000000000000B2 /* AppKeePassLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF32000000000000000000F2 /* AppKeePassLibraryView.swift */; };
 		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000002 /* PrivacyInfo.xcprivacy */; };
@@ -187,6 +189,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AF32000000000000000000F1 /* AppKeePassLibraryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppKeePassLibraryModel.swift"; sourceTree = "<group>"; };
+		AF32000000000000000000F2 /* AppKeePassLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppKeePassLibraryView.swift"; sourceTree = "<group>"; };
 		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		BA0000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -445,6 +449,8 @@
 				A10000000000000000000014 /* Info.plist */,
 				A10000000000000000000015 /* MonicaApp.entitlements */,
 				A10000000000000000000024 /* Assets.xcassets */,
+				AF32000000000000000000F1 /* AppKeePassLibraryModel.swift */,
+				AF32000000000000000000F2 /* AppKeePassLibraryView.swift */,
 				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
@@ -868,6 +874,8 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
 				AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */,
+				AF32000000000000000000B1 /* AppKeePassLibraryModel.swift in Sources */,
+				AF32000000000000000000B2 /* AppKeePassLibraryView.swift in Sources */,
 				B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */,
 				B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */,
 				B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */,

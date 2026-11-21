@@ -160,6 +160,10 @@ struct AppRootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        // issue #32：KeePass 原生库浏览器；设置页与密码页「更多」共用同一个全屏页面。
+        .fullScreenCover(isPresented: $session.isKeePassLibraryPresented) {
+            AppKeePassLibraryView(session: session)
+        }
         .alert("无法导入凭据", isPresented: credentialExchangeImportAlertBinding) {
             Button("好", role: .cancel) {}
         } message: {
