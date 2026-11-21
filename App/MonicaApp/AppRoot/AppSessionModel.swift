@@ -13554,7 +13554,7 @@ final class AppSessionModel {
                 swiftCode: $0.swiftCode,
                 billingAddress: $0.billingAddress,
                 cardArtwork: $0.cardArtwork,
-                notes: $0.notes
+                notes: $0.notes,
                 metadata: $0.metadata
             )))
         }
