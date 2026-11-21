@@ -152,6 +152,7 @@ extension LocalSshKeyEntry: VaultTaggedEntry {}
 extension LocalApiTokenEntry: VaultTaggedEntry {}
 extension LocalWifiEntry: VaultTaggedEntry {}
 extension LocalSSOEntry: VaultTaggedEntry {}
+extension LocalBarcodeEntry: VaultTaggedEntry {}
 extension LocalSendEntry: VaultTaggedEntry {}
 extension LocalSteamEntry: VaultTaggedEntry {}
 extension LocalAttachmentMetadata {
