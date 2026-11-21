@@ -62,6 +62,7 @@
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A9B000000000000000000001 /* AppGlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B000000000000000000002 /* AppGlobalSearchView.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
+		B27000000000000000000001 /* VaultFolderBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27000000000000000000011 /* VaultFolderBrowserView.swift */; };
 		A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000001 /* VaultItemExtrasViews.swift */; };
 		A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */; };
 		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
@@ -220,6 +221,7 @@
 		A100000000000000000000C8 /* AppPrivacyShield.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPrivacyShield.swift; sourceTree = "<group>"; };
 		A10000000000000000000028 /* ScannerAndStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerAndStatusViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* AndroidParityVaultHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityVaultHomeView.swift; sourceTree = "<group>"; };
+		B27000000000000000000011 /* VaultFolderBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultFolderBrowserView.swift; sourceTree = "<group>"; };
 		A94000000000000000000001 /* VaultItemExtrasViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultItemExtrasViews.swift; sourceTree = "<group>"; };
 		A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+ItemExtras.swift"; sourceTree = "<group>"; };
 		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
@@ -395,6 +397,7 @@
 				A100000000000000000000C8 /* AppPrivacyShield.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
+				B27000000000000000000011 /* VaultFolderBrowserView.swift */,
 				A94000000000000000000001 /* VaultItemExtrasViews.swift */,
 				A13000000000000000000011 /* SensitivePrivacyService.swift */,
 				AF1600000000000000000011 /* AppLoginDetailSupport.swift */,
@@ -825,6 +828,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A100000000000000000000C7 /* AppPrivacyShield.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
+				B27000000000000000000001 /* VaultFolderBrowserView.swift in Sources */,
 				A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */,
 				AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */,
 				A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */,
