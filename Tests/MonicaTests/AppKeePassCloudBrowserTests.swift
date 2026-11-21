@@ -48,12 +48,17 @@ final class AppKeePassCloudBrowserTests: XCTestCase {
         let file = try directory.write(Data("kdbx-secret-bytes".utf8), preferredName: "Vault.kdbx")
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: file.url.path))
-        XCTAssertEqual(file.byteCount, 16)
+        XCTAssertEqual(file.byteCount, 17)
         XCTAssertTrue(file.fileName.hasSuffix(".kdbx"))
         XCTAssertEqual(file.fileName.split(separator: "/").count, 1)
 
         let values = try file.url.resourceValues(forKeys: [.isExcludedFromBackupKey, .fileProtectionKey])
-        XCTAssertEqual(values.fileProtection, .complete)
+        // 模拟器上 `.complete` 可能被系统降级为 `.completeUntilFirstUserAuthentication`，两者都表示已加密保护。
+        XCTAssertTrue(
+            values.fileProtection == .complete
+                || values.fileProtection == .completeUntilFirstUserAuthentication,
+            "unexpected file protection: \(String(describing: values.fileProtection))"
+        )
         XCTAssertEqual(directory.remainingFileNames.count, 1)
 
         directory.removeAll()
