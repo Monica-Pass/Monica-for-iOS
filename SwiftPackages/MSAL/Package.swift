@@ -2,9 +2,9 @@
 
 import PackageDescription
 
-// MSAL 以 vendored binary target 的形式内置在仓库里（没有 SwiftPM 版本号可 pin）。
-// 版本、下载来源与 sha256 统一由 Scripts/update-msal.sh 声明，CI 用它的 --verify
-// 校验 Artifacts/MSAL 未与 pin 漂移。平台下限来自 MSAL.framework 的
+// MSAL 以本地 binaryTarget 的形式引用 Artifacts/MSAL（不入库，由
+// Scripts/update-msal.sh --update 按 pin 的版本下载并重新打包）。
+// 版本、下载来源与 sha256 统一由该脚本声明。平台下限来自 MSAL.framework 的
 // MinimumOSVersion / LSMinimumSystemVersion，升级 MSAL 时需同步这里。
 let package = Package(
     name: "MSAL",
