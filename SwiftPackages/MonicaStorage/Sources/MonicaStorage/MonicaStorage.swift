@@ -7943,7 +7943,10 @@ public enum VaultCSVCodec {
                 publicKey: record.value("publicKey"),
                 privateKeyReference: record.value("privateKeyReference"),
                 passphraseHint: record.value("passphraseHint"),
-                notes: record.value("notes")
+                notes: record.value("notes"),
+                algorithm: record.value("algorithm"),
+                keySize: Int(record.value("keySize")) ?? 0,
+                fingerprint: record.value("fingerprint")
             ))
         case .apiToken:
             return .apiToken(LocalApiTokenEntryDraft(
@@ -8135,6 +8138,10 @@ public enum VaultCSVCodec {
             values["privateKeyReference"] = draft.privateKeyReference
             values["passphraseHint"] = draft.passphraseHint
             values["notes"] = draft.notes
+            // 生成器写入的元数据只在存在时导出，手工条目保持原有空列。
+            if !draft.algorithm.isEmpty { values["algorithm"] = draft.algorithm }
+            if draft.keySize > 0 { values["keySize"] = String(draft.keySize) }
+            if !draft.fingerprint.isEmpty { values["fingerprint"] = draft.fingerprint }
         case .apiToken(let draft):
             values["title"] = draft.title
             values["issuer"] = draft.issuer
@@ -9992,6 +9999,12 @@ public struct LocalSshKeyEntryDraft: Sendable, Equatable {
     public let privateKeyReference: String
     public let passphraseHint: String
     public let notes: String
+    /// 生成器写入的算法（`ED25519` / `RSA`，与 Android `MonicaSshAlgorithm` 一致）；手工条目为空。
+    public let algorithm: String
+    /// 生成器写入的位数（256 / 2048 / 3072 / 4096）；手工条目为 0。
+    public let keySize: Int
+    /// 生成器写入的 `SHA256:...` 指纹；手工条目为空。
+    public let fingerprint: String
 
     public let metadata: VaultEntryMetadata
 
@@ -10002,8 +10015,10 @@ public struct LocalSshKeyEntryDraft: Sendable, Equatable {
         publicKey: String,
         privateKeyReference: String,
         passphraseHint: String,
-        notes: String
-    ,
+        notes: String,
+        algorithm: String = "",
+        keySize: Int = 0,
+        fingerprint: String = "",
         metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.username = username
@@ -10012,6 +10027,9 @@ public struct LocalSshKeyEntryDraft: Sendable, Equatable {
         self.privateKeyReference = privateKeyReference
         self.passphraseHint = passphraseHint
         self.notes = notes
+        self.algorithm = algorithm
+        self.keySize = keySize
+        self.fingerprint = fingerprint
         self.metadata = metadata
     }
 }
@@ -10026,6 +10044,9 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
     public let privateKeyReference: String
     public let passphraseHint: String
     public let notes: String
+    public let algorithm: String
+    public let keySize: Int
+    public let fingerprint: String
     public let favorite: Bool
     public let metadata: VaultEntryMetadata
 
@@ -10039,6 +10060,9 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
         privateKeyReference: String,
         passphraseHint: String,
         notes: String,
+        algorithm: String = "",
+        keySize: Int = 0,
+        fingerprint: String = "",
         favorite: Bool = false,
         metadata: VaultEntryMetadata = .empty
     ) {
@@ -10051,6 +10075,9 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
         self.privateKeyReference = privateKeyReference
         self.passphraseHint = passphraseHint
         self.notes = notes
+        self.algorithm = algorithm
+        self.keySize = keySize
+        self.fingerprint = fingerprint
         self.favorite = favorite
         self.metadata = metadata
     }
@@ -13041,7 +13068,10 @@ public struct LocalVaultEntryRepository {
             publicKey: draft.publicKey,
             privateKeyReference: draft.privateKeyReference,
             passphraseHint: draft.passphraseHint,
-            notes: draft.notes
+            notes: draft.notes,
+            algorithm: draft.algorithm,
+            keySize: draft.keySize,
+            fingerprint: draft.fingerprint
         )
     }
 
@@ -13985,7 +14015,10 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
                 "publicKey": draft.publicKey,
                 "privateKeyReference": draft.privateKeyReference,
                 "passphraseHint": draft.passphraseHint,
-                "notes": draft.notes
+                "notes": draft.notes,
+                "algorithm": draft.algorithm,
+                "keySize": draft.keySize > 0 ? String(draft.keySize) : "",
+                "fingerprint": draft.fingerprint
             ]
         )
         return try LocalSshKeyEntry(entry)
@@ -14009,7 +14042,10 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
                 "publicKey": draft.publicKey,
                 "privateKeyReference": draft.privateKeyReference,
                 "passphraseHint": draft.passphraseHint,
-                "notes": draft.notes
+                "notes": draft.notes,
+                "algorithm": draft.algorithm,
+                "keySize": draft.keySize > 0 ? String(draft.keySize) : "",
+                "fingerprint": draft.fingerprint
             ]
         )
         return try LocalSshKeyEntry(entry)
@@ -15406,6 +15442,9 @@ private extension LocalSshKeyEntry {
             privateKeyReference: payload.string("privateKeyReference"),
             passphraseHint: payload.string("passphraseHint"),
             notes: payload.string("notes"),
+            algorithm: payload.string("algorithm"),
+            keySize: Int(payload.string("keySize")) ?? 0,
+            fingerprint: payload.string("fingerprint"),
             favorite: entry.favorite,
             metadata: VaultEntryMetadata(entry.metadata)
         )

@@ -27,11 +27,11 @@ enum AppGPGKeyEditorError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .missingImportedKey:
-            return String(localized: "还没有解析出可保存的密钥，请先粘贴 armored 密钥并点「解析」。")
+            return appLocalized("还没有解析出可保存的密钥，请先粘贴 armored 密钥并点「解析」。")
         case .duplicateFingerprint(let title):
-            return String(localized: "同一指纹的密钥已存在（\(title)），请勿重复导入。")
+            return appLocalized("同一指纹的密钥已存在（\(title)），请勿重复导入。")
         case .privateKeyRequiresConfirmation:
-            return String(localized: "私钥块需要先勾选「同时保存私钥」并确认风险，才会写入保险箱。")
+            return appLocalized("私钥块需要先勾选「同时保存私钥」并确认风险，才会写入保险箱。")
         }
     }
 }
@@ -66,7 +66,7 @@ extension AppSessionModel {
             gpgKeyImportPreview = metadata
             if gpgKeyTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 gpgKeyTitle = metadata.ownerName.isEmpty
-                    ? String(localized: "GPG 密钥")
+                    ? appLocalized("GPG 密钥")
                     : metadata.ownerName
             }
             if let duplicate = gpgKeyEntries.first(where: { $0.fingerprint == metadata.fingerprint }) {
@@ -209,8 +209,8 @@ extension AppSessionModel {
             selectGPGKeyEntryForEditing(updated)
             entryOperationState = .succeeded(
                 favorite
-                    ? String(localized: "已收藏 \(updated.title)")
-                    : String(localized: "已取消收藏 \(updated.title)")
+                    ? appLocalized("已收藏 \(updated.title)")
+                    : appLocalized("已取消收藏 \(updated.title)")
             )
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -241,7 +241,7 @@ extension AppSessionModel {
                 itemID: entryID,
                 itemTitle: deletedTitle
             )
-            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            entryOperationState = .succeeded(appLocalized("已删除 \(deletedTitle)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -268,7 +268,7 @@ extension AppSessionModel {
                 itemID: restored.id,
                 itemTitle: restored.title
             )
-            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
+            entryOperationState = .succeeded(appLocalized("已恢复 \(restored.title)"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -289,8 +289,8 @@ extension AppSessionModel {
             return [
                 AppExtensionCapabilityRow(
                     id: "missing",
-                    title: String(localized: "条目"),
-                    value: String(localized: "已不存在"),
+                    title: appLocalized("条目"),
+                    value: appLocalized("已不存在"),
                     detail: "",
                     systemImage: ""
                 )
@@ -299,26 +299,26 @@ extension AppSessionModel {
 
         let created = entry.keyCreatedAt.formatted(date: .numeric, time: .omitted)
         let expires = entry.keyExpiresAt.map { $0.formatted(date: .numeric, time: .omitted) }
-            ?? String(localized: "永不过期")
+            ?? appLocalized("永不过期")
         let keyMaterial = entry.hasPrivateKey
             ? (entry.armoredPublicKey.isEmpty
-                ? String(localized: "仅私钥块（公钥未单独导出）")
-                : String(localized: "公钥 + 私钥块"))
-            : String(localized: "仅公钥")
+                ? appLocalized("仅私钥块（公钥未单独导出）")
+                : appLocalized("公钥 + 私钥块"))
+            : appLocalized("仅公钥")
 
         return [
-            row("title", String(localized: "标题"), entry.title),
-            row("owner", String(localized: "属主"), entry.ownerName),
-            row("email", String(localized: "邮箱"), entry.ownerEmail),
-            row("algorithm", String(localized: "算法"), entry.algorithm),
-            row("fingerprint", String(localized: "指纹（v\(entry.keyVersion)）"), entry.formattedFingerprint),
+            row("title", appLocalized("标题"), entry.title),
+            row("owner", appLocalized("属主"), entry.ownerName),
+            row("email", appLocalized("邮箱"), entry.ownerEmail),
+            row("algorithm", appLocalized("算法"), entry.algorithm),
+            row("fingerprint", appLocalized("指纹（v\(entry.keyVersion)）"), entry.formattedFingerprint),
             row("keyID", "Key ID", entry.keyID),
-            row("created", String(localized: "创建时间"), created),
-            row("expires", String(localized: "过期时间"), expires),
-            row("status", String(localized: "状态"), entry.statusSummary),
-            row("material", String(localized: "密钥材料"), keyMaterial),
-            row("notes", String(localized: "备注"), entry.notes),
-            row("verification", String(localized: "签名验证"), String(localized: "未接入（依赖尚未提供）"))
+            row("created", appLocalized("创建时间"), created),
+            row("expires", appLocalized("过期时间"), expires),
+            row("status", appLocalized("状态"), entry.statusSummary),
+            row("material", appLocalized("密钥材料"), keyMaterial),
+            row("notes", appLocalized("备注"), entry.notes),
+            row("verification", appLocalized("签名验证"), appLocalized("未接入（依赖尚未提供）"))
         ]
     }
 
@@ -342,7 +342,7 @@ extension AppSessionModel {
             id: id,
             title: title,
             value: value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? String(localized: "空")
+                ? appLocalized("空")
                 : value,
             detail: "",
             systemImage: ""
@@ -441,7 +441,7 @@ struct GPGKeyEntryEditorFields: View {
 
             field(
                 icon: "folder.fill",
-                title: String(localized: "标题 *"),
+                title: appLocalized("标题 *"),
                 text: $session.gpgKeyTitle
             )
         }
@@ -451,15 +451,15 @@ struct GPGKeyEntryEditorFields: View {
         VStack(alignment: .leading, spacing: 8) {
             Label("解析结果（未做签名验证）", systemImage: "checkmark.seal")
                 .font(.footnote.weight(.semibold))
-            detailLine(String(localized: "属主"), metadata.ownerName)
-            detailLine(String(localized: "邮箱"), metadata.ownerEmail)
-            detailLine(String(localized: "算法"), metadata.algorithm)
-            detailLine(String(localized: "指纹"), metadata.formattedFingerprint)
+            detailLine(appLocalized("属主"), metadata.ownerName)
+            detailLine(appLocalized("邮箱"), metadata.ownerEmail)
+            detailLine(appLocalized("算法"), metadata.algorithm)
+            detailLine(appLocalized("指纹"), metadata.formattedFingerprint)
             detailLine("Key ID", metadata.keyID)
             detailLine(
-                String(localized: "过期"),
+                appLocalized("过期"),
                 metadata.keyExpiresAt.map { $0.formatted(date: .numeric, time: .omitted) }
-                    ?? String(localized: "永不过期")
+                    ?? appLocalized("永不过期")
             )
             if metadata.isRevoked {
                 Text("该密钥带有吊销签名（仅按 packet 类型识别，未验证签名本身）。")
@@ -488,18 +488,18 @@ struct GPGKeyEntryEditorFields: View {
         VStack(alignment: .leading, spacing: 18) {
             field(
                 icon: "folder.fill",
-                title: String(localized: "标题 *"),
+                title: appLocalized("标题 *"),
                 text: $session.editingGPGKeyTitle
             )
             if let entry = session.gpgKeyEntries.first(where: { $0.id == session.editingGPGKeyEntryID }) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant, cornerRadius: 16) {
-                    detailLine(String(localized: "指纹"), entry.formattedFingerprint)
+                    detailLine(appLocalized("指纹"), entry.formattedFingerprint)
                     detailLine("Key ID", entry.keyID)
-                    detailLine(String(localized: "算法"), entry.algorithm)
-                    detailLine(String(localized: "状态"), entry.statusSummary)
+                    detailLine(appLocalized("算法"), entry.algorithm)
+                    detailLine(appLocalized("状态"), entry.statusSummary)
                     detailLine(
-                        String(localized: "密钥材料"),
-                        entry.hasPrivateKey ? String(localized: "公钥 + 私钥块") : String(localized: "仅公钥")
+                        appLocalized("密钥材料"),
+                        entry.hasPrivateKey ? appLocalized("公钥 + 私钥块") : appLocalized("仅公钥")
                     )
                 }
                 Text("指纹与密钥材料在导入时确定，不支持原地修改；需要换钥请删除后重新导入。")
@@ -513,7 +513,7 @@ struct GPGKeyEntryEditorFields: View {
     private var notesField: some View {
         field(
             icon: "note.text",
-            title: String(localized: "备注"),
+            title: appLocalized("备注"),
             text: isAdding ? $session.gpgKeyNotes : $session.editingGPGKeyNotes
         )
     }
@@ -526,7 +526,7 @@ struct GPGKeyEntryEditorFields: View {
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .frame(width: 92, alignment: .leading)
-            Text(value.isEmpty ? String(localized: "空") : value)
+            Text(value.isEmpty ? appLocalized("空") : value)
                 .font(.caption)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)

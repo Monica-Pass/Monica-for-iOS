@@ -31,7 +31,7 @@ struct AppKeePassLibraryView: View {
         @Bindable var model = model
         return NavigationStack {
             content
-                .navigationTitle(String(localized: "KeePass 库"))
+                .navigationTitle(appLocalized("KeePass 库"))
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar { toolbarContent }
         }
@@ -66,7 +66,7 @@ struct AppKeePassLibraryView: View {
             }
         }
         .alert(
-            groupEditorMode?.title ?? String(localized: "分组名称"),
+            groupEditorMode?.title ?? appLocalized("分组名称"),
             isPresented: Binding(
                 get: { groupEditorMode != nil },
                 set: { if !$0 { groupEditorMode = nil } }
@@ -79,7 +79,7 @@ struct AppKeePassLibraryView: View {
             Text(groupEditorMode?.message ?? "")
         }
         .confirmationDialog(
-            String(localized: "删除分组？"),
+            appLocalized("删除分组？"),
             isPresented: Binding(
                 get: { groupPendingDeletion != nil },
                 set: { if !$0 { groupPendingDeletion = nil } }
@@ -93,7 +93,7 @@ struct AppKeePassLibraryView: View {
             }
             Button("取消", role: .cancel) { groupPendingDeletion = nil }
         } message: { group in
-            Text(String(localized: "分组及其中的条目会从库中删除；保存写回后才会影响源文件。"))
+            Text(appLocalized("分组及其中的条目会从库中删除；保存写回后才会影响源文件。"))
                 .accessibilityLabel(group.title)
         }
         .sheet(item: $groupPendingMove) { group in
@@ -103,14 +103,14 @@ struct AppKeePassLibraryView: View {
             AppKeePassEntryEditorView(model: model, target: target)
         }
         .confirmationDialog(
-            String(localized: "有未保存的修改"),
+            appLocalized("有未保存的修改"),
             isPresented: $isCloseConfirmationPresented,
             titleVisibility: .visible
         ) {
             Button("放弃修改并关闭", role: .destructive) { dismiss() }
             Button("继续编辑", role: .cancel) {}
         } message: {
-            Text(String(localized: "关闭页面会丢弃尚未写回的修改，并清理内存中的明文。"))
+            Text(appLocalized("关闭页面会丢弃尚未写回的修改，并清理内存中的明文。"))
         }
     }
 
@@ -130,11 +130,11 @@ struct AppKeePassLibraryView: View {
         AndroidParityScreen {
             statusBanner
 
-            AndroidParitySection(title: String(localized: "数据库")) {
+            AndroidParitySection(title: appLocalized("数据库")) {
                 AndroidParityCard {
-                    AndroidParityInfoRow(title: String(localized: "源文件"), value: model.databaseDisplayName)
-                    AndroidParityInfoRow(title: String(localized: "KDBX 版本"), value: model.containerSummary)
-                    AndroidParityInfoRow(title: String(localized: "加密"), value: model.cryptoSummary)
+                    AndroidParityInfoRow(title: appLocalized("源文件"), value: model.databaseDisplayName)
+                    AndroidParityInfoRow(title: appLocalized("KDBX 版本"), value: model.containerSummary)
+                    AndroidParityInfoRow(title: appLocalized("加密"), value: model.cryptoSummary)
                     AndroidParityDivider()
                     Button {
                         isDatabaseImporterPresented = true
@@ -146,7 +146,7 @@ struct AppKeePassLibraryView: View {
                 }
             }
 
-            AndroidParitySection(title: String(localized: "解锁")) {
+            AndroidParitySection(title: appLocalized("解锁")) {
                 AndroidParityCard {
                     SecureField("数据库密码", text: $model.password)
                         .textContentType(.password)
@@ -173,13 +173,13 @@ struct AppKeePassLibraryView: View {
                         }
                     }
                     if !model.keyFileName.isEmpty {
-                        AndroidParityInfoRow(title: String(localized: "密钥文件"), value: model.keyFileName)
+                        AndroidParityInfoRow(title: appLocalized("密钥文件"), value: model.keyFileName)
                     }
                     Button {
                         model.unlock()
                     } label: {
                         Label(
-                            model.isBusy ? String(localized: "正在解锁…") : String(localized: "解锁数据库"),
+                            model.isBusy ? appLocalized("正在解锁…") : appLocalized("解锁数据库"),
                             systemImage: "lock.open"
                         )
                     }
@@ -189,9 +189,9 @@ struct AppKeePassLibraryView: View {
             }
 
             if model.databaseData == nil {
-                AndroidParitySection(title: String(localized: "开始使用")) {
+                AndroidParitySection(title: appLocalized("开始使用")) {
                     AndroidParityCard {
-                        Text(String(localized: "先选择 KeePassXC / KeePass 导出的 .kdbx 文件，再输入数据库密码或密钥文件。写回前会重新打开校验，错误口令或未知格式不会覆盖源文件。"))
+                        Text(appLocalized("先选择 KeePassXC / KeePass 导出的 .kdbx 文件，再输入数据库密码或密钥文件。写回前会重新打开校验，错误口令或未知格式不会覆盖源文件。"))
                             .font(.footnote)
                             .foregroundStyle(AndroidParityPalette.textSecondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -205,21 +205,21 @@ struct AppKeePassLibraryView: View {
         AndroidParityScreen {
             statusBanner
 
-            AndroidParitySection(title: String(localized: "数据库")) {
+            AndroidParitySection(title: appLocalized("数据库")) {
                 AndroidParityCard {
                     AndroidParityInfoRow(
-                        title: String(localized: "源文件"),
+                        title: appLocalized("源文件"),
                         value: model.sourceFileURL?.lastPathComponent ?? model.databaseDisplayName
                     )
-                    AndroidParityInfoRow(title: String(localized: "KDBX 版本"), value: model.containerSummary)
-                    AndroidParityInfoRow(title: String(localized: "加密"), value: model.cryptoSummary)
-                    AndroidParityInfoRow(title: String(localized: "分组"), value: "\(model.groupCount)")
-                    AndroidParityInfoRow(title: String(localized: "条目"), value: "\(model.entryCount)")
+                    AndroidParityInfoRow(title: appLocalized("KDBX 版本"), value: model.containerSummary)
+                    AndroidParityInfoRow(title: appLocalized("加密"), value: model.cryptoSummary)
+                    AndroidParityInfoRow(title: appLocalized("分组"), value: "\(model.groupCount)")
+                    AndroidParityInfoRow(title: appLocalized("条目"), value: "\(model.entryCount)")
                     AndroidParityInfoRow(
-                        title: String(localized: "写回状态"),
+                        title: appLocalized("写回状态"),
                         value: model.isDirty
-                            ? String(localized: "有未保存修改")
-                            : String(localized: "与源文件一致")
+                            ? appLocalized("有未保存修改")
+                            : appLocalized("与源文件一致")
                     )
                     AndroidParityDivider()
                     HStack(spacing: 12) {
@@ -243,7 +243,7 @@ struct AppKeePassLibraryView: View {
                 }
             }
 
-            AndroidParitySection(title: String(localized: "搜索")) {
+            AndroidParitySection(title: appLocalized("搜索")) {
                 AndroidParityCard {
                     HStack(spacing: 8) {
                         Image(systemName: "magnifyingglass")
@@ -265,10 +265,10 @@ struct AppKeePassLibraryView: View {
             }
 
             if model.isSearching {
-                AndroidParitySection(title: String(localized: "搜索结果")) {
+                AndroidParitySection(title: appLocalized("搜索结果")) {
                     AndroidParityCard {
                         if model.visibleEntries.isEmpty {
-                            emptyHint(String(localized: "没有匹配的条目。"))
+                            emptyHint(appLocalized("没有匹配的条目。"))
                         } else {
                             ForEach(model.visibleEntries) { entry in
                                 AppKeePassEntryRow(entry: entry, showsGroupPath: true) {
@@ -282,7 +282,7 @@ struct AppKeePassLibraryView: View {
                     }
                 }
             } else {
-                AndroidParitySection(title: String(localized: "分组")) {
+                AndroidParitySection(title: appLocalized("分组")) {
                     AndroidParityCard {
                         ForEach(model.visibleGroups) { group in
                             AppKeePassGroupRow(
@@ -310,7 +310,7 @@ struct AppKeePassLibraryView: View {
                 AndroidParitySection(title: selectedGroupSectionTitle) {
                     AndroidParityCard {
                         if model.visibleEntries.isEmpty {
-                            emptyHint(String(localized: "这个分组还没有条目。"))
+                            emptyHint(appLocalized("这个分组还没有条目。"))
                         } else {
                             ForEach(model.visibleEntries) { entry in
                                 AppKeePassEntryRow(entry: entry, showsGroupPath: false) {
@@ -329,9 +329,9 @@ struct AppKeePassLibraryView: View {
 
     private var selectedGroupSectionTitle: String {
         guard let group = model.selectedGroup else {
-            return String(localized: "条目")
+            return appLocalized("条目")
         }
-        let title = group.title.isEmpty ? String(localized: "未命名分组") : group.title
+        let title = group.title.isEmpty ? appLocalized("未命名分组") : group.title
         return title
     }
 
@@ -483,7 +483,7 @@ private struct AppKeePassGroupRow: View {
 
     private var displayName: String {
         if group.title.isEmpty {
-            return String(localized: "未命名分组")
+            return appLocalized("未命名分组")
         }
         return group.title
     }
@@ -529,7 +529,7 @@ private struct AppKeePassEntryRow: View {
                 }
                 Spacer(minLength: 8)
                 if entry.hasPasswordField {
-                    Text(String(localized: "密码"))
+                    Text(appLocalized("密码"))
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.primary)
                 }
@@ -550,18 +550,18 @@ enum AppKeePassGroupEditorMode: Equatable {
     var title: String {
         switch self {
         case .create:
-            return String(localized: "新建分组")
+            return appLocalized("新建分组")
         case .rename:
-            return String(localized: "重命名分组")
+            return appLocalized("重命名分组")
         }
     }
 
     var message: String {
         switch self {
         case .create:
-            return String(localized: "新分组会放在当前选中的分组下。")
+            return appLocalized("新分组会放在当前选中的分组下。")
         case .rename:
-            return String(localized: "只修改分组名称，组内条目与未知字段保持不变。")
+            return appLocalized("只修改分组名称，组内条目与未知字段保持不变。")
         }
     }
 }
@@ -600,10 +600,10 @@ private struct AppKeePassMoveGroupView: View {
                         destinationRow(candidate)
                     }
                 } footer: {
-                    Text(String(localized: "不能移动到自身或其子分组。"))
+                    Text(appLocalized("不能移动到自身或其子分组。"))
                 }
             }
-            .navigationTitle(String(localized: "移动分组"))
+            .navigationTitle(appLocalized("移动分组"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -620,7 +620,7 @@ private struct AppKeePassMoveGroupView: View {
             }
         } label: {
             VStack(alignment: .leading, spacing: 2) {
-                Text(destination.title.isEmpty ? String(localized: "未命名分组") : destination.title)
+                Text(destination.title.isEmpty ? appLocalized("未命名分组") : destination.title)
                 Text(destination.path)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -674,7 +674,7 @@ private struct AppKeePassEntryEditorView: View {
                     }
                 }
 
-                Section(String(localized: "基础字段")) {
+                Section(appLocalized("基础字段")) {
                     TextField("标题", text: $title)
                     TextField("用户名", text: $username)
                         .textInputAutocapitalization(.never)
@@ -685,7 +685,7 @@ private struct AppKeePassEntryEditorView: View {
                         .keyboardType(.URL)
                 }
 
-                Section(String(localized: "密码")) {
+                Section(appLocalized("密码")) {
                     HStack(spacing: 8) {
                         if revealsPassword {
                             TextField("密码", text: $password)
@@ -700,24 +700,24 @@ private struct AppKeePassEntryEditorView: View {
                             Image(systemName: revealsPassword ? "eye.slash" : "eye")
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(revealsPassword ? String(localized: "隐藏密码") : String(localized: "显示密码"))
+                        .accessibilityLabel(revealsPassword ? appLocalized("隐藏密码") : appLocalized("显示密码"))
                         Button {
                             model.copySecret(password)
                         } label: {
                             Image(systemName: "doc.on.doc")
                         }
                         .buttonStyle(.plain)
-                        .accessibilityLabel(String(localized: "复制密码"))
+                        .accessibilityLabel(appLocalized("复制密码"))
                     }
                 }
 
-                Section(String(localized: "备注")) {
+                Section(appLocalized("备注")) {
                     TextField("备注", text: $notes, axis: .vertical)
                         .lineLimit(4...12)
                 }
 
                 if case .edit(let entry) = target, !entry.protectedFieldKeys.isEmpty {
-                    Section(String(localized: "受保护字段")) {
+                    Section(appLocalized("受保护字段")) {
                         Text(entry.protectedFieldKeys.joined(separator: "、"))
                             .font(.footnote)
                             .foregroundStyle(.secondary)
@@ -740,9 +740,9 @@ private struct AppKeePassEntryEditorView: View {
     private var navigationTitle: String {
         switch target {
         case .create:
-            return String(localized: "新建条目")
+            return appLocalized("新建条目")
         case .edit:
-            return String(localized: "编辑条目")
+            return appLocalized("编辑条目")
         }
     }
 

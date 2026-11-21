@@ -3583,7 +3583,21 @@ struct VaultItemDetailView: View {
             return [row("title", String(localized: "标题"), entry.title), row("rp", String(localized: "网站标识"), entry.relyingPartyID), row("username", String(localized: "账号"), entry.username), row("credential", String(localized: "通行密钥标识"), sensitive(entry.credentialID, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret))]
         case .sshKey:
             guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("user", String(localized: "用户名"), entry.username), row("host", String(localized: "主机"), entry.host), row("public", String(localized: "公钥"), sensitive(entry.publicKey, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret)), row("hint", String(localized: "口令提示"), entry.passphraseHint)]
+            var sshRows = [row("title", String(localized: "标题"), entry.title), row("user", String(localized: "用户名"), entry.username), row("host", String(localized: "主机"), entry.host), row("public", String(localized: "公钥"), sensitive(entry.publicKey, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret)), row("hint", String(localized: "口令提示"), entry.passphraseHint)]
+            // #154：生成器保存的条目带算法、位数与指纹；手工创建的旧条目没有这些字段，只在有值时展示。
+            if !entry.fingerprint.isEmpty {
+                sshRows.insert(row("fingerprint", String(localized: "SHA-256 指纹"), entry.fingerprint), at: 3)
+            }
+            if !entry.algorithm.isEmpty || entry.keySize > 0 {
+                let algorithmName: String = switch entry.algorithm.uppercased() {
+                case "RSA": "RSA"
+                case "ED25519": "Ed25519"
+                default: entry.algorithm
+                }
+                let value = entry.keySize > 0 ? "\(algorithmName) · \(entry.keySize) 位" : algorithmName
+                sshRows.insert(row("algorithm", String(localized: "算法"), value), at: 3)
+            }
+            return sshRows
         case .gpgKey:
             return session.gpgKeyDetailRows(for: route.entryID)
         case .apiToken:
