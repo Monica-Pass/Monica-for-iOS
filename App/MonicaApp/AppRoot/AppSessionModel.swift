@@ -159,6 +159,10 @@ final class AppSessionModel {
     var cardCVV = ""
     var cardIssuer = ""
     var cardNetwork = ""
+    var cardIBAN = ""
+    var cardSwiftCode = ""
+    var cardBillingAddress = ""
+    var cardArtwork = ""
     var cardNotes = ""
     var cardSearchQuery = ""
     var showFavoriteCardEntriesOnly = false
@@ -173,6 +177,10 @@ final class AppSessionModel {
     var editingCardCVV = ""
     var editingCardIssuer = ""
     var editingCardNetwork = ""
+    var editingCardIBAN = ""
+    var editingCardSwiftCode = ""
+    var editingCardBillingAddress = ""
+    var editingCardArtwork = ""
     var editingCardNotes = ""
     var editingCardFavorite = false
     var identityTitle = ""
@@ -5517,6 +5525,10 @@ final class AppSessionModel {
                     cvv: cardCVV,
                     issuer: cardIssuer,
                     network: cardNetwork,
+                    iban: cardIBAN,
+                    swiftCode: cardSwiftCode,
+                    billingAddress: cardBillingAddress,
+                    cardArtwork: cardArtwork,
                     notes: cardNotes
                 )
             )
@@ -5550,6 +5562,10 @@ final class AppSessionModel {
         editingCardCVV = entry.cvv
         editingCardIssuer = entry.issuer
         editingCardNetwork = entry.network
+        editingCardIBAN = entry.iban
+        editingCardSwiftCode = entry.swiftCode
+        editingCardBillingAddress = entry.billingAddress
+        editingCardArtwork = entry.cardArtwork
         editingCardNotes = entry.notes
         editingCardFavorite = entry.favorite
     }
@@ -5578,6 +5594,10 @@ final class AppSessionModel {
                     cvv: editingCardCVV,
                     issuer: editingCardIssuer,
                     network: editingCardNetwork,
+                    iban: editingCardIBAN,
+                    swiftCode: editingCardSwiftCode,
+                    billingAddress: editingCardBillingAddress,
+                    cardArtwork: editingCardArtwork,
                     notes: editingCardNotes
                 )
             )
@@ -12506,6 +12526,10 @@ final class AppSessionModel {
                 cvv: $0.cvv,
                 issuer: $0.issuer,
                 network: $0.network,
+                iban: $0.iban,
+                swiftCode: $0.swiftCode,
+                billingAddress: $0.billingAddress,
+                cardArtwork: $0.cardArtwork,
                 notes: $0.notes
             )))
         }
@@ -12855,6 +12879,10 @@ final class AppSessionModel {
         editingCardCVV = ""
         editingCardIssuer = ""
         editingCardNetwork = ""
+        editingCardIBAN = ""
+        editingCardSwiftCode = ""
+        editingCardBillingAddress = ""
+        editingCardArtwork = ""
         editingCardNotes = ""
         editingCardFavorite = false
     }

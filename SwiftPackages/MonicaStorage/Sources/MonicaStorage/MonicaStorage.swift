@@ -6855,6 +6855,10 @@ public enum AndroidBackupCodec {
                 cvv: object.string("cvv", defaultValue: object.string("code")),
                 issuer: object.string("bankName"),
                 network: object.string("brand"),
+                iban: object.string("iban"),
+                swiftCode: object.string("swiftCode"),
+                billingAddress: object.string("billingAddress"),
+                cardArtwork: object.string("cardArtwork"),
                 notes: notes
             ))
         case .identity:
@@ -6953,6 +6957,10 @@ public enum AndroidBackupCodec {
                     cvv: itemData.string("cvv", defaultValue: itemData.string("code")),
                     issuer: itemData.string("bankName", defaultValue: object.string("issuer")),
                     network: itemData.string("brand"),
+                    iban: itemData.string("iban"),
+                    swiftCode: itemData.string("swiftCode"),
+                    billingAddress: itemData.string("billingAddress"),
+                    cardArtwork: itemData.string("cardArtwork"),
                     notes: object.string("notes")
                 ))
             case .identity:
@@ -7067,7 +7075,11 @@ public enum AndroidBackupCodec {
                     "expiryYear": draft.expiryYear,
                     "cvv": draft.cvv,
                     "bankName": draft.issuer,
-                    "brand": draft.network
+                    "brand": draft.network,
+                    "iban": draft.iban,
+                    "swiftCode": draft.swiftCode,
+                    "billingAddress": draft.billingAddress,
+                    "cardArtwork": draft.cardArtwork
                 ]),
                 notes: draft.notes
             )
@@ -7401,6 +7413,10 @@ public enum VaultCSVCodec {
         "expiryYear",
         "cvv",
         "network",
+        "iban",
+        "swiftCode",
+        "billingAddress",
+        "cardArtwork",
         "documentType",
         "fullName",
         "documentNumber",
@@ -7551,6 +7567,10 @@ public enum VaultCSVCodec {
                 cvv: record.value("cvv"),
                 issuer: record.value("issuer"),
                 network: record.value("network"),
+                iban: record.value("iban"),
+                swiftCode: record.value("swiftCode"),
+                billingAddress: record.value("billingAddress"),
+                cardArtwork: record.value("cardArtwork"),
                 notes: record.value("notes")
             ))
         case .identity:
@@ -7688,6 +7708,10 @@ public enum VaultCSVCodec {
             values["cvv"] = draft.cvv
             values["issuer"] = draft.issuer
             values["network"] = draft.network
+            values["iban"] = draft.iban
+            values["swiftCode"] = draft.swiftCode
+            values["billingAddress"] = draft.billingAddress
+            values["cardArtwork"] = draft.cardArtwork
             values["notes"] = draft.notes
         case .identity(let draft):
             values["title"] = draft.title
@@ -9000,6 +9024,11 @@ public struct LocalCardEntryDraft: Sendable, Equatable {
     public let cvv: String
     public let issuer: String
     public let network: String
+    /// #17 可选扩展字段；旧库/旧备份缺失时取空串。
+    public let iban: String
+    public let swiftCode: String
+    public let billingAddress: String
+    public let cardArtwork: String
     public let notes: String
 
     public init(
@@ -9011,6 +9040,10 @@ public struct LocalCardEntryDraft: Sendable, Equatable {
         cvv: String,
         issuer: String,
         network: String,
+        iban: String = "",
+        swiftCode: String = "",
+        billingAddress: String = "",
+        cardArtwork: String = "",
         notes: String
     ) {
         self.title = title
@@ -9021,6 +9054,10 @@ public struct LocalCardEntryDraft: Sendable, Equatable {
         self.cvv = cvv
         self.issuer = issuer
         self.network = network
+        self.iban = iban
+        self.swiftCode = swiftCode
+        self.billingAddress = billingAddress
+        self.cardArtwork = cardArtwork
         self.notes = notes
     }
 }
@@ -9036,6 +9073,11 @@ public struct LocalCardEntry: Sendable, Equatable, Identifiable {
     public let cvv: String
     public let issuer: String
     public let network: String
+    /// #17 可选扩展字段；旧库/旧备份缺失时取空串。
+    public let iban: String
+    public let swiftCode: String
+    public let billingAddress: String
+    public let cardArtwork: String
     public let notes: String
     public let favorite: Bool
 
@@ -9050,6 +9092,10 @@ public struct LocalCardEntry: Sendable, Equatable, Identifiable {
         cvv: String,
         issuer: String,
         network: String,
+        iban: String = "",
+        swiftCode: String = "",
+        billingAddress: String = "",
+        cardArtwork: String = "",
         notes: String,
         favorite: Bool = false
     ) {
@@ -9063,6 +9109,10 @@ public struct LocalCardEntry: Sendable, Equatable, Identifiable {
         self.cvv = cvv
         self.issuer = issuer
         self.network = network
+        self.iban = iban
+        self.swiftCode = swiftCode
+        self.billingAddress = billingAddress
+        self.cardArtwork = cardArtwork
         self.notes = notes
         self.favorite = favorite
     }
@@ -11489,6 +11539,10 @@ public struct LocalVaultEntryRepository {
             cvv: draft.cvv,
             issuer: draft.issuer,
             network: draft.network,
+            iban: draft.iban,
+            swiftCode: draft.swiftCode,
+            billingAddress: draft.billingAddress,
+            cardArtwork: draft.cardArtwork,
             notes: draft.notes
         )
     }
@@ -12137,6 +12191,10 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             cvv: draft.cvv,
             issuer: draft.issuer,
             network: draft.network,
+            iban: draft.iban,
+            swiftCode: draft.swiftCode,
+            billingAddress: draft.billingAddress,
+            cardArtwork: draft.cardArtwork,
             notes: draft.notes
         )
         return LocalCardEntry(entry)
@@ -12168,6 +12226,10 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             cvv: draft.cvv,
             issuer: draft.issuer,
             network: draft.network,
+            iban: draft.iban,
+            swiftCode: draft.swiftCode,
+            billingAddress: draft.billingAddress,
+            cardArtwork: draft.cardArtwork,
             notes: draft.notes
         )
         return LocalCardEntry(entry)
@@ -13360,6 +13422,10 @@ private extension LocalCardEntry {
             cvv: entry.cvv,
             issuer: entry.issuer,
             network: entry.network,
+            iban: entry.iban,
+            swiftCode: entry.swiftCode,
+            billingAddress: entry.billingAddress,
+            cardArtwork: entry.cardArtwork,
             notes: entry.notes,
             favorite: entry.favorite
         )
