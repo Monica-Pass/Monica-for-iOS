@@ -142,6 +142,7 @@ extension LocalLoginEntryDraft {
         LocalLoginEntryDraft(
             title: title,
             username: username,
+            account: account,
             password: password,
             url: url,
             notes: notes,
@@ -157,6 +158,7 @@ extension LocalLoginEntryDraft {
         LocalLoginEntryDraft(
             title: title,
             username: username,
+            account: account,
             password: password,
             url: urls.first ?? "",
             notes: notes,

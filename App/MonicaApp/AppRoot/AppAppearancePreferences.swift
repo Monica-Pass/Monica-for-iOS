@@ -67,6 +67,25 @@ struct VaultDisplayPreferences: Sendable, Codable, Equatable {
     var showsLoginUsername: Bool
     var showsLoginURL: Bool
     var showsTabLabels: Bool
+    /// issue #151：登录编辑页是否把「用户名」与「账号（邮箱 / 手机号）」拆成两个字段。
+    ///
+    /// 默认关闭，保持与旧版本完全一致的编辑表单；已保存的账号数据不受开关影响。
+    var separatesLoginAccount: Bool = false
+}
+
+extension VaultDisplayPreferences {
+    /// 手写解码：旧版本持久化的 JSON 没有 `separatesLoginAccount`，
+    /// 缺键时回落到 `false`，避免整个偏好解码失败后退回 `.default` 丢掉用户设置。
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            cardDensity: try container.decode(VaultDisplayCardDensity.self, forKey: .cardDensity),
+            showsLoginUsername: try container.decode(Bool.self, forKey: .showsLoginUsername),
+            showsLoginURL: try container.decode(Bool.self, forKey: .showsLoginURL),
+            showsTabLabels: try container.decode(Bool.self, forKey: .showsTabLabels),
+            separatesLoginAccount: try container.decodeIfPresent(Bool.self, forKey: .separatesLoginAccount) ?? false
+        )
+    }
 }
 
 /// 密码页二级模块的稳定标识（#63）。

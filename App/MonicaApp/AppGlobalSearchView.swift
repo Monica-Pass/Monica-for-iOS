@@ -326,7 +326,7 @@ struct AppGlobalSearchView: View {
 
                     if let match = matchedFieldBadge(for: result) {
                         HStack(spacing: 6) {
-                            Text(match.field.localizedTitle)
+                            Text(matchFieldTitle(match.field, kind: result.kind))
                                 .font(.caption2.weight(.heavy))
                                 .foregroundStyle(AndroidParityPalette.primary)
                                 .padding(.horizontal, 6)
@@ -450,6 +450,15 @@ struct AppGlobalSearchView: View {
         result.matches.first(where: { $0.field != .title })
     }
 
+    /// 登录条目的 username 与 account 是两个独立字段，搜索结果里的命中标签要能分辨；
+    /// 其它类型（TOTP 的 accountName、银行卡持卡人等）沿用原来的「账号」标签。
+    private func matchFieldTitle(_ field: VaultSearchMatchField, kind: UnifiedVaultItemKind) -> String {
+        if kind == .login, field == .username {
+            return String(localized: "用户名")
+        }
+        return field.localizedTitle
+    }
+
     /// `.task(id:)` 的 id：任一输入变化都会取消上一次查询任务。
     private var searchSignature: SearchSignature {
         SearchSignature(
@@ -564,6 +573,7 @@ private extension VaultSearchMatchField {
         switch self {
         case .title: return String(localized: "标题")
         case .username: return String(localized: "账号")
+        case .account: return String(localized: "账号")
         case .url: return String(localized: "网址")
         case .tags: return String(localized: "标签")
         case .details: return String(localized: "其他信息")

@@ -73,6 +73,8 @@ final class AppSessionModel {
     var trashMaintenanceMessage: String?
     var loginTitle = ""
     var loginUsername = ""
+    /// 新建登录条目的账号（邮箱 / 手机号 / 账号 ID），与用户名分开保存。
+    var loginAccount = ""
     var loginPassword = ""
     var loginURL = ""
     /// 新建登录条目的图标（`sf:…` / `catalog:…` 稳定 id），`nil` 表示使用默认图标。
@@ -109,6 +111,7 @@ final class AppSessionModel {
     var editingLoginEntryID: String?
     var editingLoginTitle = ""
     var editingLoginUsername = ""
+    var editingLoginAccount = ""
     var editingLoginPassword = ""
     var editingLoginURL = ""
     var editingLoginFavorite = false
@@ -4930,6 +4933,7 @@ final class AppSessionModel {
                 draft: LocalLoginEntryDraft(
                     title: loginTitle,
                     username: loginUsername,
+                    account: loginAccount,
                     password: loginPassword,
                     url: loginURL,
                     notes: loginNotes,
@@ -4983,6 +4987,7 @@ final class AppSessionModel {
         editingLoginEntryID = entry.id
         editingLoginTitle = entry.title
         editingLoginUsername = entry.username
+        editingLoginAccount = entry.account
         editingLoginPassword = entry.password
         editingLoginURL = entry.url
         editingLoginFavorite = entry.favorite
@@ -5013,6 +5018,7 @@ final class AppSessionModel {
                 draft: LocalLoginEntryDraft(
                     title: editingLoginTitle,
                     username: editingLoginUsername,
+                    account: editingLoginAccount,
                     password: editingLoginPassword,
                     url: editingLoginURL,
                     notes: editingLoginNotes,
@@ -5078,6 +5084,7 @@ final class AppSessionModel {
                 draft: LocalLoginEntryDraft(
                     title: entry.title,
                     username: entry.username,
+                    account: entry.account,
                     password: entry.password,
                     url: entry.url,
                     notes: entry.notes,
@@ -5248,6 +5255,7 @@ final class AppSessionModel {
                     draft: LocalLoginEntryDraft(
                         title: existing.title,
                         username: normalizedRequest.username,
+                        account: existing.account,
                         password: normalizedRequest.password,
                         url: existing.url,
                         notes: existing.notes
@@ -13508,6 +13516,7 @@ final class AppSessionModel {
             (itemID: $0.id, draft: .login(LocalLoginEntryDraft(
                 title: $0.title,
                 username: $0.username,
+                account: $0.account,
                 password: $0.password,
                 url: $0.url,
                 notes: $0.notes,
@@ -13910,6 +13919,7 @@ final class AppSessionModel {
         editingLoginEntryID = nil
         editingLoginTitle = ""
         editingLoginUsername = ""
+        editingLoginAccount = ""
         editingLoginPassword = ""
         editingLoginURL = ""
         editingLoginFavorite = false
