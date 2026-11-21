@@ -75,6 +75,18 @@ struct GeneratorRootView: View {
                 }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(
+            for: GeneratorHistoryController.didClearNotification
+        )) { _ in
+            Task {
+                // 设置页从另一个入口删除了加密历史：先丢弃旧缓存，再按当前 Vault 重新同步。
+                await historyController?.lock()
+                await historyController?.sync(
+                    vaultID: session.activeVaultHistoryScope,
+                    isVaultUnlocked: session.vaultState == .unlocked
+                )
+            }
+        }
         .sheet(isPresented: $isSaveLoginPresented) {
             GeneratorSaveLoginSheet(session: session, password: generatedPassword) { entry in
                 generatorState = String(localized: "已保存到登录项：\(entry.title)")

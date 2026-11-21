@@ -11971,6 +11971,28 @@ public struct LocalVaultRepository {
         )
     }
 
+    /// 在独立临时连接上校验主密码，不改变当前会话状态。
+    ///
+    /// 供「按数据类型清空」等高风险操作做二次确认：校验失败会抛
+    /// `LocalVaultRepositoryError.currentPasswordMismatch`，调用方必须放弃删除。
+    public func verifyMasterPassword(
+        for session: LocalVaultSession,
+        password: String
+    ) throws {
+        guard session.state == .unlocked else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        try validatePassword(password)
+        let verifiedHandle = try engine.verifyMasterPassword(
+            at: session.descriptor.fileURL,
+            password: password,
+            deviceID: session.handle.deviceID
+        )
+        guard verifiedHandle.vaultID == session.handle.vaultID else {
+            throw LocalVaultRepositoryError.currentPasswordMismatch
+        }
+    }
+
     /// 修改主密码：先校验旧口令，再在同一个已解锁会话上重包裹 vault key。
     ///
     /// 设计要点：
@@ -11998,14 +12020,7 @@ public struct LocalVaultRepository {
             throw LocalVaultRepositoryError.passwordUnchanged
         }
 
-        let verifiedHandle = try engine.verifyMasterPassword(
-            at: session.descriptor.fileURL,
-            password: currentPassword,
-            deviceID: session.handle.deviceID
-        )
-        guard verifiedHandle.vaultID == session.handle.vaultID else {
-            throw LocalVaultRepositoryError.currentPasswordMismatch
-        }
+        try verifyMasterPassword(for: session, password: currentPassword)
 
         try engine.resetMasterPassword(
             in: session.handle,

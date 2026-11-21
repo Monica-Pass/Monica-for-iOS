@@ -32825,6 +32825,502 @@
           }
         }
       }
+    },
+    "数据管理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data Management"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据管理"
+          }
+        }
+      }
+    },
+    "按数据类型清空": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear by Data Type"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "按数据类型清空"
+          }
+        }
+      }
+    },
+    "勾选要清空的数据类型，确认主密码后执行。条目会进入回收站，可在回收站恢复；标签与生成历史会被立即删除，不可撤销。只影响当前保险库，不会删除主密码、设置或其他保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select the data types to clear, then confirm with your master password. Entries are moved to the trash and can be restored from there; tags and generator history are deleted immediately and cannot be undone. Only this vault is affected — your master password, settings, and other vaults are kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "勾选要清空的数据类型，确认主密码后执行。条目会进入回收站，可在回收站恢复；标签与生成历史会被立即删除，不可撤销。只影响当前保险库，不会删除主密码、设置或其他保险库。"
+          }
+        }
+      }
+    },
+    "可清空条目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clearable Items"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可清空条目"
+          }
+        }
+      }
+    },
+    "数据类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Data Types"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数据类型"
+          }
+        }
+      }
+    },
+    "银行卡与证件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cards & Identities"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "银行卡与证件"
+          }
+        }
+      }
+    },
+    "被清空条目的附件会一并移除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachments of cleared entries are removed too"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "被清空条目的附件会一并移除"
+          }
+        }
+      }
+    },
+    "永久删除，不进回收站": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted permanently, not moved to trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久删除，不进回收站"
+          }
+        }
+      }
+    },
+    "WiFi": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wi-Fi"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WiFi"
+          }
+        }
+      }
+    },
+    "Passkey": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passkey"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passkey"
+          }
+        }
+      }
+    },
+    "Send": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Send"
+          }
+        }
+      }
+    },
+    "附件引用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Attachment References"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "附件引用"
+          }
+        }
+      }
+    },
+    "没有可清空的数据。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to clear."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可清空的数据。"
+          }
+        }
+      }
+    },
+    "解锁保险库后即可按数据类型清空。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault to clear data by type."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁保险库后即可按数据类型清空。"
+          }
+        }
+      }
+    },
+    "执行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Run"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "执行"
+          }
+        }
+      }
+    },
+    "已选择 %lld 类": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld selected"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已选择 %lld 类"
+          }
+        }
+      }
+    },
+    "全选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Select All"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全选"
+          }
+        }
+      }
+    },
+    "取消全选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deselect All"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消全选"
+          }
+        }
+      }
+    },
+    "清空所选类型": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Selected Types"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空所选类型"
+          }
+        }
+      }
+    },
+    "上次结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last Result"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次结果"
+          }
+        }
+      }
+    },
+    "已清空所选数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Selected Data Cleared"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已清空所选数据"
+          }
+        }
+      }
+    },
+    "条目已进入回收站，可在回收站恢复；标签与生成历史已永久删除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entries were moved to the trash and can be restored from there; tags and generator history were deleted permanently."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条目已进入回收站，可在回收站恢复；标签与生成历史已永久删除。"
+          }
+        }
+      }
+    },
+    "清空失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear Failed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空失败"
+          }
+        }
+      }
+    },
+    "确认清空所选类型？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear the selected types?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认清空所选类型？"
+          }
+        }
+      }
+    },
+    "此操作会把所选类型的全部条目移入回收站，可在回收站恢复；标签与生成历史会被立即删除，不可撤销。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All entries of the selected types will be moved to the trash, where they can be restored; tags and generator history will be deleted immediately and cannot be undone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此操作会把所选类型的全部条目移入回收站，可在回收站恢复；标签与生成历史会被立即删除，不可撤销。"
+          }
+        }
+      }
+    },
+    "请输入主密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter master password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入主密码"
+          }
+        }
+      }
+    },
+    "仅影响当前保险库，不会删除主密码、设置或其他保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affects only this vault; your master password, settings, and other vaults are kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅影响当前保险库，不会删除主密码、设置或其他保险库。"
+          }
+        }
+      }
+    },
+    "确认清空": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认清空"
+          }
+        }
+      }
+    },
+    "主密码错误，未清空任何数据。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wrong master password. Nothing was cleared."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主密码错误，未清空任何数据。"
+          }
+        }
+      }
+    },
+    "保险库未解锁，未清空任何数据。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault is locked. Nothing was cleared."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库未解锁，未清空任何数据。"
+          }
+        }
+      }
+    },
+    "清空失败，请稍后重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear failed. Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空失败，请稍后重试。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
