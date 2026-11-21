@@ -720,6 +720,8 @@ public struct VaultSearchEntrySnapshot: Sendable, Equatable {
     public var deletedPasskeyEntries: [LocalPasskeyEntry] = []
     public var sshKeyEntries: [LocalSshKeyEntry] = []
     public var deletedSshKeyEntries: [LocalSshKeyEntry] = []
+    public var gpgKeyEntries: [LocalGPGKeyEntry] = []
+    public var deletedGPGKeyEntries: [LocalGPGKeyEntry] = []
     public var apiTokenEntries: [LocalApiTokenEntry] = []
     public var deletedApiTokenEntries: [LocalApiTokenEntry] = []
     public var wifiEntries: [LocalWifiEntry] = []
@@ -797,6 +799,13 @@ public enum VaultSearchDocumentBuilder {
             deleted: snapshot.deletedSshKeyEntries,
             usage: usage,
             make: sshKeyDocument
+        )
+        append(
+            documents: &documents,
+            entries: snapshot.gpgKeyEntries,
+            deleted: snapshot.deletedGPGKeyEntries,
+            usage: usage,
+            make: gpgKeyDocument
         )
         append(
             documents: &documents,
@@ -953,6 +962,24 @@ public enum VaultSearchDocumentBuilder {
             title: entry.title,
             username: entry.username,
             url: entry.host,
+            notes: entry.notes,
+            isFavorite: entry.favorite,
+            isDeleted: deleted
+        )
+    }
+
+    /// GPG 条目只投影标题、属主、算法与 key ID 这些**公开**元数据。
+    ///
+    /// armored 公钥 / 私钥文本一律不进索引：索引是解锁会话内的内存结构，
+    /// 但没有任何搜索需求需要密钥材料，少放一份就少一份泄漏面。
+    private static func gpgKeyDocument(_ entry: LocalGPGKeyEntry, deleted: Bool) -> VaultSearchDocument {
+        VaultSearchDocument(
+            kind: .gpgKey,
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            username: joined(entry.ownerName, entry.ownerEmail),
+            details: joined(entry.algorithm, entry.keyID, entry.fingerprint),
             notes: entry.notes,
             isFavorite: entry.favorite,
             isDeleted: deleted

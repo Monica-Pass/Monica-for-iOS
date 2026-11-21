@@ -548,6 +548,7 @@ private extension UnifiedVaultItemKind {
         case .apiToken: return "curlybraces"
         case .wifi: return "wifi"
         case .sso: return "person.crop.circle.badge.checkmark"
+        case .gpgKey: return "key.horizontal.fill"
         case .send: return "paperplane.fill"
         case .steam: return "shield.lefthalf.filled"
         case .attachmentRef: return "paperclip"

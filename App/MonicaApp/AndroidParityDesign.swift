@@ -70,6 +70,8 @@ extension UnifiedVaultItemKind {
             return String(localized: "Wi-Fi")
         case .sso:
             return String(localized: "SSO")
+        case .gpgKey:
+            return String(localized: "GPG 密钥")
         case .send:
             return String(localized: "安全发送")
         case .steam:

@@ -1027,7 +1027,7 @@ public extension LocalVaultEntryRepository {
         return result
     }
 
-    /// 按 kind 取出条目 ID。switch 保持穷尽（含 `.sso`）。
+    /// 按 kind 取出条目 ID。switch 保持穷尽（含 `.sso` / `.gpgKey` / `.steam`）。
     func vaultEntryIDs(
         kind: UnifiedVaultItemKind,
         projectID: String,
@@ -1054,6 +1054,8 @@ public extension LocalVaultEntryRepository {
             return try (deleted ? listDeletedWifiEntries(projectID: projectID) : listWifiEntries(projectID: projectID)).map(\.id)
         case .sso:
             return try (deleted ? listDeletedSSOEntries(projectID: projectID) : listSSOEntries(projectID: projectID)).map(\.id)
+        case .gpgKey:
+            return try (deleted ? listDeletedGPGKeyEntries(projectID: projectID) : listGPGKeyEntries(projectID: projectID)).map(\.id)
         case .steam:
             return try (deleted ? listDeletedSteamEntries(projectID: projectID) : listSteamEntries(projectID: projectID)).map(\.id)
         case .send:
@@ -1088,6 +1090,8 @@ public extension LocalVaultEntryRepository {
             try deleteWifiEntry(projectID: projectID, entryID: entryID)
         case .sso:
             try deleteSSOEntry(projectID: projectID, entryID: entryID)
+        case .gpgKey:
+            try deleteGPGKeyEntry(projectID: projectID, entryID: entryID)
         case .steam:
             try deleteSteamEntry(projectID: projectID, entryID: entryID)
         case .send:

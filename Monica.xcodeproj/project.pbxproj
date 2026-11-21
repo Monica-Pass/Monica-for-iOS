@@ -128,6 +128,7 @@
 		AA0000000000000000000018 /* AppCloudBackupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000017 /* AppCloudBackupSupport.swift */; };
 		AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */; };
 		AA000000000000000000001C /* AppImportExportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001B /* AppImportExportSupport.swift */; };
+		AE1200000000000000000002 /* AppGPGKeySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1200000000000000000001 /* AppGPGKeySupport.swift */; };
 		AA000000000000000000001E /* AppSessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001D /* AppSessionModel.swift */; };
 		B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000001 /* AppVaultRegistrySupport.swift */; };
 		B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */; };
@@ -301,6 +302,7 @@
 		AA0000000000000000000017 /* AppCloudBackupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppCloudBackupSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBitwardenSyncSupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000001B /* AppImportExportSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportSupport.swift"; sourceTree = "<group>"; };
+		AE1200000000000000000001 /* AppGPGKeySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppGPGKeySupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000001D /* AppSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel.swift"; sourceTree = "<group>"; };
 		B29000000000000000000001 /* AppVaultRegistrySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultRegistrySupport.swift; sourceTree = "<group>"; };
 		B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultRegistry.swift"; sourceTree = "<group>"; };
@@ -437,6 +439,7 @@
 				AF1600000000000000000011 /* AppLoginDetailSupport.swift */,
 				A13000000000000000000012 /* SensitivePrivacySettingsView.swift */,
 				A9B000000000000000000002 /* AppGlobalSearchView.swift */,
+				AE1200000000000000000001 /* AppGPGKeySupport.swift */,
 				A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */,
 				A30000000000000000000011 /* AppShareExtensionInboxStore.swift */,
 				A60000000000000000000011 /* AppAutoFillCredentialSaveInboxStore.swift */,
@@ -905,6 +908,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA0000000000000000000018 /* AppCloudBackupSupport.swift in Sources */,
 				AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */,
 				AA000000000000000000001C /* AppImportExportSupport.swift in Sources */,
+				AE1200000000000000000002 /* AppGPGKeySupport.swift in Sources */,
 				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
 				B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */,
 				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
