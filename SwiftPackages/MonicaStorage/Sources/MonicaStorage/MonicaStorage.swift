@@ -6328,6 +6328,41 @@ public enum AndroidBackupCodec {
         case invalidFormat
     }
 
+    /// 用与移动端加密备份相同的信封（`MONICA_ENC_V1` + PBKDF2-SHA256 10 万次 + AES-GCM）
+    /// 保护导出文件；信封本身与 zip 无关，CSV/JSON 也能复用同一套参数。
+    public static func encryptPayload(_ payload: Data, password: String) throws -> Data {
+        guard !password.isEmpty else {
+            throw AndroidBackupEncryptedArchiveError.invalidFormat
+        }
+        let salt = Data((0..<encryptedBackupSaltLength).map { _ in UInt8.random(in: UInt8.min...UInt8.max) })
+        let iv = Data((0..<encryptedBackupIVLength).map { _ in UInt8.random(in: UInt8.min...UInt8.max) })
+        let keyData = try pbkdf2SHA256(
+            password: Data(password.utf8),
+            salt: salt,
+            iterations: encryptedBackupPBKDF2Iterations,
+            keyLength: encryptedBackupKeyLength
+        )
+        let sealedBox = try AES.GCM.seal(
+            payload,
+            using: SymmetricKey(data: keyData),
+            nonce: AES.GCM.Nonce(data: iv)
+        )
+        var output = encryptedBackupMagic
+        output.append(salt)
+        output.append(iv)
+        output.append(sealedBox.ciphertext)
+        output.append(sealedBox.tag)
+        return output
+    }
+
+    public static func decryptPayload(_ data: Data, password: String) throws -> Data {
+        try decryptAndroidEncryptedBackup(data, password: password)
+    }
+
+    public static func isEncryptedPayload(_ data: Data) -> Bool {
+        data.starts(with: encryptedBackupMagic)
+    }
+
     private static func isEncryptedBackup(_ data: Data, fileName: String?) -> Bool {
         if fileName?.lowercased().hasSuffix(".enc.zip") == true {
             return true
@@ -7354,7 +7389,10 @@ public enum VaultCSVCodec {
         "ssoProvider",
         "ssoProviderName",
         "linkedLoginEntryID",
-        "notes"
+        "notes",
+        // 追加列：旧 CSV 没有这两列时按空值回落，保证旧文件仍可导入。
+        "urls",
+        "customFields"
     ]
 
     public static let headerLine = columns.joined(separator: ",")
@@ -7402,7 +7440,19 @@ public enum VaultCSVCodec {
         return rows.map { row in row.map(escape).joined(separator: ",") }.joined(separator: "\n")
     }
 
-    private static func parseItem(
+    /// 带自定义字段的 CSV 导出：列顺序与 `columns` 一致，旧读取端会忽略多出来的列。
+    public static func exportTransferItems(_ items: [VaultTransferItem]) -> String {
+        let rows = [columns] + items.map { item -> [String] in
+            var values = rowValues(for: item.draft)
+            if !item.customFields.isEmpty {
+                values["customFields"] = VaultCustomFieldPayload.encode(item.customFields)
+            }
+            return columns.map { values[$0] ?? "" }
+        }
+        return rows.map { row in row.map(escape).joined(separator: ",") }.joined(separator: "\n")
+    }
+
+    static func parseItem(
         record: inout CSVRecord,
         rowNumber: Int,
         issues: inout [VaultCSVImportIssue]
@@ -7425,7 +7475,8 @@ public enum VaultCSVCodec {
                 username: record.value("username"),
                 password: record.value("password"),
                 url: record.value("url"),
-                notes: record.value("notes")
+                notes: record.value("notes"),
+                urls: urlList(record.value("urls"))
             ))
         case .note:
             return .note(LocalNoteEntryDraft(title: title, body: record.value("body")))
@@ -7548,7 +7599,7 @@ public enum VaultCSVCodec {
         }
     }
 
-    private static func row(for item: VaultCSVItemDraft) -> [String] {
+    static func rowValues(for item: VaultCSVItemDraft) -> [String: String] {
         var values = Dictionary(uniqueKeysWithValues: columns.map { ($0, "") })
         values["kind"] = item.kind.rawValue
         switch item {
@@ -7557,6 +7608,12 @@ public enum VaultCSVCodec {
             values["username"] = draft.username
             values["password"] = draft.password
             values["url"] = draft.url
+            values["notes"] = draft.notes
+            // 主 URL 永远在第一项；只有存在额外链接时才写 urls 列，保证单 URL 条目原样往返。
+            let normalizedURLs = LoginEntryURLRules.normalizedURLs(primary: draft.url, additional: draft.urls)
+            if normalizedURLs.count > 1 || (normalizedURLs.count == 1 && normalizedURLs[0] != draft.url) {
+                values["urls"] = normalizedURLs.joined(separator: "\n")
+            }
         case .note(let draft):
             values["title"] = draft.title
             values["body"] = draft.body
@@ -7639,10 +7696,15 @@ public enum VaultCSVCodec {
             values["maxViews"] = String(draft.maxViews)
             values["notes"] = draft.notes
         }
+        return values
+    }
+
+    private static func row(for item: VaultCSVItemDraft) -> [String] {
+        let values = rowValues(for: item)
         return columns.map { values[$0] ?? "" }
     }
 
-    private static func parseRows(_ csv: String) throws -> [[String]] {
+    static func parseRows(_ csv: String) throws -> [[String]] {
         let input = csv.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else { return [] }
         var rows: [[String]] = []
@@ -7698,6 +7760,14 @@ public enum VaultCSVCodec {
 
     private static func normalizedField(_ field: String) -> String {
         field.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 多 URL 单元格：换行分隔；同时兼容手写文件里用 `|` 分隔的情况。
+    private static func urlList(_ value: String) -> [String] {
+        value
+            .split(whereSeparator: { $0 == "\n" || $0 == "\r" || $0 == "|" })
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
     private static func escape(_ value: String) -> String {
@@ -7775,7 +7845,7 @@ public enum VaultCSVCodec {
     }
 }
 
-private struct CSVRecord {
+struct CSVRecord {
     let row: [String]
     let headerIndex: [String: Int]
 
