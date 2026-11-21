@@ -5904,7 +5904,7 @@ import MonicaStorage
     #expect(draft.providerName.isEmpty)
 }
 
-private final class RecordingVaultEngine: LocalVaultEngine {
+class RecordingVaultEngine: LocalVaultEngine {
     private(set) var createdVaults: [RecordedVaultCall] = []
     private(set) var openedVaults: [RecordedVaultCall] = []
     private(set) var securityKeyOpenedVaults: [RecordedSecurityKeyVaultCall] = []
@@ -7235,6 +7235,46 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         attachmentMetadata[projectID, default: []]
     }
 
+    private(set) var itemExtrasByProject: [String: [String: VaultItemExtras]] = [:]
+
+    func listItemExtras(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [String: VaultItemExtras] {
+        itemExtrasByProject[projectID, default: [:]]
+    }
+
+    func saveItemExtras(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        extras: VaultItemExtras
+    ) throws -> VaultItemExtras {
+        let normalized = extras.normalized()
+        itemExtrasByProject[projectID, default: [:]][normalized.itemID] = normalized
+        return normalized
+    }
+
+    func deleteItemExtras(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        itemID: String
+    ) throws {
+        itemExtrasByProject[projectID]?.removeValue(forKey: itemID)
+    }
+
+    func moveItemExtras(
+        in handle: LocalVaultHandle,
+        itemID: String,
+        fromProjectID: String,
+        toProjectID: String
+    ) throws {
+        guard fromProjectID != toProjectID,
+              let extras = itemExtrasByProject[fromProjectID]?.removeValue(forKey: itemID) else {
+            return
+        }
+        itemExtrasByProject[toProjectID, default: [:]][itemID] = extras
+    }
+
     func deleteAttachmentMetadata(in handle: LocalVaultHandle, projectID: String, attachmentID: String) throws {
         deletedAttachmentMetadata.append(.init(vaultID: handle.vaultID, projectID: projectID, attachmentID: attachmentID))
         guard let metadata = attachmentMetadata[projectID, default: []].first(where: { $0.id == attachmentID }) else { return }
@@ -7281,45 +7321,45 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     }
 }
 
-private struct RecordedVaultCall: Equatable {
+struct RecordedVaultCall: Equatable {
     let fileURL: URL
     let password: String
     let deviceID: String
 }
 
-private struct RecordedSecurityKeyVaultCall: Equatable {
+struct RecordedSecurityKeyVaultCall: Equatable {
     let fileURL: URL
     let keyMaterial: Data
     let deviceID: String
 }
 
-private struct RecordedSecurityKeySetupCall: Equatable {
+struct RecordedSecurityKeySetupCall: Equatable {
     let vaultID: String
     let keyMaterial: Data
 }
 
-private struct RecordedResetMasterPasswordCall: Equatable {
+struct RecordedResetMasterPasswordCall: Equatable {
     let vaultID: String
     let newPassword: String
 }
 
-private struct RecordedProjectCall: Equatable {
+struct RecordedProjectCall: Equatable {
     let vaultID: String
     let title: String
 }
 
-private struct RecordedRenamedProjectCall: Equatable {
+struct RecordedRenamedProjectCall: Equatable {
     let vaultID: String
     let projectID: String
     let title: String
 }
 
-private struct RecordedDeletedProjectCall: Equatable {
+struct RecordedDeletedProjectCall: Equatable {
     let vaultID: String
     let projectID: String
 }
 
-private struct RecordedMoveEntryCall: Equatable {
+struct RecordedMoveEntryCall: Equatable {
     let vaultID: String
     let kind: UnifiedVaultItemKind
     let entryID: String
@@ -7327,144 +7367,144 @@ private struct RecordedMoveEntryCall: Equatable {
     let toProjectID: String
 }
 
-private struct RecordedLoginEntryCall: Equatable {
+struct RecordedLoginEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalLoginEntryDraft
 }
 
-private struct RecordedUpdatedLoginEntryCall: Equatable {
+struct RecordedUpdatedLoginEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalLoginEntryDraft
 }
 
-private struct RecordedFavoriteEntryCall: Equatable {
+struct RecordedFavoriteEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let favorite: Bool
 }
 
-private struct RecordedNoteEntryCall: Equatable {
+struct RecordedNoteEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalNoteEntryDraft
 }
 
-private struct RecordedUpdatedNoteEntryCall: Equatable {
+struct RecordedUpdatedNoteEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalNoteEntryDraft
 }
 
-private struct RecordedTotpEntryCall: Equatable {
+struct RecordedTotpEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalTotpEntryDraft
 }
 
-private struct RecordedUpdatedTotpEntryCall: Equatable {
+struct RecordedUpdatedTotpEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalTotpEntryDraft
 }
 
-private struct RecordedCardEntryCall: Equatable {
+struct RecordedCardEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalCardEntryDraft
 }
 
-private struct RecordedUpdatedCardEntryCall: Equatable {
+struct RecordedUpdatedCardEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalCardEntryDraft
 }
 
-private struct RecordedIdentityEntryCall: Equatable {
+struct RecordedIdentityEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalIdentityEntryDraft
 }
 
-private struct RecordedUpdatedIdentityEntryCall: Equatable {
+struct RecordedUpdatedIdentityEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalIdentityEntryDraft
 }
 
-private struct RecordedPasskeyEntryCall: Equatable {
+struct RecordedPasskeyEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalPasskeyEntryDraft
 }
 
-private struct RecordedUpdatedPasskeyEntryCall: Equatable {
+struct RecordedUpdatedPasskeyEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalPasskeyEntryDraft
 }
 
-private struct RecordedSshKeyEntryCall: Equatable {
+struct RecordedSshKeyEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalSshKeyEntryDraft
 }
 
-private struct RecordedUpdatedSshKeyEntryCall: Equatable {
+struct RecordedUpdatedSshKeyEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalSshKeyEntryDraft
 }
 
-private struct RecordedApiTokenEntryCall: Equatable {
+struct RecordedApiTokenEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalApiTokenEntryDraft
 }
 
-private struct RecordedUpdatedApiTokenEntryCall: Equatable {
+struct RecordedUpdatedApiTokenEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalApiTokenEntryDraft
 }
 
-private struct RecordedWifiEntryCall: Equatable {
+struct RecordedWifiEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalWifiEntryDraft
 }
 
-private struct RecordedUpdatedWifiEntryCall: Equatable {
+struct RecordedUpdatedWifiEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalWifiEntryDraft
 }
 
-private struct RecordedSendEntryCall: Equatable {
+struct RecordedSendEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let draft: LocalSendEntryDraft
 }
 
-private struct RecordedUpdatedSendEntryCall: Equatable {
+struct RecordedUpdatedSendEntryCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
     let draft: LocalSendEntryDraft
 }
 
-private struct RecordedAttachmentMetadataCall: Equatable {
+struct RecordedAttachmentMetadataCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String?
@@ -7475,13 +7515,13 @@ private struct RecordedAttachmentMetadataCall: Equatable {
     let localPath: String?
 }
 
-private struct RecordedEntryMutationCall: Equatable {
+struct RecordedEntryMutationCall: Equatable {
     let vaultID: String
     let projectID: String
     let entryID: String
 }
 
-private struct RecordedAttachmentMutationCall: Equatable {
+struct RecordedAttachmentMutationCall: Equatable {
     let vaultID: String
     let projectID: String
     let attachmentID: String

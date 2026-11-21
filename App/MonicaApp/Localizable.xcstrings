@@ -24342,6 +24342,326 @@
           }
         }
       }
+    },
+    "无法读取回收站账本密钥，回收站清理已暂停。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't read the trash ledger key. Trash cleanup is paused."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取回收站账本密钥，回收站清理已暂停。"
+          }
+        }
+      }
+    },
+    "保险库已锁定，无法读写回收站账本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault is locked, so the trash ledger can't be read or written."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库已锁定，无法读写回收站账本。"
+          }
+        }
+      }
+    },
+    "回收站账本密钥读取失败（%d）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to read the trash ledger key (%d)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回收站账本密钥读取失败（%d）。"
+          }
+        }
+      }
+    },
+    "90 天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90 days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "90 天"
+          }
+        }
+      }
+    },
+    "永久保留": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keep forever"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久保留"
+          }
+        }
+      }
+    },
+    "没有已到期的回收站条目。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No expired trash items."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有已到期的回收站条目。"
+          }
+        }
+      }
+    },
+    "回收站已经是空的。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Trash is already empty."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回收站已经是空的。"
+          }
+        }
+      }
+    },
+    "有 %d 项清理失败：\n%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d item(s) failed to clean up:\n%2$@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有 %d 项清理失败：\n%@"
+          }
+        }
+      }
+    },
+    "没有需要清理的条目。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to clean up."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有需要清理的条目。"
+          }
+        }
+      }
+    },
+    "已永久清理 %d 项，删除后无法恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permanently cleaned up %d item(s). This can't be undone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已永久清理 %d 项，删除后无法恢复。"
+          }
+        }
+      }
+    },
+    "共 %d 项，按当前策略 %d 项已到期": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$d in trash · %2$d expired under the current policy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共 %d 项，按当前策略 %d 项已到期"
+          }
+        }
+      }
+    },
+    "回收站自动清理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic trash cleanup"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回收站自动清理"
+          }
+        }
+      }
+    },
+    "删除后无法恢复；清理只影响已标记删除的条目，不会动正常条目。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted items can't be recovered. Cleanup only touches items already marked as deleted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除后无法恢复；清理只影响已标记删除的条目，不会动正常条目。"
+          }
+        }
+      }
+    },
+    "立即清理已到期（%d）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clean up expired now (%d)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "立即清理已到期（%d）"
+          }
+        }
+      }
+    },
+    "清空回收站": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty trash"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空回收站"
+          }
+        }
+      }
+    },
+    "确定永久清理 %d 项已到期条目吗？此操作无法撤销。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permanently clean up %d expired item(s)? This can't be undone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定永久清理 %d 项已到期条目吗？此操作无法撤销。"
+          }
+        }
+      }
+    },
+    "永久清理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clean up"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久清理"
+          }
+        }
+      }
+    },
+    "确定要清空回收站吗？%d 项将被永久删除，无法撤销。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Empty the trash? %d item(s) will be permanently deleted. This can't be undone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确定要清空回收站吗？%d 项将被永久删除，无法撤销。"
+          }
+        }
+      }
+    },
+    "自动清理未开启，共 %d 项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic cleanup is off · %d item(s)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动清理未开启，共 %d 项"
+          }
+        }
+      }
+    },
+    "自动清理未开启；选择保留天数后，到期条目才会被自动清理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Automatic cleanup is off. Choose a retention period to purge expired items automatically."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动清理未开启；选择保留天数后，到期条目才会被自动清理。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
