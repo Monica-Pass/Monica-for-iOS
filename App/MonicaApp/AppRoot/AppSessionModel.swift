@@ -95,6 +95,10 @@ final class AppSessionModel {
     var operationTimelineFilterKind: UnifiedVaultItemKind?
     var operationTimelineFilterAction: AppOperationTimelineAction?
     private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
+    /// 加密格式文件：保留原始数据，用户重新输入密码时再解析一次。
+    private var pendingFormatImportData: Data?
+    private var pendingFormatImportFileName: String?
+    private var pendingFormatImportContentType: String?
     private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
     private var nextOperationTimelineEventSequence = 0
     var editingLoginEntryID: String?
@@ -390,6 +394,9 @@ final class AppSessionModel {
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
     var bitwardenPendingMutationBatches: [AppBitwardenPendingMutationBatch] = []
     var csvImportPreview: CSVImportPreview?
+    /// issue #37：CSV / JSON / Bitwarden / Aegis / Stratum 的格式导入预览（确认前不写库）。
+    var formatImportPreview: FormatImportPreview?
+    var formatImportPassword = ""
     var credentialExchange = AppCredentialExchangeState()
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
@@ -6929,6 +6936,192 @@ final class AppSessionModel {
         }
     }
 
+    // MARK: - 通用导入导出（CSV / JSON / Bitwarden / Aegis / Stratum）
+
+    /// 只解析、不写库：format sniffing 与逐条错误都来自 Storage 层。
+    func previewTransferImport(
+        data: Data,
+        fileName: String?,
+        contentType: String?,
+        password: String? = nil
+    ) -> VaultImportResult {
+        VaultImportEngine.preview(
+            data: data,
+            fileName: fileName,
+            contentType: contentType,
+            options: VaultImportOptions(
+                password: password,
+                existingLoginEntries: loginEntries,
+                existingTotpEntries: totpEntries
+            )
+        )
+    }
+
+    /// 用户确认后逐条写入；自定义字段跟随条目写入侧表。
+    func importTransferItems(_ items: [VaultTransferItem], projectTitle: String) throws -> Int {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+
+            var importedCount = 0
+            for item in items {
+                guard let itemID = try createCSVImportedItem(
+                    item.draft,
+                    projectID: project.id,
+                    entryRepository: entryRepository
+                ) else {
+                    continue
+                }
+                if !item.customFields.isEmpty {
+                    _ = try entryRepository.saveItemExtras(
+                        projectID: project.id,
+                        extras: VaultItemExtras(
+                            itemID: itemID,
+                            itemKind: item.draft.kind,
+                            customFields: item.customFields
+                        )
+                    )
+                }
+                importedCount += 1
+            }
+
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            entryOperationState = .succeeded(String(localized: "已导入 \(importedCount) 项"))
+            return importedCount
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    /// 导出用的统一模型：条目 + 自定义字段；`sourceID` 只会写进导出的 JSON，不写日志。
+    func transferItems(includeCustomFields: Bool) -> [VaultTransferItem] {
+        let rows = csvExportRows()
+        var extrasByItemID: [String: VaultItemExtras] = [:]
+        if includeCustomFields,
+           let entryRepository = activeEntryRepository,
+           let project = activeProject {
+            extrasByItemID = (try? entryRepository.listItemExtras(projectID: project.id)) ?? [:]
+        }
+        return rows.enumerated().map { index, row in
+            VaultTransferItem(
+                draft: row.draft,
+                customFields: includeCustomFields ? (extrasByItemID[row.itemID]?.customFields ?? []) : [],
+                sourceIndex: index,
+                sourceID: row.itemID
+            )
+        }
+    }
+
+    // MARK: - 格式导入（issue #37）
+
+    /// 从文件选择器拿到的 URL 读取数据；只预览，不写库。
+    @discardableResult
+    func beginFormatImport(from fileURL: URL) throws -> FormatImportPreview {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let data = try Data(contentsOf: fileURL)
+        let contentType = UTType(filenameExtension: fileURL.pathExtension)?.preferredMIMEType
+        return beginFormatImport(
+            data: data,
+            fileName: fileURL.lastPathComponent,
+            contentType: contentType
+        )
+    }
+
+    /// 解析并缓存预览；密码只留在内存里，不写日志。
+    @discardableResult
+    func beginFormatImport(
+        data: Data,
+        fileName: String?,
+        contentType: String?,
+        password: String? = nil
+    ) -> FormatImportPreview {
+        recordUserActivity()
+        let result = previewTransferImport(
+            data: data,
+            fileName: fileName,
+            contentType: contentType,
+            password: password
+        )
+        let preview = FormatImportPreview(result: result, fileName: fileName)
+        formatImportPreview = preview
+        csvImportPreview = nil
+        androidBackupImportPreview = nil
+        clearKeePassImportState()
+        pendingFormatImportData = data
+        pendingFormatImportFileName = fileName
+        pendingFormatImportContentType = contentType
+        entryOperationState = .succeeded(
+            String(localized: "格式预览：可导入 \(preview.itemCount) 项，\(preview.issues.count) 个问题")
+        )
+        return preview
+    }
+
+    /// 加密文件：用界面上输入的密码重试一次，输入后立即清空密码。
+    @discardableResult
+    func previewEncryptedFormatImport() -> FormatImportPreview? {
+        guard let data = pendingFormatImportData else {
+            return nil
+        }
+        let password = formatImportPassword
+        formatImportPassword = ""
+        return beginFormatImport(
+            data: data,
+            fileName: pendingFormatImportFileName,
+            contentType: pendingFormatImportContentType,
+            password: password
+        )
+    }
+
+    func cancelFormatImport() {
+        formatImportPreview = nil
+        formatImportPassword = ""
+        pendingFormatImportData = nil
+        pendingFormatImportFileName = nil
+        pendingFormatImportContentType = nil
+    }
+
+    /// 用户确认后逐条写入；自定义字段跟随条目写入侧表。
+    @discardableResult
+    func confirmFormatImport(projectTitle: String) throws -> Int {
+        guard let preview = formatImportPreview, preview.canImport else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        let importedCount = try importTransferItems(preview.result.items, projectTitle: projectTitle)
+        cancelFormatImport()
+        entryOperationState = .succeeded(String(localized: "已导入 \(importedCount) 项"))
+        return importedCount
+    }
+
+    /// 导出：CSV / JSON，可选自定义字段与加密密码；明文确认由界面负责。
+    func exportTransferArtifact(
+        format: VaultExportFormat,
+        includeCustomFields: Bool,
+        encryptionPassword: String?
+    ) throws -> VaultExportArtifact {
+        recordUserActivity()
+        let items = transferItems(includeCustomFields: includeCustomFields)
+        return try VaultExportEngine.export(
+            items: items,
+            options: VaultExportOptions(
+                format: format,
+                includeCustomFields: includeCustomFields,
+                encryptionPassword: encryptionPassword
+            )
+        )
+    }
+
     // MARK: - 凭据交换（CXF，iOS 26+）
 
     /// 系统完成导入握手后通过 NSUserActivity 调用；令牌只保留在内存里。
@@ -11772,20 +11965,27 @@ final class AppSessionModel {
     }
 
     private func csvExportDrafts() -> [VaultCSVItemDraft] {
-        var drafts: [VaultCSVItemDraft] = []
-        drafts += loginEntries.map {
-            .login(LocalLoginEntryDraft(
+        csvExportRows().map(\.draft)
+    }
+
+    /// 导出用的条目行：保留本地条目 ID，便于把自定义字段侧表一起带走。
+    private func csvExportRows() -> [(itemID: String, draft: VaultCSVItemDraft)] {
+        var rows: [(itemID: String, draft: VaultCSVItemDraft)] = []
+        rows += loginEntries.map {
+            (itemID: $0.id, draft: .login(LocalLoginEntryDraft(
                 title: $0.title,
                 username: $0.username,
                 password: $0.password,
-                url: $0.url
-            ))
+                url: $0.url,
+                notes: $0.notes,
+                urls: $0.effectiveURLs
+            )))
         }
-        drafts += noteEntries.map {
-            .note(LocalNoteEntryDraft(title: $0.title, body: $0.body))
+        rows += noteEntries.map {
+            (itemID: $0.id, draft: .note(LocalNoteEntryDraft(title: $0.title, body: $0.body)))
         }
-        drafts += totpEntries.map {
-            .totp(LocalTotpEntryDraft(
+        rows += totpEntries.map {
+            (itemID: $0.id, draft: .totp(LocalTotpEntryDraft(
                 title: $0.title,
                 secret: $0.secret,
                 issuer: $0.issuer,
@@ -11795,10 +11995,10 @@ final class AppSessionModel {
                 algorithm: $0.algorithm,
                 otpType: $0.otpType,
                 counter: $0.counter
-            ))
+            )))
         }
-        drafts += cardEntries.map {
-            .card(LocalCardEntryDraft(
+        rows += cardEntries.map {
+            (itemID: $0.id, draft: .card(LocalCardEntryDraft(
                 title: $0.title,
                 cardholderName: $0.cardholderName,
                 number: $0.number,
@@ -11808,10 +12008,10 @@ final class AppSessionModel {
                 issuer: $0.issuer,
                 network: $0.network,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += identityEntries.map {
-            .identity(LocalIdentityEntryDraft(
+        rows += identityEntries.map {
+            (itemID: $0.id, draft: .identity(LocalIdentityEntryDraft(
                 title: $0.title,
                 documentType: $0.documentType,
                 fullName: $0.fullName,
@@ -11821,10 +12021,10 @@ final class AppSessionModel {
                 issueDate: $0.issueDate,
                 expiryDate: $0.expiryDate,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += passkeyEntries.map {
-            .passkey(LocalPasskeyEntryDraft(
+        rows += passkeyEntries.map {
+            (itemID: $0.id, draft: .passkey(LocalPasskeyEntryDraft(
                 title: $0.title,
                 relyingPartyID: $0.relyingPartyID,
                 username: $0.username,
@@ -11833,10 +12033,10 @@ final class AppSessionModel {
                 publicKeyCOSE: $0.publicKeyCOSE,
                 privateKeyReference: $0.privateKeyReference,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += sshKeyEntries.map {
-            .sshKey(LocalSshKeyEntryDraft(
+        rows += sshKeyEntries.map {
+            (itemID: $0.id, draft: .sshKey(LocalSshKeyEntryDraft(
                 title: $0.title,
                 username: $0.username,
                 host: $0.host,
@@ -11844,10 +12044,10 @@ final class AppSessionModel {
                 privateKeyReference: $0.privateKeyReference,
                 passphraseHint: $0.passphraseHint,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += apiTokenEntries.map {
-            .apiToken(LocalApiTokenEntryDraft(
+        rows += apiTokenEntries.map {
+            (itemID: $0.id, draft: .apiToken(LocalApiTokenEntryDraft(
                 title: $0.title,
                 issuer: $0.issuer,
                 accountName: $0.accountName,
@@ -11855,20 +12055,20 @@ final class AppSessionModel {
                 scopes: $0.scopes,
                 expiresAt: $0.expiresAt,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += wifiEntries.map {
-            .wifi(LocalWifiEntryDraft(
+        rows += wifiEntries.map {
+            (itemID: $0.id, draft: .wifi(LocalWifiEntryDraft(
                 title: $0.title,
                 ssid: $0.ssid,
                 securityType: $0.securityType,
                 password: $0.password,
                 hidden: $0.hidden,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += ssoEntries.map {
-            .sso(LocalSSOEntryDraft(
+        rows += ssoEntries.map {
+            (itemID: $0.id, draft: .sso(LocalSSOEntryDraft(
                 title: $0.title,
                 provider: $0.provider,
                 providerName: $0.providerName,
@@ -11878,18 +12078,18 @@ final class AppSessionModel {
                 linkedLoginEntryID: $0.linkedLoginEntryID,
                 notes: $0.notes,
                 secret: $0.secret
-            ))
+            )))
         }
-        drafts += sendEntries.map {
-            .send(LocalSendEntryDraft(
+        rows += sendEntries.map {
+            (itemID: $0.id, draft: .send(LocalSendEntryDraft(
                 title: $0.title,
                 body: $0.body,
                 expiresAt: $0.expiresAt,
                 maxViews: $0.maxViews,
                 notes: $0.notes
-            ))
+            )))
         }
-        return drafts
+        return rows
     }
 
     func makeWebDAVEndpoint() throws -> WebDAVEndpoint {

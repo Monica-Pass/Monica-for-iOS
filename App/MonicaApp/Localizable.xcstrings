@@ -19549,6 +19549,438 @@
           }
         }
       }
+    },
+    "导出文件已保存": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export file saved"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出文件已保存"
+          }
+        }
+      }
+    },
+    "导出明文文件？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export a plaintext file?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出明文文件？"
+          }
+        }
+      }
+    },
+    "导出明文": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Plaintext"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出明文"
+          }
+        }
+      }
+    },
+    "明文文件里的密码、TOTP 密钥和备注不会被加密，任何能读取该文件的人都能看到。建议设置导出密码，或导出后立即妥善保管。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passwords, TOTP secrets and notes in a plaintext file are not encrypted; anyone who can read the file can see them. Set an export password, or store the file somewhere safe immediately."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "明文文件里的密码、TOTP 密钥和备注不会被加密，任何能读取该文件的人都能看到。建议设置导出密码，或导出后立即妥善保管。"
+          }
+        }
+      }
+    },
+    "格式导入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式导入"
+          }
+        }
+      }
+    },
+    "自动识别": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-detect"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动识别"
+          }
+        }
+      }
+    },
+    "支持 Monica CSV/JSON、Bitwarden（未加密 JSON）、Aegis、Stratum、1Password CSV 与通用 CSV。加密文件需要输入导出密码；识别不确定时会给出提示。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supports Monica CSV/JSON, Bitwarden (unencrypted JSON), Aegis, Stratum, 1Password CSV and generic CSV. Encrypted files require the export password; a warning appears when detection is uncertain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持 Monica CSV/JSON、Bitwarden（未加密 JSON）、Aegis、Stratum、1Password CSV 与通用 CSV。加密文件需要输入导出密码；识别不确定时会给出提示。"
+          }
+        }
+      }
+    },
+    "选择导入文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose File to Import"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择导入文件"
+          }
+        }
+      }
+    },
+    "识别格式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Detected Format"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "识别格式"
+          }
+        }
+      }
+    },
+    "可导入条目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Importable Items"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可导入条目"
+          }
+        }
+      }
+    },
+    "文件密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File Password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件密码"
+          }
+        }
+      }
+    },
+    "用密码解密预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock with Password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用密码解密预览"
+          }
+        }
+      }
+    },
+    "问题摘要": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Issues"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "问题摘要"
+          }
+        }
+      }
+    },
+    "收起问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hide Issues"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "收起问题"
+          }
+        }
+      }
+    },
+    "查看全部问题（%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Show All Issues (%lld)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看全部问题（%lld）"
+          }
+        }
+      }
+    },
+    "格式导出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式导出"
+          }
+        }
+      }
+    },
+    "CSV / JSON": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV / JSON"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "CSV / JSON"
+          }
+        }
+      }
+    },
+    "导出格式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Format"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出格式"
+          }
+        }
+      }
+    },
+    "包含自定义字段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include Custom Fields"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含自定义字段"
+          }
+        }
+      }
+    },
+    "导出密码（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export Password (Optional)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出密码（可选）"
+          }
+        }
+      }
+    },
+    "不设置密码会导出明文文件，导出前会再确认一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Without a password the export is plaintext; you will be asked to confirm first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不设置密码会导出明文文件，导出前会再确认一次。"
+          }
+        }
+      }
+    },
+    "使用 MONICA_ENC_V1 加密，导入时需要同一个密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted with MONICA_ENC_V1; the same password is required to import."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用 MONICA_ENC_V1 加密，导入时需要同一个密码。"
+          }
+        }
+      }
+    },
+    "导出文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Export File"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导出文件"
+          }
+        }
+      }
+    },
+    "格式预览：可导入 %lld 项，%lld 个问题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format preview: %lld importable, %lld issues"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式预览：可导入 %1$lld 项，%2$lld 个问题"
+          }
+        }
+      }
+    },
+    "已导入 %lld 项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Imported %lld items"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入 %lld 项"
+          }
+        }
+      }
+    },
+    "格式导入导出": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Format Import & Export"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "格式导入导出"
+          }
+        }
+      }
+    },
+    "通用 CSV": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generic CSV"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用 CSV"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
