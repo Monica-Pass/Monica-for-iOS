@@ -381,7 +381,7 @@ extension AppSessionModel {
             throw NoteMarkdownImageError.imageLimitReached(limit: NoteMarkdownImageLimits.maximumImagesPerNote)
         }
         if activeProject == nil, let repository = activeEntryRepository {
-            activeProject = try repository.createProject(title: String(localized: "个人"))
+            activeProject = try createOrReuseVaultProject(title: String(localized: "个人"), entryRepository: repository)
         }
         let sanitizedFileName = AppNoteDraftPolicy.sanitizedImageFileName(fileName, mediaType: properties.mediaType)
         return try addLocalAttachmentContent(
