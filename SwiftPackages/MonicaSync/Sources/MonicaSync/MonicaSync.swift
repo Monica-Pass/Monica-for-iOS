@@ -5330,9 +5330,9 @@ public struct WebDAVClient {
     private let endpoint: WebDAVEndpoint
     private let transport: any WebDAVTransport
 
-    public init(endpoint: WebDAVEndpoint, transport: any WebDAVTransport = URLSessionWebDAVTransport()) {
+    public init(endpoint: WebDAVEndpoint, transport: (any WebDAVTransport)? = nil) {
         self.endpoint = endpoint
-        self.transport = transport
+        self.transport = transport ?? URLSessionWebDAVTransport(identity: WebDAVTrustIdentity(endpoint: endpoint))
     }
 
     public func upload(_ package: WebDAVBackupPackage) async throws -> WebDAVBackupReceipt {
@@ -5601,11 +5601,31 @@ private extension WebDAVBackupPackage {
     }
 }
 
-public final class URLSessionWebDAVTransport: WebDAVTransport {
-    private let session: URLSession
+/// URLSession based WebDAV transport with Trust On First Use support for the
+/// server certificate.
+///
+/// The transport never disables TLS validation globally: every request runs on an
+/// ephemeral session whose delegate only answers `NSURLAuthenticationMethodServerTrust`.
+/// A chain that the system trusts is handed back to URLSession untouched; a chain
+/// the system rejects is accepted only when its SHA-256 fingerprint matches the pin
+/// the user confirmed for this `host:port + user` scope.
+public final class URLSessionWebDAVTransport: WebDAVTransport, @unchecked Sendable {
+    public let identity: WebDAVTrustIdentity
 
-    public init(session: URLSession = .shared) {
-        self.session = session
+    private let trustStore: any WebDAVCertificateTrustStore
+    private let configuration: URLSessionConfiguration
+    private let clock: @Sendable () -> Date
+
+    public init(
+        identity: WebDAVTrustIdentity,
+        trustStore: any WebDAVCertificateTrustStore = KeychainWebDAVCertificateTrustStore(),
+        configuration: URLSessionConfiguration = .ephemeral,
+        now: @escaping @Sendable () -> Date = Date.init
+    ) {
+        self.identity = identity
+        self.trustStore = trustStore
+        self.configuration = configuration
+        self.clock = now
     }
 
     public func send(_ request: WebDAVTransportRequest) async throws -> WebDAVTransportResponse {
@@ -5616,7 +5636,26 @@ public final class URLSessionWebDAVTransport: WebDAVTransport {
             urlRequest.setValue(value, forHTTPHeaderField: key)
         }
 
-        let (data, response) = try await session.data(for: urlRequest)
+        let recorder = WebDAVServerTrustOutcomeRecorder()
+        let delegate = WebDAVServerTrustDelegate(
+            username: identity.username,
+            trustStore: trustStore,
+            recorder: recorder,
+            now: clock
+        )
+        let session = URLSession(configuration: configuration, delegate: delegate, delegateQueue: nil)
+        defer {
+            session.finishTasksAndInvalidate()
+        }
+
+        let data: Data
+        let response: URLResponse
+        do {
+            (data, response) = try await session.data(for: urlRequest)
+        } catch {
+            throw Self.translatedError(error, recorder: recorder)
+        }
+
         guard let httpResponse = response as? HTTPURLResponse else {
             throw WebDAVError.nonHTTPResponse
         }
@@ -5635,12 +5674,40 @@ public final class URLSessionWebDAVTransport: WebDAVTransport {
             body: data
         )
     }
+
+    /// URLSession reports a cancelled trust challenge as a generic connection
+    /// error; the delegate leaves the actionable decision in the recorder.
+    private static func translatedError(
+        _ error: Error,
+        recorder: WebDAVServerTrustOutcomeRecorder
+    ) -> Error {
+        switch recorder.currentOutcome() {
+        case .blocked(let challenge):
+            if challenge.state == .mismatch {
+                return WebDAVError.certificateFingerprintChanged(challenge)
+            }
+            return WebDAVError.untrustedCertificate(challenge)
+        case .trustStoreUnavailable:
+            return WebDAVError.certificateTrustStoreUnavailable
+        case .inspectionFailed:
+            return WebDAVError.certificateInspectionFailed
+        case .systemTrusted, .pinned, .none:
+            return error
+        }
+    }
 }
 
 public enum WebDAVError: Error, Sendable, Equatable, LocalizedError {
     case unexpectedStatus(operation: String, statusCode: Int)
     case integrityCheckFailed
     case nonHTTPResponse
+    /// First connection to a self-signed / privately issued server: the user has
+    /// to look at the fingerprint and confirm before anything is sent.
+    case untrustedCertificate(WebDAVCertificateChallenge)
+    /// The pinned fingerprint no longer matches. Never auto-accepted.
+    case certificateFingerprintChanged(WebDAVCertificateChallenge)
+    case certificateTrustStoreUnavailable
+    case certificateInspectionFailed
 
     public var errorDescription: String? {
         switch self {
@@ -5650,6 +5717,14 @@ public enum WebDAVError: Error, Sendable, Equatable, LocalizedError {
             return "WebDAV 备份完整性校验失败。"
         case .nonHTTPResponse:
             return "WebDAV 服务器返回了非 HTTP 响应。"
+        case .untrustedCertificate(let challenge):
+            return "WebDAV 服务器证书未被系统信任（\(challenge.info.identity.displayAddress)）。SHA-256 指纹：\(challenge.info.displayFingerprint)。"
+        case .certificateFingerprintChanged(let challenge):
+            return "WebDAV 服务器证书指纹已变更，连接已阻止（\(challenge.info.identity.displayAddress)）。当前指纹：\(challenge.info.displayFingerprint)。"
+        case .certificateTrustStoreUnavailable:
+            return "无法读取 WebDAV 证书信任记录，已阻止连接。"
+        case .certificateInspectionFailed:
+            return "无法读取 WebDAV 服务器证书，已阻止连接。"
         }
     }
 }

@@ -384,30 +384,51 @@ protocol AppWebDAVBackupService: Sendable {
 }
 
 struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
+    /// 与设置页共用同一口径的证书信任记录（Keychain 单条记录）。
+    let webDAVCertificateTrustStore: any WebDAVCertificateTrustStore
+
+    init(
+        webDAVCertificateTrustStore: any WebDAVCertificateTrustStore = KeychainWebDAVCertificateTrustStore()
+    ) {
+        self.webDAVCertificateTrustStore = webDAVCertificateTrustStore
+    }
+
+    /// 每个请求都带上 TOFU 证书校验：系统信任链直接放行，自签名证书只有在
+    /// 指纹与用户确认过的记录一致时才接受。
+    private func client(for endpoint: WebDAVEndpoint) -> WebDAVClient {
+        WebDAVClient(
+            endpoint: endpoint,
+            transport: URLSessionWebDAVTransport(
+                identity: WebDAVTrustIdentity(endpoint: endpoint),
+                trustStore: webDAVCertificateTrustStore
+            )
+        )
+    }
+
     func upload(
         endpoint: WebDAVEndpoint,
         package: WebDAVBackupPackage
     ) async throws -> WebDAVBackupReceipt {
-        try await WebDAVClient(endpoint: endpoint).upload(package)
+        try await client(for: endpoint).upload(package)
     }
 
     func download(
         endpoint: WebDAVEndpoint,
         fileName: String
     ) async throws -> WebDAVDownloadedBackup {
-        try await WebDAVClient(endpoint: endpoint).download(fileName: fileName)
+        try await client(for: endpoint).download(fileName: fileName)
     }
 
     func listBackups(endpoint: WebDAVEndpoint) async throws -> [WebDAVBackupItem] {
-        try await WebDAVClient(endpoint: endpoint).listBackups()
+        try await client(for: endpoint).listBackups()
     }
 
     func deleteBackup(endpoint: WebDAVEndpoint, fileName: String) async throws {
-        try await WebDAVClient(endpoint: endpoint).deleteBackup(fileName: fileName)
+        try await client(for: endpoint).deleteBackup(fileName: fileName)
     }
 
     func setBackupPermanent(endpoint: WebDAVEndpoint, fileName: String, isPermanent: Bool) async throws -> WebDAVBackupItem {
-        try await WebDAVClient(endpoint: endpoint).setBackupPermanent(fileName: fileName, isPermanent: isPermanent)
+        try await client(for: endpoint).setBackupPermanent(fileName: fileName, isPermanent: isPermanent)
     }
 
     func cleanupBackups(
@@ -415,7 +436,7 @@ struct URLSessionAppWebDAVBackupService: AppWebDAVBackupService {
         backups: [WebDAVBackupItem],
         olderThan cutoff: Date
     ) async throws -> [WebDAVBackupItem] {
-        try await WebDAVClient(endpoint: endpoint).cleanupBackups(backups, olderThan: cutoff)
+        try await client(for: endpoint).cleanupBackups(backups, olderThan: cutoff)
     }
 }
 
