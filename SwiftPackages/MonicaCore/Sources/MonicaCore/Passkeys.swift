@@ -86,6 +86,9 @@ private extension String {
 public protocol PasskeyPrivateKeyStore: Sendable {
     func savePrivateKey(_ privateKey: Data, credentialID: Data) throws -> String
     func loadPrivateKey(credentialID: Data) throws -> Data?
+    /// Removes the private key. Deleting a missing key is not an error: rollback and revocation
+    /// cleanup must be idempotent.
+    func deletePrivateKey(credentialID: Data) throws
 }
 
 public final class MemoryPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unchecked Sendable {
@@ -105,6 +108,12 @@ public final class MemoryPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unchec
         lock.lock()
         defer { lock.unlock() }
         return privateKeys[credentialID]
+    }
+
+    public func deletePrivateKey(credentialID: Data) throws {
+        lock.lock()
+        defer { lock.unlock() }
+        privateKeys.removeValue(forKey: credentialID)
     }
 }
 
@@ -168,6 +177,16 @@ public final class KeychainPasskeyPrivateKeyStore: PasskeyPrivateKeyStore, @unch
             throw PasskeyCredentialError.privateKeyNotFound
         }
         return data
+    }
+
+    public func deletePrivateKey(credentialID: Data) throws {
+        var query = baseQuery(credentialID: credentialID)
+        // Match both the syncing and the device-local variant.
+        query[kSecAttrSynchronizable as String] = kSecAttrSynchronizableAny
+        let status = SecItemDelete(query as CFDictionary)
+        guard status == errSecSuccess || status == errSecItemNotFound else {
+            throw PasskeyCredentialError.keychainUnexpectedStatus(status)
+        }
     }
 
     private func baseQuery(credentialID: Data) -> [String: Any] {
@@ -380,7 +399,10 @@ public struct MonicaPasskeyCredentialManager: Sendable {
         return bytes
     }
 
-    private static func coseKey(for publicKey: P256.Signing.PublicKey) throws -> Data {
+    /// Encodes the P-256 public key as the WebAuthn COSE_Key map Monica stores in the vault
+    /// (`publicKeyCOSE`). Also used when importing a CXF passkey: only the private key travels in
+    /// the exchange payload, so the public key has to be derived locally.
+    static func coseKey(for publicKey: P256.Signing.PublicKey) throws -> Data {
         let representation = publicKey.x963Representation
         guard representation.count == 65, representation.first == 0x04 else {
             throw PasskeyCredentialError.invalidPublicKey
