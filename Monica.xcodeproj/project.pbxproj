@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000002 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000003 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000003 /* PrivacyInfo.xcprivacy */; };
@@ -182,6 +183,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		BA0000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000003 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -409,7 +411,6 @@
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
-				AE1300000000000000000001 /* AppSteamGuardSupport.swift */,
 				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
 				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
@@ -465,6 +466,7 @@
 A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */,
 			B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
+			AE1300000000000000000001 /* AppSteamGuardSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
