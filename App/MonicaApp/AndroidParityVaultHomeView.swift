@@ -9,6 +9,8 @@ import UniformTypeIdentifiers
 struct AndroidParityVaultHomeView: View {
     @Bindable var session: AppSessionModel
     @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
+    /// 「减弱动态效果」时验证码进度条不做平滑动画（#155）。
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 是否为密码 Tab 根页：为 true 时显示二级模块 Picker，列表随 `session.passwordModule` 切换。
     let isPasswordRoot: Bool
     /// 非密码根页时固定的条目类型（验证器 / 银行卡）。
@@ -354,6 +356,15 @@ struct AndroidParityVaultHomeView: View {
         loginActionFeedback = session.copySensitiveValueToPasteboard(value).message
     }
 
+    /// 验证码进度条设置（#155）。每秒 tick 只改变数值，不改变视图层级。
+    private var totpProgressPolicy: TotpCardStylePolicy {
+        session.totpCardStylePolicy(reduceMotion: reduceMotion)
+    }
+
+    private var unifiedTotpRemaining: Int {
+        totpProgressPolicy.unifiedRemaining(at: now)
+    }
+
     private var totpList: some View {
         VStack(spacing: 14) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.52), cornerRadius: 22) {
@@ -378,6 +389,18 @@ struct AndroidParityVaultHomeView: View {
             }
             // Issue #47：手动开始/结束的锁屏倒计时试点，只显示别名 + 倒计时。
             AuthenticatorLiveActivityCard(entries: session.filteredTotpEntries, now: now)
+            // Issue #155：开启统一进度条时，30 秒周期由这一条接管，卡片不再重复绘制。
+            if totpProgressPolicy.usesUnifiedProgressBar, !session.filteredTotpEntries.isEmpty {
+                TotpUnifiedProgressBar(
+                    fraction: totpProgressPolicy.progress(
+                        remaining: unifiedTotpRemaining,
+                        period: TotpCardStylePolicy.unifiedPeriod
+                    ),
+                    style: totpProgressPolicy.style,
+                    animatesChanges: totpProgressPolicy.isSmoothAnimationEnabled
+                        && unifiedTotpRemaining < TotpCardStylePolicy.unifiedPeriod
+                )
+            }
             ForEach(session.filteredTotpEntries) { entry in
                 batchAwareButton(id: entry.id, kind: .totp) {
                     batchSelectableCard(id: entry.id) {
@@ -385,7 +408,8 @@ struct AndroidParityVaultHomeView: View {
                             entry: entry,
                             code: session.maskedSensitivePreview(totpCode(for: entry)),
                             remaining: session.totpTimeRemaining(for: entry, at: now),
-                            iconSystemName: session.totpIconSystemName(for: entry)
+                            iconSystemName: session.totpIconSystemName(for: entry),
+                            stylePolicy: totpProgressPolicy
                         )
                     }
                 }
@@ -1913,9 +1937,20 @@ private struct AndroidTotpListCard: View {
     let code: String
     let remaining: Int
     let iconSystemName: String
+    /// 进度条样式、统一进度条与平滑动画策略（#155）。
+    let stylePolicy: TotpCardStylePolicy
 
     private var isCounterBased: Bool {
         OtpType(storageValue: entry.otpType) == .hotp
+    }
+
+    /// 卡片实际使用的周期：统一进度条开启时 30 秒会被列表顶部那条接管。
+    private var displayPeriod: Int {
+        stylePolicy.period(forEntryPeriod: Int(entry.period))
+    }
+
+    private var showsProgress: Bool {
+        stylePolicy.showsCardProgress(isCounterBased: isCounterBased, entryPeriod: Int(entry.period))
     }
 
     var body: some View {
@@ -1932,17 +1967,13 @@ private struct AndroidTotpListCard: View {
                         Text(String(localized: "计数器 #\(entry.counter) · 确认使用后前进"))
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(AndroidParityPalette.textSecondary)
-                    } else {
-                        GeometryReader { proxy in
-                            Capsule()
-                                .fill(AndroidParityPalette.outline)
-                                .overlay(alignment: .leading) {
-                                    Capsule()
-                                        .fill(AndroidParityPalette.primary)
-                                        .frame(width: max(0, proxy.size.width * CGFloat(remaining) / CGFloat(max(Int(entry.period), 1))))
-                                }
-                        }
-                        .frame(height: 10)
+                    } else if showsProgress {
+                        TotpProgressIndicator(
+                            fraction: stylePolicy.progress(remaining: remaining, period: displayPeriod),
+                            style: stylePolicy.style,
+                            animatesChanges: stylePolicy.isSmoothAnimationEnabled
+                                && !stylePolicy.isCycleStart(remaining: remaining, period: displayPeriod)
+                        )
                     }
                 }
                 Spacer()

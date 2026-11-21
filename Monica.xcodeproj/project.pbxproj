@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		AF1B0000000000000000A101 /* AppTotpProgressViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1B0000000000000000A102 /* AppTotpProgressViews.swift */; };
+		AF1B0000000000000000A103 /* AppTotpCardStyleSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1B0000000000000000A104 /* AppTotpCardStyleSettingsView.swift */; };
+		AF1B0000000000000000A105 /* TotpCardStyleSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1B0000000000000000A106 /* TotpCardStyleSettingsTests.swift */; };
 		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
 		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
 		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
@@ -221,6 +224,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		AF1B0000000000000000A102 /* AppTotpProgressViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTotpProgressViews.swift; sourceTree = "<group>"; };
+		AF1B0000000000000000A104 /* AppTotpCardStyleSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTotpCardStyleSettingsView.swift; sourceTree = "<group>"; };
+		AF1B0000000000000000A106 /* TotpCardStyleSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TotpCardStyleSettingsTests.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
@@ -473,6 +479,8 @@
 				A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */,
 				A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */,
 				AA2B00000000000000000003 /* AppLanguageSettingsView.swift */,
+				AF1B0000000000000000A102 /* AppTotpProgressViews.swift */,
+				AF1B0000000000000000A104 /* AppTotpCardStyleSettingsView.swift */,
 				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */,
@@ -639,6 +647,7 @@
 				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
 				AB2000000000000000000001 /* BillingItemsTests.swift */,
 				AA2B00000000000000000004 /* AppLanguageTests.swift */,
+				AF1B0000000000000000A106 /* TotpCardStyleSettingsTests.swift */,
 				A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */,
 				B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */,
 			);
@@ -1017,6 +1026,8 @@
 				AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */,
 				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
 				AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */,
+				AF1B0000000000000000A101 /* AppTotpProgressViews.swift in Sources */,
+				AF1B0000000000000000A103 /* AppTotpCardStyleSettingsView.swift in Sources */,
 				AA000000000000000000000E /* AppUnlockSupport.swift in Sources */,
 				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
 				AA20000000000000000000F2 /* AppVaultTagsSupport.swift in Sources */,
@@ -1066,6 +1077,7 @@
 				F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */,
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */,
+				AF1B0000000000000000A105 /* TotpCardStyleSettingsTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
