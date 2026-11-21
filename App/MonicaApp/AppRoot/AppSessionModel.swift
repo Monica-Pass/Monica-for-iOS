@@ -448,6 +448,8 @@ final class AppSessionModel {
     var keePassKeyFileData: Data?
     var keePassKeyFileName = ""
     var keePassLastMetadataImportReferences: [AppKeePassImportedEntryReference] = []
+    /// issue #32：KeePass 原生库页面是否展示（设置页与密码页「更多」共用）。
+    var isKeePassLibraryPresented = false
     var androidBackupDecryptPassword = ""
     var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
@@ -2514,11 +2516,14 @@ final class AppSessionModel {
     }
 
     /// 「更多」菜单里的模块入口（#63）：被隐藏的模块按布局顺序出现；
-    /// 生成器作为工具页始终保留在此，保证任何布局下都能从「更多」找到它。
+    /// 生成器与 KeePass 库作为工具页始终保留在此，保证任何布局下都能从「更多」找到。
     var moreMenuLayoutModules: [PasswordLayoutModule] {
         var modules = vaultLayoutPreferences.hiddenModules
         if !modules.contains(.generator) {
             modules.append(.generator)
+        }
+        if !modules.contains(.keePass) {
+            modules.append(.keePass)
         }
         return modules
     }

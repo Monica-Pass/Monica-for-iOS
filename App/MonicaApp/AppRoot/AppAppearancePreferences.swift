@@ -76,6 +76,8 @@ enum PasswordLayoutModule: String, Sendable, Codable, Equatable, CaseIterable, I
     case note
     case passkey
     case generator
+    /// issue #32：KeePass 原生库浏览器（工具页，不进入密码列表模块栏）。
+    case keePass
 
     var id: String { rawValue }
 
@@ -89,6 +91,8 @@ enum PasswordLayoutModule: String, Sendable, Codable, Equatable, CaseIterable, I
             return String(localized: "通行密钥")
         case .generator:
             return String(localized: "生成器")
+        case .keePass:
+            return String(localized: "KeePass 库")
         }
     }
 
@@ -102,10 +106,12 @@ enum PasswordLayoutModule: String, Sendable, Codable, Equatable, CaseIterable, I
             return "person.badge.key.fill"
         case .generator:
             return "sparkles"
+        case .keePass:
+            return "lock.shield"
         }
     }
 
-    /// 对应的密码页列表模块；生成器是工具页，没有列表模块。
+    /// 对应的密码页列表模块；生成器与 KeePass 库是工具页，没有列表模块。
     var passwordModule: PasswordModule? {
         switch self {
         case .login:
@@ -115,6 +121,8 @@ enum PasswordLayoutModule: String, Sendable, Codable, Equatable, CaseIterable, I
         case .passkey:
             return .passkey
         case .generator:
+            return nil
+        case .keePass:
             return nil
         }
     }

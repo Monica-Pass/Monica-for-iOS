@@ -3475,7 +3475,7 @@ private enum KeePassKdbx4InnerHeaderParser {
     }
 }
 
-private enum KeePassGzipPayloadInflator {
+enum KeePassGzipPayloadInflator {
     private static let gzipMagic = Data([0x1F, 0x8B])
     private static let chunkSize = 64 * 1024
 
@@ -4111,7 +4111,7 @@ public struct KeePassXMLReadOnlySnapshotReader: KeePassDatabaseReader {
     }
 }
 
-private final class KeePassProtectedValueStreamDecoder {
+final class KeePassProtectedValueStreamDecoder {
     fileprivate static let salsa20IV = Data([0xE8, 0x30, 0x09, 0x4B, 0x97, 0x20, 0x5D, 0x2A])
 
     private let keyStream: KeePassInnerRandomKeyStream
@@ -4178,7 +4178,7 @@ private final class KeePassProtectedValueStreamDecoder {
     }
 }
 
-private final class KeePassProtectedValueStreamEncoder {
+final class KeePassProtectedValueStreamEncoder {
     private let keyStream: KeePassInnerRandomKeyStream
 
     private init(keyStream: KeePassInnerRandomKeyStream) {
@@ -4467,6 +4467,7 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
     private var currentMetaBinaryID: String?
     private var currentText = ""
     private var elementStack: [String] = []
+    private var historyDepth = 0
     private var parseFailure: Error?
 
     init(
@@ -4502,14 +4503,20 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
         switch elementName {
         case "Group":
             groupStack.append(ParsedKeePassGroup())
+        case "History":
+            historyDepth += 1
         case "Entry":
-            currentEntry = ParsedKeePassEntry()
+            // <History> 内的历史条目不是库里的可见条目；继续解析仅为推进保护值密钥流。
+            if historyDepth == 0 {
+                currentEntry = ParsedKeePassEntry()
+            }
         case "String":
-            if currentEntry != nil {
+            // 历史条目也要读取 String：受保护值的密钥流按文档顺序推进，跳过会导致后续密码解码错位。
+            if historyDepth > 0 || currentEntry != nil {
                 currentString = ParsedKeePassStringField()
             }
         case "Binary":
-            if currentEntry != nil {
+            if currentEntry != nil && historyDepth == 0 {
                 currentEntryBinary = ParsedKeePassEntryBinary()
             } else if isInsideMetaBinaries {
                 currentMetaBinaryID = attributeDict["ID"]
@@ -4546,19 +4553,19 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
         let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
         switch elementName {
         case "UUID":
-            if currentEntry != nil {
+            if historyDepth == 0, currentEntry != nil {
                 currentEntry?.uuid = text
-            } else if !groupStack.isEmpty {
+            } else if historyDepth == 0, !groupStack.isEmpty {
                 groupStack[groupStack.count - 1].uuid = text
             }
         case "Name":
-            if currentEntry == nil, !groupStack.isEmpty {
+            if historyDepth == 0, currentEntry == nil, !groupStack.isEmpty {
                 groupStack[groupStack.count - 1].name = text
             }
         case "RecycleBinUUID":
             parsed.recycleBinUUID = text.isEmpty ? nil : text
         case "PreviousParentGroup":
-            if currentEntry != nil {
+            if historyDepth == 0, currentEntry != nil {
                 currentEntry?.previousParentGroupUUID = text
             }
         case "Key":
@@ -4581,12 +4588,12 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
                 }
             }
         case "String":
-            if let field = currentString {
+            if historyDepth == 0, let field = currentString {
                 currentEntry?.strings.append(field)
             }
             currentString = nil
         case "Binary":
-            if let binary = currentEntryBinary {
+            if historyDepth == 0, let binary = currentEntryBinary {
                 currentEntry?.binaries.append(binary)
                 currentEntryBinary = nil
             } else if let id = currentMetaBinaryID {
@@ -4594,10 +4601,14 @@ private final class KeePassXMLSnapshotParser: NSObject, XMLParserDelegate {
                 currentMetaBinaryID = nil
             }
         case "Entry":
-            if let entry = currentEntry, !groupStack.isEmpty {
+            if historyDepth == 0, let entry = currentEntry, !groupStack.isEmpty {
                 groupStack[groupStack.count - 1].entries.append(entry)
             }
-            currentEntry = nil
+            if historyDepth == 0 {
+                currentEntry = nil
+            }
+        case "History":
+            historyDepth = max(0, historyDepth - 1)
         case "Group":
             guard let group = groupStack.popLast() else { return }
             if groupStack.isEmpty {
