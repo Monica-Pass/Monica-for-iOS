@@ -313,6 +313,8 @@ struct AndroidParityVaultHomeView: View {
                 }
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
+            // Issue #47：手动开始/结束的锁屏倒计时试点，只显示别名 + 倒计时。
+            AuthenticatorLiveActivityCard(entries: session.filteredTotpEntries, now: now)
             ForEach(session.filteredTotpEntries) { entry in
                 batchAwareButton(id: entry.id, kind: .totp) {
                     batchSelectableCard(id: entry.id) {
