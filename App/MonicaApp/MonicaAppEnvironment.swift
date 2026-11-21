@@ -16,6 +16,7 @@ struct MonicaAppEnvironment: Sendable {
     let oneDriveAuthenticationService: any AppOneDriveAuthenticationService
     let oneDriveGraphTransport: any OneDriveGraphTransport
     let oneDriveBackupPreferencesStore: any AppOneDriveBackupPreferencesStore
+    let plusPurchaseService: (any AppPlusPurchaseService)?
     let plusEntitlementStore: any AppPlusEntitlementStore
     let appLanguageStore: any AppLanguageStore
 
@@ -27,6 +28,7 @@ struct MonicaAppEnvironment: Sendable {
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         oneDriveGraphTransport: any OneDriveGraphTransport = URLSessionOneDriveGraphTransport(),
         oneDriveBackupPreferencesStore: (any AppOneDriveBackupPreferencesStore)? = nil,
+        plusPurchaseService: (any AppPlusPurchaseService)? = StoreKitAppPlusPurchaseService(),
         plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore(),
         appLanguageStore: any AppLanguageStore = UserDefaultsAppLanguageStore()
     ) {
@@ -39,6 +41,7 @@ struct MonicaAppEnvironment: Sendable {
         )
         self.oneDriveGraphTransport = oneDriveGraphTransport
         self.oneDriveBackupPreferencesStore = oneDriveBackupPreferencesStore ?? UserDefaultsAppOneDriveBackupPreferencesStore()
+        self.plusPurchaseService = plusPurchaseService
         self.plusEntitlementStore = plusEntitlementStore
         self.appLanguageStore = appLanguageStore
     }
@@ -430,7 +433,7 @@ extension AppSessionModel {
                 autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
                 autoFillGuardPolicyStore: UserDefaultsAppAutoFillGuardPolicyStore(),
                 autoFillPublishLogStore: UserDefaultsAppAutoFillPublishLogStore(),
-                plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
+                plusPurchaseService: environment.plusPurchaseService,
                 plusEntitlementStore: environment.plusEntitlementStore,
                 sensitivePasteboard: MonicaSensitivePasteboard(pasteboard: SystemSensitivePasteboard()),
                 sensitivePreviewPreferenceStore: UserDefaultsSensitivePreviewPreferenceStore(),
@@ -511,7 +514,7 @@ extension AppSessionModel {
             autoFillIndexKeyMaterialProvider: { vaultID in
                 try keyMaterialProvider.keyMaterial(for: vaultID)
             },
-            plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
+            plusPurchaseService: environment.plusPurchaseService,
             plusEntitlementStore: environment.plusEntitlementStore,
             widgetSnapshotStore: widgetSnapshotStore,
             shortcutSnapshotStore: shortcutSnapshotStore,

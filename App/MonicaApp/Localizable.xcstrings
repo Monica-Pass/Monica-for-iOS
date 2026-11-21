@@ -29111,6 +29111,758 @@
           }
         }
       }
+    },
+    "Monica Plus 尚未在此版本开放。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica Plus 尚未在此版本开放。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica Plus isn't available in this version yet."
+          }
+        }
+      }
+    },
+    "已取消": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cancelled"
+          }
+        }
+      }
+    },
+    "已取消购买。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消购买。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchase cancelled."
+          }
+        }
+      }
+    },
+    "感谢支持": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感谢支持"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thank you"
+          }
+        }
+      }
+    },
+    "正在恢复购买": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在恢复购买"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring purchase"
+          }
+        }
+      }
+    },
+    "正在购买": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在购买"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchasing"
+          }
+        }
+      }
+    },
+    "永久免费": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永久免费"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free forever"
+          }
+        }
+      }
+    },
+    "没有可恢复的购买": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可恢复的购买"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing to restore"
+          }
+        }
+      }
+    },
+    "等待批准": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待批准"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Awaiting approval"
+          }
+        }
+      }
+    },
+    "网络连接不可用，请稍后重试。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "网络连接不可用，请稍后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No network connection. Please try again later."
+          }
+        }
+      }
+    },
+    "该商品当前不可用，请稍后重试。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该商品当前不可用，请稍后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item isn't available right now. Please try again later."
+          }
+        }
+      }
+    },
+    "购买失败，请稍后重试。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "购买失败，请稍后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchase failed. Please try again later."
+          }
+        }
+      }
+    },
+    "支持者": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持者"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supporter"
+          }
+        }
+      }
+    },
+    "免费使用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "免费使用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free to use"
+          }
+        }
+      }
+    },
+    "Monica Plus 只是支持作者的心意，所有功能永久免费，无需购买。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica Plus 只是支持作者的心意，所有功能永久免费，无需购买。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica Plus is just a way to support the developer. Every feature is free forever — no purchase needed."
+          }
+        }
+      }
+    },
+    "感谢支持！你的支持者身份永久有效。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感谢支持！你的支持者身份永久有效。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thank you! Your supporter status never expires."
+          }
+        }
+      }
+    },
+    "感谢支持！支持者身份有效期至 %@。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感谢支持！支持者身份有效期至 %@。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thank you! Supporter status is valid until %@."
+          }
+        }
+      }
+    },
+    "支持作者的可选赞助，不会解锁或锁定任何功能。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持作者的可选赞助，不会解锁或锁定任何功能。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An optional tip to support the developer. It doesn't unlock or lock any feature."
+          }
+        }
+      }
+    },
+    "购买凭据未通过验证，未取得支持者身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "购买凭据未通过验证，未取得支持者身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase couldn't be verified, so supporter status wasn't granted."
+          }
+        }
+      }
+    },
+    "购买已完成，但未取得有效支持者权益。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "购买已完成，但未取得有效支持者权益。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase completed, but no active supporter entitlement was found."
+          }
+        }
+      }
+    },
+    "密码库与附件": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码库与附件"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault & attachments"
+          }
+        }
+      }
+    },
+    "登录、笔记、卡片、身份、通行密钥、SSH、API Token、Wi-Fi、Send 与加密附件。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录、笔记、卡片、身份、通行密钥、SSH、API Token、Wi-Fi、Send 与加密附件。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Logins, notes, cards, identities, passkeys, SSH keys, API tokens, Wi-Fi, Send and encrypted attachments."
+          }
+        }
+      }
+    },
+    "自动填充与通行密钥": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充与通行密钥"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AutoFill & passkeys"
+          }
+        }
+      }
+    },
+    "系统自动填充、通行密钥提供器与安全策略。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统自动填充、通行密钥提供器与安全策略。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System AutoFill, the passkey provider and security policies."
+          }
+        }
+      }
+    },
+    "验证器与安全中心": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证器与安全中心"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator & Security Center"
+          }
+        }
+      }
+    },
+    "TOTP、Steam 令牌、安全洞察与安全中心。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TOTP、Steam 令牌、安全洞察与安全中心。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TOTP, Steam Guard, security insights and the Security Center."
+          }
+        }
+      }
+    },
+    "同步与备份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同步与备份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync & backup"
+          }
+        }
+      }
+    },
+    "WebDAV、OneDrive、iCloud、局域网同步与加密备份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV、OneDrive、iCloud、局域网同步与加密备份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV, OneDrive, iCloud, LAN sync and encrypted backups."
+          }
+        }
+      }
+    },
+    "支持作者": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持作者"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support the developer"
+          }
+        }
+      }
+    },
+    "再次支持": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次支持"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support again"
+          }
+        }
+      }
+    },
+    "支持完全自愿；不购买也能使用全部功能。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持完全自愿；不购买也能使用全部功能。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support is entirely voluntary; every feature works without a purchase."
+          }
+        }
+      }
+    },
+    "支持完全自愿。Monica 的所有功能永久免费，购买不会改变任何功能的可用性。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持完全自愿。Monica 的所有功能永久免费，购买不会改变任何功能的可用性。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support is entirely voluntary. Every Monica feature is free forever, and a purchase never changes what you can use."
+          }
+        }
+      }
+    },
+    "支持者徽章已点亮": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持者徽章已点亮"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supporter badge unlocked"
+          }
+        }
+      }
+    },
+    "支持作者，所有功能永久免费": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持作者，所有功能永久免费"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support the developer — everything is free forever"
+          }
+        }
+      }
+    },
+    "感谢你的支持！": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "感谢你的支持！"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Thank you for your support!"
+          }
+        }
+      }
+    },
+    "赞助商品": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "赞助商品"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support options"
+          }
+        }
+      }
+    },
+    "商品名称与价格来自 App Store；购买只点亮支持者徽章，不会解锁任何功能。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "商品名称与价格来自 App Store；购买只点亮支持者徽章，不会解锁任何功能。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Names and prices come from the App Store. A purchase only lights up the supporter badge; it doesn't unlock any feature."
+          }
+        }
+      }
+    },
+    "正在从 App Store 加载商品…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在从 App Store 加载商品…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loading products from the App Store…"
+          }
+        }
+      }
+    },
+    "正在与 App Store 完成购买…": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在与 App Store 完成购买…"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Completing your purchase with the App Store…"
+          }
+        }
+      }
+    },
+    "所有功能仍然永久免费，可稍后下拉重试。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有功能仍然永久免费，可稍后下拉重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every feature stays free forever. Pull down to try again later."
+          }
+        }
+      }
+    },
+    "所有功能永久免费": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有功能永久免费"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Every feature is free forever"
+          }
+        }
+      }
+    },
+    "已确认支持者身份，感谢你的支持！": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已确认支持者身份，感谢你的支持！"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supporter status confirmed. Thank you!"
+          }
+        }
+      }
+    },
+    "已取消购买，所有功能仍可正常使用。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已取消购买，所有功能仍可正常使用。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Purchase cancelled. Every feature still works."
+          }
+        }
+      }
+    },
+    "购买正在等待 App Store 批准（例如家长同意）。批准后会自动更新，无需重复购买。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "购买正在等待 App Store 批准（例如家长同意）。批准后会自动更新，无需重复购买。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The purchase is waiting for App Store approval (for example, a parent's consent). It will update automatically once approved; no need to buy again."
+          }
+        }
+      }
+    },
+    "当前 Apple ID 没有可恢复的 Monica Plus 购买。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前 Apple ID 没有可恢复的 Monica Plus 购买。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This Apple ID has no Monica Plus purchase to restore."
+          }
+        }
+      }
+    },
+    "恢复购买": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复购买"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore purchases"
+          }
+        }
+      }
+    },
+    "更换设备或重装后，用同一个 Apple ID 恢复支持者身份；不会恢复或影响你的密码库。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更换设备或重装后，用同一个 Apple ID 恢复支持者身份；不会恢复或影响你的密码库。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After switching devices or reinstalling, restore supporter status with the same Apple ID. Your vault is not restored or affected."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

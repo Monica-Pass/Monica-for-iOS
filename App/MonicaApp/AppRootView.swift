@@ -97,6 +97,8 @@ struct AppRootView: View {
                 restoreBitwardenAuthenticationSessionIfAvailable()
                 importPendingExtensionInboxItems()
                 session.consumePendingControlNavigationIfAvailable()
+                // 账号切换、退款或 Ask-to-Buy 批准都可能发生在后台，回到前台后以 StoreKit 为准。
+                Task { await session.refreshPlusEntitlement() }
             }
         }
         .onChange(of: session.vaultState) { _, state in
@@ -126,6 +128,8 @@ struct AppRootView: View {
             restoreBitwardenAuthenticationSessionIfAvailable()
             importPendingExtensionInboxItems()
             session.consumePendingControlNavigationIfAvailable()
+            session.startObservingPlusPurchases()
+            await session.refreshPlusEntitlement()
         }
         .sheet(isPresented: forgotPasswordSheetBinding) {
             ForgotPasswordRecoverySheet(
