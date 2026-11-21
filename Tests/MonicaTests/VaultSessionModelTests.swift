@@ -73,7 +73,7 @@ final class VaultSessionModelTests: XCTestCase {
         )
         XCTAssertEqual(
             PasswordModule.otherKinds,
-            [.sshKey, .apiToken, .wifi, .send, .attachmentRef]
+            [.sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef]
         )
     }
 
@@ -13059,6 +13059,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     favorite: entry.favorite
                 )
             }
+        case .sso:
+            throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(

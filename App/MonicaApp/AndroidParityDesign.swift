@@ -68,6 +68,8 @@ extension UnifiedVaultItemKind {
             return String(localized: "API Token")
         case .wifi:
             return String(localized: "Wi-Fi")
+        case .sso:
+            return String(localized: "SSO")
         case .send:
             return String(localized: "安全发送")
         case .attachmentRef:
