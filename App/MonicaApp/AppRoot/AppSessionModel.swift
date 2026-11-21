@@ -2224,7 +2224,8 @@ final class AppSessionModel {
             // 保留旧行为：非空分类仍然拒绝删除，需要走新的文件夹删除流程显式选择处置方式。
             let plan = try folderRepository.deletionPlan(folderID: projectID)
             guard plan.isEffectivelyEmpty else {
-                throw VaultFolderError.folderNotEmpty
+                // 保留旧语义：分类非空时抛出 projectNotEmpty，调用方据此提示“请先清空分类”。
+                throw LocalVaultRepositoryError.projectNotEmpty
             }
             _ = try folderRepository.deleteFolder(folderID: projectID, strategy: .reparent)
             refreshVaultFolders(entryRepository: entryRepository)
@@ -4038,6 +4039,7 @@ final class AppSessionModel {
             activeEntryRepository = entryRepository
             activeProject = nil
             refreshVaultFolders(entryRepository: entryRepository)
+            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
             rememberVault(session)
             bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
                 vaultID: session.handle.vaultID
@@ -4091,6 +4093,7 @@ final class AppSessionModel {
             activeEntryRepository = entryRepository
             activeProject = nil
             refreshVaultFolders(entryRepository: entryRepository)
+            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
             rememberVault(session)
             bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
                 vaultID: session.handle.vaultID
@@ -9454,6 +9457,7 @@ final class AppSessionModel {
             activeEntryRepository = entryRepository
             activeProject = nil
             refreshVaultFolders(entryRepository: entryRepository)
+            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
             rememberVault(session)
             loginEntries = []
             deletedLoginEntries = []
@@ -12670,6 +12674,25 @@ final class AppSessionModel {
             kdfParameters: parameters.kdfParameters,
             existingHeaderBytes: envelope.headerBytes
         )
+    }
+
+    /// 解锁/新建后自动进入第一个文件夹（分类），让用户看到条目而不是空白页。
+    /// 旧库没有文件夹记录时退回项目列表，保持既有行为。
+    private func activateInitialVaultCategoryIfNeeded(
+        entryRepository: LocalVaultEntryRepository
+    ) {
+        guard activeProject == nil else { return }
+        let projects: [LocalVaultProject]
+        if vaultProjects.isEmpty {
+            projects = (try? entryRepository.listProjects()) ?? []
+            if !projects.isEmpty {
+                vaultProjects = projects
+            }
+        } else {
+            projects = vaultProjects
+        }
+        guard let first = projects.first else { return }
+        try? activateVaultCategory(first, entryRepository: entryRepository)
     }
 
     private func activateVaultCategory(
