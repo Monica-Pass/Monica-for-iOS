@@ -452,9 +452,9 @@ extension AppSessionModel {
             if lhs == rhs { return .orderedSame }
             return lhs < rhs ? .orderedAscending : .orderedDescending
         case (nil, nil):
-            // 旧条目没有时间戳，退回原始顺序，保证排序稳定且可复现。
-            if lhsOffset == rhsOffset { return .orderedSame }
-            return lhsOffset < rhsOffset ? .orderedAscending : .orderedDescending
+            // 旧条目没有时间戳：一律退回原始顺序（由调用方的 offset 兜底），
+            // 不参与方向反转，否则「最近修改倒序」会把它们整段翻成倒序。
+            return .orderedSame
         case (nil, _):
             return .orderedAscending
         case (_, nil):
