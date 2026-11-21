@@ -304,6 +304,9 @@ struct AppVaultRecoveryFailureClassifier: Sendable {
                 return .vaultFileCorrupted
             case .Serialization, .InvalidEntryType, .LockPoisoned:
                 return .vaultFileCorrupted
+            @unknown default:
+                // 绑定由上游 UniFFI 生成；新增错误变体时按「文件损坏」保守归类。
+                return .vaultFileCorrupted
             }
         }
         return nil
