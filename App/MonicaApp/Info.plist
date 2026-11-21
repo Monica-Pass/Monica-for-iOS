@@ -24,6 +24,43 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>MonicaAppStoreID</key>
 	<string></string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Monica Send 加密分享包</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSHandlerRank</key>
+			<string>Owner</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>com.monicapass.monica.send</string>
+			</array>
+		</dict>
+	</array>
+	<key>UTExportedTypeDeclarations</key>
+	<array>
+		<dict>
+			<key>UTTypeIdentifier</key>
+			<string>com.monicapass.monica.send</string>
+			<key>UTTypeDescription</key>
+			<string>Monica Send 加密分享包</string>
+			<key>UTTypeConformsTo</key>
+			<array>
+				<string>public.data</string>
+			</array>
+			<key>UTTypeTagSpecification</key>
+			<dict>
+				<key>public.filename-extension</key>
+				<array>
+					<string>send</string>
+				</array>
+				<key>public.mime-type</key>
+				<string>application/vnd.monicapass.send</string>
+			</dict>
+		</dict>
+	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>

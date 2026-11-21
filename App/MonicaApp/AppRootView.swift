@@ -153,6 +153,12 @@ struct AppRootView: View {
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
+        // issue #36：`monica://send/...#<code>` 深链与 .send 文件导入共用同一个接收页。
+        .sheet(item: $session.monicaSendIncoming) { incoming in
+            MonicaSendReceiveSheet(session: session, incoming: incoming)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .alert("无法导入凭据", isPresented: credentialExchangeImportAlertBinding) {
             Button("好", role: .cancel) {}
         } message: {

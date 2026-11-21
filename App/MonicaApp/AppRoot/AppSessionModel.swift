@@ -420,6 +420,8 @@ final class AppSessionModel {
     var presentedDetailExtras: VaultItemExtras?
     var isQuickSetupPresented = false
     var isExtensionsPresented = false
+    /// issue #36：Monica Send 分享包接收入口（URL scheme 或 `.send` 文件导入时填充）。
+    var monicaSendIncoming: MonicaSendIncoming?
     var expandedToolbarAction: AndroidParityToolbarAction?
     var securityQuestion1ID = AppSessionModel.securityQuestionOptions[0].id
     var securityQuestion2ID = AppSessionModel.securityQuestionOptions[1].id
@@ -1118,6 +1120,10 @@ final class AppSessionModel {
     @discardableResult
     func openDeepLinkURL(_ url: URL) -> Bool {
         if openShortcutURL(url) {
+            return true
+        }
+        // issue #36：Monica Send 的本地分享凭据（monica://send/<id>#<code>）与 .send 文件导入。
+        if handleMonicaSendURL(url) {
             return true
         }
         guard url.scheme == "monica",
