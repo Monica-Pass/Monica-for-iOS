@@ -699,6 +699,29 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: String(localized: "数据管理")) {
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    NavigationLink {
+                        AppDataClearView(
+                            session: session,
+                            refreshAutoFillIndex: refreshAutoFillIndex
+                        )
+                    } label: {
+                        HStack(spacing: 12) {
+                            Label(String(localized: "按数据类型清空"), systemImage: "trash.slash")
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(session.vaultState != .unlocked)
+                }
+            }
+
             AndroidParitySection(title: String(localized: "迁移")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: "CSV", value: session.entryOperationState.label)

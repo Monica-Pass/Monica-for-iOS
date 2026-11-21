@@ -587,7 +587,7 @@ final class AppSessionModel {
     private let oneDriveBackupPreferencesStore: any AppOneDriveBackupPreferencesStore
     private let oneDriveNow: () -> Date
 
-    private let vaultRepository: LocalVaultRepository
+    let vaultRepository: LocalVaultRepository
     @ObservationIgnored let trashMaintenance = AppTrashMaintenance()
     private let vaultKeychainService: (any AppVaultKeychainService)?
     private let vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)?

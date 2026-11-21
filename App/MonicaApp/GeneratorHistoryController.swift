@@ -15,6 +15,8 @@ import Security
 final class GeneratorHistoryController {
     static let enabledDefaultsKey = "monica.generatorHistory.enabled"
     static let retentionDefaultsKey = "monica.generatorHistory.retention"
+    /// 设置里的「按数据类型清空」删掉密文后广播，让本进程内其它界面丢弃旧缓存。
+    static let didClearNotification = Notification.Name("monica.generatorHistory.didClear")
 
     private(set) var entries: [GeneratorHistoryEntry] = []
     private(set) var isEnabled: Bool
@@ -160,6 +162,24 @@ final class GeneratorHistoryController {
             entries = []
             errorMessage = Self.message(for: error)
         }
+    }
+
+    /// 设置里的「按数据类型清空」删除了该 Vault 的加密生成历史后调用。
+    ///
+    /// 只删除密文，不删除钥匙串密钥（历史可能继续记录）；同时让本实例丢弃内存缓存，
+    /// 并广播通知，让生成器页面的控制器重新同步。
+    func clearPersistedHistory(forVaultID vaultID: String) async {
+        let trimmed = vaultID.trimmingCharacters(in: .whitespacesAndNewlines)
+        entries = []
+        errorMessage = nil
+        guard !trimmed.isEmpty else { return }
+
+        try? await store.remove(vaultID: trimmed)
+        if activeVaultID == trimmed {
+            await coordinator.lock()
+            isVaultUnlocked = false
+        }
+        NotificationCenter.default.post(name: Self.didClearNotification, object: nil)
     }
 
     private func unlockEncryptedHistory(vaultID: String) async {
