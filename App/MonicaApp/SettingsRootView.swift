@@ -755,6 +755,16 @@ struct SettingsRootView: View {
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                     .disabled(session.vaultState != .unlocked)
 
+                    // issue #32：进入 KeePass 原生库浏览器（组树/搜索/编辑/安全写回）。
+                    Button {
+                        session.isKeePassLibraryPresented = true
+                    } label: {
+                        Label("打开 KeePass 库", systemImage: "lock.shield")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                    .disabled(session.vaultState != .unlocked)
+
                     if let preview = session.keePassImportPreview {
                         AndroidParityDivider()
                         AndroidParityInfoRow(title: String(localized: "KeePass 格式"), value: preview.format.localizedDisplayName)
