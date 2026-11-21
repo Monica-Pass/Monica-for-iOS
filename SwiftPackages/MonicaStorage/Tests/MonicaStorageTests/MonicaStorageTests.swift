@@ -7704,3 +7704,84 @@ private func littleEndianUInt64(_ value: UInt64) -> Data {
     var little = value.littleEndian
     return Data(bytes: &little, count: MemoryLayout<UInt64>.size)
 }
+
+@Test func csvMigrationCodecRoundTripsExtendedCardFields() {
+    let draft = LocalCardEntryDraft(
+        title: "Travel Card",
+        cardholderName: "Alice Example",
+        number: "4111111111111111",
+        expiryMonth: "12",
+        expiryYear: "2030",
+        cvv: "123",
+        issuer: "Monica Bank",
+        network: "Visa",
+        iban: "DE89370400440532013000",
+        swiftCode: "COBADEFFXXX",
+        billingAddress: "Friedrichstrasse 1, Berlin",
+        cardArtwork: "ocean",
+        notes: "travel"
+    )
+
+    let report = VaultCSVCodec.importItems(from: VaultCSVCodec.exportItems([.card(draft)]))
+
+    #expect(report.issues.isEmpty)
+    guard case .card(let decoded) = report.items.first else {
+        Issue.record("Expected a card draft after CSV round trip")
+        return
+    }
+    #expect(decoded == draft)
+}
+
+@Test func androidBackupCodecRoundTripsExtendedCardFieldsAndDefaultsLegacyPayload() throws {
+    let draft = LocalCardEntryDraft(
+        title: "Travel Card",
+        cardholderName: "Alice Example",
+        number: "4111111111111111",
+        expiryMonth: "12",
+        expiryYear: "2030",
+        cvv: "123",
+        issuer: "Monica Bank",
+        network: "Visa",
+        iban: "DE89370400440532013000",
+        swiftCode: "COBADEFFXXX",
+        billingAddress: "Friedrichstrasse 1, Berlin",
+        cardArtwork: "midnight",
+        notes: "travel"
+    )
+
+    let backup = try AndroidBackupCodec.exportItems([.card(draft)])
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(report.issues.isEmpty)
+    guard case .card(let decoded) = report.items.first else {
+        Issue.record("Expected a card draft after Android backup round trip")
+        return
+    }
+    #expect(decoded == draft)
+
+    // 旧备份没有 #17 的四个键时必须仍然可导入，且扩展字段为空串。
+    let legacyItemData = #"{"cardNumber":"4111111111111111","cardholderName":"Old Holder","expiryMonth":"01","expiryYear":"2029","cvv":"999","bankName":"Legacy Bank","brand":"Visa"}"#
+    let wrapper = try JSONSerialization.data(withJSONObject: [
+        "id": 99,
+        "itemType": "BANK_CARD",
+        "title": "Legacy Card",
+        "itemData": legacyItemData,
+        "notes": "",
+        "categoryName": "Imported"
+    ])
+    let legacyBackup = try AndroidBackupCodec.exportZip(entries: [
+        "folders/Imported/bank_cards/bank_card_99_1000.json": String(decoding: wrapper, as: UTF8.self)
+    ])
+    let legacyReport = try AndroidBackupCodec.importItems(from: legacyBackup)
+
+    #expect(legacyReport.issues.isEmpty)
+    guard case .card(let legacy) = legacyReport.items.first else {
+        Issue.record("Expected a legacy card draft")
+        return
+    }
+    #expect(legacy.iban.isEmpty)
+    #expect(legacy.swiftCode.isEmpty)
+    #expect(legacy.billingAddress.isEmpty)
+    #expect(legacy.cardArtwork.isEmpty)
+    #expect(legacy.number == "4111111111111111")
+}

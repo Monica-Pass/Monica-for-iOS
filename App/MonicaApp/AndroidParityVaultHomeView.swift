@@ -1926,6 +1926,14 @@ struct AddEditVaultItemView: View {
                     header
                     storageBanner
                     formCard
+                    if mode.kind == .identity, !mode.isAdding, let entryID = currentEntryID {
+                        IdentityDocumentPhotoSection(
+                            session: session,
+                            entryID: entryID,
+                            allowsEditing: true,
+                            masksPhotos: false
+                        )
+                    }
                 }
                 .padding(.horizontal, 18)
                 .padding(.top, 18)
@@ -2105,7 +2113,7 @@ struct AddEditVaultItemView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
-                ForEach(session.attachmentEntries(for: currentEntryID)) { attachment in
+                ForEach(nonIdentityPhotoAttachments) { attachment in
                     HStack(alignment: .top, spacing: 10) {
                         Image(systemName: "paperclip")
                             .foregroundStyle(AndroidParityPalette.primary)
@@ -2135,7 +2143,7 @@ struct AddEditVaultItemView: View {
                         .buttonStyle(.plain)
                     }
                 }
-                if session.attachmentEntries(for: currentEntryID).isEmpty {
+                if nonIdentityPhotoAttachments.isEmpty {
                     Text("暂无附件")
                         .font(.caption.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
@@ -2159,6 +2167,13 @@ struct AddEditVaultItemView: View {
             return nil
         }
         return route.entryID
+    }
+
+    /// 证件正反面照片由专用区块管理，避免在通用附件列表里重复出现。
+    private var nonIdentityPhotoAttachments: [LocalAttachmentMetadata] {
+        session.attachmentEntries(for: currentEntryID).filter { attachment in
+            !IdentityDocumentPhotoSide.allCases.contains { attachment.fileName.hasPrefix($0.fileNamePrefix) }
+        }
     }
 
     private var loginIconBinding: Binding<String?> {
@@ -2292,7 +2307,47 @@ struct AddEditVaultItemView: View {
             secureField(icon: "lock.fill", title: "CVV", text: mode.isAdding ? $session.cardCVV : $session.editingCardCVV)
             field(icon: "building.columns.fill", title: String(localized: "银行"), text: mode.isAdding ? $session.cardIssuer : $session.editingCardIssuer)
             field(icon: "network", title: String(localized: "卡组织"), text: mode.isAdding ? $session.cardNetwork : $session.editingCardNetwork)
+            BankCardFaceView(
+                title: mode.isAdding ? session.cardTitle : session.editingCardTitle,
+                cardholderName: mode.isAdding ? session.cardholderName : session.editingCardholderName,
+                number: mode.isAdding ? session.cardNumber : session.editingCardNumber,
+                expiryMonth: mode.isAdding ? session.cardExpiryMonth : session.editingCardExpiryMonth,
+                expiryYear: mode.isAdding ? session.cardExpiryYear : session.editingCardExpiryYear,
+                issuer: mode.isAdding ? session.cardIssuer : session.editingCardIssuer,
+                network: mode.isAdding ? session.cardNetwork : session.editingCardNetwork,
+                artwork: cardArtworkBinding.wrappedValue,
+                masksNumber: true
+            )
+            .padding(.top, 2)
+            field(icon: "number", title: "IBAN", text: mode.isAdding ? $session.cardIBAN : $session.editingCardIBAN)
+            field(icon: "arrow.left.arrow.right", title: String(localized: "SWIFT 代码"), text: mode.isAdding ? $session.cardSwiftCode : $session.editingCardSwiftCode)
+            field(icon: "mappin.and.ellipse", title: String(localized: "账单地址"), text: mode.isAdding ? $session.cardBillingAddress : $session.editingCardBillingAddress)
+            HStack(spacing: 16) {
+                Image(systemName: "paintpalette.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .frame(minWidth: 34)
+                Text("卡面样式")
+                    .font(.subheadline.weight(.semibold))
+                Spacer(minLength: 8)
+                Picker("卡面样式", selection: cardArtworkBinding) {
+                    ForEach(BankCardArtworkStyle.allCases) { style in
+                        Text(style.localizedName).tag(style.rawValue)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .tint(AndroidParityPalette.primary)
+            }
+            .padding(.horizontal, 18)
+            .frame(minHeight: 58)
+            .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1.2) }
         }
+    }
+
+    private var cardArtworkBinding: Binding<String> {
+        mode.isAdding ? $session.cardArtwork : $session.editingCardArtwork
     }
 
     private var identityFields: some View {
@@ -2303,6 +2358,12 @@ struct AddEditVaultItemView: View {
             secureField(icon: "number", title: String(localized: "证件号"), text: mode.isAdding ? $session.identityDocumentNumber : $session.editingIdentityDocumentNumber)
             field(icon: "building.2.fill", title: String(localized: "签发方"), text: mode.isAdding ? $session.identityIssuer : $session.editingIdentityIssuer)
             field(icon: "globe", title: String(localized: "国家/地区"), text: mode.isAdding ? $session.identityCountry : $session.editingIdentityCountry)
+            field(icon: "calendar", title: String(localized: "签发日期"), text: mode.isAdding ? $session.identityIssueDate : $session.editingIdentityIssueDate)
+            field(icon: "calendar.badge.clock", title: String(localized: "有效期至"), text: mode.isAdding ? $session.identityExpiryDate : $session.editingIdentityExpiryDate)
+            Text("日期格式 YYYY-MM-DD，可留空。")
+                .font(.caption2)
+                .foregroundStyle(AndroidParityPalette.textSecondary)
+                .padding(.horizontal, 4)
         }
     }
 
@@ -2588,6 +2649,21 @@ struct VaultItemDetailView: View {
                 SteamGuardCodePanel(session: session, entry: steamEntry)
             }
 
+            if route.kind == .card,
+               let entry = session.cardEntries.first(where: { $0.id == route.entryID }) {
+                BankCardFaceView(
+                    title: entry.title,
+                    cardholderName: entry.cardholderName,
+                    number: entry.number,
+                    expiryMonth: entry.expiryMonth,
+                    expiryYear: entry.expiryYear,
+                    issuer: entry.issuer,
+                    network: entry.network,
+                    artwork: entry.cardArtwork,
+                    masksNumber: masksSensitiveFields
+                )
+            }
+
             AndroidParitySection(title: String(localized: "详情")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(rows) { row in
@@ -2622,6 +2698,15 @@ struct VaultItemDetailView: View {
                         }
                     }
                 }
+            }
+
+            if route.kind == .identity {
+                IdentityDocumentPhotoSection(
+                    session: session,
+                    entryID: route.entryID,
+                    allowsEditing: false,
+                    masksPhotos: masksSensitiveFields
+                )
             }
 
             if let entry = loginEntry, !entry.passwordHistory.isEmpty {
@@ -2791,10 +2876,21 @@ struct VaultItemDetailView: View {
             return totpRows
         case .card:
             guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("holder", String(localized: "持卡人"), entry.cardholderName), row("number", String(localized: "卡号"), sensitive(entry.number, .cardNumber)), row("expiry", String(localized: "有效期"), "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv, .cvv)), row("issuer", String(localized: "银行"), entry.issuer)]
+            return [
+                row("title", String(localized: "标题"), entry.title),
+                row("holder", String(localized: "持卡人"), entry.cardholderName),
+                row("number", String(localized: "卡号"), sensitive(entry.number, .cardNumber)),
+                row("expiry", String(localized: "有效期"), "\(entry.expiryMonth)/\(entry.expiryYear)"),
+                row("cvv", "CVV", sensitive(entry.cvv, .cvv)),
+                row("issuer", String(localized: "银行"), entry.issuer),
+                row("network", String(localized: "卡组织"), entry.network),
+                row("iban", "IBAN", sensitive(entry.iban, .otherSecret)),
+                row("swift", String(localized: "SWIFT 代码"), entry.swiftCode),
+                row("billing", String(localized: "账单地址"), sensitive(entry.billingAddress, .otherSecret))
+            ]
         case .identity:
             guard let entry = session.identityEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("type", String(localized: "类型"), entry.documentType), row("name", String(localized: "姓名"), entry.fullName), row("number", String(localized: "证件号"), sensitive(entry.documentNumber, .otherSecret)), row("issuer", String(localized: "签发方"), entry.issuer), row("country", String(localized: "国家/地区"), entry.country)]
+            return [row("title", String(localized: "标题"), entry.title), row("type", String(localized: "类型"), entry.documentType), row("name", String(localized: "姓名"), entry.fullName), row("number", String(localized: "证件号"), sensitive(entry.documentNumber, .otherSecret)), row("issuer", String(localized: "签发方"), entry.issuer), row("country", String(localized: "国家/地区"), entry.country), row("issue", String(localized: "签发日期"), entry.issueDate), row("expiry", String(localized: "有效期至"), entry.expiryDate)]
         case .passkey:
             guard let entry = session.passkeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("rp", String(localized: "网站标识"), entry.relyingPartyID), row("username", String(localized: "账号"), entry.username), row("credential", String(localized: "通行密钥标识"), sensitive(entry.credentialID, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret))]
@@ -2864,7 +2960,7 @@ struct VaultItemDetailView: View {
             return ["secret": entry.secret]
         case .card:
             guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return [:] }
-            return ["number": entry.number, "cvv": entry.cvv]
+            return ["number": entry.number, "cvv": entry.cvv, "iban": entry.iban]
         case .identity:
             guard let entry = session.identityEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["number": entry.documentNumber]
