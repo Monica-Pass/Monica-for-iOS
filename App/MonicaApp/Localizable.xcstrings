@@ -18013,6 +18013,390 @@
           }
         }
       }
+    },
+    "无法从钥匙串读取笔记草稿密钥，草稿暂时无法保存。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot read the note draft key from the keychain, so drafts cannot be saved right now."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法从钥匙串读取笔记草稿密钥，草稿暂时无法保存。"
+          }
+        }
+      }
+    },
+    "笔记草稿密钥长度不正确，已拒绝使用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The note draft key has an invalid length and was rejected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔记草稿密钥长度不正确，已拒绝使用。"
+          }
+        }
+      }
+    },
+    "显示模式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display Mode"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示模式"
+          }
+        }
+      }
+    },
+    "支持常用 Markdown 子集：标题、列表、引用、代码、强调与链接；不支持完整 CommonMark。外部图片不会自动加载。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supports a Markdown subset: headings, lists, quotes, code, emphasis, and links. Full CommonMark is not supported, and external images are never loaded automatically."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持常用 Markdown 子集：标题、列表、引用、代码、强调与链接；不支持完整 CommonMark。外部图片不会自动加载。"
+          }
+        }
+      }
+    },
+    "无法插入图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot Insert Image"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法插入图片"
+          }
+        }
+      }
+    },
+    "用 Markdown 写笔记，例如 # 标题、- 列表、> 引用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Write your note in Markdown, e.g. # Heading, - List, > Quote"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用 Markdown 写笔记，例如 # 标题、- 列表、> 引用"
+          }
+        }
+      }
+    },
+    "插入图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert Image"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "插入图片"
+          }
+        }
+      }
+    },
+    "从文件插入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Insert from File"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从文件插入"
+          }
+        }
+      }
+    },
+    "图片 %lld/%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images %lld/%lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片 %lld/%lld"
+          }
+        }
+      }
+    },
+    "正文引用的图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Images Referenced in the Note"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正文引用的图片"
+          }
+        }
+      }
+    },
+    "单张上限 %@，单条笔记最多 %lld 张。图片以加密附件存储，预览时才解密。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Up to %@ per image and %lld images per note. Images are stored as encrypted attachments and decrypted only for preview."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单张上限 %@，单条笔记最多 %lld 张。图片以加密附件存储，预览时才解密。"
+          }
+        }
+      }
+    },
+    "移除引用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove Reference"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除引用"
+          }
+        }
+      }
+    },
+    "删除附件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete Attachment"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除附件"
+          }
+        }
+      }
+    },
+    "无法读取所选文件，请重新选择。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cannot read the selected file. Please choose another one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取所选文件，请重新选择。"
+          }
+        }
+      }
+    },
+    "图片插入失败，请换一张再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The image could not be inserted. Please try another one."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片插入失败，请换一张再试。"
+          }
+        }
+      }
+    },
+    "发现未保存的草稿": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsaved Draft Found"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发现未保存的草稿"
+          }
+        }
+      }
+    },
+    "保存于 %@，可以恢复继续编辑，或彻底丢弃。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %@. Restore it to continue editing, or discard it permanently."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存于 %@，可以恢复继续编辑，或彻底丢弃。"
+          }
+        }
+      }
+    },
+    "恢复草稿": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Draft"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复草稿"
+          }
+        }
+      }
+    },
+    "丢弃草稿": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Discard Draft"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "丢弃草稿"
+          }
+        }
+      }
+    },
+    "还没有内容，切换到「编辑」开始写 Markdown。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nothing here yet. Switch to Edit and start writing Markdown."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有内容，切换到「编辑」开始写 Markdown。"
+          }
+        }
+      }
+    },
+    "图片不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Image Unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "图片不可用"
+          }
+        }
+      }
+    },
+    "正在解密图片…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decrypting image…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在解密图片…"
+          }
+        }
+      }
+    },
+    "笔记图片": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note image"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "笔记图片"
+          }
+        }
+      }
+    },
+    "Markdown 预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown Preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Markdown 预览"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

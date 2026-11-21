@@ -171,7 +171,7 @@ struct AndroidParityVaultHomeView: View {
                     setFavorite: setFavorite,
                     deleteEntry: deletePresentedEntry,
                     save: savePresentedEditor,
-                    dismiss: session.dismissPresentedEditor
+                    dismiss: session.dismissPresentedEditorSavingNoteDraft
                 )
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
@@ -788,7 +788,7 @@ struct AndroidParityVaultHomeView: View {
         Binding(
             get: { session.presentedEditorMode != nil },
             set: { isPresented in
-                if !isPresented { session.dismissPresentedEditor() }
+                if !isPresented { session.dismissPresentedEditorSavingNoteDraft() }
             }
         )
     }
@@ -2201,12 +2201,12 @@ struct AddEditVaultItemView: View {
     private var noteFields: some View {
         VStack(spacing: 18) {
             field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.noteTitle : $session.editingNoteTitle)
-            TextEditor(text: mode.isAdding ? $session.noteBody : $session.editingNoteBody)
-                .frame(minHeight: 190)
-                .padding(12)
-                .scrollContentBackground(.hidden)
-                .background(AndroidParityPalette.background, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1) }
+            AppNoteMarkdownComposer(
+                session: session,
+                title: mode.isAdding ? $session.noteTitle : $session.editingNoteTitle,
+                markdownBody: mode.isAdding ? $session.noteBody : $session.editingNoteBody,
+                noteID: currentEntryID
+            )
         }
     }
 
@@ -2621,6 +2621,18 @@ struct VaultItemDetailView: View {
                         showCopyFeedback(rowID: route.entryID, message: message)
                     }
                 )
+            }
+            if route.kind == .note,
+               session.isSensitivePreviewRevealed(entryID: route.entryID),
+               let note = session.noteEntries.first(where: { $0.id == route.entryID }) {
+                AndroidParitySection(title: String(localized: "Markdown 预览")) {
+                    AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                        AppNoteMarkdownPreview(
+                            document: NoteMarkdownDocument.parse(note.body),
+                            session: session
+                        )
+                    }
+                }
             }
         }
         .task {
