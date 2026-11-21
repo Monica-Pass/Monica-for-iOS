@@ -64,10 +64,6 @@ extension AppSessionModel {
         OtpType(storageValue: entry.otpType)
     }
 
-    func totpIconSystemName(for entry: LocalTotpEntry) -> String {
-        TotpIconCatalog.systemName(for: entry.iconName)
-    }
-
     func totpAdvancedSummary(for entry: LocalTotpEntry) -> String {
         let type = otpType(for: entry)
         let algorithm = totpAlgorithm(from: entry.algorithm).rawValue

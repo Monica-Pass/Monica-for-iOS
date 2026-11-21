@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A149A0000000000000000001 /* AppItemIconPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A149A0000000000000000002 /* AppItemIconPreferences.swift */; };
+		A149A0000000000000000003 /* ItemIconPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A149A0000000000000000004 /* ItemIconPreferencesTests.swift */; };
 		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
 		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
 		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
@@ -221,6 +223,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A149A0000000000000000002 /* AppItemIconPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppItemIconPreferences.swift; sourceTree = "<group>"; };
+		A149A0000000000000000004 /* ItemIconPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ItemIconPreferencesTests.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
@@ -495,6 +499,7 @@
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
+		A149A0000000000000000002 /* AppItemIconPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
 				A4B000000000000000000011 /* AppKeyboardInputSupport.swift */,
 				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
@@ -629,6 +634,7 @@
 				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
+		A149A0000000000000000004 /* ItemIconPreferencesTests.swift */,
 				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
 				B1270000000000000000A007 /* AccountTemplateTests.swift */,
@@ -972,6 +978,7 @@
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
+		A149A0000000000000000001 /* AppItemIconPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
 				A4B000000000000000000001 /* AppKeyboardInputSupport.swift in Sources */,
 				AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */,
@@ -1068,6 +1075,7 @@
 				AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
+		A149A0000000000000000003 /* ItemIconPreferencesTests.swift in Sources */,
 				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
 				A97000000000000000000004 /* SSOItemTests.swift in Sources */,
 				B1270000000000000000A008 /* AccountTemplateTests.swift in Sources */,

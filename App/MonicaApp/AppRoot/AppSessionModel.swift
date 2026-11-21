@@ -440,6 +440,8 @@ final class AppSessionModel {
     var vaultDisplayPreferences: VaultDisplayPreferences
     var appearancePreferences: AppAppearancePreferences
     var vaultLayoutPreferences: VaultLayoutPreferences
+    /// #149：条目图标全局体系（总开关 / 分页面开关 / 未匹配策略 / 来源优先级）。
+    var itemIconPreferences: ItemIconPreferences
     /// #58：剪贴板自动清除时长与敏感预览掩码偏好。
     var sensitiveClipboardTTL: SensitiveClipboardTTL
     var sensitivePreviewPreferences: SensitivePreviewPreferences
@@ -597,6 +599,7 @@ final class AppSessionModel {
     private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
+    private let itemIconPreferenceStore: any AppItemIconPreferenceStore
     private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
     private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
     private let sensitivePasteboard: MonicaSensitivePasteboard
@@ -686,6 +689,7 @@ final class AppSessionModel {
         vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore = MemoryVaultDisplayPreferenceStore(),
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
+        itemIconPreferenceStore: any AppItemIconPreferenceStore = MemoryAppItemIconPreferenceStore(),
         biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
         deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
         passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
@@ -762,6 +766,7 @@ final class AppSessionModel {
         self.vaultDisplayPreferenceStore = vaultDisplayPreferenceStore
         self.appearancePreferenceStore = appearancePreferenceStore
         self.vaultLayoutPreferenceStore = vaultLayoutPreferenceStore
+        self.itemIconPreferenceStore = itemIconPreferenceStore
         self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
         self.passkeyExchangeService = passkeyExchangeService
@@ -829,6 +834,7 @@ final class AppSessionModel {
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
         self.vaultLayoutPreferences = vaultLayoutPreferenceStore.loadPreferences()
+        self.itemIconPreferences = itemIconPreferenceStore.loadPreferences()
         self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
         self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
         self.sensitiveClipboardPreferenceStore = sensitiveClipboardPreferenceStore
@@ -2781,6 +2787,20 @@ final class AppSessionModel {
 
     func restoreDefaultVaultLayoutPreferences() {
         updateVaultLayoutPreferences(.default)
+    }
+
+    /// #149：写入条目图标偏好。先归一化（保证来源优先级是完整排列）再落盘，
+    /// 存储独立于保险库，不触发任何数据迁移。
+    func updateItemIconPreferences(_ preferences: ItemIconPreferences) {
+        let normalized = preferences.normalized()
+        guard normalized != itemIconPreferences else { return }
+        itemIconPreferences = normalized
+        itemIconPreferenceStore.savePreferences(normalized)
+        recordUserActivity()
+    }
+
+    func restoreDefaultItemIconPreferences() {
+        updateItemIconPreferences(.default)
     }
 
     var appearancePreferenceRows: [AppAppearancePreferenceRow] {
