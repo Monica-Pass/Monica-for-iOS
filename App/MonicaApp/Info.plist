@@ -24,6 +24,8 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>MonicaAppStoreID</key>
 	<string></string>
+	<key>GoogleDriveClientID</key>
+	<string></string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>

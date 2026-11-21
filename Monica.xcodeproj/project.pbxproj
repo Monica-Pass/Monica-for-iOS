@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B9C100000000000000000001 /* AppGoogleDriveAuthenticationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */; };
+		B9C100000000000000000002 /* AppKeePassCloudSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000002 /* AppKeePassCloudSupport.swift */; };
+		B9C100000000000000000003 /* AppKeePassCloudBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */; };
+		B9C100000000000000000004 /* AppKeePassCloudBrowserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */; };
 		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000002 /* PrivacyInfo.xcprivacy */; };
@@ -187,6 +191,10 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGoogleDriveAuthenticationService.swift; sourceTree = "<group>"; };
+		B9C200000000000000000002 /* AppKeePassCloudSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeePassCloudSupport.swift; sourceTree = "<group>"; };
+		B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeePassCloudBrowserView.swift; sourceTree = "<group>"; };
+		B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeePassCloudBrowserTests.swift; sourceTree = "<group>"; };
 		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		BA0000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -445,6 +453,9 @@
 				A10000000000000000000014 /* Info.plist */,
 				A10000000000000000000015 /* MonicaApp.entitlements */,
 				A10000000000000000000024 /* Assets.xcassets */,
+				B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */,
+				B9C200000000000000000002 /* AppKeePassCloudSupport.swift */,
+				B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */,
 				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
@@ -539,6 +550,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */,
 				AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
+				B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -915,6 +927,9 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */,
 A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				AA1000000000000000000002 /* AppTotpAdvancedSupport.swift in Sources */,
+				B9C100000000000000000001 /* AppGoogleDriveAuthenticationService.swift in Sources */,
+				B9C100000000000000000002 /* AppKeePassCloudSupport.swift in Sources */,
+				B9C100000000000000000003 /* AppKeePassCloudBrowserView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -943,6 +958,7 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */,
 				AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
 				A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */,
+				B9C100000000000000000004 /* AppKeePassCloudBrowserTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
