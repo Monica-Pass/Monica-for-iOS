@@ -13311,6 +13311,9 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     linkedLoginEntryID: entry.linkedLoginEntryID,
                     notes: entry.notes,
                     secret: entry.secret,
+                    favorite: entry.favorite
+                )
+            }
         case .steam:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &steamEntries, title: \.title) { entry, projectID in
                 LocalSteamEntry(
