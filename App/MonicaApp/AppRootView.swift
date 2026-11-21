@@ -73,6 +73,7 @@ struct AppRootView: View {
                     }
                 }
                 .background(AndroidParityPalette.background.ignoresSafeArea())
+                .appLiquidGlassTabBar()
             }
 
             if session.isPrivacyShieldVisible {
@@ -150,6 +151,12 @@ struct AppRootView: View {
         .sheet(isPresented: credentialExchangeExportSheetBinding) {
             CredentialExchangeExportSheet(session: session)
                 .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
+        // issue #36：`monica://send/...#<code>` 深链与 .send 文件导入共用同一个接收页。
+        .sheet(item: $session.monicaSendIncoming) { incoming in
+            MonicaSendReceiveSheet(session: session, incoming: incoming)
+                .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
         .alert("无法导入凭据", isPresented: credentialExchangeImportAlertBinding) {
@@ -292,8 +299,7 @@ struct AppRootView: View {
                 }
             }
         }
-        .toolbarBackground(AndroidParityPalette.surface, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .appNavigationBarMaterial(fallbackFill: AndroidParityPalette.surface)
     }
 
     private func vaultHomeView(isPasswordRoot: Bool, baseItemKind: UnifiedVaultItemKind?) -> some View {
