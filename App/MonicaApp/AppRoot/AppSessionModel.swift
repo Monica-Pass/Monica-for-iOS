@@ -483,6 +483,10 @@ final class AppSessionModel {
     var webDAVBackupRetentionDays = 30
     var webDAVBackgroundBackupEnabled = false
     var webDAVBackgroundBackupSchedulerState: AppBackgroundBackupSchedulerState = .idle
+    /// 已确认的 WebDAV 服务器证书指纹，按 host:port + 用户名区分。
+    var webDAVCertificateTrustRecords: [WebDAVTrustedCertificateRecord] = []
+    /// 最近一次因证书问题被阻断的连接；设置页据此给出「查看指纹并信任」入口。
+    var webDAVPendingCertificateChallenge: WebDAVCertificateChallenge?
     var cloudFileState: CloudFileState = .idle
     var cloudFileItemsByProvider: [CloudFileProviderKind: [CloudFileItem]] = [:]
     var cloudFileRestorePreview: AppCloudFileRestorePreview?
@@ -612,6 +616,8 @@ final class AppSessionModel {
     private let securityQuestionThrottle: SecurityQuestionVerificationThrottle
     private let securityQuestionClock: () -> Date
     private let webDAVBackupService: any AppWebDAVBackupService
+    /// TOFU 证书指纹存储；设置页与备份服务共用同一个 Keychain 记录。
+    let webDAVCertificateTrustStore: any WebDAVCertificateTrustStore
     private let operationTimelineStore: any AppOperationTimelineStore
     private let quickSetupStateStore: any AppQuickSetupStateStore
     private let backgroundBackupScheduler: any AppBackgroundBackupScheduler
@@ -699,6 +705,7 @@ final class AppSessionModel {
         securityQuestionThrottle: SecurityQuestionVerificationThrottle = .default,
         securityQuestionClock: @escaping () -> Date = { Date() },
         webDAVBackupService: any AppWebDAVBackupService = URLSessionAppWebDAVBackupService(),
+        webDAVCertificateTrustStore: any WebDAVCertificateTrustStore = KeychainWebDAVCertificateTrustStore(),
         operationTimelineStore: any AppOperationTimelineStore = MemoryAppOperationTimelineStore(),
         quickSetupStateStore: any AppQuickSetupStateStore = MemoryAppQuickSetupStateStore(),
         securityInsightStore: any SecurityInsightPersisting = MemorySecurityInsightStore(),
@@ -774,6 +781,7 @@ final class AppSessionModel {
         self.securityQuestionThrottle = securityQuestionThrottle
         self.securityQuestionClock = securityQuestionClock
         self.webDAVBackupService = webDAVBackupService
+        self.webDAVCertificateTrustStore = webDAVCertificateTrustStore
         self.operationTimelineStore = operationTimelineStore
         self.quickSetupStateStore = quickSetupStateStore
         self.securityInsightStore = securityInsightStore
@@ -10026,7 +10034,7 @@ final class AppSessionModel {
                 itemTitle: "WebDAV \(fileName)"
             )
         } catch {
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             appendOperationTimelineEvent(
                 action: .backedUp,
                 itemKind: .attachmentRef,
@@ -10109,7 +10117,7 @@ final class AppSessionModel {
             webDAVBackupState = .listed(count: backups.count)
             return backups
         } catch {
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             throw error
         }
     }
@@ -10131,7 +10139,7 @@ final class AppSessionModel {
                 itemTitle: "WebDAV \(item.fileName)"
             )
         } catch {
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             appendOperationTimelineEvent(
                 action: .deleted,
                 itemKind: .attachmentRef,
@@ -10171,7 +10179,7 @@ final class AppSessionModel {
                 itemTitle: "WebDAV \(updated.fileName)"
             )
         } catch {
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             throw error
         }
     }
@@ -10203,7 +10211,7 @@ final class AppSessionModel {
                 itemTitle: "WebDAV \(deleted.count) backups"
             )
         } catch {
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             throw error
         }
     }
@@ -11337,7 +11345,7 @@ final class AppSessionModel {
                 byteCount: preview.byteCount
             )
         } catch {
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             throw error
         }
     }
@@ -11387,7 +11395,7 @@ final class AppSessionModel {
             )
         } catch {
             webDAVRestoreVaultPassword = ""
-            webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
+            handleWebDAVFailure(error)
             appendOperationTimelineEvent(
                 action: .restoredBackup,
                 itemKind: .attachmentRef,
@@ -11398,6 +11406,21 @@ final class AppSessionModel {
             )
             throw error
         }
+    }
+
+    /// 统一处理 WebDAV 失败：证书类错误保留可操作的挑战（主机、指纹、状态），
+    /// 供设置页展示确认入口；其余错误只落一条可读文案。
+    private func handleWebDAVFailure(_ error: Error) {
+        if let webDAVError = error as? WebDAVError {
+            switch webDAVError {
+            case .untrustedCertificate(let challenge), .certificateFingerprintChanged(let challenge):
+                webDAVPendingCertificateChallenge = challenge
+            case .unexpectedStatus, .integrityCheckFailed, .nonHTTPResponse,
+                 .certificateTrustStoreUnavailable, .certificateInspectionFailed:
+                break
+            }
+        }
+        webDAVBackupState = .failed(readableWebDAVErrorMessage(for: error))
     }
 
     private func readableWebDAVErrorMessage(for error: Error) -> String {
@@ -11419,6 +11442,14 @@ final class AppSessionModel {
                 return String(localized: "远端备份未通过完整性校验，可能已经损坏。")
             case .nonHTTPResponse:
                 return String(localized: "WebDAV 服务器返回了无效响应。")
+            case .untrustedCertificate:
+                return String(localized: "WebDAV 服务器证书尚未信任，请在下方查看 SHA-256 指纹并确认信任。")
+            case .certificateFingerprintChanged:
+                return String(localized: "WebDAV 服务器证书指纹已变更，连接已被阻止，请确认新指纹后再信任。")
+            case .certificateTrustStoreUnavailable:
+                return String(localized: "无法读取 WebDAV 证书信任记录，已阻止连接。")
+            case .certificateInspectionFailed:
+                return String(localized: "无法读取 WebDAV 服务器证书，已阻止连接。")
             }
         }
 

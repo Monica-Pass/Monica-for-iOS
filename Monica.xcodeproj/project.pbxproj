@@ -67,6 +67,7 @@ C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa =
 		A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F6 /* AppLanSyncCoordinator.swift */; };
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
 		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
+		A4E0000000000000000000F1 /* AppWebDAVCertificateTrustView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4E0000000000000000000F2 /* AppWebDAVCertificateTrustView.swift */; };
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
 		B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B760000000000000000000A2 /* AppCloudKitSync.swift */; };
 		AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000011 /* AppAutoFillDomainRules.swift */; };
@@ -277,6 +278,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 		A100000000000000000000F6 /* AppLanSyncCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncCoordinator.swift; sourceTree = "<group>"; };
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
 		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
+		A4E0000000000000000000F2 /* AppWebDAVCertificateTrustView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWebDAVCertificateTrustView.swift; sourceTree = "<group>"; };
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
 		B760000000000000000000A2 /* AppCloudKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudKitSync.swift; sourceTree = "<group>"; };
 		AD0000000000000000000011 /* AppAutoFillDomainRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDomainRules.swift; sourceTree = "<group>"; };
@@ -499,6 +501,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				A100000000000000000000F6 /* AppLanSyncCoordinator.swift */,
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
 				A100000000000000000000F8 /* AppLanSyncView.swift */,
+				A4E0000000000000000000F2 /* AppWebDAVCertificateTrustView.swift */,
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
 				B760000000000000000000A2 /* AppCloudKitSync.swift */,
 				AD0000000000000000000011 /* AppAutoFillDomainRules.swift */,
@@ -983,6 +986,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				A100000000000000000000F3 /* AppLanSyncCoordinator.swift in Sources */,
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
 				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
+				A4E0000000000000000000F1 /* AppWebDAVCertificateTrustView.swift in Sources */,
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
 				B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */,
 				AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */,
