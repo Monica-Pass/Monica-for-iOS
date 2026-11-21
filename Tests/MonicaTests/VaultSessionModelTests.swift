@@ -1743,14 +1743,28 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.appearancePreferences.passwordListIconStyle, .monochrome)
     }
 
-    func testCloudFileEnvironmentConfiguresOneDriveAndDefersGoogleDrive() throws {
+    func testCloudFileEnvironmentConfiguresOneDriveAndDegradesUnconfiguredGoogleDrive() throws {
         let environment = MonicaAppEnvironment()
 
         XCTAssertEqual(environment.oneDriveConfiguration.clientID, "2aaf8c2c-b817-4085-9517-586a4a113dfc")
         XCTAssertEqual(environment.oneDriveConfiguration.redirectURI.absoluteString, "msauth.com.monicapass.monica://auth")
-        XCTAssertEqual(environment.productionCloudFileProviders.keys.sorted(by: { $0.rawValue < $1.rawValue }), [.oneDrive])
-        XCTAssertNil(environment.productionCloudFileProviders[.googleDrive])
+        XCTAssertEqual(
+            environment.productionCloudFileProviders.keys.sorted(by: { $0.rawValue < $1.rawValue }),
+            [.googleDrive, .oneDrive]
+        )
+        XCTAssertNotNil(environment.productionCloudFileProviders[.googleDrive])
+        XCTAssertEqual(
+            environment.productionCloudFileBrowsers.keys.sorted(by: { $0.rawValue < $1.rawValue }),
+            [.googleDrive, .oneDrive]
+        )
         XCTAssertFalse(environment.oneDriveConfiguration.redactedSummary.contains(environment.oneDriveConfiguration.clientID))
+
+        // 没配 Info.plist 的 GoogleDriveClientID / URL scheme 时必须降级，而不是让整个云端列表失败。
+        let googleDriveBrowser = try XCTUnwrap(environment.productionCloudFileBrowsers[.googleDrive])
+        XCTAssertFalse(googleDriveBrowser.availability.isAvailable)
+        XCTAssertNotNil(googleDriveBrowser.availability.unavailableReason)
+        let oneDriveBrowser = try XCTUnwrap(environment.productionCloudFileBrowsers[.oneDrive])
+        XCTAssertTrue(oneDriveBrowser.availability.isAvailable)
     }
 
     func testOneDriveMSALLoginConnectsProductionProviderWithoutLeakingSecrets() async throws {
@@ -1798,7 +1812,15 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.oneDriveAuthenticationState, .connected(accountLabel: "alice@example.com"))
         XCTAssertEqual(listed.map(\.name), ["Mobile.kdbx"])
         XCTAssertEqual(graphTransport.requests.first?.headers["Authorization"], "Bearer onedrive-access-token-secret")
-        XCTAssertNil(environment.productionCloudFileProviders[.googleDrive])
+        XCTAssertNotNil(environment.productionCloudFileProviders[.googleDrive])
+
+        // Google Drive 未配置时只有调用它的能力才失败，OneDrive 流程不受影响。
+        do {
+            _ = try await environment.productionCloudFileProviders[.googleDrive]?.listFiles()
+            XCTFail("未配置的 Google Drive provider 不应成功列目录")
+        } catch let error as CloudFileProviderError {
+            XCTAssertEqual(error, .notConfigured(provider: .googleDrive))
+        }
 
         let visibleText = [
             model.oneDriveAuthenticationState.label,

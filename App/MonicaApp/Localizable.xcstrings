@@ -24342,6 +24342,376 @@
           }
         }
       }
+    },
+    "云端 KeePass 文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud KeePass Files"
+          }
+        }
+      }
+    },
+    "来源": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Source"
+          }
+        }
+      }
+    },
+    "没有可用的云端文件来源。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No cloud file source is available."
+          }
+        }
+      }
+    },
+    "退出 Google Drive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign Out of Google Drive"
+          }
+        }
+      }
+    },
+    "登录 Google Drive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign In to Google Drive"
+          }
+        }
+      }
+    },
+    "当前打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Currently Open"
+          }
+        }
+      }
+    },
+    "保存回云端（先比对版本）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save to Cloud (compare version first)"
+          }
+        }
+      }
+    },
+    "另存副本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save a Copy"
+          }
+        }
+      }
+    },
+    "保存前会先下载云端最新版本比对 ETag/revision；发现他人修改时不会覆盖。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica downloads the latest cloud version and compares ETag/revision before saving; changes made on other devices are never overwritten."
+          }
+        }
+      }
+    },
+    "临时明文已清理，密码库内容只在内存与受保护的预览里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporary plaintext has been cleaned up; the database only lives in memory and the protected preview."
+          }
+        }
+      }
+    },
+    "仅 KeePass 数据库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "KeePass databases only"
+          }
+        }
+      }
+    },
+    "全部文件与目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All files and folders"
+          }
+        }
+      }
+    },
+    "没有子目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No subfolders"
+          }
+        }
+      }
+    },
+    "此目录没有 .kdbx 文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No .kdbx files in this folder"
+          }
+        }
+      }
+    },
+    "加载更多": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Load More"
+          }
+        }
+      }
+    },
+    "云端文件已被修改": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud File Was Modified"
+          }
+        }
+      }
+    },
+    "%@ 在云端已更新。为免覆盖其他设备的修改，Monica 不会直接写入，可以另存一份副本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was updated in the cloud. To avoid overwriting changes from another device, Monica will not write directly; you can save a copy instead."
+          }
+        }
+      }
+    },
+    "%@ 未配置，无法浏览云端 KeePass 文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is not configured, so cloud KeePass files cannot be browsed."
+          }
+        }
+      }
+    },
+    "%@ 当前不可用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ is currently unavailable."
+          }
+        }
+      }
+    },
+    "该条目不是目录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This item is not a folder."
+          }
+        }
+      }
+    },
+    "只能打开 .kdbx 数据库文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only .kdbx database files can be opened."
+          }
+        }
+      }
+    },
+    "请先打开一个云端文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a cloud file first."
+          }
+        }
+      }
+    },
+    "请先登录 Google Drive。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to Google Drive first."
+          }
+        }
+      }
+    },
+    "云端 %@ 已被其他设备修改，未覆盖。请另存副本。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ was modified by another device in the cloud and was not overwritten. Save a copy instead."
+          }
+        }
+      }
+    },
+    "尚未接入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not connected yet"
+          }
+        }
+      }
+    },
+    "云端根目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cloud Root"
+          }
+        }
+      }
+    },
+    "已下载 %@ 到受保护的临时位置，共 %lld 字节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Downloaded %@ to the protected temporary location (%lld bytes)"
+          }
+        }
+      }
+    },
+    "临时明文已清理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Temporary plaintext cleaned up"
+          }
+        }
+      }
+    },
+    "已保存 %@ 到 %@，共 %lld 字节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved %@ to %@ (%lld bytes)"
+          }
+        }
+      }
+    },
+    "已另存副本 %@，共 %lld 字节": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved a copy as %@ (%lld bytes)"
+          }
+        }
+      }
+    },
+    "已退出 Google Drive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signed out of Google Drive"
+          }
+        }
+      }
+    },
+    "Google Drive 未配置。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Drive is not configured."
+          }
+        }
+      }
+    },
+    "Google Drive 未登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Drive not signed in"
+          }
+        }
+      }
+    },
+    "正在登录 Google Drive": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signing in to Google Drive"
+          }
+        }
+      }
+    },
+    "Google Drive 已登录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Drive signed in"
+          }
+        }
+      }
+    },
+    "Google Drive 已登录 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Google Drive signed in as %@"
+          }
+        }
+      }
+    },
+    "已授权": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authorized"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
