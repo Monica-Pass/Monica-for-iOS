@@ -5830,6 +5830,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
     case sso
     case send
     case attachmentRef
+    case billingAddress
+    case paymentAccount
 
     public var displayName: String {
         switch self {
@@ -5857,6 +5859,10 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
             return "安全发送"
         case .attachmentRef:
             return "附件"
+        case .billingAddress:
+            return "账单地址"
+        case .paymentAccount:
+            return "支付账户"
         }
     }
 
@@ -5880,7 +5886,9 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
         .wifi,
         .sso,
         .send,
-        .attachmentRef
+        .attachmentRef,
+        .billingAddress,
+        .paymentAccount
     ]
 }
 
@@ -5938,6 +5946,8 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
     case wifi(LocalWifiEntryDraft)
     case sso(LocalSSOEntryDraft)
     case send(LocalSendEntryDraft)
+    case billingAddress(LocalBillingAddressEntryDraft)
+    case paymentAccount(LocalPaymentAccountEntryDraft)
 
     public var kind: UnifiedVaultItemKind {
         switch self {
@@ -5952,6 +5962,10 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
         case .wifi: return .wifi
         case .sso: return .sso
         case .send: return .send
+        case .wifi: return .wifi
+        case .send: return .send
+        case .billingAddress: return .billingAddress
+        case .paymentAccount: return .paymentAccount
         }
     }
 }
@@ -5976,6 +5990,7 @@ public enum VaultCSVImportIssueCode: Sendable, Equatable {
     case invalidNumber
     case invalidBoolean
     case malformedCSV
+    case invalidFieldFormat
 }
 
 public struct VaultCSVImportIssue: Sendable, Equatable {
@@ -6378,6 +6393,8 @@ public enum AndroidBackupCodec {
         case card
         case identity
         case passkey
+        case billingAddress
+        case paymentAccount
     }
 
     private static func kind(for path: String) -> BackupKind? {
@@ -6394,6 +6411,10 @@ public enum AndroidBackupCodec {
             return .identity
         case path.contains("/passkeys/") || path.hasPrefix("passkeys/"):
             return .passkey
+        case path.contains("/billing_addresses/") || path.hasPrefix("billing_addresses/"):
+            return .billingAddress
+        case path.contains("/payment_accounts/") || path.hasPrefix("payment_accounts/"):
+            return .paymentAccount
         default:
             return nil
         }
@@ -6439,6 +6460,8 @@ public enum AndroidBackupCodec {
         case .card: return 3
         case .identity: return 4
         case .passkey: return 5
+        case .billingAddress: return 6
+        case .paymentAccount: return 7
         }
     }
 
@@ -6456,6 +6479,10 @@ public enum AndroidBackupCodec {
             return .identity
         case .passkey:
             return .passkey
+        case .billingAddress:
+            return .billingAddress
+        case .paymentAccount:
+            return .paymentAccount
         }
     }
 
@@ -6588,6 +6615,10 @@ public enum AndroidBackupCodec {
             return .card
         case "document", "identity", "id_card", "id-card":
             return .identity
+        case "billing_address", "billing-address", "billingaddress":
+            return .billingAddress
+        case "payment_account", "payment-account", "paymentaccount":
+            return .paymentAccount
         default:
             return inferSecureKind(from: itemData) ?? .note
         }
@@ -6821,6 +6852,12 @@ public enum AndroidBackupCodec {
                 expiryDate: object.string("expiryDate"),
                 notes: notes
             ))
+        case .billingAddress:
+            let object = (try? JSONObject(jsonString: itemData)) ?? JSONObject.empty()
+            return .billingAddress(billingAddressDraft(title: title, itemData: object, notes: notes))
+        case .paymentAccount:
+            let object = (try? JSONObject(jsonString: itemData)) ?? JSONObject.empty()
+            return .paymentAccount(paymentAccountDraft(title: title, itemData: object, notes: notes))
         case .password, .passkey:
             return nil
         }
@@ -6921,6 +6958,20 @@ public enum AndroidBackupCodec {
                     privateKeyReference: object.string("privateKeyAlias"),
                     notes: object.string("notes")
                 ))
+            case .billingAddress:
+                let itemData = try object.nestedObject("itemData")
+                draft = .billingAddress(billingAddressDraft(
+                    title: object.string("title"),
+                    itemData: itemData,
+                    notes: object.string("notes")
+                ))
+            case .paymentAccount:
+                let itemData = try object.nestedObject("itemData")
+                draft = .paymentAccount(paymentAccountDraft(
+                    title: object.string("title"),
+                    itemData: itemData,
+                    notes: object.string("notes")
+                ))
             }
             return AndroidBackupImportedItem(sourceID: sourceID, draft: draft)
         } catch {
@@ -6954,6 +7005,10 @@ public enum AndroidBackupCodec {
             return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
         case .send:
             return "folders/\(folder)/notes/note_\(id)_\(timestamp).json"
+        case .billingAddress:
+            return "folders/\(folder)/billing_addresses/billing_address_\(id)_\(timestamp).json"
+        case .paymentAccount:
+            return "folders/\(folder)/payment_accounts/payment_account_\(id)_\(timestamp).json"
         }
     }
 
@@ -7074,8 +7129,127 @@ public enum AndroidBackupCodec {
             )
         case .send(let draft):
             object = secureItemObject(id: id, timestamp: timestamp, folderName: folderName, itemType: "NOTE", title: draft.title, itemData: draft.body, notes: draft.notes)
+        case .billingAddress(let draft):
+            object = secureItemObject(
+                id: id,
+                timestamp: timestamp,
+                folderName: folderName,
+                itemType: "BILLING_ADDRESS",
+                title: draft.title,
+                itemData: jsonStringObject([
+                    "schemaVersion": 1,
+                    "fullName": draft.fullName,
+                    "streetAddress": draft.streetAddress,
+                    "apartment": draft.apartment,
+                    "city": draft.city,
+                    "stateProvince": draft.stateProvince,
+                    "postalCode": draft.postalCode,
+                    "country": draft.country,
+                    "phone": draft.phone,
+                    "linkedCardIDs": joinedVaultReferenceIdentifiers(draft.linkedCardIDs)
+                ]),
+                notes: draft.notes
+            )
+        case .paymentAccount(let draft):
+            object = secureItemObject(
+                id: id,
+                timestamp: timestamp,
+                folderName: folderName,
+                itemType: "PAYMENT_ACCOUNT",
+                title: draft.title,
+                itemData: jsonStringObject([
+                    "schemaVersion": 1,
+                    "paymentType": draft.kind.androidName,
+                    "provider": draft.provider,
+                    "accountName": draft.accountName,
+                    "accountHolderName": draft.accountHolderName,
+                    "iban": draft.iban,
+                    "swiftBic": draft.swiftBIC,
+                    "routingNumber": draft.routingNumber,
+                    "accountNumber": draft.accountNumber,
+                    "maskedAccountNumber": BillingFieldValidator.maskedAccountNumber(draft.accountNumber),
+                    "currency": draft.currency,
+                    "linkedCardID": draft.linkedCardID,
+                    "billingAddressID": draft.billingAddressID
+                ]),
+                notes: draft.notes
+            )
         }
         return jsonStringObject(object)
+    }
+
+    private static func billingAddressDraft(
+        title: String,
+        itemData: JSONObject,
+        notes: String
+    ) -> LocalBillingAddressEntryDraft {
+        LocalBillingAddressEntryDraft(
+            title: title,
+            fullName: itemData.string("fullName"),
+            streetAddress: itemData.string("streetAddress", defaultValue: itemData.string("addressLine1")),
+            apartment: itemData.string("apartment", defaultValue: itemData.string("addressLine2", defaultValue: itemData.string("addressLine3"))),
+            city: itemData.string("city"),
+            stateProvince: itemData.string("stateProvince", defaultValue: itemData.string("state")),
+            postalCode: itemData.string("postalCode", defaultValue: itemData.string("zip")),
+            country: itemData.string("country"),
+            phone: itemData.string("phone"),
+            notes: notes.isEmpty ? itemData.string("notes") : notes,
+            linkedCardIDs: splitVaultReferenceIdentifiers(itemData.string("linkedCardIDs"))
+        )
+    }
+
+    private static func paymentAccountDraft(
+        title: String,
+        itemData: JSONObject,
+        notes: String
+    ) -> LocalPaymentAccountEntryDraft {
+        let addressReference = itemData.string("billingAddressID")
+        var resolvedNotes = notes.isEmpty ? itemData.string("notes") : notes
+        if addressReference.isEmpty {
+            // Android 侧账单地址内嵌在支付账户里：iOS 导入时没有独立地址条目可关联，
+            // 把地址文本并进备注，避免备份恢复丢字段。
+            let embedded = embeddedBillingAddressText(itemData.string("billingAddress"))
+            if embedded.isEmpty == false {
+                resolvedNotes = resolvedNotes.isEmpty ? embedded : resolvedNotes + "\n" + embedded
+            }
+        }
+        return LocalPaymentAccountEntryDraft(
+            title: title,
+            kind: LocalPaymentAccountKind(androidName: itemData.string("paymentType")),
+            provider: itemData.string("provider"),
+            accountName: itemData.string("accountName", defaultValue: itemData.string("username")),
+            accountHolderName: itemData.string("accountHolderName"),
+            iban: itemData.string("iban"),
+            swiftBIC: itemData.string("swiftBic", defaultValue: itemData.string("swift")),
+            routingNumber: itemData.string("routingNumber"),
+            accountNumber: itemData.string("accountNumber", defaultValue: itemData.string("maskedAccountNumber")),
+            currency: itemData.string("currency"),
+            notes: resolvedNotes,
+            linkedCardID: itemData.string("linkedCardID"),
+            billingAddressID: addressReference
+        )
+    }
+
+    private static func embeddedBillingAddressText(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false, let object = try? JSONObject(jsonString: trimmed) else {
+            return ""
+        }
+        var lines = BillingAddressLines.lines(
+            streetAddress: object.string("streetAddress"),
+            apartment: object.string("apartment"),
+            city: object.string("city"),
+            stateProvince: object.string("stateProvince"),
+            postalCode: object.string("postalCode"),
+            country: object.string("country")
+        )
+        let recipient = [object.string("fullName"), object.string("company")]
+            .filter { $0.isEmpty == false }
+            .joined(separator: " ")
+        if recipient.isEmpty == false {
+            lines.insert(recipient, at: 0)
+        }
+        return lines.joined(separator: "\n")
     }
 
     private static func passwordObject(
@@ -7354,6 +7528,23 @@ public enum VaultCSVCodec {
         "ssoProvider",
         "ssoProviderName",
         "linkedLoginEntryID",
+        "streetAddress",
+        "apartment",
+        "city",
+        "stateProvince",
+        "postalCode",
+        "phone",
+        "linkedCardIDs",
+        "paymentType",
+        "provider",
+        "accountHolderName",
+        "iban",
+        "swiftBic",
+        "routingNumber",
+        "accountNumber",
+        "currency",
+        "linkedCardID",
+        "billingAddressID",
         "notes"
     ]
 
@@ -7542,6 +7733,44 @@ public enum VaultCSVCodec {
                 maxViews: maxViews,
                 notes: record.value("notes")
             ))
+        case .billingAddress:
+            let addressDraft = LocalBillingAddressEntryDraft(
+                title: title,
+                fullName: record.value("fullName"),
+                streetAddress: record.value("streetAddress"),
+                apartment: record.value("apartment"),
+                city: record.value("city"),
+                stateProvince: record.value("stateProvince"),
+                postalCode: record.value("postalCode"),
+                country: record.value("country"),
+                phone: record.value("phone"),
+                notes: record.value("notes"),
+                linkedCardIDs: splitVaultReferenceIdentifiers(record.value("linkedCardIDs"))
+            )
+            if let field = formatIssueField(for: addressDraft) {
+                issues.append(issue(row: rowNumber, code: .invalidFieldFormat, field: field, detail: "字段格式可能不正确（仅提示，不影响导入）"))
+            }
+            return .billingAddress(addressDraft)
+        case .paymentAccount:
+            let accountDraft = LocalPaymentAccountEntryDraft(
+                title: title,
+                kind: LocalPaymentAccountKind(androidName: record.value("paymentType")),
+                provider: record.value("provider"),
+                accountName: record.value("accountName"),
+                accountHolderName: record.value("accountHolderName"),
+                iban: record.value("iban"),
+                swiftBIC: record.value("swiftBic"),
+                routingNumber: record.value("routingNumber"),
+                accountNumber: record.value("accountNumber"),
+                currency: record.value("currency"),
+                notes: record.value("notes"),
+                linkedCardID: record.value("linkedCardID"),
+                billingAddressID: record.value("billingAddressID")
+            )
+            if let field = formatIssueField(for: accountDraft) {
+                issues.append(issue(row: rowNumber, code: .invalidFieldFormat, field: field, detail: "字段格式可能不正确（仅提示，不影响导入）"))
+            }
+            return .paymentAccount(accountDraft)
         case .attachmentRef:
             issues.append(issue(row: rowNumber, code: .unsupportedKind, field: "kind", detail: "CSV 未包含可导入的附件内容"))
             return nil
@@ -7638,8 +7867,57 @@ public enum VaultCSVCodec {
             values["expiresAt"] = draft.expiresAt
             values["maxViews"] = String(draft.maxViews)
             values["notes"] = draft.notes
+        case .billingAddress(let draft):
+            values["title"] = draft.title
+            values["fullName"] = draft.fullName
+            values["streetAddress"] = draft.streetAddress
+            values["apartment"] = draft.apartment
+            values["city"] = draft.city
+            values["stateProvince"] = draft.stateProvince
+            values["postalCode"] = draft.postalCode
+            values["country"] = draft.country
+            values["phone"] = draft.phone
+            values["linkedCardIDs"] = joinedVaultReferenceIdentifiers(draft.linkedCardIDs)
+            values["notes"] = draft.notes
+        case .paymentAccount(let draft):
+            values["title"] = draft.title
+            values["paymentType"] = draft.kind.androidName
+            values["provider"] = draft.provider
+            values["accountName"] = draft.accountName
+            values["accountHolderName"] = draft.accountHolderName
+            values["iban"] = draft.iban
+            values["swiftBic"] = draft.swiftBIC
+            values["routingNumber"] = draft.routingNumber
+            values["accountNumber"] = draft.accountNumber
+            values["currency"] = draft.currency
+            values["linkedCardID"] = draft.linkedCardID
+            values["billingAddressID"] = draft.billingAddressID
+            values["notes"] = draft.notes
         }
         return columns.map { values[$0] ?? "" }
+    }
+
+    private static func formatIssueField(for draft: LocalBillingAddressEntryDraft) -> String? {
+        if BillingFieldValidator.postalCodeIssue(draft.postalCode) != nil {
+            return "postalCode"
+        }
+        return nil
+    }
+
+    private static func formatIssueField(for draft: LocalPaymentAccountEntryDraft) -> String? {
+        if BillingFieldValidator.ibanIssue(draft.iban) != nil {
+            return "iban"
+        }
+        if BillingFieldValidator.swiftBICIssue(draft.swiftBIC) != nil {
+            return "swiftBic"
+        }
+        if BillingFieldValidator.routingNumberIssue(draft.routingNumber) != nil {
+            return "routingNumber"
+        }
+        if BillingFieldValidator.currencyIssue(draft.currency) != nil {
+            return "currency"
+        }
+        return nil
     }
 
     private static func parseRows(_ csv: String) throws -> [[String]] {
@@ -8470,6 +8748,90 @@ public protocol LocalVaultEngine {
         attachmentID: String
     ) throws -> LocalAttachmentMetadata
 
+    func createBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalBillingAddressEntryDraft
+    ) throws -> LocalBillingAddressEntry
+
+    func listBillingAddressEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBillingAddressEntry]
+
+    func updateBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalBillingAddressEntryDraft
+    ) throws -> LocalBillingAddressEntry
+
+    func setBillingAddressEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalBillingAddressEntry
+
+    func deleteBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws
+
+    func listDeletedBillingAddressEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBillingAddressEntry]
+
+    func restoreBillingAddressEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalBillingAddressEntry
+
+    func createPaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalPaymentAccountEntryDraft
+    ) throws -> LocalPaymentAccountEntry
+
+    func listPaymentAccountEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalPaymentAccountEntry]
+
+    func updatePaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalPaymentAccountEntryDraft
+    ) throws -> LocalPaymentAccountEntry
+
+    func setPaymentAccountEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalPaymentAccountEntry
+
+    func deletePaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws
+
+    func listDeletedPaymentAccountEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalPaymentAccountEntry]
+
+    func restorePaymentAccountEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalPaymentAccountEntry
+
     func moveEntry(
         in handle: LocalVaultHandle,
         kind: UnifiedVaultItemKind,
@@ -8509,6 +8871,23 @@ public protocol LocalVaultEngine {
 
 public extension LocalVaultEngine {
     func moveEntry(in handle: LocalVaultHandle, kind: UnifiedVaultItemKind, entryID: String, fromProjectID: String, toProjectID: String) throws -> LocalVaultMovedEntry { throw LocalVaultRepositoryError.unsupportedEntryType(kind) }
+
+    func createBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+    func listBillingAddressEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBillingAddressEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+    func updateBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+    func setBillingAddressEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalBillingAddressEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+    func deleteBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+    func listDeletedBillingAddressEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBillingAddressEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+    func restoreBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalBillingAddressEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.billingAddress) }
+
+    func createPaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+    func listPaymentAccountEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPaymentAccountEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+    func updatePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+    func setPaymentAccountEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalPaymentAccountEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+    func deletePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+    func listDeletedPaymentAccountEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPaymentAccountEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+    func restorePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalPaymentAccountEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
+
 
     func createPasskeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
     func listPasskeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPasskeyEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
@@ -9087,6 +9466,570 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
         self.passphraseHint = passphraseHint
         self.notes = notes
         self.favorite = favorite
+    }
+}
+
+
+// MARK: - Billing addresses & payment accounts
+
+/// 账单地址的展示行拼装规则（国家/地区差异只影响排版，不做任何有效性判断）。
+public enum BillingAddressLines {
+    public static func lines(
+        streetAddress: String,
+        apartment: String,
+        city: String,
+        stateProvince: String,
+        postalCode: String,
+        country: String
+    ) -> [String] {
+        var lines: [String] = []
+        let street = streetAddress.trimmingCharacters(in: .whitespacesAndNewlines)
+        let unit = apartment.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !street.isEmpty {
+            lines.append(street)
+        }
+        if !unit.isEmpty {
+            lines.append(unit)
+        }
+        let region = [city, stateProvince]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+        let zone = [postalCode, country]
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .joined(separator: " ")
+        let locality = [region, zone].filter { !$0.isEmpty }.joined(separator: " ")
+        if !locality.isEmpty {
+            lines.append(locality)
+        }
+        return lines
+    }
+
+    public static func singleLine(
+        streetAddress: String,
+        apartment: String,
+        city: String,
+        stateProvince: String,
+        postalCode: String,
+        country: String
+    ) -> String {
+        lines(
+            streetAddress: streetAddress,
+            apartment: apartment,
+            city: city,
+            stateProvince: stateProvince,
+            postalCode: postalCode,
+            country: country
+        ).joined(separator: ", ")
+    }
+}
+
+public struct LocalBillingAddressEntryDraft: Sendable, Equatable {
+    public let title: String
+    public let fullName: String
+    public let streetAddress: String
+    public let apartment: String
+    public let city: String
+    public let stateProvince: String
+    public let postalCode: String
+    public let country: String
+    public let phone: String
+    public let notes: String
+    /// 引用该地址的银行卡条目 ID（稳定 ID，不使用卡片展示名）。
+    public let linkedCardIDs: [String]
+
+    public init(
+        title: String,
+        fullName: String = "",
+        streetAddress: String = "",
+        apartment: String = "",
+        city: String = "",
+        stateProvince: String = "",
+        postalCode: String = "",
+        country: String = "",
+        phone: String = "",
+        notes: String = "",
+        linkedCardIDs: [String] = []
+    ) {
+        self.title = title
+        self.fullName = fullName
+        self.streetAddress = streetAddress
+        self.apartment = apartment
+        self.city = city
+        self.stateProvince = stateProvince
+        self.postalCode = postalCode
+        self.country = country
+        self.phone = phone
+        self.notes = notes
+        self.linkedCardIDs = linkedCardIDs
+    }
+}
+
+public struct LocalBillingAddressEntry: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let projectID: String
+    public let title: String
+    public let fullName: String
+    public let streetAddress: String
+    public let apartment: String
+    public let city: String
+    public let stateProvince: String
+    public let postalCode: String
+    public let country: String
+    public let phone: String
+    public let notes: String
+    public let linkedCardIDs: [String]
+    public let favorite: Bool
+
+    public init(
+        id: String,
+        projectID: String,
+        title: String,
+        fullName: String = "",
+        streetAddress: String = "",
+        apartment: String = "",
+        city: String = "",
+        stateProvince: String = "",
+        postalCode: String = "",
+        country: String = "",
+        phone: String = "",
+        notes: String = "",
+        linkedCardIDs: [String] = [],
+        favorite: Bool = false
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.title = title
+        self.fullName = fullName
+        self.streetAddress = streetAddress
+        self.apartment = apartment
+        self.city = city
+        self.stateProvince = stateProvince
+        self.postalCode = postalCode
+        self.country = country
+        self.phone = phone
+        self.notes = notes
+        self.linkedCardIDs = linkedCardIDs
+        self.favorite = favorite
+    }
+}
+
+public extension LocalBillingAddressEntry {
+    var addressLines: [String] {
+        BillingAddressLines.lines(
+            streetAddress: streetAddress,
+            apartment: apartment,
+            city: city,
+            stateProvince: stateProvince,
+            postalCode: postalCode,
+            country: country
+        )
+    }
+
+    var formattedAddress: String {
+        addressLines.joined(separator: "\n")
+    }
+
+    var addressSummary: String {
+        BillingAddressLines.singleLine(
+            streetAddress: streetAddress,
+            apartment: apartment,
+            city: city,
+            stateProvince: stateProvince,
+            postalCode: postalCode,
+            country: country
+        )
+    }
+
+    var searchableText: String {
+        [
+            title,
+            fullName,
+            streetAddress,
+            apartment,
+            city,
+            stateProvince,
+            postalCode,
+            country,
+            phone,
+            notes
+        ].joined(separator: " ")
+    }
+
+    /// 解析引用的银行卡条目；已被删除的引用会被忽略，由 UI 通过 `missingLinkedCardIDs(in:)` 提示。
+    func linkedCards(in cards: [LocalCardEntry]) -> [LocalCardEntry] {
+        linkedCardIDs.compactMap { id in cards.first { $0.id == id } }
+    }
+
+    func missingLinkedCardIDs(in cards: [LocalCardEntry]) -> [String] {
+        linkedCardIDs.filter { id in cards.contains { $0.id == id } == false }
+    }
+}
+
+public enum LocalPaymentAccountKind: String, Sendable, Equatable, CaseIterable {
+    case digitalWallet = "digital-wallet"
+    case bankAccount = "bank-account"
+    case paymentApp = "payment-app"
+    case buyNowPayLater = "buy-now-pay-later"
+    case cryptoWallet = "crypto-wallet"
+    case other
+
+    /// 兼容 Android 备份中的枚举名（`BANK_ACCOUNT`）与 iOS 私有导出值（`bank-account`）。
+    public init(androidName: String) {
+        let trimmed = androidName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let stored = LocalPaymentAccountKind(rawValue: trimmed.lowercased()) {
+            self = stored
+            return
+        }
+        switch trimmed.uppercased() {
+        case "DIGITAL_WALLET":
+            self = .digitalWallet
+        case "BANK_ACCOUNT":
+            self = .bankAccount
+        case "PAYMENT_APP":
+            self = .paymentApp
+        case "BUY_NOW_PAY_LATER":
+            self = .buyNowPayLater
+        case "CRYPTO_WALLET":
+            self = .cryptoWallet
+        default:
+            self = .other
+        }
+    }
+
+    public var androidName: String {
+        switch self {
+        case .digitalWallet:
+            return "DIGITAL_WALLET"
+        case .bankAccount:
+            return "BANK_ACCOUNT"
+        case .paymentApp:
+            return "PAYMENT_APP"
+        case .buyNowPayLater:
+            return "BUY_NOW_PAY_LATER"
+        case .cryptoWallet:
+            return "CRYPTO_WALLET"
+        case .other:
+            return "OTHER"
+        }
+    }
+
+    public var displayName: String {
+        switch self {
+        case .digitalWallet:
+            return "数字钱包"
+        case .bankAccount:
+            return "银行账户"
+        case .paymentApp:
+            return "支付应用"
+        case .buyNowPayLater:
+            return "先买后付"
+        case .cryptoWallet:
+            return "加密钱包"
+        case .other:
+            return "其他"
+        }
+    }
+}
+
+public struct LocalPaymentAccountEntryDraft: Sendable, Equatable {
+    public let title: String
+    public let kind: LocalPaymentAccountKind
+    public let provider: String
+    public let accountName: String
+    public let accountHolderName: String
+    public let iban: String
+    public let swiftBIC: String
+    public let routingNumber: String
+    public let accountNumber: String
+    public let currency: String
+    public let notes: String
+    /// 关联的银行卡条目 ID（稳定 ID）。
+    public let linkedCardID: String
+    /// 关联的账单地址条目 ID（稳定 ID）。
+    public let billingAddressID: String
+
+    public init(
+        title: String,
+        kind: LocalPaymentAccountKind = .other,
+        provider: String = "",
+        accountName: String = "",
+        accountHolderName: String = "",
+        iban: String = "",
+        swiftBIC: String = "",
+        routingNumber: String = "",
+        accountNumber: String = "",
+        currency: String = "",
+        notes: String = "",
+        linkedCardID: String = "",
+        billingAddressID: String = ""
+    ) {
+        self.title = title
+        self.kind = kind
+        self.provider = provider
+        self.accountName = accountName
+        self.accountHolderName = accountHolderName
+        self.iban = iban
+        self.swiftBIC = swiftBIC
+        self.routingNumber = routingNumber
+        self.accountNumber = accountNumber
+        self.currency = currency
+        self.notes = notes
+        self.linkedCardID = linkedCardID
+        self.billingAddressID = billingAddressID
+    }
+}
+
+public struct LocalPaymentAccountEntry: Sendable, Equatable, Identifiable {
+    public let id: String
+    public let projectID: String
+    public let title: String
+    public let kind: LocalPaymentAccountKind
+    public let provider: String
+    public let accountName: String
+    public let accountHolderName: String
+    public let iban: String
+    public let swiftBIC: String
+    public let routingNumber: String
+    public let accountNumber: String
+    public let currency: String
+    public let notes: String
+    public let linkedCardID: String
+    public let billingAddressID: String
+    public let favorite: Bool
+
+    public init(
+        id: String,
+        projectID: String,
+        title: String,
+        kind: LocalPaymentAccountKind = .other,
+        provider: String = "",
+        accountName: String = "",
+        accountHolderName: String = "",
+        iban: String = "",
+        swiftBIC: String = "",
+        routingNumber: String = "",
+        accountNumber: String = "",
+        currency: String = "",
+        notes: String = "",
+        linkedCardID: String = "",
+        billingAddressID: String = "",
+        favorite: Bool = false
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.title = title
+        self.kind = kind
+        self.provider = provider
+        self.accountName = accountName
+        self.accountHolderName = accountHolderName
+        self.iban = iban
+        self.swiftBIC = swiftBIC
+        self.routingNumber = routingNumber
+        self.accountNumber = accountNumber
+        self.currency = currency
+        self.notes = notes
+        self.linkedCardID = linkedCardID
+        self.billingAddressID = billingAddressID
+        self.favorite = favorite
+    }
+}
+
+/// 关联引用的解析状态：未关联 / 已关联 / 目标条目已删除（失效关联）。
+public enum VaultEntryReferenceStatus: String, Sendable, Equatable {
+    case none
+    case linked
+    case missing
+}
+
+public extension LocalPaymentAccountEntry {
+    var searchableText: String {
+        [
+            title,
+            kind.displayName,
+            provider,
+            accountName,
+            accountHolderName,
+            iban,
+            swiftBIC,
+            routingNumber,
+            currency,
+            notes
+        ].joined(separator: " ")
+    }
+
+    func billingAddress(in billingAddresses: [LocalBillingAddressEntry]) -> LocalBillingAddressEntry? {
+        let reference = billingAddressID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard reference.isEmpty == false else {
+            return nil
+        }
+        return billingAddresses.first { $0.id == reference }
+    }
+
+    func billingAddressReferenceStatus(in billingAddresses: [LocalBillingAddressEntry]) -> VaultEntryReferenceStatus {
+        let reference = billingAddressID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard reference.isEmpty == false else {
+            return .none
+        }
+        return billingAddresses.contains { $0.id == reference } ? .linked : .missing
+    }
+
+    func linkedCard(in cards: [LocalCardEntry]) -> LocalCardEntry? {
+        let reference = linkedCardID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard reference.isEmpty == false else {
+            return nil
+        }
+        return cards.first { $0.id == reference }
+    }
+
+    func linkedCardReferenceStatus(in cards: [LocalCardEntry]) -> VaultEntryReferenceStatus {
+        let reference = linkedCardID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard reference.isEmpty == false else {
+            return .none
+        }
+        return cards.contains { $0.id == reference } ? .linked : .missing
+    }
+}
+
+public enum BillingFieldValidationIssue: Sendable, Equatable {
+    case ibanCharacters
+    case ibanLength
+    case ibanChecksum
+    case swiftCharacters
+    case swiftLength
+    case routingNumberFormat
+    case postalCodeFormat
+    case currencyFormat
+}
+
+/// 温和格式校验：只提示格式/长度层面的可疑输入，不判断账户或地址在现实中是否有效，
+/// 也不做 US-only 的 IBAN/routing number 强制约束。
+public enum BillingFieldValidator {
+    public static let minimumIBANLength = 15
+    public static let maximumIBANLength = 34
+    public static let minimumSWIFTLIength = 8
+    public static let maximumSWIFTLength = 11
+    public static let maximumReferenceLength = 34
+    public static let maximumPostalCodeLength = 16
+
+    public static func normalizedIBAN(_ value: String) -> String {
+        value
+            .components(separatedBy: .whitespacesAndNewlines)
+            .joined()
+            .uppercased()
+    }
+
+    public static func normalizedSWIFT(_ value: String) -> String {
+        value.trimmingCharacters(in: .whitespacesAndNewlines).uppercased()
+    }
+
+    public static func ibanIssue(_ value: String) -> BillingFieldValidationIssue? {
+        let normalized = normalizedIBAN(value)
+        guard normalized.isEmpty == false else {
+            return nil
+        }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        guard normalized.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return .ibanCharacters
+        }
+        guard (minimumIBANLength...maximumIBANLength).contains(normalized.count) else {
+            return .ibanLength
+        }
+        guard isValidIBANChecksum(normalized) else {
+            return .ibanChecksum
+        }
+        return nil
+    }
+
+    public static func swiftBICIssue(_ value: String) -> BillingFieldValidationIssue? {
+        let normalized = normalizedSWIFT(value)
+        guard normalized.isEmpty == false else {
+            return nil
+        }
+        guard normalized.count == minimumSWIFTLIength || normalized.count == maximumSWIFTLength else {
+            return .swiftLength
+        }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
+        guard normalized.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return .swiftCharacters
+        }
+        return nil
+    }
+
+    /// 路由号/清算号：只要求是字母、数字、空格或连字符，长度合理，不套用任何国家的固定长度。
+    public static func routingNumberIssue(_ value: String) -> BillingFieldValidationIssue? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return nil
+        }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -")
+        guard trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return .routingNumberFormat
+        }
+        guard trimmed.count <= maximumReferenceLength else {
+            return .routingNumberFormat
+        }
+        return nil
+    }
+
+    public static func postalCodeIssue(_ value: String) -> BillingFieldValidationIssue? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return nil
+        }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -")
+        guard trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return .postalCodeFormat
+        }
+        guard trimmed.count <= maximumPostalCodeLength else {
+            return .postalCodeFormat
+        }
+        return nil
+    }
+
+    public static func currencyIssue(_ value: String) -> BillingFieldValidationIssue? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return nil
+        }
+        guard trimmed.count == 3 else {
+            return .currencyFormat
+        }
+        let allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+        guard trimmed.unicodeScalars.allSatisfy({ allowed.contains($0) }) else {
+            return .currencyFormat
+        }
+        return nil
+    }
+
+    /// 账号/IBAN 的掩码展示：保留末 4 位，其余用圆点占位。
+    public static func maskedAccountNumber(_ value: String) -> String {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return ""
+        }
+        guard trimmed.count > 4 else {
+            return String(repeating: "•", count: trimmed.count)
+        }
+        return String(repeating: "•", count: trimmed.count - 4) + trimmed.suffix(4)
+    }
+
+    private static func isValidIBANChecksum(_ iban: String) -> Bool {
+        let rearranged = String(iban.dropFirst(4)) + String(iban.prefix(4))
+        var remainder = 0
+        for scalar in rearranged.unicodeScalars {
+            let value: Int
+            if scalar.value >= 48, scalar.value <= 57 {
+                value = Int(scalar.value - 48)
+            } else if scalar.value >= 65, scalar.value <= 90 {
+                value = Int(scalar.value - 65) + 10
+            } else {
+                return false
+            }
+            remainder = value >= 10 ? (remainder * 100 + value) % 97 : (remainder * 10 + value) % 97
+        }
+        return remainder == 1
     }
 }
 
@@ -11001,6 +11944,62 @@ public struct LocalVaultEntryRepository {
         try engine.restoreSshKeyEntry(in: session.handle, projectID: projectID, entryID: entryID)
     }
 
+    public func createBillingAddressEntry(projectID: String, draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntry {
+        try engine.createBillingAddressEntry(in: session.handle, projectID: projectID, draft: normalizedBillingAddressEntryDraft(draft))
+    }
+
+    public func listBillingAddressEntries(projectID: String) throws -> [LocalBillingAddressEntry] {
+        try engine.listBillingAddressEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func updateBillingAddressEntry(projectID: String, entryID: String, draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntry {
+        try engine.updateBillingAddressEntry(in: session.handle, projectID: projectID, entryID: entryID, draft: normalizedBillingAddressEntryDraft(draft))
+    }
+
+    public func setBillingAddressEntryFavorite(projectID: String, entryID: String, favorite: Bool) throws -> LocalBillingAddressEntry {
+        try engine.setBillingAddressEntryFavorite(in: session.handle, projectID: projectID, entryID: entryID, favorite: favorite)
+    }
+
+    public func deleteBillingAddressEntry(projectID: String, entryID: String) throws {
+        try engine.deleteBillingAddressEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
+    public func listDeletedBillingAddressEntries(projectID: String) throws -> [LocalBillingAddressEntry] {
+        try engine.listDeletedBillingAddressEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func restoreBillingAddressEntry(projectID: String, entryID: String) throws -> LocalBillingAddressEntry {
+        try engine.restoreBillingAddressEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
+    public func createPaymentAccountEntry(projectID: String, draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntry {
+        try engine.createPaymentAccountEntry(in: session.handle, projectID: projectID, draft: normalizedPaymentAccountEntryDraft(draft))
+    }
+
+    public func listPaymentAccountEntries(projectID: String) throws -> [LocalPaymentAccountEntry] {
+        try engine.listPaymentAccountEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func updatePaymentAccountEntry(projectID: String, entryID: String, draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntry {
+        try engine.updatePaymentAccountEntry(in: session.handle, projectID: projectID, entryID: entryID, draft: normalizedPaymentAccountEntryDraft(draft))
+    }
+
+    public func setPaymentAccountEntryFavorite(projectID: String, entryID: String, favorite: Bool) throws -> LocalPaymentAccountEntry {
+        try engine.setPaymentAccountEntryFavorite(in: session.handle, projectID: projectID, entryID: entryID, favorite: favorite)
+    }
+
+    public func deletePaymentAccountEntry(projectID: String, entryID: String) throws {
+        try engine.deletePaymentAccountEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
+    public func listDeletedPaymentAccountEntries(projectID: String) throws -> [LocalPaymentAccountEntry] {
+        try engine.listDeletedPaymentAccountEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func restorePaymentAccountEntry(projectID: String, entryID: String) throws -> LocalPaymentAccountEntry {
+        try engine.restorePaymentAccountEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
     public func createApiTokenEntry(projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
         try engine.createApiTokenEntry(in: session.handle, projectID: projectID, draft: normalizedApiTokenEntryDraft(draft))
     }
@@ -11319,6 +12318,55 @@ public struct LocalVaultEntryRepository {
         )
     }
 
+    private func normalizedBillingAddressEntryDraft(_ draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntryDraft {
+        let normalizedTitle = try normalizedEntryTitle(draft.title)
+        return LocalBillingAddressEntryDraft(
+            title: normalizedTitle,
+            fullName: draft.fullName.trimmingCharacters(in: .whitespacesAndNewlines),
+            streetAddress: draft.streetAddress.trimmingCharacters(in: .whitespacesAndNewlines),
+            apartment: draft.apartment.trimmingCharacters(in: .whitespacesAndNewlines),
+            city: draft.city.trimmingCharacters(in: .whitespacesAndNewlines),
+            stateProvince: draft.stateProvince.trimmingCharacters(in: .whitespacesAndNewlines),
+            postalCode: draft.postalCode.trimmingCharacters(in: .whitespacesAndNewlines),
+            country: draft.country.trimmingCharacters(in: .whitespacesAndNewlines),
+            phone: draft.phone.trimmingCharacters(in: .whitespacesAndNewlines),
+            notes: draft.notes,
+            linkedCardIDs: normalizedReferenceIdentifiers(draft.linkedCardIDs)
+        )
+    }
+
+    private func normalizedPaymentAccountEntryDraft(_ draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntryDraft {
+        let normalizedTitle = try normalizedEntryTitle(draft.title)
+        return LocalPaymentAccountEntryDraft(
+            title: normalizedTitle,
+            kind: draft.kind,
+            provider: draft.provider.trimmingCharacters(in: .whitespacesAndNewlines),
+            accountName: draft.accountName.trimmingCharacters(in: .whitespacesAndNewlines),
+            accountHolderName: draft.accountHolderName.trimmingCharacters(in: .whitespacesAndNewlines),
+            iban: BillingFieldValidator.normalizedIBAN(draft.iban),
+            swiftBIC: BillingFieldValidator.normalizedSWIFT(draft.swiftBIC),
+            routingNumber: draft.routingNumber.trimmingCharacters(in: .whitespacesAndNewlines),
+            accountNumber: draft.accountNumber.trimmingCharacters(in: .whitespacesAndNewlines),
+            currency: draft.currency.trimmingCharacters(in: .whitespacesAndNewlines).uppercased(),
+            notes: draft.notes,
+            linkedCardID: draft.linkedCardID.trimmingCharacters(in: .whitespacesAndNewlines),
+            billingAddressID: draft.billingAddressID.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
+    }
+
+    private func normalizedReferenceIdentifiers(_ identifiers: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for identifier in identifiers {
+            let trimmed = identifier.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard trimmed.isEmpty == false, seen.insert(trimmed).inserted else {
+                continue
+            }
+            result.append(trimmed)
+        }
+        return result
+    }
+
     private func normalizedApiTokenEntryDraft(_ draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntryDraft {
         let normalizedTitle = try normalizedEntryTitle(draft.title)
         return LocalApiTokenEntryDraft(
@@ -11588,7 +12636,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
                 targetProjectID: toProjectID
             )
             return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
-        case .passkey, .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
+        case .passkey, .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef, .billingAddress, .paymentAccount:
             let mapping = parityMoveMapping(for: kind)
             let entry = try moveParityEntry(
                 in: handle,
@@ -12199,6 +13247,130 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         try LocalSshKeyEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "ssh-key", kind: "ssh-key"))
     }
 
+    public func createBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntry {
+        let entry = try createParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryType: "document-ref",
+            kind: "billing-address",
+            title: draft.title,
+            payload: billingAddressPayload(draft)
+        )
+        return try LocalBillingAddressEntry(entry)
+    }
+
+    public func listBillingAddressEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBillingAddressEntry] {
+        try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "billing-address").map(LocalBillingAddressEntry.init)
+    }
+
+    public func updateBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalBillingAddressEntryDraft) throws -> LocalBillingAddressEntry {
+        let entry = try updateParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryID: entryID,
+            entryType: "document-ref",
+            kind: "billing-address",
+            title: draft.title,
+            payload: billingAddressPayload(draft)
+        )
+        return try LocalBillingAddressEntry(entry)
+    }
+
+    public func setBillingAddressEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalBillingAddressEntry {
+        try LocalBillingAddressEntry(setParityEntryFavorite(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "billing-address", favorite: favorite))
+    }
+
+    public func deleteBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        try deleteParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "billing-address")
+    }
+
+    public func listDeletedBillingAddressEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBillingAddressEntry] {
+        try listDeletedParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "billing-address").map(LocalBillingAddressEntry.init)
+    }
+
+    public func restoreBillingAddressEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalBillingAddressEntry {
+        try LocalBillingAddressEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "billing-address"))
+    }
+
+    public func createPaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntry {
+        let entry = try createParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryType: "document-ref",
+            kind: "payment-account",
+            title: draft.title,
+            payload: paymentAccountPayload(draft)
+        )
+        return try LocalPaymentAccountEntry(entry)
+    }
+
+    public func listPaymentAccountEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPaymentAccountEntry] {
+        try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "payment-account").map(LocalPaymentAccountEntry.init)
+    }
+
+    public func updatePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalPaymentAccountEntryDraft) throws -> LocalPaymentAccountEntry {
+        let entry = try updateParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryID: entryID,
+            entryType: "document-ref",
+            kind: "payment-account",
+            title: draft.title,
+            payload: paymentAccountPayload(draft)
+        )
+        return try LocalPaymentAccountEntry(entry)
+    }
+
+    public func setPaymentAccountEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalPaymentAccountEntry {
+        try LocalPaymentAccountEntry(setParityEntryFavorite(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "payment-account", favorite: favorite))
+    }
+
+    public func deletePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        try deleteParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "payment-account")
+    }
+
+    public func listDeletedPaymentAccountEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPaymentAccountEntry] {
+        try listDeletedParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "payment-account").map(LocalPaymentAccountEntry.init)
+    }
+
+    public func restorePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalPaymentAccountEntry {
+        try LocalPaymentAccountEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "payment-account"))
+    }
+
+    private func billingAddressPayload(_ draft: LocalBillingAddressEntryDraft) -> [String: Any] {
+        [
+            "schemaVersion": 1,
+            "fullName": draft.fullName,
+            "streetAddress": draft.streetAddress,
+            "apartment": draft.apartment,
+            "city": draft.city,
+            "stateProvince": draft.stateProvince,
+            "postalCode": draft.postalCode,
+            "country": draft.country,
+            "phone": draft.phone,
+            "notes": draft.notes,
+            "linkedCardIDs": draft.linkedCardIDs
+        ]
+    }
+
+    private func paymentAccountPayload(_ draft: LocalPaymentAccountEntryDraft) -> [String: Any] {
+        [
+            "schemaVersion": 1,
+            "paymentType": draft.kind.rawValue,
+            "provider": draft.provider,
+            "accountName": draft.accountName,
+            "accountHolderName": draft.accountHolderName,
+            "iban": draft.iban,
+            "swiftBic": draft.swiftBIC,
+            "routingNumber": draft.routingNumber,
+            "accountNumber": draft.accountNumber,
+            "currency": draft.currency,
+            "notes": draft.notes,
+            "linkedCardID": draft.linkedCardID,
+            "billingAddressID": draft.billingAddressID
+        ]
+    }
+
     public func createApiTokenEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
         let entry = try createParityEntry(
             in: handle,
@@ -12730,6 +13902,10 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             return ("document-ref", "send")
         case .attachmentRef:
             return ("document-ref", "attachment-ref")
+        case .billingAddress:
+            return ("document-ref", "billing-address")
+        case .paymentAccount:
+            return ("document-ref", "payment-account")
         case .login, .totp, .note, .card, .identity:
             preconditionFailure("Core entry kinds do not use parity move mapping.")
         }
@@ -13014,6 +14190,54 @@ private extension LocalPasskeyEntry {
     }
 }
 
+private extension LocalBillingAddressEntry {
+    init(_ entry: MonicaMDBXParityEntry) throws {
+        let payload = try entry.payloadDictionary()
+        self.init(
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            fullName: payload.string("fullName"),
+            streetAddress: payload.string("streetAddress"),
+            apartment: payload.string("apartment"),
+            city: payload.string("city"),
+            stateProvince: payload.string("stateProvince"),
+            postalCode: payload.string("postalCode"),
+            country: payload.string("country"),
+            phone: payload.string("phone"),
+            notes: payload.string("notes"),
+            linkedCardIDs: payload.stringArray("linkedCardIDs"),
+            favorite: entry.favorite
+        )
+    }
+}
+
+private extension LocalPaymentAccountEntry {
+    init(_ entry: MonicaMDBXParityEntry) throws {
+        let payload = try entry.payloadDictionary()
+        let storedKindValue = payload.string("paymentType")
+        let storedKind = storedKindValue.isEmpty ? "OTHER" : storedKindValue
+        self.init(
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            kind: LocalPaymentAccountKind(androidName: storedKind),
+            provider: payload.string("provider"),
+            accountName: payload.string("accountName"),
+            accountHolderName: payload.string("accountHolderName"),
+            iban: payload.string("iban"),
+            swiftBIC: payload.string("swiftBic"),
+            routingNumber: payload.string("routingNumber"),
+            accountNumber: payload.string("accountNumber"),
+            currency: payload.string("currency"),
+            notes: payload.string("notes"),
+            linkedCardID: payload.string("linkedCardID"),
+            billingAddressID: payload.string("billingAddressID"),
+            favorite: entry.favorite
+        )
+    }
+}
+
 private extension LocalSshKeyEntry {
     init(_ entry: MonicaMDBXParityEntry) throws {
         let payload = try entry.payloadDictionary()
@@ -13136,6 +14360,21 @@ private extension MonicaMDBXParityEntry {
     }
 }
 
+/// 跨条目引用（卡片/地址 ID）在 CSV 与备份里用分号连接成字符串，避免依赖数组解析。
+func joinedVaultReferenceIdentifiers(_ identifiers: [String]) -> String {
+    identifiers
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { $0.isEmpty == false }
+        .joined(separator: ";")
+}
+
+func splitVaultReferenceIdentifiers(_ value: String) -> [String] {
+    value
+        .split(separator: ";")
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { $0.isEmpty == false }
+}
+
 private extension Dictionary where Key == String, Value == Any {
     func string(_ key: String) -> String {
         self[key] as? String ?? ""
@@ -13157,6 +14396,16 @@ private extension Dictionary where Key == String, Value == Any {
             return value.intValue
         }
         return 0
+    }
+
+    func stringArray(_ key: String) -> [String] {
+        if let values = self[key] as? [Any] {
+            return values.compactMap { $0 as? String }.filter { $0.isEmpty == false }
+        }
+        if let joined = self[key] as? String {
+            return splitVaultReferenceIdentifiers(joined)
+        }
+        return []
     }
 
     func int64(_ key: String) -> Int64 {
