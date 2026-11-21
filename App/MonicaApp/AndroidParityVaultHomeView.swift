@@ -319,10 +319,20 @@ struct AndroidParityVaultHomeView: View {
                         }
                     }
                     .contextMenu {
-                        Button {
-                            copyLoginValue(entry.username)
-                        } label: {
-                            Label("复制用户名", systemImage: "person.text.rectangle")
+                        // issue #151：用户名与账号是两个独立字段，复制动作分开；空值不显示动作。
+                        if !entry.username.isEmpty {
+                            Button {
+                                copyLoginValue(entry.username)
+                            } label: {
+                                Label("复制用户名", systemImage: "person.text.rectangle")
+                            }
+                        }
+                        if !entry.account.isEmpty {
+                            Button {
+                                copyLoginValue(entry.account)
+                            } label: {
+                                Label("复制账号", systemImage: "at")
+                            }
                         }
                         Button {
                             copyLoginValue(entry.password)
@@ -1839,6 +1849,11 @@ private struct AndroidPasswordListCard: View {
                         Text(entry.username)
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(AndroidParityPalette.textSecondary)
+                    } else if displayPreferences.showsLoginUsername, !entry.account.isEmpty {
+                        // 只有账号、没有用户名时，副标题展示账号，避免条目看起来没有身份信息。
+                        Text(entry.account)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
                     if displayPreferences.showsLoginURL, !entry.url.isEmpty {
                         Text(entry.url)
@@ -2624,14 +2639,38 @@ struct AddEditVaultItemView: View {
                 appName: mode.isAdding ? $session.loginAppName : $session.editingLoginAppName,
                 bundleID: mode.isAdding ? $session.loginAppBundleID : $session.editingLoginAppBundleID
             )
-            field(
-                icon: "person.fill",
-                title: String(localized: "账号"),
-                placeholder: mode.isAdding && !session.accountTemplateUsernamePrompt.isEmpty
-                    ? session.accountTemplateUsernamePrompt
-                    : nil,
-                text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername
-            )
+            if session.vaultDisplayPreferences.separatesLoginAccount {
+                // issue #151：开关开启后用户名与账号并列；关闭时保持旧版单字段表单。
+                field(
+                    icon: "person.fill",
+                    title: String(localized: "用户名"),
+                    placeholder: mode.isAdding && !session.accountTemplateUsernamePrompt.isEmpty
+                        ? session.accountTemplateUsernamePrompt
+                        : nil,
+                    text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername
+                )
+                VStack(alignment: .leading, spacing: 6) {
+                    field(
+                        icon: "at",
+                        title: String(localized: "账号"),
+                        placeholder: String(localized: "邮箱 / 手机号 / 账号 ID"),
+                        text: mode.isAdding ? $session.loginAccount : $session.editingLoginAccount
+                    )
+                    Text("与用户名分开保存，可单独复制。")
+                        .font(.caption)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .padding(.horizontal, 4)
+                }
+            } else {
+                field(
+                    icon: "person.fill",
+                    title: String(localized: "账号"),
+                    placeholder: mode.isAdding && !session.accountTemplateUsernamePrompt.isEmpty
+                        ? session.accountTemplateUsernamePrompt
+                        : nil,
+                    text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername
+                )
+            }
             secureField(icon: "lock.fill", title: String(localized: "密码"), text: mode.isAdding ? $session.loginPassword : $session.editingLoginPassword)
             Button(action: mode.isAdding ? generateLoginPassword : generateSelectedLoginPassword) {
                 Label("添加密码", systemImage: "plus")
@@ -3269,10 +3308,15 @@ struct VaultItemDetailView: View {
         case .login:
             guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             let urls = entry.effectiveURLs
+            // 拆分开关开启、或条目已有账号时，把用户名与账号分成两行；旧数据保持原来的「账号」标签。
+            let showsSeparateAccount = session.vaultDisplayPreferences.separatesLoginAccount || !entry.account.isEmpty
             var items = [
                 row("title", String(localized: "标题"), entry.title),
-                row("username", String(localized: "账号"), entry.username)
+                row("username", showsSeparateAccount ? String(localized: "用户名") : String(localized: "账号"), entry.username)
             ]
+            if !entry.account.isEmpty {
+                items.append(row("account", String(localized: "账号"), entry.account))
+            }
             if urls.isEmpty {
                 items.append(row("url", String(localized: "网址"), ""))
             } else {
@@ -3405,8 +3449,8 @@ struct VaultItemDetailView: View {
         switch route.kind {
         case .login:
             guard let entry = session.loginEntries.first(where: { $0.id == route.entryID }) else { return [:] }
-            // 用户名、密码、备注都给复制入口；密码与备注在展示层仍是掩码，复制值来自 Vault 解锁后的内存数据。
-            return ["username": entry.username, "password": entry.password, "notes": entry.notes]
+            // 用户名、账号、密码、备注都给复制入口；密码与备注在展示层仍是掩码，复制值来自 Vault 解锁后的内存数据。
+            return ["username": entry.username, "account": entry.account, "password": entry.password, "notes": entry.notes]
         case .note:
             guard let entry = session.noteEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["body": entry.body]

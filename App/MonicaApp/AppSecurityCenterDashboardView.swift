@@ -220,7 +220,7 @@ struct AppSecurityCenterDashboardView: View {
                     Button {
                         copy(username: finding.username)
                     } label: {
-                        Label("复制账号", systemImage: "doc.on.doc")
+                        Label("复制用户名", systemImage: "doc.on.doc")
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }

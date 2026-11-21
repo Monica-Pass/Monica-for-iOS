@@ -6653,6 +6653,7 @@ public enum AndroidBackupCodec {
                         : .login(LocalLoginEntryDraft(
                             title: object.string("title"),
                             username: object.string("username"),
+                            account: object.string("account"),
                             password: object.string("password"),
                             url: object.string("website"),
                             notes: object.string("notes")
@@ -7003,6 +7004,7 @@ public enum AndroidBackupCodec {
                     draft = .login(LocalLoginEntryDraft(
                         title: object.string("title"),
                         username: object.string("username"),
+                        account: object.string("account"),
                         password: object.string("password"),
                         url: object.string("website"),
                         notes: object.string("notes")
@@ -7159,7 +7161,7 @@ public enum AndroidBackupCodec {
         let object: [String: Any]
         switch item {
         case .login(let draft):
-            object = passwordObject(id: id, timestamp: timestamp, folderName: folderName, title: draft.title, username: draft.username, password: draft.password, website: draft.url)
+            object = passwordObject(id: id, timestamp: timestamp, folderName: folderName, title: draft.title, username: draft.username, account: draft.account, password: draft.password, website: draft.url)
         case .totp(let draft):
             object = [
                 "id": id,
@@ -7436,6 +7438,7 @@ public enum AndroidBackupCodec {
         folderName: String,
         title: String,
         username: String,
+        account: String = "",
         password: String,
         website: String,
         notes: String = "",
@@ -7446,7 +7449,7 @@ public enum AndroidBackupCodec {
         ssoMetadata: String = "",
         barcodeMetadata: String = ""
     ) -> [String: Any] {
-        [
+        var object: [String: Any] = [
             "id": id,
             "title": title,
             "username": username,
@@ -7467,6 +7470,11 @@ public enum AndroidBackupCodec {
             "barcodeMetadata": barcodeMetadata,
             "customFields": []
         ]
+        // issue #151：账号为可选字段；为空时不写键，旧版 Android 备份读取方不受影响。
+        if !account.isEmpty {
+            object["account"] = account
+        }
+        return object
     }
 
     /// 条码在 Android 备份中复用密码对象：`loginType == "BARCODE"`，原文放在
@@ -7766,12 +7774,14 @@ public enum VaultCSVCodec {
         "linkedCardID",
         "billingAddressID",
         "notes",
-        // 追加列：旧 CSV 没有这两列时按空值回落，保证旧文件仍可导入。
+        // 追加列：旧 CSV 没有这些列时按空值回落，保证旧文件仍可导入。
         "urls",
         "customFields",
         "payload",
         "symbology",
-        "label"
+        "label",
+        // issue #151：登录账号（邮箱 / 手机号 / 账号 ID），追加在末尾，不打乱既有列顺序。
+        "account"
     ]
 
     public static let headerLine = columns.joined(separator: ",")
@@ -7852,6 +7862,8 @@ public enum VaultCSVCodec {
             return .login(LocalLoginEntryDraft(
                 title: title,
                 username: record.value("username"),
+                // 旧 CSV 没有 account 列时按空字符串回落。
+                account: record.value("account"),
                 password: record.value("password"),
                 url: record.value("url"),
                 notes: record.value("notes"),
@@ -8053,6 +8065,7 @@ public enum VaultCSVCodec {
         case .login(let draft):
             values["title"] = draft.title
             values["username"] = draft.username
+            values["account"] = draft.account
             values["password"] = draft.password
             values["url"] = draft.url
             values["notes"] = draft.notes
@@ -9462,6 +9475,8 @@ public struct LocalVaultMovedEntry: Sendable, Equatable, Identifiable {
 public struct LocalLoginEntryDraft: Sendable, Equatable {
     public let title: String
     public let username: String
+    /// 登录账号（邮箱 / 手机号 / 账号 ID），与 `username` 分开保存；旧数据为空字符串。
+    public let account: String
     public let password: String
     /// 主 URL：AutoFill 关联只使用它。
     public let url: String
@@ -9482,6 +9497,7 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
     public init(
         title: String,
         username: String,
+        account: String = "",
         password: String,
         url: String,
         notes: String = "",
@@ -9493,6 +9509,7 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
     ) {
         self.title = title
         self.username = username
+        self.account = account
         self.password = password
         self.url = url
         self.notes = notes
@@ -9509,6 +9526,8 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
     public let projectID: String
     public let title: String
     public let username: String
+    /// 登录账号（邮箱 / 手机号 / 账号 ID），与 `username` 分开保存；旧数据为空字符串。
+    public let account: String
     public let password: String
     /// 主 URL：AutoFill 关联只使用它。
     public let url: String
@@ -9530,6 +9549,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         projectID: String,
         title: String,
         username: String,
+        account: String = "",
         password: String,
         url: String,
         notes: String = "",
@@ -9545,6 +9565,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         self.projectID = projectID
         self.title = title
         self.username = username
+        self.account = account
         self.password = password
         self.url = url
         self.notes = notes
@@ -12904,6 +12925,7 @@ public struct LocalVaultEntryRepository {
         return LocalLoginEntryDraft(
             title: normalizedTitle,
             username: draft.username,
+            account: draft.account,
             password: draft.password,
             url: normalizedURLs.first ?? "",
             notes: draft.notes,
@@ -13396,6 +13418,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             projectID: projectID,
             title: draft.title,
             username: draft.username,
+            account: draft.account,
             password: draft.password,
             url: draft.url,
             notes: draft.notes,
@@ -13427,6 +13450,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             entryID: entryID,
             title: draft.title,
             username: draft.username,
+            account: draft.account,
             password: draft.password,
             url: draft.url,
             notes: draft.notes,
@@ -15181,6 +15205,7 @@ private extension LocalLoginEntry {
             projectID: entry.projectID,
             title: entry.title,
             username: entry.username,
+            account: entry.account,
             password: entry.password,
             url: entry.url,
             notes: entry.notes,
