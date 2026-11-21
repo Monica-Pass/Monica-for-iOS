@@ -372,15 +372,17 @@ public struct CloudVaultSyncEngine: Sendable {
     // MARK: Failure bookkeeping
 
     /// Stamps a failure onto the ledger. Retryable transport failures (and a lost
-    /// If-Match race) keep the upload pending so the next sync retries it;
-    /// everything else (auth, integrity, invalid manifest) leaves the pending flag
-    /// untouched because retrying cannot fix it.
+    /// If-Match race) keep the upload pending so the next sync retries it; a full
+    /// cloud account (`cloudQuotaExceeded`) is kept pending too, because freeing
+    /// space on the device/account makes the very same push succeed. Everything
+    /// else (auth, integrity, invalid manifest) leaves the pending flag untouched
+    /// because retrying cannot fix it.
     public func recordFailure(_ error: Error, in record: CloudVaultSyncRecord) -> CloudVaultSyncRecord {
         var updated = record
         updated.lastFailureMessage = error.localizedDescription
         if let cloudError = error as? CloudVaultError {
             switch cloudError {
-            case .preconditionFailed, .network, .server:
+            case .preconditionFailed, .network, .server, .cloudQuotaExceeded:
                 updated.pendingUpload = true
             default:
                 break

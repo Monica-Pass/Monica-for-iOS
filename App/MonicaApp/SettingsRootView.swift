@@ -1720,6 +1720,8 @@ struct SettingsRootView: View {
                 }
             }
 
+            AppCloudKitSyncSection(session: session)
+
             AndroidParitySection(title: "云端保险库") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
                     NavigationLink {
@@ -1734,7 +1736,7 @@ struct SettingsRootView: View {
                                 Text("加密保险库上传与还原")
                                     .font(.subheadline.weight(.heavy))
                                     .foregroundStyle(AndroidParityPalette.textPrimary)
-                                Text("WebDAV / OneDrive · 手动 Push/Pull · 版本冲突三选一")
+                                Text("WebDAV / OneDrive / iCloud · 手动 Push/Pull · 版本冲突三选一")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(AndroidParityPalette.textSecondary)
                             }
