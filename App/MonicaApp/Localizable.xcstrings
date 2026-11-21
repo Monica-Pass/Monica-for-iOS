@@ -22998,6 +22998,726 @@
           }
         }
       }
+    },
+    "手动创建": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动创建"
+          }
+        }
+      }
+    },
+    "锁定时自动创建": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Created on lock"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定时自动创建"
+          }
+        }
+      }
+    },
+    "恢复前回滚点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Pre-restore rollback point"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复前回滚点"
+          }
+        }
+      }
+    },
+    "没有可用的保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No vault available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可用的保险库。"
+          }
+        }
+      }
+    },
+    "请先解锁保险库，再创建快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault before creating a snapshot."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先解锁保险库，再创建快照。"
+          }
+        }
+      }
+    },
+    "正在锁定保险库并写入快照…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Locking the vault and writing the snapshot…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在锁定保险库并写入快照…"
+          }
+        }
+      }
+    },
+    "快照已创建。为保证一致性，保险库已锁定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot created. The vault is locked to keep the checkpoint consistent."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已创建。为保证一致性，保险库已锁定。"
+          }
+        }
+      }
+    },
+    "请选择要恢复的快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose a snapshot to restore."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请选择要恢复的快照。"
+          }
+        }
+      }
+    },
+    "正在恢复快照…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring the snapshot…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在恢复快照…"
+          }
+        }
+      }
+    },
+    "快照已恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot restored."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已恢复。"
+          }
+        }
+      }
+    },
+    "快照已恢复，并已创建恢复前回滚点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot restored, with a pre-restore rollback point."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已恢复，并已创建恢复前回滚点。"
+          }
+        }
+      }
+    },
+    "快照已删除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot deleted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已删除。"
+          }
+        }
+      }
+    },
+    "已清理全部快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All snapshots were removed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已清理全部快照。"
+          }
+        }
+      }
+    },
+    "没有需要清理的快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "There are no snapshots to remove."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有需要清理的快照。"
+          }
+        }
+      }
+    },
+    "保险库快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault snapshots"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库快照"
+          }
+        }
+      }
+    },
+    "创建快照需要先锁定保险库，之后 MDBX 检查点才一致。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Creating a snapshot locks the vault first so the MDBX checkpoint stays consistent."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建快照需要先锁定保险库，之后 MDBX 检查点才一致。"
+          }
+        }
+      }
+    },
+    "清理全部快照会删除这个保险库的所有快照，无法撤销。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Removing all snapshots deletes every snapshot for this vault. This cannot be undone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理全部快照会删除这个保险库的所有快照，无法撤销。"
+          }
+        }
+      }
+    },
+    "清理全部快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Remove all snapshots"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理全部快照"
+          }
+        }
+      }
+    },
+    "删除这一份快照？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete this snapshot?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除这一份快照？"
+          }
+        }
+      }
+    },
+    "快照使用 AES-GCM 加密，密钥保存在钥匙串。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshots use AES-GCM encryption with the key stored in the keychain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照使用 AES-GCM 加密，密钥保存在钥匙串。"
+          }
+        }
+      }
+    },
+    "当前库已解锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current vault is unlocked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前库已解锁"
+          }
+        }
+      }
+    },
+    "当前库已锁定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Current vault is locked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前库已锁定"
+          }
+        }
+      }
+    },
+    "创建快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建快照"
+          }
+        }
+      }
+    },
+    "快照列表": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshots"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照列表"
+          }
+        }
+      }
+    },
+    "还没有快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No snapshots yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有快照"
+          }
+        }
+      }
+    },
+    "创建第一份快照，之后可在这里对比与恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Create your first snapshot to compare and restore from here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建第一份快照，之后可在这里对比与恢复。"
+          }
+        }
+      }
+    },
+    "保留策略": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retention"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留策略"
+          }
+        }
+      }
+    },
+    "默认保留最近 10 份快照，超出后自动删除最旧的。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keeps the 10 most recent snapshots and removes the oldest beyond that."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认保留最近 10 份快照，超出后自动删除最旧的。"
+          }
+        }
+      }
+    },
+    "恢复前会自动创建一份回滚点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A rollback point is created automatically before restoring."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复前会自动创建一份回滚点。"
+          }
+        }
+      }
+    },
+    "快照位置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot location"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照位置"
+          }
+        }
+      }
+    },
+    "恢复预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复预览"
+          }
+        }
+      }
+    },
+    "恢复此快照？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore this snapshot?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复此快照？"
+          }
+        }
+      }
+    },
+    "会先创建回滚点，再原子替换当前库文件。恢复后保险库保持锁定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A rollback point is created first, then the vault file is replaced atomically. The vault stays locked afterwards."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "会先创建回滚点，再原子替换当前库文件。恢复后保险库保持锁定。"
+          }
+        }
+      }
+    },
+    "项目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Projects"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目"
+          }
+        }
+      }
+    },
+    "恢复后变化": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Changes after restore"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复后变化"
+          }
+        }
+      }
+    },
+    "恢复后新增": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored additions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复后新增"
+          }
+        }
+      }
+    },
+    "恢复后删除": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored deletions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复后删除"
+          }
+        }
+      }
+    },
+    "恢复后变更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored changes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复后变更"
+          }
+        }
+      }
+    },
+    "未变化条目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unchanged items"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未变化条目"
+          }
+        }
+      }
+    },
+    "恢复会删除当前库中的条目，请确认。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring removes items from the current vault. Please confirm."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复会删除当前库中的条目，请确认。"
+          }
+        }
+      }
+    },
+    "其余已省略": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "More omitted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其余已省略"
+          }
+        }
+      }
+    },
+    "解锁保险库后可对比当前条目。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault to compare current items."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁保险库后可对比当前条目。"
+          }
+        }
+      }
+    },
+    "恢复此快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore this snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复此快照"
+          }
+        }
+      }
+    },
+    "没有可对比的当前状态，请先解锁并预览。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No current state to compare. Unlock the vault and preview first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可对比的当前状态，请先解锁并预览。"
+          }
+        }
+      }
+    },
+    "快照可随时查看、预览与恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshots can be reviewed, previewed, and restored at any time."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照可随时查看、预览与恢复。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
