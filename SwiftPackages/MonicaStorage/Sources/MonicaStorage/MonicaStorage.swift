@@ -9479,118 +9479,6 @@ public struct LocalVaultMovedEntry: Sendable, Equatable, Identifiable {
     }
 }
 
-public struct LocalLoginEntryDraft: Sendable, Equatable {
-    public let title: String
-    public let username: String
-    /// 登录账号（邮箱 / 手机号 / 账号 ID），与 `username` 分开保存；旧数据为空字符串。
-    public let account: String
-    public let password: String
-    /// 主 URL：AutoFill 关联只使用它。
-    public let url: String
-    public let notes: String
-    /// 完整有序 URL 列表（含主 URL）；为空时按 `[url]` 处理。
-    public let urls: [String]
-    /// 应用绑定 metadata：仅用于展示与筛选，不参与系统 AutoFill 关联。
-    public let appBundleID: String
-    public let appName: String
-    /// 上一份密码历史，最新的一条在最前面。
-    ///
-    /// `nil` 表示「沿用仓库里已有的历史，并在密码变化时自动追加」；
-    /// 显式传入数组表示「用这份列表替换历史」（UI 删除单条/清空时使用）。
-    public let passwordHistory: [LocalLoginPasswordHistoryEntry]?
-
-    public let metadata: VaultEntryMetadata
-
-    public init(
-        title: String,
-        username: String,
-        account: String = "",
-        password: String,
-        url: String,
-        notes: String = "",
-        urls: [String] = [],
-        appBundleID: String = "",
-        appName: String = "",
-        passwordHistory: [LocalLoginPasswordHistoryEntry]? = nil,
-        metadata: VaultEntryMetadata = .empty
-    ) {
-        self.title = title
-        self.username = username
-        self.account = account
-        self.password = password
-        self.url = url
-        self.notes = notes
-        self.urls = urls
-        self.appBundleID = appBundleID
-        self.appName = appName
-        self.passwordHistory = passwordHistory
-        self.metadata = metadata
-    }
-}
-
-public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
-    public let id: String
-    public let projectID: String
-    public let title: String
-    public let username: String
-    /// 登录账号（邮箱 / 手机号 / 账号 ID），与 `username` 分开保存；旧数据为空字符串。
-    public let account: String
-    public let password: String
-    /// 主 URL：AutoFill 关联只使用它。
-    public let url: String
-    public let notes: String
-    public let favorite: Bool
-    /// 条目图标的稳定资源 ID（`sf:…` / `catalog:…`）；`nil` 表示按条目类型使用默认图标。
-    public let icon: String?
-    /// 完整有序 URL 列表（含主 URL）；旧库没有该字段时回退为 `[url]`。
-    public let urls: [String]
-    /// 应用绑定 metadata：仅用于展示与筛选，不参与系统 AutoFill 关联。
-    public let appBundleID: String
-    public let appName: String
-    /// 上一份密码历史，最新的一条在最前面。
-    public let passwordHistory: [LocalLoginPasswordHistoryEntry]
-    public let metadata: VaultEntryMetadata
-
-    public init(
-        id: String,
-        projectID: String,
-        title: String,
-        username: String,
-        account: String = "",
-        password: String,
-        url: String,
-        notes: String = "",
-        favorite: Bool = false,
-        icon: String? = nil,
-        urls: [String] = [],
-        appBundleID: String = "",
-        appName: String = "",
-        passwordHistory: [LocalLoginPasswordHistoryEntry] = [],
-        metadata: VaultEntryMetadata = .empty
-    ) {
-        self.id = id
-        self.projectID = projectID
-        self.title = title
-        self.username = username
-        self.account = account
-        self.password = password
-        self.url = url
-        self.notes = notes
-        self.favorite = favorite
-        self.icon = icon
-        self.urls = urls
-        self.appBundleID = appBundleID
-        self.appName = appName
-        self.passwordHistory = passwordHistory
-        self.metadata = metadata
-    }
-
-    /// 完整 URL 列表：旧数据只有单个 `url` 时等价于 `[url]`。
-    public var effectiveURLs: [String] {
-        urls.isEmpty ? (url.isEmpty ? [] : [url]) : urls
-    }
-}
-
 public struct LocalNoteEntryDraft: Sendable, Equatable {
     public let title: String
     public let body: String
@@ -9625,96 +9513,6 @@ public struct LocalNoteEntry: Sendable, Equatable, Identifiable {
         self.title = title
         self.body = body
         self.favorite = favorite
-        self.metadata = metadata
-    }
-}
-
-public struct LocalTotpEntryDraft: Sendable, Equatable {
-    public let title: String
-    public let secret: String
-    public let issuer: String
-    public let accountName: String
-    public let period: UInt32
-    public let digits: UInt32
-    public let algorithm: String
-    public let otpType: String
-    public let counter: UInt64
-    public let iconName: String
-
-    public let metadata: VaultEntryMetadata
-
-    public init(
-        title: String,
-        secret: String,
-        issuer: String,
-        accountName: String,
-        period: UInt32,
-        digits: UInt32,
-        algorithm: String,
-        otpType: String,
-        counter: UInt64,
-        iconName: String = "",
-        metadata: VaultEntryMetadata = .empty
-    ) {
-        self.title = title
-        self.secret = secret
-        self.issuer = issuer
-        self.accountName = accountName
-        self.period = period
-        self.digits = digits
-        self.algorithm = algorithm
-        self.otpType = otpType
-        self.counter = counter
-        self.iconName = iconName
-        self.metadata = metadata
-    }
-}
-
-public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
-    public let id: String
-    public let projectID: String
-    public let title: String
-    public let secret: String
-    public let issuer: String
-    public let accountName: String
-    public let period: UInt32
-    public let digits: UInt32
-    public let algorithm: String
-    public let otpType: String
-    public let counter: UInt64
-    public let favorite: Bool
-    public let iconName: String
-    public let metadata: VaultEntryMetadata
-
-    public init(
-        id: String,
-        projectID: String,
-        title: String,
-        secret: String,
-        issuer: String,
-        accountName: String,
-        period: UInt32,
-        digits: UInt32,
-        algorithm: String,
-        otpType: String,
-        counter: UInt64,
-        favorite: Bool = false,
-        iconName: String = "",
-        metadata: VaultEntryMetadata = .empty
-    ) {
-        self.id = id
-        self.projectID = projectID
-        self.title = title
-        self.secret = secret
-        self.issuer = issuer
-        self.accountName = accountName
-        self.period = period
-        self.digits = digits
-        self.algorithm = algorithm
-        self.otpType = otpType
-        self.counter = counter
-        self.favorite = favorite
-        self.iconName = iconName
         self.metadata = metadata
     }
 }
@@ -10815,66 +10613,6 @@ public extension LocalWifiEntry {
             }
             result.append(character)
         }
-    }
-}
-
-public struct LocalSendEntryDraft: Sendable, Equatable {
-    public let title: String
-    public let body: String
-    public let expiresAt: String
-    public let maxViews: Int
-    public let notes: String
-
-    public let metadata: VaultEntryMetadata
-
-    public init(
-        title: String,
-        body: String,
-        expiresAt: String,
-        maxViews: Int,
-        notes: String
-    ,
-        metadata: VaultEntryMetadata = .empty) {
-        self.title = title
-        self.body = body
-        self.expiresAt = expiresAt
-        self.maxViews = maxViews
-        self.notes = notes
-        self.metadata = metadata
-    }
-}
-
-public struct LocalSendEntry: Sendable, Equatable, Identifiable {
-    public let id: String
-    public let projectID: String
-    public let title: String
-    public let body: String
-    public let expiresAt: String
-    public let maxViews: Int
-    public let notes: String
-    public let favorite: Bool
-    public let metadata: VaultEntryMetadata
-
-    public init(
-        id: String,
-        projectID: String,
-        title: String,
-        body: String,
-        expiresAt: String,
-        maxViews: Int,
-        notes: String,
-        favorite: Bool = false,
-        metadata: VaultEntryMetadata = .empty
-    ) {
-        self.id = id
-        self.projectID = projectID
-        self.title = title
-        self.body = body
-        self.expiresAt = expiresAt
-        self.maxViews = maxViews
-        self.notes = notes
-        self.favorite = favorite
-        self.metadata = metadata
     }
 }
 
@@ -12189,106 +11927,6 @@ public struct LocalVaultEntryRepository {
         )
     }
 
-    public func createLoginEntry(
-        projectID: String,
-        draft: LocalLoginEntryDraft
-    ) throws -> LocalLoginEntry {
-        let normalizedDraft = try normalizedLoginEntryDraft(draft)
-        return try engine.createLoginEntry(
-            in: session.handle,
-            projectID: projectID,
-            draft: normalizedDraft
-        )
-    }
-
-    public func listLoginEntries(projectID: String) throws -> [LocalLoginEntry] {
-        try engine.listLoginEntries(
-            in: session.handle,
-            projectID: projectID
-        )
-    }
-
-    public func updateLoginEntry(
-        projectID: String,
-        entryID: String,
-        draft: LocalLoginEntryDraft
-    ) throws -> LocalLoginEntry {
-        let normalizedDraft = try normalizedLoginEntryDraft(draft)
-        // 只有密码确实变化时才把上一份密文追加成一条历史；UI 传回的历史会保留删除/清空结果。
-        let existingEntry = try? engine.listLoginEntries(
-            in: session.handle,
-            projectID: projectID
-        ).first(where: { $0.id == entryID })
-        let history: [LocalLoginPasswordHistoryEntry]
-        if let existingEntry {
-            history = LoginPasswordHistoryPolicy.appending(
-                previousPassword: existingEntry.password,
-                newPassword: normalizedDraft.password,
-                history: normalizedDraft.passwordHistory ?? existingEntry.passwordHistory
-            )
-        } else {
-            history = normalizedDraft.passwordHistory ?? []
-        }
-        return try engine.updateLoginEntry(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID,
-            draft: normalizedDraft.withPasswordHistory(history)
-        )
-    }
-
-    public func setLoginEntryFavorite(
-        projectID: String,
-        entryID: String,
-        favorite: Bool
-    ) throws -> LocalLoginEntry {
-        try engine.setLoginEntryFavorite(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID,
-            favorite: favorite
-        )
-    }
-
-    public func setLoginEntryIcon(
-        projectID: String,
-        entryID: String,
-        icon: String?
-    ) throws -> LocalLoginEntry {
-        try engine.setLoginEntryIcon(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID,
-            icon: icon
-        )
-    }
-
-    public func deleteLoginEntry(projectID: String, entryID: String) throws {
-        try engine.deleteLoginEntry(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID
-        )
-    }
-
-    public func listDeletedLoginEntries(projectID: String) throws -> [LocalLoginEntry] {
-        try engine.listDeletedLoginEntries(
-            in: session.handle,
-            projectID: projectID
-        )
-    }
-
-    public func restoreLoginEntry(
-        projectID: String,
-        entryID: String
-    ) throws -> LocalLoginEntry {
-        try engine.restoreLoginEntry(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID
-        )
-    }
-
     public func createNoteEntry(
         projectID: String,
         draft: LocalNoteEntryDraft
@@ -12349,72 +11987,6 @@ public struct LocalVaultEntryRepository {
         entryID: String
     ) throws -> LocalNoteEntry {
         try engine.restoreNoteEntry(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID
-        )
-    }
-
-    public func createTotpEntry(
-        projectID: String,
-        draft: LocalTotpEntryDraft
-    ) throws -> LocalTotpEntry {
-        let normalizedDraft = try normalizedTotpEntryDraft(draft)
-        return try engine.createTotpEntry(
-            in: session.handle,
-            projectID: projectID,
-            draft: normalizedDraft
-        )
-    }
-
-    public func listTotpEntries(projectID: String) throws -> [LocalTotpEntry] {
-        try engine.listTotpEntries(in: session.handle, projectID: projectID)
-    }
-
-    public func updateTotpEntry(
-        projectID: String,
-        entryID: String,
-        draft: LocalTotpEntryDraft
-    ) throws -> LocalTotpEntry {
-        let normalizedDraft = try normalizedTotpEntryDraft(draft)
-        return try engine.updateTotpEntry(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID,
-            draft: normalizedDraft
-        )
-    }
-
-    public func setTotpEntryFavorite(
-        projectID: String,
-        entryID: String,
-        favorite: Bool
-    ) throws -> LocalTotpEntry {
-        try engine.setTotpEntryFavorite(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID,
-            favorite: favorite
-        )
-    }
-
-    public func deleteTotpEntry(projectID: String, entryID: String) throws {
-        try engine.deleteTotpEntry(
-            in: session.handle,
-            projectID: projectID,
-            entryID: entryID
-        )
-    }
-
-    public func listDeletedTotpEntries(projectID: String) throws -> [LocalTotpEntry] {
-        try engine.listDeletedTotpEntries(in: session.handle, projectID: projectID)
-    }
-
-    public func restoreTotpEntry(
-        projectID: String,
-        entryID: String
-    ) throws -> LocalTotpEntry {
-        try engine.restoreTotpEntry(
             in: session.handle,
             projectID: projectID,
             entryID: entryID
@@ -12833,34 +12405,6 @@ public struct LocalVaultEntryRepository {
         try engine.restoreBarcodeEntry(in: session.handle, projectID: projectID, entryID: entryID)
     }
 
-    public func createSendEntry(projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
-        try engine.createSendEntry(in: session.handle, projectID: projectID, draft: normalizedSendEntryDraft(draft))
-    }
-
-    public func listSendEntries(projectID: String) throws -> [LocalSendEntry] {
-        try engine.listSendEntries(in: session.handle, projectID: projectID)
-    }
-
-    public func updateSendEntry(projectID: String, entryID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
-        try engine.updateSendEntry(in: session.handle, projectID: projectID, entryID: entryID, draft: normalizedSendEntryDraft(draft))
-    }
-
-    public func setSendEntryFavorite(projectID: String, entryID: String, favorite: Bool) throws -> LocalSendEntry {
-        try engine.setSendEntryFavorite(in: session.handle, projectID: projectID, entryID: entryID, favorite: favorite)
-    }
-
-    public func deleteSendEntry(projectID: String, entryID: String) throws {
-        try engine.deleteSendEntry(in: session.handle, projectID: projectID, entryID: entryID)
-    }
-
-    public func listDeletedSendEntries(projectID: String) throws -> [LocalSendEntry] {
-        try engine.listDeletedSendEntries(in: session.handle, projectID: projectID)
-    }
-
-    public func restoreSendEntry(projectID: String, entryID: String) throws -> LocalSendEntry {
-        try engine.restoreSendEntry(in: session.handle, projectID: projectID, entryID: entryID)
-    }
-
     public func createAttachmentMetadata(
         projectID: String,
         entryID: String?,
@@ -12957,52 +12501,12 @@ public struct LocalVaultEntryRepository {
         return normalized
     }
 
-    private func normalizedLoginEntryDraft(_ draft: LocalLoginEntryDraft) throws -> LocalLoginEntryDraft {
-        let normalizedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedTitle.isEmpty else {
-            throw LocalVaultRepositoryError.emptyEntryTitle
-        }
-        // 旧数据只有一个 `url`；新数据用有序去重列表，首项永远作为主 URL。
-        let normalizedURLs = LoginEntryURLRules.normalizedURLs(primary: draft.url, additional: draft.urls)
-        return LocalLoginEntryDraft(
-            title: normalizedTitle,
-            username: draft.username,
-            account: draft.account,
-            password: draft.password,
-            url: normalizedURLs.first ?? "",
-            notes: draft.notes,
-            urls: normalizedURLs,
-            appBundleID: draft.appBundleID.trimmingCharacters(in: .whitespacesAndNewlines),
-            appName: draft.appName.trimmingCharacters(in: .whitespacesAndNewlines),
-            passwordHistory: draft.passwordHistory.map(LoginPasswordHistoryPolicy.sanitizedHistory)
-        )
-    }
-
     private func normalizedNoteEntryDraft(_ draft: LocalNoteEntryDraft) throws -> LocalNoteEntryDraft {
         let normalizedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedTitle.isEmpty else {
             throw LocalVaultRepositoryError.emptyEntryTitle
         }
         return LocalNoteEntryDraft(title: normalizedTitle, body: draft.body)
-    }
-
-    private func normalizedTotpEntryDraft(_ draft: LocalTotpEntryDraft) throws -> LocalTotpEntryDraft {
-        let normalizedTitle = draft.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalizedTitle.isEmpty else {
-            throw LocalVaultRepositoryError.emptyEntryTitle
-        }
-        return LocalTotpEntryDraft(
-            title: normalizedTitle,
-            secret: draft.secret,
-            issuer: draft.issuer,
-            accountName: draft.accountName,
-            period: draft.period,
-            digits: draft.digits,
-            algorithm: draft.algorithm,
-            otpType: draft.otpType,
-            counter: draft.counter,
-            iconName: draft.iconName.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
     }
 
     private func normalizedCardEntryDraft(_ draft: LocalCardEntryDraft) throws -> LocalCardEntryDraft {
@@ -13220,18 +12724,7 @@ public struct LocalVaultEntryRepository {
         )
     }
 
-    private func normalizedSendEntryDraft(_ draft: LocalSendEntryDraft) throws -> LocalSendEntryDraft {
-        let normalizedTitle = try normalizedEntryTitle(draft.title)
-        return LocalSendEntryDraft(
-            title: normalizedTitle,
-            body: draft.body,
-            expiresAt: draft.expiresAt,
-            maxViews: draft.maxViews,
-            notes: draft.notes
-        )
-    }
-
-    private func normalizedEntryTitle(_ title: String) throws -> String {
+    func normalizedEntryTitle(_ title: String) throws -> String {
         let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !normalizedTitle.isEmpty else {
             throw LocalVaultRepositoryError.emptyEntryTitle
@@ -13454,117 +12947,6 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         }
     }
 
-    public func createLoginEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        draft: LocalLoginEntryDraft
-    ) throws -> LocalLoginEntry {
-        let entry = try vault(for: handle).createLoginEntry(
-            projectID: projectID,
-            title: draft.title,
-            username: draft.username,
-            account: draft.account,
-            password: draft.password,
-            url: draft.url,
-            notes: draft.notes,
-            urls: draft.urls,
-            appBundleID: draft.appBundleID,
-            appName: draft.appName,
-            passwordHistory: (draft.passwordHistory ?? []).map(MonicaMDBXLoginPasswordHistoryEntry.init)
-        )
-        return LocalLoginEntry(entry)
-    }
-
-    public func listLoginEntries(
-        in handle: LocalVaultHandle,
-        projectID: String
-    ) throws -> [LocalLoginEntry] {
-        try vault(for: handle)
-            .listLoginEntries(projectID: projectID)
-            .map(LocalLoginEntry.init)
-    }
-
-    public func updateLoginEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String,
-        draft: LocalLoginEntryDraft
-    ) throws -> LocalLoginEntry {
-        let entry = try vault(for: handle).updateLoginEntry(
-            projectID: projectID,
-            entryID: entryID,
-            title: draft.title,
-            username: draft.username,
-            account: draft.account,
-            password: draft.password,
-            url: draft.url,
-            notes: draft.notes,
-            urls: draft.urls,
-            appBundleID: draft.appBundleID,
-            appName: draft.appName,
-            passwordHistory: (draft.passwordHistory ?? []).map(MonicaMDBXLoginPasswordHistoryEntry.init)
-        )
-        return LocalLoginEntry(entry)
-    }
-
-    public func deleteLoginEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String
-    ) throws {
-        try vault(for: handle).deleteLoginEntry(projectID: projectID, entryID: entryID)
-    }
-
-    public func setLoginEntryFavorite(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String,
-        favorite: Bool
-    ) throws -> LocalLoginEntry {
-        let entry = try vault(for: handle).setLoginEntryFavorite(
-            projectID: projectID,
-            entryID: entryID,
-            favorite: favorite
-        )
-        return LocalLoginEntry(entry)
-    }
-
-    /// 写入登录条目图标；`nil` 表示恢复默认图标。
-    public func setLoginEntryIcon(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String,
-        icon: String?
-    ) throws -> LocalLoginEntry {
-        let entry = try vault(for: handle).setLoginEntryIcon(
-            projectID: projectID,
-            entryID: entryID,
-            icon: icon
-        )
-        return LocalLoginEntry(entry)
-    }
-
-    public func listDeletedLoginEntries(
-        in handle: LocalVaultHandle,
-        projectID: String
-    ) throws -> [LocalLoginEntry] {
-        try vault(for: handle)
-            .listDeletedLoginEntries(projectID: projectID)
-            .map(LocalLoginEntry.init)
-    }
-
-    public func restoreLoginEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String
-    ) throws -> LocalLoginEntry {
-        let entry = try vault(for: handle).restoreLoginEntry(
-            projectID: projectID,
-            entryID: entryID
-        )
-        return LocalLoginEntry(entry)
-    }
-
     public func createNoteEntry(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -13643,102 +13025,6 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             entryID: entryID
         )
         return LocalNoteEntry(entry)
-    }
-
-    public func createTotpEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        draft: LocalTotpEntryDraft
-    ) throws -> LocalTotpEntry {
-        let entry = try vault(for: handle).createTotpEntry(
-            projectID: projectID,
-            title: draft.title,
-            secret: draft.secret,
-            issuer: draft.issuer,
-            accountName: draft.accountName,
-            period: draft.period,
-            digits: draft.digits,
-            algorithm: draft.algorithm,
-            otpType: draft.otpType,
-            counter: draft.counter,
-            iconName: draft.iconName
-        )
-        return LocalTotpEntry(entry)
-    }
-
-    public func listTotpEntries(
-        in handle: LocalVaultHandle,
-        projectID: String
-    ) throws -> [LocalTotpEntry] {
-        try vault(for: handle)
-            .listTotpEntries(projectID: projectID)
-            .map(LocalTotpEntry.init)
-    }
-
-    public func updateTotpEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String,
-        draft: LocalTotpEntryDraft
-    ) throws -> LocalTotpEntry {
-        let entry = try vault(for: handle).updateTotpEntry(
-            projectID: projectID,
-            entryID: entryID,
-            title: draft.title,
-            secret: draft.secret,
-            issuer: draft.issuer,
-            accountName: draft.accountName,
-            period: draft.period,
-            digits: draft.digits,
-            algorithm: draft.algorithm,
-            otpType: draft.otpType,
-            counter: draft.counter,
-            iconName: draft.iconName
-        )
-        return LocalTotpEntry(entry)
-    }
-
-    public func setTotpEntryFavorite(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String,
-        favorite: Bool
-    ) throws -> LocalTotpEntry {
-        let entry = try vault(for: handle).setTotpEntryFavorite(
-            projectID: projectID,
-            entryID: entryID,
-            favorite: favorite
-        )
-        return LocalTotpEntry(entry)
-    }
-
-    public func deleteTotpEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String
-    ) throws {
-        try vault(for: handle).deleteTotpEntry(projectID: projectID, entryID: entryID)
-    }
-
-    public func listDeletedTotpEntries(
-        in handle: LocalVaultHandle,
-        projectID: String
-    ) throws -> [LocalTotpEntry] {
-        try vault(for: handle)
-            .listDeletedTotpEntries(projectID: projectID)
-            .map(LocalTotpEntry.init)
-    }
-
-    public func restoreTotpEntry(
-        in handle: LocalVaultHandle,
-        projectID: String,
-        entryID: String
-    ) throws -> LocalTotpEntry {
-        let entry = try vault(for: handle).restoreTotpEntry(
-            projectID: projectID,
-            entryID: entryID
-        )
-        return LocalTotpEntry(entry)
     }
 
     public func createCardEntry(
@@ -14503,61 +13789,6 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
 
     }
 
-    public func createSendEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
-        let entry = try createParityEntry(
-            in: handle,
-            projectID: projectID,
-            entryType: "document-ref",
-            kind: "send",
-            title: draft.title,
-            payload: [
-                "body": draft.body,
-                "expiresAt": draft.expiresAt,
-                "maxViews": draft.maxViews,
-                "notes": draft.notes
-            ]
-        )
-        return try LocalSendEntry(entry)
-    }
-
-    public func listSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] {
-        try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "send").map(LocalSendEntry.init)
-    }
-
-    public func updateSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
-        let entry = try updateParityEntry(
-            in: handle,
-            projectID: projectID,
-            entryID: entryID,
-            entryType: "document-ref",
-            kind: "send",
-            title: draft.title,
-            payload: [
-                "body": draft.body,
-                "expiresAt": draft.expiresAt,
-                "maxViews": draft.maxViews,
-                "notes": draft.notes
-            ]
-        )
-        return try LocalSendEntry(entry)
-    }
-
-    public func setSendEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalSendEntry {
-        try LocalSendEntry(setParityEntryFavorite(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "send", favorite: favorite))
-    }
-
-    public func deleteSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
-        try deleteParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "send")
-    }
-
-    public func listDeletedSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] {
-        try listDeletedParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "send").map(LocalSendEntry.init)
-    }
-
-    public func restoreSendEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSendEntry {
-        try LocalSendEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "send"))
-    }
-
     public func createAttachmentMetadata(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -14728,7 +13959,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             || !listDeletedGPGKeyEntries(in: handle, projectID: projectID).isEmpty
     }
 
-    private func createParityEntry(
+    func createParityEntry(
         in handle: LocalVaultHandle,
         projectID: String,
         entryType: String,
@@ -14745,7 +13976,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         )
     }
 
-    private func listParityEntries(
+    func listParityEntries(
         in handle: LocalVaultHandle,
         projectID: String,
         entryType: String,
@@ -14754,7 +13985,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         try vault(for: handle).listParityEntries(projectID: projectID, entryType: entryType, kind: kind)
     }
 
-    private func listDeletedParityEntries(
+    func listDeletedParityEntries(
         in handle: LocalVaultHandle,
         projectID: String,
         entryType: String,
@@ -14763,7 +13994,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         try vault(for: handle).listDeletedParityEntries(projectID: projectID, entryType: entryType, kind: kind)
     }
 
-    private func updateParityEntry(
+    func updateParityEntry(
         in handle: LocalVaultHandle,
         projectID: String,
         entryID: String,
@@ -14782,7 +14013,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         )
     }
 
-    private func setParityEntryFavorite(
+    func setParityEntryFavorite(
         in handle: LocalVaultHandle,
         projectID: String,
         entryID: String,
@@ -14799,7 +14030,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         )
     }
 
-    private func deleteParityEntry(
+    func deleteParityEntry(
         in handle: LocalVaultHandle,
         projectID: String,
         entryID: String,
@@ -14814,7 +14045,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         )
     }
 
-    private func restoreParityEntry(
+    func restoreParityEntry(
         in handle: LocalVaultHandle,
         projectID: String,
         entryID: String,
@@ -15249,40 +14480,6 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
     }
 }
 
-private extension LocalLoginEntry {
-    init(_ entry: MonicaMDBXLoginEntry) {
-        self.init(
-            id: entry.id,
-            projectID: entry.projectID,
-            title: entry.title,
-            username: entry.username,
-            account: entry.account,
-            password: entry.password,
-            url: entry.url,
-            notes: entry.notes,
-            favorite: entry.favorite,
-            icon: entry.icon,
-            urls: entry.urls,
-            appBundleID: entry.appBundleID,
-            appName: entry.appName,
-            passwordHistory: entry.passwordHistory.map(LocalLoginPasswordHistoryEntry.init),
-            metadata: VaultEntryMetadata(entry.metadata)
-        )
-    }
-}
-
-private extension LocalLoginPasswordHistoryEntry {
-    init(_ entry: MonicaMDBXLoginPasswordHistoryEntry) {
-        self.init(id: entry.id, changedAt: entry.changedAt, password: entry.password)
-    }
-}
-
-private extension MonicaMDBXLoginPasswordHistoryEntry {
-    init(_ entry: LocalLoginPasswordHistoryEntry) {
-        self.init(id: entry.id, changedAt: entry.changedAt, password: entry.password)
-    }
-}
-
 private extension LocalNoteEntry {
     init(_ entry: MonicaMDBXNoteEntry) {
         self.init(
@@ -15291,27 +14488,6 @@ private extension LocalNoteEntry {
             title: entry.title,
             body: entry.body,
             favorite: entry.favorite,
-            metadata: VaultEntryMetadata(entry.metadata)
-        )
-    }
-}
-
-private extension LocalTotpEntry {
-    init(_ entry: MonicaMDBXTotpEntry) {
-        self.init(
-            id: entry.id,
-            projectID: entry.projectID,
-            title: entry.title,
-            secret: entry.secret,
-            issuer: entry.issuer,
-            accountName: entry.accountName,
-            period: entry.period,
-            digits: entry.digits,
-            algorithm: entry.algorithm,
-            otpType: entry.otpType,
-            counter: entry.counter,
-            favorite: entry.favorite,
-            iconName: entry.iconName,
             metadata: VaultEntryMetadata(entry.metadata)
         )
     }
@@ -15546,23 +14722,6 @@ private extension LocalBarcodeEntry {
     }
 }
 
-private extension LocalSendEntry {
-    init(_ entry: MonicaMDBXParityEntry) throws {
-        let payload = try entry.payloadDictionary()
-        self.init(
-            id: entry.id,
-            projectID: entry.projectID,
-            title: entry.title,
-            body: payload.string("body"),
-            expiresAt: payload.string("expiresAt"),
-            maxViews: payload.int("maxViews"),
-            notes: payload.string("notes"),
-            favorite: entry.favorite,
-            metadata: VaultEntryMetadata(entry.metadata)
-        )
-    }
-}
-
 private extension LocalSSOEntry {
     init(_ entry: MonicaMDBXParityEntry) throws {
         let payload = try entry.payloadDictionary()
@@ -15608,7 +14767,7 @@ private extension LocalAttachmentMetadata {
     }
 }
 
-private extension MonicaMDBXParityEntry {
+extension MonicaMDBXParityEntry {
     func payloadDictionary() throws -> [String: Any] {
         guard let data = payloadJSON.data(using: .utf8),
               let payload = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -15633,7 +14792,7 @@ func splitVaultReferenceIdentifiers(_ value: String) -> [String] {
         .filter { $0.isEmpty == false }
 }
 
-private extension Dictionary where Key == String, Value == Any {
+extension Dictionary where Key == String, Value == Any {
     func string(_ key: String) -> String {
         self[key] as? String ?? ""
     }
