@@ -183,6 +183,22 @@ final class AppSessionModel {
     var editingCardArtwork = ""
     var editingCardNotes = ""
     var editingCardFavorite = false
+    var billingAddressEntries: [LocalBillingAddressEntry] = []
+    var deletedBillingAddressEntries: [LocalBillingAddressEntry] = []
+    var billingAddressSearchQuery = ""
+    var showFavoriteBillingAddressEntriesOnly = false
+    var billingAddressForm = BillingAddressFormState()
+    var editingBillingAddressEntryID: String?
+    var editingBillingAddressForm = BillingAddressFormState()
+    var editingBillingAddressFavorite = false
+    var paymentAccountEntries: [LocalPaymentAccountEntry] = []
+    var deletedPaymentAccountEntries: [LocalPaymentAccountEntry] = []
+    var paymentAccountSearchQuery = ""
+    var showFavoritePaymentAccountEntriesOnly = false
+    var paymentAccountForm = PaymentAccountFormState()
+    var editingPaymentAccountEntryID: String?
+    var editingPaymentAccountForm = PaymentAccountFormState()
+    var editingPaymentAccountFavorite = false
     var identityTitle = ""
     var identityDocumentType = ""
     var identityFullName = ""
@@ -1227,6 +1243,10 @@ final class AppSessionModel {
             return sendEntries.contains { $0.id == summary.id }
         case .steam:
             return steamEntries.contains { $0.id == summary.id }
+        case .billingAddress:
+            return billingAddressEntries.contains { $0.id == summary.id }
+        case .paymentAccount:
+            return paymentAccountEntries.contains { $0.id == summary.id }
         case .attachmentRef:
             return false
         }
@@ -1333,6 +1353,8 @@ final class AppSessionModel {
         summaries += barcodeEntries.map(shortcutSummary(for:))
         summaries += sendEntries.map(shortcutSummary(for:))
         summaries += steamEntries.map(shortcutSummary(for:))
+        summaries += billingAddressEntries.map(shortcutSummary(for:))
+        summaries += paymentAccountEntries.map(shortcutSummary(for:))
         return summaries
     }
 
@@ -1475,6 +1497,37 @@ final class AppSessionModel {
         )
     }
 
+    private func shortcutSummary(for entry: LocalBillingAddressEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .billingAddress,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.fullName, entry.addressSummary]),
+            searchableText: shortcutSearchableText([
+                UnifiedVaultItemKind.billingAddress.localizedDisplayName,
+                entry.title,
+                entry.fullName,
+                entry.addressSummary
+            ])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalPaymentAccountEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .paymentAccount,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.provider, entry.kind.displayName]),
+            searchableText: shortcutSearchableText([
+                UnifiedVaultItemKind.paymentAccount.localizedDisplayName,
+                entry.title,
+                entry.provider,
+                entry.accountName,
+                entry.currency
+            ])
+        )
+    }
+
     private func shortcutTitle(_ value: String) -> String {
         let title = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? String(localized: "未命名") : title
@@ -1508,7 +1561,7 @@ final class AppSessionModel {
             return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
         case .totp, .steam:
             return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
-        case .card, .identity:
+        case .card, .identity, .billingAddress, .paymentAccount:
             return VaultShortcutDestination(tab: .wallet, passwordModule: nil, otherKind: nil)
         }
     }
@@ -3233,6 +3286,8 @@ final class AppSessionModel {
             + sendEntries.count
             + steamEntries.count
             + attachmentEntries.count
+            + billingAddressEntries.count
+            + paymentAccountEntries.count
     }
 
     private var favoriteVaultEntryCount: Int {
@@ -3248,6 +3303,8 @@ final class AppSessionModel {
             + barcodeEntries.filter(\.favorite).count
             + sendEntries.filter(\.favorite).count
             + steamEntries.filter(\.favorite).count
+            + billingAddressEntries.filter(\.favorite).count
+            + paymentAccountEntries.filter(\.favorite).count
     }
 
     private var deletedVaultEntryCount: Int {
@@ -3264,6 +3321,8 @@ final class AppSessionModel {
             + deletedSendEntries.count
             + deletedSteamEntries.count
             + deletedAttachmentEntries.count
+            + deletedBillingAddressEntries.count
+            + deletedPaymentAccountEntries.count
     }
 
     private func itemCountLabel(_ count: Int) -> String {
@@ -3499,6 +3558,10 @@ final class AppSessionModel {
                 return deletedSendEntries.map(\.id)
             case .steam:
                 return deletedSteamEntries.map(\.id)
+            case .billingAddress:
+                return deletedBillingAddressEntries.map(\.id)
+            case .paymentAccount:
+                return deletedPaymentAccountEntries.map(\.id)
             case .attachmentRef:
                 return deletedAttachmentEntries.map(\.id)
             }
@@ -3531,6 +3594,10 @@ final class AppSessionModel {
             return filteredSendEntries.map(\.id)
         case .steam:
             return filteredSteamEntries.map(\.id)
+        case .billingAddress:
+            return filteredBillingAddressEntries.map(\.id)
+        case .paymentAccount:
+            return filteredPaymentAccountEntries.map(\.id)
         case .attachmentRef:
             return filteredAttachmentEntries.map(\.id)
         }
@@ -3658,6 +3725,13 @@ final class AppSessionModel {
             case .steam:
                 guard let entry = steamEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteSteamEntry(projectID: projectID, entryID: id)
+            case .billingAddress:
+                guard let entry = billingAddressEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteBillingAddressEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .paymentAccount:
+                guard let entry = paymentAccountEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deletePaymentAccountEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
             case .attachmentRef:
                 guard let entry = attachmentEntries.first(where: { $0.id == id }) else { continue }
@@ -3714,6 +3788,11 @@ final class AppSessionModel {
                 events.append((id, entry.title))
             case .steam:
                 let entry = try entryRepository.restoreSteamEntry(projectID: projectID, entryID: id)
+            case .billingAddress:
+                let entry = try entryRepository.restoreBillingAddressEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .paymentAccount:
+                let entry = try entryRepository.restorePaymentAccountEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
             case .attachmentRef:
                 let entry = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: id)
@@ -3758,6 +3837,8 @@ final class AppSessionModel {
         sendSearchQuery = ""
         steamSearchQuery = ""
         attachmentSearchQuery = ""
+        billingAddressSearchQuery = ""
+        paymentAccountSearchQuery = ""
     }
 
     private func setAllFavoriteFilters(_ favoritesOnly: Bool) {
@@ -3774,6 +3855,8 @@ final class AppSessionModel {
         showFavoriteBarcodeEntriesOnly = favoritesOnly
         showFavoriteSendEntriesOnly = favoritesOnly
         showFavoriteSteamEntriesOnly = favoritesOnly
+        showFavoriteBillingAddressEntriesOnly = favoritesOnly
+        showFavoritePaymentAccountEntriesOnly = favoritesOnly
     }
 
     private func resetVaultQuickFilters() {
@@ -4394,6 +4477,10 @@ final class AppSessionModel {
             if let entry = sendEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .steam:
             if let entry = steamEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .billingAddress:
+            if let entry = billingAddressEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .paymentAccount:
+            if let entry = paymentAccountEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .attachmentRef:
             break
         }
@@ -4428,6 +4515,10 @@ final class AppSessionModel {
             return sendEntries.first { $0.id == entryID }?.title ?? "Send"
         case .steam:
             return steamEntries.first { $0.id == entryID }?.title ?? "Steam"
+        case .billingAddress:
+            return billingAddressEntries.first { $0.id == entryID }?.title ?? String(localized: "账单地址")
+        case .paymentAccount:
+            return paymentAccountEntries.first { $0.id == entryID }?.title ?? String(localized: "支付账户")
         case .attachmentRef:
             return attachmentEntries.first { $0.id == entryID }?.fileName ?? String(localized: "附件")
         }
@@ -4515,6 +4606,10 @@ final class AppSessionModel {
             try createSendEntry(projectTitle: projectTitle)
         case .steam:
             try createSteamEntry(projectTitle: projectTitle)
+        case .billingAddress:
+            try createBillingAddressEntry(projectTitle: projectTitle)
+        case .paymentAccount:
+            try createPaymentAccountEntry(projectTitle: projectTitle)
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
@@ -4548,6 +4643,10 @@ final class AppSessionModel {
             try updateSelectedSendEntry()
         case .steam:
             try updateSelectedSteamEntry()
+        case .billingAddress:
+            try updateSelectedBillingAddressEntry()
+        case .paymentAccount:
+            try updateSelectedPaymentAccountEntry()
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
@@ -12275,6 +12374,16 @@ final class AppSessionModel {
         deletedAttachmentEntries = []
         attachmentSearchQuery = ""
         dismissAttachmentQuickLookPreview()
+        billingAddressEntries = []
+        deletedBillingAddressEntries = []
+        billingAddressSearchQuery = ""
+        showFavoriteBillingAddressEntriesOnly = false
+        clearEditingBillingAddressEntry()
+        paymentAccountEntries = []
+        deletedPaymentAccountEntries = []
+        paymentAccountSearchQuery = ""
+        showFavoritePaymentAccountEntriesOnly = false
+        clearEditingPaymentAccountEntry()
     }
 
     private func requireActiveVaultSession() throws -> LocalVaultSession {
@@ -12581,6 +12690,10 @@ final class AppSessionModel {
             return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
         case .steam(let draft):
             return try entryRepository.createSteamEntry(projectID: projectID, draft: draft).id
+        case .billingAddress(let draft):
+            return try entryRepository.createBillingAddressEntry(projectID: projectID, draft: draft).id
+        case .paymentAccount(let draft):
+            return try entryRepository.createPaymentAccountEntry(projectID: projectID, draft: draft).id
         }
     }
 
@@ -12617,6 +12730,10 @@ final class AppSessionModel {
             try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
         case .steam:
             try entryRepository.deleteSteamEntry(projectID: projectID, entryID: entryID)
+        case .billingAddress:
+            try entryRepository.deleteBillingAddressEntry(projectID: projectID, entryID: entryID)
+        case .paymentAccount:
+            try entryRepository.deletePaymentAccountEntry(projectID: projectID, entryID: entryID)
         }
     }
 
@@ -12652,6 +12769,10 @@ final class AppSessionModel {
         deletedSteamEntries = try entryRepository.listDeletedSteamEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+        billingAddressEntries = try entryRepository.listBillingAddressEntries(projectID: projectID)
+        deletedBillingAddressEntries = try entryRepository.listDeletedBillingAddressEntries(projectID: projectID)
+        paymentAccountEntries = try entryRepository.listPaymentAccountEntries(projectID: projectID)
+        deletedPaymentAccountEntries = try entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)
         publishWidgetSnapshots()
         refreshVaultSearchIndex(entryRepository: entryRepository)
         // 锁定清空过系统身份时，条目重新载入后就补一次发布，避免解锁后自动填充一直为空。
@@ -12701,6 +12822,10 @@ final class AppSessionModel {
             snapshot.deletedSteamEntries += (try? entryRepository.listDeletedSteamEntries(projectID: projectID)) ?? []
             snapshot.attachmentEntries += (try? entryRepository.listAttachmentMetadata(projectID: projectID)) ?? []
             snapshot.deletedAttachmentEntries += (try? entryRepository.listDeletedAttachmentMetadata(projectID: projectID)) ?? []
+            snapshot.billingAddressEntries += (try? entryRepository.listBillingAddressEntries(projectID: projectID)) ?? []
+            snapshot.deletedBillingAddressEntries += (try? entryRepository.listDeletedBillingAddressEntries(projectID: projectID)) ?? []
+            snapshot.paymentAccountEntries += (try? entryRepository.listPaymentAccountEntries(projectID: projectID)) ?? []
+            snapshot.deletedPaymentAccountEntries += (try? entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)) ?? []
         }
 
         let documents = VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
@@ -12759,6 +12884,10 @@ final class AppSessionModel {
         deletedIdentityEntries = []
         passkeyEntries = []
         deletedPasskeyEntries = []
+        billingAddressEntries = []
+        deletedBillingAddressEntries = []
+        paymentAccountEntries = []
+        deletedPaymentAccountEntries = []
         clearExtendedParityEntries()
     }
 
@@ -12908,6 +13037,38 @@ final class AppSessionModel {
                 sharedSecret: $0.sharedSecret,
                 issuer: $0.issuer,
                 notes: $0.notes
+            )))
+        }
+        rows += billingAddressEntries.map {
+            (itemID: $0.id, draft: .billingAddress(LocalBillingAddressEntryDraft(
+                title: $0.title,
+                fullName: $0.fullName,
+                streetAddress: $0.streetAddress,
+                apartment: $0.apartment,
+                city: $0.city,
+                stateProvince: $0.stateProvince,
+                postalCode: $0.postalCode,
+                country: $0.country,
+                phone: $0.phone,
+                notes: $0.notes,
+                linkedCardIDs: $0.linkedCardIDs
+            )))
+        }
+        rows += paymentAccountEntries.map {
+            (itemID: $0.id, draft: .paymentAccount(LocalPaymentAccountEntryDraft(
+                title: $0.title,
+                kind: $0.kind,
+                provider: $0.provider,
+                accountName: $0.accountName,
+                accountHolderName: $0.accountHolderName,
+                iban: $0.iban,
+                swiftBIC: $0.swiftBIC,
+                routingNumber: $0.routingNumber,
+                accountNumber: $0.accountNumber,
+                currency: $0.currency,
+                notes: $0.notes,
+                linkedCardID: $0.linkedCardID,
+                billingAddressID: $0.billingAddressID
             )))
         }
         return rows

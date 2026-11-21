@@ -1060,6 +1060,14 @@ public extension LocalVaultEntryRepository {
             return try (deleted ? listDeletedBarcodeEntries(projectID: projectID) : listBarcodeEntries(projectID: projectID)).map(\.id)
         case .send:
             return try (deleted ? listDeletedSendEntries(projectID: projectID) : listSendEntries(projectID: projectID)).map(\.id)
+        case .billingAddress:
+            return try (deleted
+                ? listDeletedBillingAddressEntries(projectID: projectID)
+                : listBillingAddressEntries(projectID: projectID)).map(\.id)
+        case .paymentAccount:
+            return try (deleted
+                ? listDeletedPaymentAccountEntries(projectID: projectID)
+                : listPaymentAccountEntries(projectID: projectID)).map(\.id)
         case .attachmentRef:
             return try (deleted
                 ? listDeletedAttachmentMetadata(projectID: projectID)
@@ -1096,6 +1104,10 @@ public extension LocalVaultEntryRepository {
             try deleteBarcodeEntry(projectID: projectID, entryID: entryID)
         case .send:
             try deleteSendEntry(projectID: projectID, entryID: entryID)
+        case .billingAddress:
+            try deleteBillingAddressEntry(projectID: projectID, entryID: entryID)
+        case .paymentAccount:
+            try deletePaymentAccountEntry(projectID: projectID, entryID: entryID)
         case .attachmentRef:
             try deleteAttachmentMetadata(projectID: projectID, attachmentID: entryID)
         }

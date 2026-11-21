@@ -552,6 +552,8 @@ private extension UnifiedVaultItemKind {
         case .send: return "paperplane.fill"
         case .steam: return "shield.lefthalf.filled"
         case .attachmentRef: return "paperclip"
+        case .billingAddress: return "house.fill"
+        case .paymentAccount: return "wallet.pass.fill"
         }
     }
 }

@@ -1839,7 +1839,7 @@ private func convertedIssueCode(_ code: VaultCSVImportIssueCode) -> VaultImportI
         return .unsupportedItemKind
     case .missingRequiredField:
         return .missingRequiredField
-    case .invalidNumber, .invalidBoolean:
+    case .invalidNumber, .invalidBoolean, .invalidFieldFormat:
         return .invalidField
     }
 }

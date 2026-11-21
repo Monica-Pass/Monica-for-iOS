@@ -47,6 +47,16 @@ struct AndroidParityVaultHomeView: View {
     let setSelectedIdentityFavorite: (Bool) -> Void
     let deleteIdentityEntry: () -> Void
     let restoreIdentityEntry: (LocalIdentityEntry) -> Void
+    let createBillingAddressEntry: () -> Void
+    let updateBillingAddressEntry: () -> Void
+    let setSelectedBillingAddressFavorite: (Bool) -> Void
+    let deleteBillingAddressEntry: () -> Void
+    let restoreBillingAddressEntry: (LocalBillingAddressEntry) -> Void
+    let createPaymentAccountEntry: () -> Void
+    let updatePaymentAccountEntry: () -> Void
+    let setSelectedPaymentAccountFavorite: (Bool) -> Void
+    let deletePaymentAccountEntry: () -> Void
+    let restorePaymentAccountEntry: (LocalPaymentAccountEntry) -> Void
     let createPasskeyEntry: () -> Void
     let updatePasskeyEntry: () -> Void
     let setSelectedPasskeyFavorite: (Bool) -> Void
@@ -100,7 +110,10 @@ struct AndroidParityVaultHomeView: View {
     }
 
     private var addMenuKinds: [UnifiedVaultItemKind] {
-        isPasswordRoot && session.passwordModule == .other ? PasswordModule.otherKinds : []
+        if !isPasswordRoot {
+            return [.card, .identity, .billingAddress, .paymentAccount]
+        }
+        return session.passwordModule == .other ? PasswordModule.otherKinds : []
     }
 
     var body: some View {
@@ -235,6 +248,10 @@ struct AndroidParityVaultHomeView: View {
             barcodeList
         case .send:
             sendList
+        case .billingAddress:
+            billingAddressList
+        case .paymentAccount:
+            paymentAccountList
         case .attachmentRef:
             attachmentList
         }
@@ -438,11 +455,62 @@ struct AndroidParityVaultHomeView: View {
                     }
                 }
             }
-            if session.filteredCardEntries.isEmpty && session.filteredIdentityEntries.isEmpty {
-                emptyList(String(localized: "没有匹配的卡片或证件"), icon: "creditcard")
+            ForEach(session.filteredBillingAddressEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .billingAddress) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidBillingAddressListCard(entry: entry)
+                    }
+                }
+            }
+            ForEach(session.filteredPaymentAccountEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .paymentAccount) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidPaymentAccountListCard(entry: entry)
+                    }
+                }
+            }
+            if session.filteredCardEntries.isEmpty
+                && session.filteredIdentityEntries.isEmpty
+                && session.filteredBillingAddressEntries.isEmpty
+                && session.filteredPaymentAccountEntries.isEmpty {
+                emptyList(String(localized: "没有匹配的卡片、证件或账单信息"), icon: "creditcard")
             }
             deletedCardRows
             deletedIdentityRows
+            deletedBillingAddressRows
+            deletedPaymentAccountRows
+        }
+    }
+
+    private var billingAddressList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredBillingAddressEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .billingAddress) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidBillingAddressListCard(entry: entry)
+                    }
+                }
+            }
+            if session.filteredBillingAddressEntries.isEmpty {
+                emptyList(String(localized: "没有匹配的账单地址"), icon: "house.fill")
+            }
+            deletedBillingAddressRows
+        }
+    }
+
+    private var paymentAccountList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredPaymentAccountEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .paymentAccount) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidPaymentAccountListCard(entry: entry)
+                    }
+                }
+            }
+            if session.filteredPaymentAccountEntries.isEmpty {
+                emptyList(String(localized: "没有匹配的支付账户"), icon: "wallet.pass.fill")
+            }
+            deletedPaymentAccountRows
         }
     }
 
@@ -681,6 +749,30 @@ struct AndroidParityVaultHomeView: View {
                 ForEach(session.deletedIdentityEntries) { entry in
                     restoreButton(id: entry.id, kind: .identity, title: entry.title, subtitle: identitySummary(for: entry)) {
                         restoreIdentityEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedBillingAddressRows: some View {
+        if !session.deletedBillingAddressEntries.isEmpty {
+            restoreSection("已删除账单地址") {
+                ForEach(session.deletedBillingAddressEntries) { entry in
+                    restoreButton(id: entry.id, kind: .billingAddress, title: entry.title, subtitle: entry.addressSummary) {
+                        restoreBillingAddressEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedPaymentAccountRows: some View {
+        if !session.deletedPaymentAccountEntries.isEmpty {
+            restoreSection("已删除支付账户") {
+                ForEach(session.deletedPaymentAccountEntries) { entry in
+                    restoreButton(id: entry.id, kind: .paymentAccount, title: entry.title, subtitle: entry.kind.displayName) {
+                        restorePaymentAccountEntry(entry)
                     }
                 }
             }
@@ -947,6 +1039,8 @@ struct AndroidParityVaultHomeView: View {
                 case .barcode: return session.barcodeSearchQuery
                 case .send: return session.sendSearchQuery
                 case .steam: return session.steamSearchQuery
+                case .billingAddress: return session.billingAddressSearchQuery
+                case .paymentAccount: return session.paymentAccountSearchQuery
                 case .attachmentRef: return session.attachmentSearchQuery
                 }
             },
@@ -967,6 +1061,8 @@ struct AndroidParityVaultHomeView: View {
                 case .barcode: session.barcodeSearchQuery = value
                 case .send: session.sendSearchQuery = value
                 case .steam: session.steamSearchQuery = value
+                case .billingAddress: session.billingAddressSearchQuery = value
+                case .paymentAccount: session.paymentAccountSearchQuery = value
                 case .attachmentRef: session.attachmentSearchQuery = value
                 }
             }
@@ -990,6 +1086,8 @@ struct AndroidParityVaultHomeView: View {
                 case .barcode: return session.showFavoriteBarcodeEntriesOnly
                 case .send: return session.showFavoriteSendEntriesOnly
                 case .steam: return session.showFavoriteSteamEntriesOnly
+                case .billingAddress: return session.showFavoriteBillingAddressEntriesOnly
+                case .paymentAccount: return session.showFavoritePaymentAccountEntriesOnly
                 case .attachmentRef: return false
                 }
             },
@@ -1010,6 +1108,8 @@ struct AndroidParityVaultHomeView: View {
                 case .barcode: session.showFavoriteBarcodeEntriesOnly = value
                 case .send: session.showFavoriteSendEntriesOnly = value
                 case .steam: session.showFavoriteSteamEntriesOnly = value
+                case .billingAddress: session.showFavoriteBillingAddressEntriesOnly = value
+                case .paymentAccount: session.showFavoritePaymentAccountEntriesOnly = value
                 case .attachmentRef: break
                 }
             }
@@ -1158,6 +1258,8 @@ struct AndroidParityVaultHomeView: View {
         case .barcode: setSelectedBarcodeFavorite(favorite)
         case .send: setSelectedSendFavorite(favorite)
         case .steam: try? session.setSelectedSteamFavorite(favorite)
+        case .billingAddress: setSelectedBillingAddressFavorite(favorite)
+        case .paymentAccount: setSelectedPaymentAccountFavorite(favorite)
         case .attachmentRef: break
         }
     }
@@ -1178,6 +1280,8 @@ struct AndroidParityVaultHomeView: View {
         case .barcode: deleteBarcodeEntry()
         case .send: deleteSendEntry()
         case .steam: try? session.deleteSelectedSteamEntry()
+        case .billingAddress: deleteBillingAddressEntry()
+        case .paymentAccount: deletePaymentAccountEntry()
         case .attachmentRef: break
         }
         session.dismissPresentedEditor()
@@ -2128,6 +2232,10 @@ struct AddEditVaultItemView: View {
             case .barcode: barcodeFields
             case .send: sendFields
             case .steam: SteamEntryEditorFields(session: session, isAdding: mode.isAdding)
+            case .billingAddress:
+                BillingAddressEditorFields(session: session, isAdding: mode.isAdding)
+            case .paymentAccount:
+                PaymentAccountEditorFields(session: session, isAdding: mode.isAdding)
             case .attachmentRef:
                 Text("该类型当前只支持列表展示。")
                     .foregroundStyle(AndroidParityPalette.textSecondary)
@@ -2616,6 +2724,8 @@ struct AddEditVaultItemView: View {
         case .card: return String(localized: "银行卡")
         case .identity: return String(localized: "证件")
         case .passkey: return String(localized: "通行密钥")
+        case .billingAddress: return String(localized: "账单地址")
+        case .paymentAccount: return String(localized: "支付账户")
         case .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .steam, .attachmentRef: return mode.kind.localizedDisplayName
         }
     }
@@ -2635,6 +2745,8 @@ struct AddEditVaultItemView: View {
         case .barcode: return session.editingBarcodeFavorite
         case .send: return session.editingSendFavorite
         case .steam: return session.editingSteamFavorite
+        case .billingAddress: return session.editingBillingAddressFavorite
+        case .paymentAccount: return session.editingPaymentAccountFavorite
         case .attachmentRef: return false
         }
     }
@@ -2656,6 +2768,8 @@ private extension UnifiedVaultItemKind {
         case .barcode: return "barcode.viewfinder"
         case .send: return "paperplane.fill"
         case .steam: return "shield.lefthalf.filled"
+        case .billingAddress: return "house.fill"
+        case .paymentAccount: return "wallet.pass.fill"
         case .attachmentRef: return "paperclip"
         }
     }
@@ -3005,6 +3119,12 @@ struct VaultItemDetailView: View {
         case .steam:
             guard let entry = session.steamEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return session.steamDetailRows(for: entry)
+        case .billingAddress:
+            guard let entry = session.billingAddressEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return session.billingAddressDetailRows(for: entry)
+        case .paymentAccount:
+            guard let entry = session.paymentAccountEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return session.paymentAccountDetailRows(for: entry)
         case .attachmentRef:
             guard let entry = session.attachmentEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "文件名"), entry.fileName), row("state", String(localized: "状态"), entry.downloadState), row("mode", String(localized: "存储"), entry.storageMode), row("size", String(localized: "大小"), String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节"))]
@@ -3081,6 +3201,12 @@ struct VaultItemDetailView: View {
         case .steam:
             guard let entry = session.steamEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return session.steamDetailSecrets(for: entry)
+        case .billingAddress:
+            guard let entry = session.billingAddressEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return session.billingAddressDetailSecrets(for: entry)
+        case .paymentAccount:
+            guard let entry = session.paymentAccountEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return session.paymentAccountDetailSecrets(for: entry)
         case .attachmentRef:
             return [:]
         }
