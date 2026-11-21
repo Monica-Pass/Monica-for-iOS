@@ -726,6 +726,8 @@ public struct VaultSearchEntrySnapshot: Sendable, Equatable {
     public var deletedWifiEntries: [LocalWifiEntry] = []
     public var sendEntries: [LocalSendEntry] = []
     public var deletedSendEntries: [LocalSendEntry] = []
+    public var steamEntries: [LocalSteamEntry] = []
+    public var deletedSteamEntries: [LocalSteamEntry] = []
     public var attachmentEntries: [LocalAttachmentMetadata] = []
     public var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
 
@@ -816,6 +818,13 @@ public enum VaultSearchDocumentBuilder {
             deleted: snapshot.deletedSendEntries,
             usage: usage,
             make: sendDocument
+        )
+        append(
+            documents: &documents,
+            entries: snapshot.steamEntries,
+            deleted: snapshot.deletedSteamEntries,
+            usage: usage,
+            make: steamDocument
         )
         append(
             documents: &documents,
@@ -972,6 +981,20 @@ public enum VaultSearchDocumentBuilder {
             title: entry.title,
             username: entry.ssid,
             details: entry.securityType,
+            notes: entry.notes,
+            isFavorite: entry.favorite,
+            isDeleted: deleted
+        )
+    }
+
+    private static func steamDocument(_ entry: LocalSteamEntry, deleted: Bool) -> VaultSearchDocument {
+        VaultSearchDocument(
+            kind: .steam,
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            username: entry.accountName,
+            details: joined(entry.issuer, entry.steamID),
             notes: entry.notes,
             isFavorite: entry.favorite,
             isDeleted: deleted

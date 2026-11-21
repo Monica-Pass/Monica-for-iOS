@@ -22694,6 +22694,310 @@
           }
         }
       }
+    },
+    "Steam": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam"
+          }
+        }
+      }
+    },
+    "验证模块": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification Module"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证模块"
+          }
+        }
+      }
+    },
+    "Steam Guard 验证码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam Guard code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam Guard 验证码"
+          }
+        }
+      }
+    },
+    "Steam 账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam 账号"
+          }
+        }
+      }
+    },
+    "shared_secret（base64）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "shared_secret (base64)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "shared_secret（base64）"
+          }
+        }
+      }
+    },
+    "从 maFile / JSON 导入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import from maFile / JSON"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从 maFile / JSON 导入"
+          }
+        }
+      }
+    },
+    "Steam maFile 或 steamguard 链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam maFile or steamguard link"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam maFile 或 steamguard 链接"
+          }
+        }
+      }
+    },
+    "导入 Steam 数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import Steam data"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入 Steam 数据"
+          }
+        }
+      }
+    },
+    "已导入 Steam 数据": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam data imported"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已导入 Steam 数据"
+          }
+        }
+      }
+    },
+    "粘贴 maFile / steamguard 链接": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Paste maFile / steamguard link"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "粘贴 maFile / steamguard 链接"
+          }
+        }
+      }
+    },
+    "添加 Steam 账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Steam account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加 Steam 账号"
+          }
+        }
+      }
+    },
+    "还没有 Steam Guard 条目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Steam Guard entries yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有 Steam Guard 条目"
+          }
+        }
+      }
+    },
+    "已删除 Steam": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted Steam"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除 Steam"
+          }
+        }
+      }
+    },
+    "未填写账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未填写账号"
+          }
+        }
+      }
+    },
+    "复制 Steam Guard 验证码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Steam Guard code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制 Steam Guard 验证码"
+          }
+        }
+      }
+    },
+    "已读取 %@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Loaded %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已读取 %@"
+          }
+        }
+      }
+    },
+    "已存在 Steam 账号 %@，本次导入已跳过。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Steam account %@ already exists; this import was skipped."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已存在 Steam 账号 %@，本次导入已跳过。"
+          }
+        }
+      }
+    },
+    "没有可导入的 Steam 数据。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No Steam data to import."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可导入的 Steam 数据。"
+          }
+        }
+      }
+    },
+    "只保存 Steam Guard 的离线 shared_secret，用于本地生成验证码；不会读取登录 cookie、identity_secret，也不会发起任何 Steam 网络请求。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stores only the offline Steam Guard shared_secret used to generate codes locally. It never reads login cookies or identity_secret, and never makes Steam network requests."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只保存 Steam Guard 的离线 shared_secret，用于本地生成验证码；不会读取登录 cookie、identity_secret，也不会发起任何 Steam 网络请求。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

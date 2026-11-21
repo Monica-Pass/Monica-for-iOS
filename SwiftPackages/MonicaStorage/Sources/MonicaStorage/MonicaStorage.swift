@@ -5830,6 +5830,7 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
     case sso
     case send
     case attachmentRef
+    case steam
 
     public var displayName: String {
         switch self {
@@ -5857,6 +5858,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
             return "安全发送"
         case .attachmentRef:
             return "附件"
+        case .steam:
+            return "Steam"
         }
     }
 
@@ -5880,7 +5883,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
         .wifi,
         .sso,
         .send,
-        .attachmentRef
+        .attachmentRef,
+        .steam
     ]
 }
 
@@ -5938,6 +5942,7 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
     case wifi(LocalWifiEntryDraft)
     case sso(LocalSSOEntryDraft)
     case send(LocalSendEntryDraft)
+    case steam(LocalSteamEntryDraft)
 
     public var kind: UnifiedVaultItemKind {
         switch self {
@@ -5952,6 +5957,7 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
         case .wifi: return .wifi
         case .sso: return .sso
         case .send: return .send
+        case .steam: return .steam
         }
     }
 }
@@ -6481,7 +6487,7 @@ public enum AndroidBackupCodec {
         switch item {
         case .login, .sshKey, .apiToken, .wifi, .sso:
             return .password
-        case .totp:
+        case .totp, .steam:
             return .totp
         case .note, .send:
             return .note
@@ -6817,6 +6823,14 @@ public enum AndroidBackupCodec {
         switch kind {
         case .totp:
             let object = (try? JSONObject(jsonString: itemData)) ?? JSONObject.empty()
+            if let steamDraft = LocalSteamEntryDraft.steamDraft(
+                title: title,
+                issuer: object.string("issuer"),
+                accountName: object.string("accountName"),
+                itemData: object.dictionaryRepresentation
+            ) {
+                return .steam(steamDraft)
+            }
             return .totp(LocalTotpEntryDraft(
                 title: title,
                 secret: object.string("secret"),
@@ -6903,6 +6917,15 @@ public enum AndroidBackupCodec {
                 }
             case .totp:
                 let itemData = try object.nestedObject("itemData")
+                if let steamDraft = LocalSteamEntryDraft.steamDraft(
+                    title: object.string("title"),
+                    issuer: itemData.string("issuer"),
+                    accountName: itemData.string("accountName"),
+                    itemData: itemData.dictionaryRepresentation
+                ) {
+                    draft = .steam(steamDraft)
+                    break
+                }
                 draft = .totp(LocalTotpEntryDraft(
                     title: object.string("title"),
                     secret: itemData.string("secret"),
@@ -6969,7 +6992,7 @@ public enum AndroidBackupCodec {
         switch item {
         case .login:
             return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
-        case .totp:
+        case .totp, .steam:
             return "folders/\(folder)/authenticators/totp_\(id)_\(timestamp).json"
         case .note:
             return "folders/\(folder)/notes/note_\(id)_\(timestamp).json"
@@ -7012,6 +7035,17 @@ public enum AndroidBackupCodec {
                     "counter": Int(draft.counter)
                 ]),
                 "notes": "",
+                "isFavorite": false,
+                "createdAt": timestamp,
+                "updatedAt": timestamp,
+                "categoryName": folderName
+            ]
+        case .steam(let draft):
+            object = [
+                "id": id,
+                "title": draft.title,
+                "itemData": jsonStringObject(LocalSteamEntryDraft.backupItemData(from: draft)),
+                "notes": draft.notes,
                 "isFavorite": false,
                 "createdAt": timestamp,
                 "updatedAt": timestamp,
@@ -7338,6 +7372,8 @@ private struct JSONObject {
         }
     }
 
+    var dictionaryRepresentation: [String: Any] { values }
+
     private init(values: [String: Any]) {
         self.values = values
     }
@@ -7496,6 +7532,15 @@ public enum VaultCSVCodec {
                 otpType: record.value("otpType", fallback: "totp"),
                 counter: counter
             ))
+        case .steam:
+            return .steam(LocalSteamEntryDraft(
+                title: title,
+                accountName: record.value("accountName"),
+                steamID: record.value("steamID"),
+                sharedSecret: record.value("secret"),
+                issuer: record.value("issuer", fallback: "Steam"),
+                notes: record.value("notes")
+            ))
         case .card:
             return .card(LocalCardEntryDraft(
                 title: title,
@@ -7627,6 +7672,13 @@ public enum VaultCSVCodec {
             values["algorithm"] = draft.algorithm
             values["otpType"] = draft.otpType
             values["counter"] = String(draft.counter)
+        case .steam(let draft):
+            values["title"] = draft.title
+            values["accountName"] = draft.accountName
+            values["steamID"] = draft.steamID
+            values["secret"] = SteamSharedSecretValidator.normalizedBase64(draft.sharedSecret)
+            values["issuer"] = draft.issuer
+            values["notes"] = draft.notes
         case .card(let draft):
             values["title"] = draft.title
             values["cardholderName"] = draft.cardholderName
@@ -8443,6 +8495,48 @@ public protocol LocalVaultEngine {
         entryID: String
     ) throws -> LocalSSOEntry
 
+    func createSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalSteamEntryDraft
+    ) throws -> LocalSteamEntry
+
+    func listSteamEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalSteamEntry]
+
+    func updateSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalSteamEntryDraft
+    ) throws -> LocalSteamEntry
+
+    func setSteamEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalSteamEntry
+
+    func deleteSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws
+
+    func listDeletedSteamEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalSteamEntry]
+
+    func restoreSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalSteamEntry
+
     func createSendEntry(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -8639,6 +8733,13 @@ public extension LocalVaultEngine {
     func deleteSSOEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.sso) }
     func listDeletedSSOEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSSOEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.sso) }
     func restoreSSOEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSSOEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.sso) }
+    func createSteamEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSteamEntryDraft) throws -> LocalSteamEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+    func listSteamEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSteamEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+    func updateSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalSteamEntryDraft) throws -> LocalSteamEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+    func setSteamEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalSteamEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+    func deleteSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+    func listDeletedSteamEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSteamEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+    func restoreSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSteamEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
 
     func createSendEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.send) }
     func listSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.send) }
@@ -11175,6 +11276,34 @@ public struct LocalVaultEntryRepository {
         try engine.restoreSSOEntry(in: session.handle, projectID: projectID, entryID: entryID)
     }
 
+    public func createSteamEntry(projectID: String, draft: LocalSteamEntryDraft) throws -> LocalSteamEntry {
+        try engine.createSteamEntry(in: session.handle, projectID: projectID, draft: normalizedSteamEntryDraft(draft))
+    }
+
+    public func listSteamEntries(projectID: String) throws -> [LocalSteamEntry] {
+        try engine.listSteamEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func updateSteamEntry(projectID: String, entryID: String, draft: LocalSteamEntryDraft) throws -> LocalSteamEntry {
+        try engine.updateSteamEntry(in: session.handle, projectID: projectID, entryID: entryID, draft: normalizedSteamEntryDraft(draft))
+    }
+
+    public func setSteamEntryFavorite(projectID: String, entryID: String, favorite: Bool) throws -> LocalSteamEntry {
+        try engine.setSteamEntryFavorite(in: session.handle, projectID: projectID, entryID: entryID, favorite: favorite)
+    }
+
+    public func deleteSteamEntry(projectID: String, entryID: String) throws {
+        try engine.deleteSteamEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
+    public func listDeletedSteamEntries(projectID: String) throws -> [LocalSteamEntry] {
+        try engine.listDeletedSteamEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func restoreSteamEntry(projectID: String, entryID: String) throws -> LocalSteamEntry {
+        try engine.restoreSteamEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
     public func createSendEntry(projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
         try engine.createSendEntry(in: session.handle, projectID: projectID, draft: normalizedSendEntryDraft(draft))
     }
@@ -11458,6 +11587,22 @@ public struct LocalVaultEntryRepository {
         )
     }
 
+    private func normalizedSteamEntryDraft(_ draft: LocalSteamEntryDraft) throws -> LocalSteamEntryDraft {
+        let normalizedTitle = try normalizedEntryTitle(draft.title)
+        guard SteamSharedSecretValidator.isValid(draft.sharedSecret) else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        let issuer = draft.issuer.trimmingCharacters(in: .whitespacesAndNewlines)
+        return LocalSteamEntryDraft(
+            title: normalizedTitle,
+            accountName: draft.accountName.trimmingCharacters(in: .whitespacesAndNewlines),
+            steamID: draft.steamID.trimmingCharacters(in: .whitespacesAndNewlines),
+            sharedSecret: SteamSharedSecretValidator.normalizedBase64(draft.sharedSecret),
+            issuer: issuer.isEmpty ? "Steam" : issuer,
+            notes: draft.notes
+        )
+    }
+
     private func normalizedSendEntryDraft(_ draft: LocalSendEntryDraft) throws -> LocalSendEntryDraft {
         let normalizedTitle = try normalizedEntryTitle(draft.title)
         return LocalSendEntryDraft(
@@ -11678,7 +11823,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
                 targetProjectID: toProjectID
             )
             return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
-        case .passkey, .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
+        case .passkey, .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef, .steam:
             let mapping = parityMoveMapping(for: kind)
             let entry = try moveParityEntry(
                 in: handle,
@@ -12465,6 +12610,51 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         ]
     }
 
+    public func createSteamEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSteamEntryDraft) throws -> LocalSteamEntry {
+        let entry = try createParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryType: "document-ref",
+            kind: "steam",
+            title: draft.title,
+            payload: SteamEntryPayloadCodec.encoded(draft)
+        )
+        return try LocalSteamEntry(entry)
+    }
+
+    public func listSteamEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSteamEntry] {
+        try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "steam").map(LocalSteamEntry.init)
+    }
+
+    public func updateSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalSteamEntryDraft) throws -> LocalSteamEntry {
+        let entry = try updateParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryID: entryID,
+            entryType: "document-ref",
+            kind: "steam",
+            title: draft.title,
+            payload: SteamEntryPayloadCodec.encoded(draft)
+        )
+        return try LocalSteamEntry(entry)
+    }
+
+    public func setSteamEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalSteamEntry {
+        try LocalSteamEntry(setParityEntryFavorite(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "steam", favorite: favorite))
+    }
+
+    public func deleteSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        try deleteParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "steam")
+    }
+
+    public func listDeletedSteamEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSteamEntry] {
+        try listDeletedParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "steam").map(LocalSteamEntry.init)
+    }
+
+    public func restoreSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSteamEntry {
+        try LocalSteamEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "steam"))
+    }
+
     public func createSendEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
         let entry = try createParityEntry(
             in: handle,
@@ -12820,6 +13010,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             return ("document-ref", "send")
         case .attachmentRef:
             return ("document-ref", "attachment-ref")
+        case .steam:
+            return ("document-ref", "steam")
         case .login, .totp, .note, .card, .identity:
             preconditionFailure("Core entry kinds do not use parity move mapping.")
         }
@@ -13368,5 +13560,19 @@ private extension Dictionary where Key == String, Value == Any {
             return value.int64Value
         }
         return 0
+    }
+}
+
+private extension LocalSteamEntry {
+    init(_ entry: MonicaMDBXParityEntry) throws {
+        let payload = try entry.payloadDictionary()
+        let decoded = SteamEntryPayloadCodec.decoded(
+            payload,
+            entryID: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            favorite: entry.favorite
+        )
+        self = decoded
     }
 }
