@@ -26,6 +26,8 @@ extension AppSessionModel {
             return apiTokenEntries.map(\.id)
         case .wifi:
             return wifiEntries.map(\.id)
+        case .sso:
+            return ssoEntries.map(\.id)
         case .send:
             return sendEntries.map(\.id)
         case .attachmentRef:
