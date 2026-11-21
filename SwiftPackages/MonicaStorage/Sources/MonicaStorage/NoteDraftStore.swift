@@ -47,7 +47,8 @@ public struct NoteDraft: Codable, Sendable, Equatable, Identifiable {
         self.noteID = noteID
         self.title = title
         self.body = body
-        self.updatedAt = updatedAt
+        // 落盘用 ISO8601（秒级），内存模型同样截断到秒，保证往返相等。
+        self.updatedAt = Date(timeIntervalSince1970: updatedAt.timeIntervalSince1970.rounded(.down))
     }
 }
 
