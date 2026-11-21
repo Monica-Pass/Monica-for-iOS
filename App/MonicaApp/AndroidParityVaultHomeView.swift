@@ -2622,6 +2622,10 @@ struct VaultItemDetailView: View {
                 customFields: session.presentedDetailExtras?.customFields ?? [],
                 relations: session.resolvedPresentedDetailRelations()
             )
+            if route.kind == .send,
+               let entry = session.sendEntries.first(where: { $0.id == route.entryID }) {
+                MonicaSendShareSection(session: session, entry: entry)
+            }
             if route.kind == .sso,
                let entry = session.ssoEntries.first(where: { $0.id == route.entryID }) {
                 SSOLoginLinkSection(session: session, entry: entry)
@@ -2766,7 +2770,7 @@ struct VaultItemDetailView: View {
             return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password, .password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
+            return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt.isEmpty ? String(localized: "不过期") : entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
         case .attachmentRef:
             guard let entry = session.attachmentEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "文件名"), entry.fileName), row("state", String(localized: "状态"), entry.downloadState), row("mode", String(localized: "存储"), entry.storageMode), row("size", String(localized: "大小"), String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节"))]
