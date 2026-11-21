@@ -151,6 +151,11 @@ public struct MonicaMDBXCardEntry: Sendable, Equatable, Identifiable {
     public let cvv: String
     public let issuer: String
     public let network: String
+    /// 以下字段为 #17 新增的可选扩展：旧库/旧备份缺失时按空串解码。
+    public let iban: String
+    public let swiftCode: String
+    public let billingAddress: String
+    public let cardArtwork: String
     public let notes: String
     public let favorite: Bool
 }
@@ -514,6 +519,10 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         cvv: String,
         issuer: String,
         network: String,
+        iban: String = "",
+        swiftCode: String = "",
+        billingAddress: String = "",
+        cardArtwork: String = "",
         notes: String
     ) throws -> MonicaMDBXCardEntry {
         let entry = try rawVault.createCardEntry(
@@ -526,6 +535,10 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             cvv: cvv,
             issuer: issuer,
             network: network,
+            iban: iban,
+            swiftCode: swiftCode,
+            billingAddress: billingAddress,
+            cardArtwork: cardArtwork,
             notes: notes
         )
         return MonicaMDBXCardEntry(raw: entry)
@@ -550,6 +563,10 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         cvv: String,
         issuer: String,
         network: String,
+        iban: String = "",
+        swiftCode: String = "",
+        billingAddress: String = "",
+        cardArtwork: String = "",
         notes: String
     ) throws -> MonicaMDBXCardEntry {
         let entry = try rawVault.updateCardEntry(
@@ -563,6 +580,10 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             cvv: cvv,
             issuer: issuer,
             network: network,
+            iban: iban,
+            swiftCode: swiftCode,
+            billingAddress: billingAddress,
+            cardArtwork: cardArtwork,
             notes: notes
         )
         return MonicaMDBXCardEntry(raw: entry)
@@ -866,6 +887,20 @@ extension MonicaMDBXLoginEntry {
     }
 }
 
+extension MonicaMDBXCardEntry {
+    /// 测试专用：直接解码任意 card payload，用来验证旧库缺失 #17 扩展键时仍可读取。
+    static func decodePayloadForTesting(_ payloadJSON: String) throws -> MonicaMDBXCardEntry {
+        MonicaMDBXCardEntry(raw: try CardEntryRecord(raw: EntryRecord(
+            entryId: "testing-card",
+            projectId: "testing-project",
+            entryType: "card",
+            title: "Testing Card",
+            payloadJson: payloadJSON,
+            deleted: false
+        )))
+    }
+}
+
 fileprivate struct NoteEntryRecord {
     let entryId: String
     let projectId: String
@@ -901,6 +936,10 @@ fileprivate struct CardEntryRecord {
     let cvv: String
     let issuer: String
     let network: String
+    let iban: String
+    let swiftCode: String
+    let billingAddress: String
+    let cardArtwork: String
     let notes: String
     let favorite: Bool
 }
@@ -1136,6 +1175,10 @@ fileprivate extension CardEntryRecord {
             cvv: MDBXBusinessPayload.string(payload, "cvv"),
             issuer: MDBXBusinessPayload.string(payload, "issuer"),
             network: MDBXBusinessPayload.string(payload, "network"),
+            iban: MDBXBusinessPayload.string(payload, "iban"),
+            swiftCode: MDBXBusinessPayload.string(payload, "swiftCode"),
+            billingAddress: MDBXBusinessPayload.string(payload, "billingAddress"),
+            cardArtwork: MDBXBusinessPayload.string(payload, "cardArtwork"),
             notes: MDBXBusinessPayload.string(payload, "notes"),
             favorite: MDBXBusinessPayload.bool(payload, "favorite")
         )
@@ -1420,8 +1463,8 @@ fileprivate extension MdbxVault {
         return try TotpEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
     }
 
-    func createCardEntry(projectId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws -> CardEntryRecord {
-        let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, notes: notes, favorite: false)
+    func createCardEntry(projectId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, iban: String, swiftCode: String, billingAddress: String, cardArtwork: String, notes: String) throws -> CardEntryRecord {
+        let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, iban: iban, swiftCode: swiftCode, billingAddress: billingAddress, cardArtwork: cardArtwork, notes: notes, favorite: false)
         return try CardEntryRecord(raw: createEntry(projectId: projectId, entryType: "card", title: title, payloadJson: payload))
     }
 
@@ -1433,9 +1476,9 @@ fileprivate extension MdbxVault {
         try listDeletedEntries(projectId: projectId, entryType: "card").map(CardEntryRecord.init(raw:))
     }
 
-    func updateCardEntry(projectId: String, entryId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws -> CardEntryRecord {
+    func updateCardEntry(projectId: String, entryId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, iban: String, swiftCode: String, billingAddress: String, cardArtwork: String, notes: String) throws -> CardEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "card")
-        let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, notes: notes, favorite: favorite)
+        let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, iban: iban, swiftCode: swiftCode, billingAddress: billingAddress, cardArtwork: cardArtwork, notes: notes, favorite: favorite)
         return try CardEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "card", title: title, payloadJson: payload))
     }
 
@@ -1596,7 +1639,7 @@ fileprivate extension MdbxVault {
         ])
     }
 
-    private func cardPayload(cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String, favorite: Bool) throws -> String {
+    private func cardPayload(cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, iban: String, swiftCode: String, billingAddress: String, cardArtwork: String, notes: String, favorite: Bool) throws -> String {
         try MDBXBusinessPayload.jsonString([
             "kind": "card",
             "cardholderName": cardholderName,
@@ -1606,6 +1649,10 @@ fileprivate extension MdbxVault {
             "cvv": cvv,
             "issuer": issuer,
             "network": network,
+            "iban": iban,
+            "swiftCode": swiftCode,
+            "billingAddress": billingAddress,
+            "cardArtwork": cardArtwork,
             "notes": notes,
             "favorite": favorite
         ])
@@ -1699,6 +1746,10 @@ extension MonicaMDBXCardEntry {
             cvv: raw.cvv,
             issuer: raw.issuer,
             network: raw.network,
+            iban: raw.iban,
+            swiftCode: raw.swiftCode,
+            billingAddress: raw.billingAddress,
+            cardArtwork: raw.cardArtwork,
             notes: raw.notes,
             favorite: raw.favorite
         )
@@ -1951,6 +2002,10 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         cvv: String,
         issuer: String,
         network: String,
+        iban: String = "",
+        swiftCode: String = "",
+        billingAddress: String = "",
+        cardArtwork: String = "",
         notes: String
     ) throws -> MonicaMDBXCardEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
@@ -1975,6 +2030,10 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         cvv: String,
         issuer: String,
         network: String,
+        iban: String = "",
+        swiftCode: String = "",
+        billingAddress: String = "",
+        cardArtwork: String = "",
         notes: String
     ) throws -> MonicaMDBXCardEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
