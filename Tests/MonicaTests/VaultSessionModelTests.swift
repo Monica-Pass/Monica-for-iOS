@@ -13113,7 +13113,11 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             username: draft.username,
             password: draft.password,
             url: draft.url,
-            notes: draft.notes
+            notes: draft.notes,
+            urls: draft.urls,
+            appBundleID: draft.appBundleID,
+            appName: draft.appName,
+            passwordHistory: draft.passwordHistory ?? []
         )
         createdLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
@@ -13146,7 +13150,13 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             password: draft.password,
             url: draft.url,
             notes: draft.notes,
-            favorite: currentFavorite
+            favorite: currentFavorite,
+            urls: draft.urls,
+            appBundleID: draft.appBundleID,
+            appName: draft.appName,
+            passwordHistory: draft.passwordHistory
+                ?? loginEntries[projectID, default: []].first(where: { $0.id == entryID })?.passwordHistory
+                ?? []
         )
         updatedLoginEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)

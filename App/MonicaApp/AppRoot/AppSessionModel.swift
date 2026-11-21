@@ -72,6 +72,11 @@ final class AppSessionModel {
     var loginURL = ""
     /// 新建登录条目的图标（`sf:…` / `catalog:…` 稳定 id），`nil` 表示使用默认图标。
     var loginIcon: String?
+    // issue #16：多 URL、应用绑定与备注（历史只从「修改密码」开始记录）。
+    var loginAdditionalURLs: [String] = []
+    var loginAppBundleID = ""
+    var loginAppName = ""
+    var loginNotes = ""
     var loginSearchQuery = ""
     var showFavoriteLoginEntriesOnly = false
     var isLoginStackedGroupModeEnabled = false
@@ -92,6 +97,11 @@ final class AppSessionModel {
     var editingLoginFavorite = false
     /// 编辑中の登录条目图标稳定 id。
     var editingLoginIcon: String?
+    var editingLoginAdditionalURLs: [String] = []
+    var editingLoginAppBundleID = ""
+    var editingLoginAppName = ""
+    var editingLoginNotes = ""
+    var editingLoginPasswordHistory: [LocalLoginPasswordHistoryEntry] = []
     var noteTitle = ""
     var noteBody = ""
     var noteSearchQuery = ""
@@ -3963,7 +3973,11 @@ final class AppSessionModel {
                     title: loginTitle,
                     username: loginUsername,
                     password: loginPassword,
-                    url: loginURL
+                    url: loginURL,
+                    notes: loginNotes,
+                    urls: [loginURL] + loginAdditionalURLs,
+                    appBundleID: loginAppBundleID,
+                    appName: loginAppName
                 )
             )
             if let loginIcon {
@@ -3974,6 +3988,10 @@ final class AppSessionModel {
                 )
             }
             loginPassword = ""
+            loginAdditionalURLs = []
+            loginAppBundleID = ""
+            loginAppName = ""
+            loginNotes = ""
             loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
             deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
             try refreshAutoFillEncryptedIndexIfConfigured()
@@ -4011,6 +4029,12 @@ final class AppSessionModel {
         editingLoginURL = entry.url
         editingLoginFavorite = entry.favorite
         editingLoginIcon = entry.icon
+        let urls = entry.effectiveURLs
+        editingLoginAdditionalURLs = urls.count > 1 ? Array(urls.dropFirst()) : []
+        editingLoginAppBundleID = entry.appBundleID
+        editingLoginAppName = entry.appName
+        editingLoginNotes = entry.notes
+        editingLoginPasswordHistory = entry.passwordHistory
     }
 
     func updateSelectedLoginEntry() throws {
@@ -4032,7 +4056,12 @@ final class AppSessionModel {
                     title: editingLoginTitle,
                     username: editingLoginUsername,
                     password: editingLoginPassword,
-                    url: editingLoginURL
+                    url: editingLoginURL,
+                    notes: editingLoginNotes,
+                    urls: [editingLoginURL] + editingLoginAdditionalURLs,
+                    appBundleID: editingLoginAppBundleID,
+                    appName: editingLoginAppName,
+                    passwordHistory: editingLoginPasswordHistory
                 )
             )
             // 图标不属于编辑表单字段：只有用户显式改过才回写，避免把旧值当成变更。
@@ -4054,6 +4083,57 @@ final class AppSessionModel {
                 itemTitle: entry.title
             )
             entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    /// 删除详情页里的一条旧密码；密码本身不变，因此不会再被自动补回。
+    func deleteLoginPasswordHistoryEntry(entryID: String, historyEntryID: String) throws {
+        try mutateLoginPasswordHistory(entryID: entryID) { history in
+            LoginPasswordHistoryPolicy.removing(id: historyEntryID, from: history)
+        }
+    }
+
+    /// 清空详情页里展示的密码历史。
+    func clearLoginPasswordHistory(entryID: String) throws {
+        try mutateLoginPasswordHistory(entryID: entryID) { _ in [] }
+    }
+
+    private func mutateLoginPasswordHistory(
+        entryID: String,
+        transform: ([LocalLoginPasswordHistoryEntry]) -> [LocalLoginPasswordHistoryEntry]
+    ) throws {
+        recordUserActivity()
+        guard let entryRepository = activeEntryRepository,
+              let projectID = activeProject?.id,
+              let entry = loginEntries.first(where: { $0.id == entryID })
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+
+        do {
+            let updated = try entryRepository.updateLoginEntry(
+                projectID: projectID,
+                entryID: entryID,
+                draft: LocalLoginEntryDraft(
+                    title: entry.title,
+                    username: entry.username,
+                    password: entry.password,
+                    url: entry.url,
+                    notes: entry.notes,
+                    urls: entry.effectiveURLs,
+                    appBundleID: entry.appBundleID,
+                    appName: entry.appName,
+                    passwordHistory: transform(entry.passwordHistory)
+                )
+            )
+            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
+            if editingLoginEntryID == entryID {
+                selectLoginEntryForEditing(updated)
+            }
+            entryOperationState = .succeeded(updated.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
@@ -11785,6 +11865,11 @@ final class AppSessionModel {
         editingLoginPassword = ""
         editingLoginURL = ""
         editingLoginFavorite = false
+        editingLoginAdditionalURLs = []
+        editingLoginAppBundleID = ""
+        editingLoginAppName = ""
+        editingLoginNotes = ""
+        editingLoginPasswordHistory = []
     }
 
     func clearEditingNoteEntry() {
