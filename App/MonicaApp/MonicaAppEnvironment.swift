@@ -385,6 +385,7 @@ extension AppSessionModel {
                 try vaultSecurityKeyProvider.wrappedKey(for: session)
             },
             rememberedVaultStore: UserDefaultsRememberedVaultStore(),
+            vaultRegistryStore: UserDefaultsVaultRegistryStore(),
             biometricUnlockPreferenceStore: UserDefaultsBiometricUnlockPreferenceStore(),
             vaultDisplayPreferenceStore: UserDefaultsVaultDisplayPreferenceStore(),
             appearancePreferenceStore: UserDefaultsAppAppearancePreferenceStore(),
