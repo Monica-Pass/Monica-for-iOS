@@ -104,6 +104,7 @@
 		A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000003 /* AppMarkdownNotesView.swift */; };
 		A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F000000000000000000001 /* MarkdownNoteTests.swift */; };
 		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
+		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
 		AA000000000000000000000A /* AppPlusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* AppPlusSupport.swift */; };
 		AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* AppAppearancePreferences.swift */; };
@@ -259,6 +260,7 @@
 		A9E000000000000000000003 /* AppMarkdownNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotesView.swift; sourceTree = "<group>"; };
 		A9F000000000000000000001 /* MarkdownNoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownNoteTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
+		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000009 /* AppPlusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusSupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000000B /* AppAppearancePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAppearancePreferences.swift"; sourceTree = "<group>"; };
@@ -409,6 +411,7 @@
 				AA0000000000000000000001 /* WifiQRCodeRenderer.swift */,
 				AA0000000000000000000003 /* AppAttachmentSupport.swift */,
 				AA0000000000000000000005 /* AppSecurityCenterSupport.swift */,
+				AE1300000000000000000001 /* AppSteamGuardSupport.swift */,
 				AA0000000000000000000007 /* AppAutoFillSupport.swift */,
 				AA0000000000000000000009 /* AppPlusSupport.swift */,
 				AA000000000000000000000B /* AppAppearancePreferences.swift */,
@@ -825,6 +828,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A9E000000000000000000002 /* AppMarkdownNotes.swift in Sources */,
 				A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */,
 				AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */,
+				AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */,
 				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
 				AA000000000000000000000A /* AppPlusSupport.swift in Sources */,
 				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,

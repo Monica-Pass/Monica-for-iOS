@@ -321,6 +321,26 @@ final class AppSessionModel {
     var editingSendMaxViews = 1
     var editingSendNotes = ""
     var editingSendFavorite = false
+    var steamEntries: [LocalSteamEntry] = []
+    var deletedSteamEntries: [LocalSteamEntry] = []
+    var steamTitle = ""
+    var steamAccountName = ""
+    var steamID = ""
+    var steamSharedSecret = ""
+    var steamIssuer = "Steam"
+    var steamNotes = ""
+    var steamSearchQuery = ""
+    var showFavoriteSteamEntriesOnly = false
+    var steamImportInput = ""
+    var editingSteamEntryID: String?
+    var editingSteamTitle = ""
+    var editingSteamAccountName = ""
+    var editingSteamID = ""
+    var editingSteamSharedSecret = ""
+    var editingSteamIssuer = "Steam"
+    var editingSteamNotes = ""
+    var editingSteamFavorite = false
+    var totpModule: TotpModule = .totp
     var attachmentEntries: [LocalAttachmentMetadata] = []
     var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
     var attachmentSearchQuery = ""
@@ -1041,6 +1061,9 @@ final class AppSessionModel {
         if let otherKind = destination.otherKind {
             passwordOtherKind = otherKind
         }
+        if summary.kind == .steam {
+            totpModule = .steam
+        }
         presentedDetailRoute = VaultItemRoute(kind: summary.kind, entryID: summary.id)
     }
 
@@ -1068,6 +1091,8 @@ final class AppSessionModel {
             return ssoEntries.contains { $0.id == summary.id }
         case .send:
             return sendEntries.contains { $0.id == summary.id }
+        case .steam:
+            return steamEntries.contains { $0.id == summary.id }
         case .attachmentRef:
             return false
         }
@@ -1168,6 +1193,7 @@ final class AppSessionModel {
         summaries += wifiEntries.map(shortcutSummary(for:))
         summaries += ssoEntries.map(shortcutSummary(for:))
         summaries += sendEntries.map(shortcutSummary(for:))
+        summaries += steamEntries.map(shortcutSummary(for:))
         return summaries
     }
 
@@ -1290,6 +1316,16 @@ final class AppSessionModel {
         )
     }
 
+    private func shortcutSummary(for entry: LocalSteamEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .steam,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.accountName, entry.issuer]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.steam.localizedDisplayName, entry.title, entry.accountName, entry.steamID])
+        )
+    }
+
     private func shortcutTitle(_ value: String) -> String {
         let title = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? String(localized: "未命名") : title
@@ -1321,7 +1357,7 @@ final class AppSessionModel {
             return VaultShortcutDestination(tab: .passwords, passwordModule: .passkey, otherKind: nil)
         case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
-        case .totp:
+        case .totp, .steam:
             return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
         case .card, .identity:
             return VaultShortcutDestination(tab: .wallet, passwordModule: nil, otherKind: nil)
@@ -2813,6 +2849,7 @@ final class AppSessionModel {
             + apiTokenEntries.count
             + wifiEntries.count
             + sendEntries.count
+            + steamEntries.count
             + attachmentEntries.count
     }
 
@@ -2827,6 +2864,7 @@ final class AppSessionModel {
             + apiTokenEntries.filter(\.favorite).count
             + wifiEntries.filter(\.favorite).count
             + sendEntries.filter(\.favorite).count
+            + steamEntries.filter(\.favorite).count
     }
 
     private var deletedVaultEntryCount: Int {
@@ -2840,6 +2878,7 @@ final class AppSessionModel {
             + deletedApiTokenEntries.count
             + deletedWifiEntries.count
             + deletedSendEntries.count
+            + deletedSteamEntries.count
             + deletedAttachmentEntries.count
     }
 
@@ -3020,7 +3059,7 @@ final class AppSessionModel {
             && canUnlockRememberedVaultWithKeychain
     }
 
-    private func filteredFavoriteEntries<Entry>(
+    func filteredFavoriteEntries<Entry>(
         _ entries: [Entry],
         query: String,
         favoritesOnly: Bool,
@@ -3072,6 +3111,8 @@ final class AppSessionModel {
                 return deletedSSOEntries.map(\.id)
             case .send:
                 return deletedSendEntries.map(\.id)
+            case .steam:
+                return deletedSteamEntries.map(\.id)
             case .attachmentRef:
                 return deletedAttachmentEntries.map(\.id)
             }
@@ -3100,6 +3141,8 @@ final class AppSessionModel {
             return filteredSSOEntries.map(\.id)
         case .send:
             return filteredSendEntries.map(\.id)
+        case .steam:
+            return filteredSteamEntries.map(\.id)
         case .attachmentRef:
             return filteredAttachmentEntries.map(\.id)
         }
@@ -3221,6 +3264,10 @@ final class AppSessionModel {
                 guard let entry = sendEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteSendEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .steam:
+                guard let entry = steamEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteSteamEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .attachmentRef:
                 guard let entry = attachmentEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteAttachmentMetadata(projectID: projectID, attachmentID: id)
@@ -3272,6 +3319,9 @@ final class AppSessionModel {
             case .send:
                 let entry = try entryRepository.restoreSendEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .steam:
+                let entry = try entryRepository.restoreSteamEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .attachmentRef:
                 let entry = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: id)
                 events.append((id, entry.fileName))
@@ -3312,6 +3362,7 @@ final class AppSessionModel {
         wifiSearchQuery = ""
         ssoSearchQuery = ""
         sendSearchQuery = ""
+        steamSearchQuery = ""
         attachmentSearchQuery = ""
     }
 
@@ -3327,6 +3378,7 @@ final class AppSessionModel {
         showFavoriteWifiEntriesOnly = favoritesOnly
         showFavoriteSSOEntriesOnly = favoritesOnly
         showFavoriteSendEntriesOnly = favoritesOnly
+        showFavoriteSteamEntriesOnly = favoritesOnly
     }
 
     private func resetVaultQuickFilters() {
@@ -3936,6 +3988,8 @@ final class AppSessionModel {
             if let entry = ssoEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .send:
             if let entry = sendEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .steam:
+            if let entry = steamEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .attachmentRef:
             break
         }
@@ -3966,6 +4020,8 @@ final class AppSessionModel {
             return ssoEntries.first { $0.id == entryID }?.title ?? "SSO"
         case .send:
             return sendEntries.first { $0.id == entryID }?.title ?? "Send"
+        case .steam:
+            return steamEntries.first { $0.id == entryID }?.title ?? "Steam"
         case .attachmentRef:
             return attachmentEntries.first { $0.id == entryID }?.fileName ?? String(localized: "附件")
         }
@@ -4049,6 +4105,8 @@ final class AppSessionModel {
             try createSSOEntry(projectTitle: projectTitle)
         case .send:
             try createSendEntry(projectTitle: projectTitle)
+        case .steam:
+            try createSteamEntry(projectTitle: projectTitle)
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
@@ -4078,6 +4136,8 @@ final class AppSessionModel {
             try updateSelectedSSOEntry()
         case .send:
             try updateSelectedSendEntry()
+        case .steam:
+            try updateSelectedSteamEntry()
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
@@ -6817,6 +6877,8 @@ final class AppSessionModel {
             deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            steamEntries = try entryRepository.listSteamEntries(projectID: projectID)
+            deletedSteamEntries = try entryRepository.listDeletedSteamEntries(projectID: projectID)
             attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
             deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
             entryOperationState = .succeeded(String(localized: "已刷新扩展通行条目"))
@@ -11245,6 +11307,13 @@ final class AppSessionModel {
         showFavoriteSendEntriesOnly = false
         sendBody = ""
         clearEditingSendEntry()
+        steamEntries = []
+        deletedSteamEntries = []
+        steamSearchQuery = ""
+        showFavoriteSteamEntriesOnly = false
+        steamSharedSecret = ""
+        steamImportInput = ""
+        clearEditingSteamEntry()
         attachmentEntries = []
         deletedAttachmentEntries = []
         attachmentSearchQuery = ""
@@ -11551,6 +11620,8 @@ final class AppSessionModel {
             return try entryRepository.createSSOEntry(projectID: projectID, draft: draft).id
         case .send(let draft):
             return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
+        case .steam(let draft):
+            return try entryRepository.createSteamEntry(projectID: projectID, draft: draft).id
         }
     }
 
@@ -11583,6 +11654,8 @@ final class AppSessionModel {
             try entryRepository.deleteSSOEntry(projectID: projectID, entryID: entryID)
         case .send:
             try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
+        case .steam:
+            try entryRepository.deleteSteamEntry(projectID: projectID, entryID: entryID)
         }
     }
 
@@ -11612,6 +11685,8 @@ final class AppSessionModel {
         deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
         sendEntries = try entryRepository.listSendEntries(projectID: projectID)
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+        steamEntries = try entryRepository.listSteamEntries(projectID: projectID)
+        deletedSteamEntries = try entryRepository.listDeletedSteamEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
         publishWidgetSnapshots()
@@ -11654,6 +11729,8 @@ final class AppSessionModel {
             snapshot.deletedWifiEntries += (try? entryRepository.listDeletedWifiEntries(projectID: projectID)) ?? []
             snapshot.sendEntries += (try? entryRepository.listSendEntries(projectID: projectID)) ?? []
             snapshot.deletedSendEntries += (try? entryRepository.listDeletedSendEntries(projectID: projectID)) ?? []
+            snapshot.steamEntries += (try? entryRepository.listSteamEntries(projectID: projectID)) ?? []
+            snapshot.deletedSteamEntries += (try? entryRepository.listDeletedSteamEntries(projectID: projectID)) ?? []
             snapshot.attachmentEntries += (try? entryRepository.listAttachmentMetadata(projectID: projectID)) ?? []
             snapshot.deletedAttachmentEntries += (try? entryRepository.listDeletedAttachmentMetadata(projectID: projectID)) ?? []
         }
@@ -11831,6 +11908,16 @@ final class AppSessionModel {
                 body: $0.body,
                 expiresAt: $0.expiresAt,
                 maxViews: $0.maxViews,
+                notes: $0.notes
+            ))
+        }
+        drafts += steamEntries.map {
+            .steam(LocalSteamEntryDraft(
+                title: $0.title,
+                accountName: $0.accountName,
+                steamID: $0.steamID,
+                sharedSecret: $0.sharedSecret,
+                issuer: $0.issuer,
                 notes: $0.notes
             ))
         }
