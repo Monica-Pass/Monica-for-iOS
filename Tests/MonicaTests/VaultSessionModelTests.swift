@@ -9359,6 +9359,161 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(rawIndex.contains("GitHub"))
     }
 
+    func testAutoFillGuardNeverPublishesIdentitiesWhileVaultLocked() throws {
+        let engine = RecordingVaultEngine()
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            autoFillCredentialIdentityStore: identityStore
+        )
+
+        XCTAssertThrowsError(
+            try model.refreshAutoFillEncryptedIndex(
+                updatedAt: Date(timeIntervalSince1970: 1_800_500_000)
+            )
+        ) { error in
+            XCTAssertEqual(error as? AppAutoFillIndexError, .vaultLocked)
+        }
+        XCTAssertEqual(model.vaultState, .locked)
+        XCTAssertTrue(identityStore.savedIdentities.isEmpty)
+        XCTAssertEqual(identityStore.removeAllCallCount, 0)
+    }
+
+    func testAutoFillGuardBiometricPolicySkipsPublishAfterPasswordUnlock() throws {
+        let engine = RecordingVaultEngine()
+        let indexStore = RecordingAutoFillEncryptedIndexStore()
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let publishLog = MemoryAppAutoFillPublishLogStore()
+        let keyMaterial = AutoFillIndexKeyMaterial(
+            vaultID: "created-vault",
+            keyIdentifier: "autofill-key-1",
+            keyMaterial: Data(repeating: 19, count: 32),
+            createdAt: Date(timeIntervalSince1970: 1_800_510_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            autoFillIndexStore: indexStore,
+            autoFillCredentialSecretStore: RecordingAutoFillCredentialSecretStore(),
+            autoFillCredentialIdentityStore: identityStore,
+            autoFillGuardPolicyStore: MemoryAppAutoFillGuardPolicyStore(
+                policy: AutoFillGuardPolicy(publishesOnlyAfterBiometricUnlock: true)
+            ),
+            autoFillPublishLogStore: publishLog,
+            autoFillIndexKeyMaterialProvider: { _ in keyMaterial }
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "correct horse battery staple"
+        model.loginURL = "https://github.com/login"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        try model.refreshAutoFillEncryptedIndex(
+            updatedAt: Date(timeIntervalSince1970: 1_800_510_100)
+        )
+
+        XCTAssertTrue(identityStore.savedIdentities.isEmpty)
+        XCTAssertEqual(model.autoFillGuardBlockedReason, .biometricUnlockRequired)
+        XCTAssertEqual(model.autoFillIndexState, .succeeded(1))
+        XCTAssertNotNil(publishLog.loadLog().lastSkippedAt)
+    }
+
+    func testAutoFillGuardDefaultPolicyPublishesIdentitiesAfterPasswordUnlock() throws {
+        let engine = RecordingVaultEngine()
+        let indexStore = RecordingAutoFillEncryptedIndexStore()
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let keyMaterial = AutoFillIndexKeyMaterial(
+            vaultID: "created-vault",
+            keyIdentifier: "autofill-key-1",
+            keyMaterial: Data(repeating: 23, count: 32),
+            createdAt: Date(timeIntervalSince1970: 1_800_520_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            autoFillIndexStore: indexStore,
+            autoFillCredentialSecretStore: RecordingAutoFillCredentialSecretStore(),
+            autoFillCredentialIdentityStore: identityStore,
+            autoFillIndexKeyMaterialProvider: { _ in keyMaterial }
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "correct horse battery staple"
+        model.loginURL = "https://github.com/login"
+        try model.createLoginEntry(projectTitle: "Personal")
+
+        try model.refreshAutoFillEncryptedIndex(
+            updatedAt: Date(timeIntervalSince1970: 1_800_520_100)
+        )
+
+        XCTAssertFalse(identityStore.savedIdentities.isEmpty)
+        // 一条登录条目会按「主机名 + 完整 URL」各生成一条身份，因此这里是 2 而不是条目数。
+        XCTAssertEqual(identityStore.savedIdentities.last?.count, 2)
+        XCTAssertNil(model.autoFillGuardBlockedReason)
+    }
+
+    func testAutoFillGuardClearsPublishedIdentitiesWhenVaultLocks() async throws {
+        let engine = RecordingVaultEngine()
+        let indexStore = RecordingAutoFillEncryptedIndexStore()
+        let identityStore = RecordingAutoFillCredentialIdentityStore()
+        let keyMaterial = AutoFillIndexKeyMaterial(
+            vaultID: "created-vault",
+            keyIdentifier: "autofill-key-1",
+            keyMaterial: Data(repeating: 29, count: 32),
+            createdAt: Date(timeIntervalSince1970: 1_800_530_000)
+        )
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            autoFillIndexStore: indexStore,
+            autoFillCredentialSecretStore: RecordingAutoFillCredentialSecretStore(),
+            autoFillCredentialIdentityStore: identityStore,
+            autoFillGuardPolicyStore: MemoryAppAutoFillGuardPolicyStore(
+                policy: AutoFillGuardPolicy(clearsPublishedIdentitiesWhenVaultLocks: true)
+            ),
+            autoFillIndexKeyMaterialProvider: { _ in keyMaterial }
+        )
+
+        model.vaultName = "Mobile"
+        model.vaultPassword = "中文 password 12345!"
+        try model.createLocalVault(
+            in: URL(fileURLWithPath: "/tmp/monica-app-tests", isDirectory: true),
+            deviceID: "ios-app-test-device"
+        )
+        model.loginTitle = "GitHub"
+        model.loginUsername = "alice@example.com"
+        model.loginPassword = "correct horse battery staple"
+        model.loginURL = "https://github.com/login"
+        try model.createLoginEntry(projectTitle: "Personal")
+        try model.refreshAutoFillEncryptedIndex(
+            updatedAt: Date(timeIntervalSince1970: 1_800_530_100)
+        )
+        XCTAssertFalse(identityStore.savedIdentities.isEmpty)
+
+        model.lockLocalVault()
+
+        for _ in 0..<40 {
+            if identityStore.removeAllCallCount > 0 {
+                break
+            }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+
+        XCTAssertEqual(identityStore.removeAllCallCount, 1)
+        XCTAssertEqual(model.vaultState, .locked)
+    }
+
     func testLoginEntryMutationsKeepEncryptedAutoFillIndexInSync() throws {
         let engine = RecordingVaultEngine()
         let indexStore = RecordingAutoFillEncryptedIndexStore()
@@ -12275,6 +12430,8 @@ private final class RecordingAutoFillCredentialSecretStore: AutoFillCredentialSe
 private final class RecordingAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentityStore, @unchecked Sendable {
     private(set) var savedIdentities: [[AppAutoFillCredentialIdentity]] = []
     private(set) var savedPasskeyIdentities: [[AppAutoFillPasskeyCredentialIdentity]] = []
+    private(set) var removeAllCallCount = 0
+    var identityStoreStatus: AppAutoFillIdentityStoreStatus?
 
     func replaceCredentialIdentities(
         _ identities: [AppAutoFillCredentialIdentity],
@@ -12282,6 +12439,14 @@ private final class RecordingAutoFillCredentialIdentityStore: AppAutoFillCredent
     ) {
         savedIdentities.append(identities)
         savedPasskeyIdentities.append(passkeyIdentities)
+    }
+
+    func loadIdentityStoreStatus() async -> AppAutoFillIdentityStoreStatus? {
+        identityStoreStatus
+    }
+
+    func removeAllPublishedIdentities() async {
+        removeAllCallCount += 1
     }
 }
 

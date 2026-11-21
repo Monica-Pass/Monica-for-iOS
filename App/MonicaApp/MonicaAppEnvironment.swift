@@ -222,13 +222,32 @@ protocol AppAutoFillCredentialIdentityStore: Sendable {
         _ identities: [AppAutoFillCredentialIdentity],
         passkeyIdentities: [AppAutoFillPasskeyCredentialIdentity]
     )
+
+    /// 读取系统凭据存储的真实状态。无法读取时返回 nil，调用方应展示为「未知」。
+    func loadIdentityStoreStatus() async -> AppAutoFillIdentityStoreStatus?
+
+    /// 清空本扩展已经发布到系统凭据列表的身份条目。
+    func removeAllPublishedIdentities() async
+}
+
+extension AppAutoFillCredentialIdentityStore {
+    func loadIdentityStoreStatus() async -> AppAutoFillIdentityStoreStatus? {
+        nil
+    }
+
+    func removeAllPublishedIdentities() async {}
 }
 
 final class SystemAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentityStore, @unchecked Sendable {
     private let store: ASCredentialIdentityStore
+    private let publishLog: (any AppAutoFillPublishLogStore)?
 
-    init(store: ASCredentialIdentityStore = .shared) {
+    init(
+        store: ASCredentialIdentityStore = .shared,
+        publishLog: (any AppAutoFillPublishLogStore)? = nil
+    ) {
         self.store = store
+        self.publishLog = publishLog
     }
 
     func replaceCredentialIdentities(
@@ -255,17 +274,75 @@ final class SystemAutoFillCredentialIdentityStore: AppAutoFillCredentialIdentity
             )
         }
         let credentialIdentities: [any ASCredentialIdentity] = passwordIdentities + systemPasskeyIdentities
+        let publishedIdentityCount = credentialIdentities.count
 
         // Keep the authoritative full sync, but never write while the provider is disabled:
         // the store rejects writes then and the failure is silent.
         let identityStore = store
+        let publishLog = publishLog
         identityStore.getState { state in
             guard state.isEnabled else {
+                publishLog?.recordSkip(
+                    reason: String(localized: "自动填充扩展未启用，未发布身份。"),
+                    at: Date()
+                )
                 return
             }
-            identityStore.replaceCredentialIdentities(credentialIdentities) { _, _ in
-                // AutoFill identity sync is best-effort; signed-device validation covers entitlement errors.
+            identityStore.replaceCredentialIdentities(credentialIdentities) { success, error in
+                // AutoFill identity sync is best-effort; the completion is the only place where the
+                // real outcome is observable, so the diagnostics panel reports it from here instead
+                // of assuming success.
+                let now = Date()
+                if success, error == nil {
+                    publishLog?.recordSuccess(count: publishedIdentityCount, at: now)
+                } else {
+                    publishLog?.recordFailure(
+                        message: error.map { AppAutoFillPublishErrorMessage.message(for: $0) }
+                            ?? String(localized: "系统拒绝了身份发布。"),
+                        at: now
+                    )
+                }
             }
+        }
+    }
+
+    func loadIdentityStoreStatus() async -> AppAutoFillIdentityStoreStatus? {
+        let state = await store.state()
+        var identityCount: Int?
+        if #available(iOS 17.4, *) {
+            // `credentialIdentityTypes: []` 等价于 ASCredentialIdentityTypesAll（raw value 为 0）。
+            // 只取数量，返回的身份对象不缓存、不落盘、不打印。
+            let identities = await store.credentialIdentities(
+                forService: nil,
+                credentialIdentityTypes: []
+            )
+            identityCount = identities.count
+        }
+        return AppAutoFillIdentityStoreStatus(
+            isEnabled: state.isEnabled,
+            supportsIncrementalUpdates: state.supportsIncrementalUpdates,
+            identityCount: identityCount
+        )
+    }
+
+    func removeAllPublishedIdentities() async {
+        let publishLog = publishLog
+        let state = await store.state()
+        guard state.isEnabled else {
+            publishLog?.recordSkip(
+                reason: String(localized: "自动填充扩展未启用，无法清空已发布身份。"),
+                at: Date()
+            )
+            return
+        }
+        do {
+            try await store.removeAllCredentialIdentities()
+            publishLog?.recordClear(at: Date())
+        } catch {
+            publishLog?.recordFailure(
+                message: AppAutoFillPublishErrorMessage.message(for: error),
+                at: Date()
+            )
         }
     }
 
@@ -348,6 +425,8 @@ extension AppSessionModel {
                 oneDriveAuthenticationService: environment.oneDriveAuthenticationService,
                 oneDriveBackupPreferencesStore: environment.oneDriveBackupPreferencesStore,
                 autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
+                autoFillGuardPolicyStore: UserDefaultsAppAutoFillGuardPolicyStore(),
+                autoFillPublishLogStore: UserDefaultsAppAutoFillPublishLogStore(),
                 plusResourceUnlockService: DefaultAppPlusResourceUnlockService(),
                 plusEntitlementStore: environment.plusEntitlementStore,
                 sensitivePasteboard: MonicaSensitivePasteboard(pasteboard: SystemSensitivePasteboard()),
@@ -379,6 +458,8 @@ extension AppSessionModel {
             authenticator: DeviceOwnerLocalAuthenticator()
         )
         let vaultSecurityKeyProvider = AppVaultSecurityKeyMaterialProvider()
+        // 发布记录由系统凭据存储的回调写入、由会话与诊断面板读取，三处共用同一个实现。
+        let autoFillPublishLogStore = UserDefaultsAppAutoFillPublishLogStore()
 
         let session = AppSessionModel(
             vaultKeychainService: vaultKeychainService,
@@ -418,8 +499,12 @@ extension AppSessionModel {
             bitwardenSyncCheckpointStore: bitwardenSyncCheckpointStore,
             autoFillIndexStore: indexStore,
             autoFillCredentialSecretStore: secretStore,
-            autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(),
+            autoFillCredentialIdentityStore: SystemAutoFillCredentialIdentityStore(
+                publishLog: autoFillPublishLogStore
+            ),
             autoFillPolicyStore: UserDefaultsAppAutoFillPolicyStore(),
+            autoFillGuardPolicyStore: UserDefaultsAppAutoFillGuardPolicyStore(),
+            autoFillPublishLogStore: autoFillPublishLogStore,
             autoFillIndexKeyMaterialProvider: { vaultID in
                 try keyMaterialProvider.keyMaterial(for: vaultID)
             },
