@@ -3957,10 +3957,10 @@ final class VaultSessionModelTests: XCTestCase {
 
         let rows = model.vaultQuickFilterRows
 
-        XCTAssertEqual(rows.map(\.id), ["all", "category-project-1", "favorites", "trash"])
-        XCTAssertEqual(rows.map(\.title), ["全部", "Personal", "收藏", "回收站"])
-        XCTAssertEqual(rows.map(\.value), ["2 项", "2 项", "2 项", "2 项"])
-        XCTAssertEqual(rows.map(\.systemImage), ["tray.full", "folder", "star", "trash"])
+        XCTAssertEqual(rows.map(\.id), ["all", "category-project-1", "favorites", "archived", "trash"])
+        XCTAssertEqual(rows.map(\.title), ["全部", "Personal", "收藏", "归档", "回收站"])
+        XCTAssertEqual(rows.map(\.value), ["2 项", "2 项", "2 项", "0 项", "2 项"])
+        XCTAssertEqual(rows.map(\.systemImage), ["tray.full", "folder", "star", "archivebox", "trash"])
         XCTAssertEqual(rows.map(\.isSelected), [true, false, false, false])
 
         model.loginSearchQuery = "github"
@@ -3971,13 +3971,13 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.showFavoriteNoteEntriesOnly)
         XCTAssertEqual(model.loginSearchQuery, "")
         XCTAssertEqual(model.noteSearchQuery, "")
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, true, false])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, true, false, false])
 
         model.applyVaultQuickFilter("category-project-1")
 
         XCTAssertFalse(model.showFavoriteLoginEntriesOnly)
         XCTAssertFalse(model.showFavoriteNoteEntriesOnly)
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, true, false, false])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, true, false, false, false])
 
         model.applyVaultQuickFilter("trash")
 
@@ -3986,7 +3986,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.filteredNoteEntries.isEmpty)
         XCTAssertEqual(model.deletedTotpEntries.map(\.title), ["Old TOTP"])
         XCTAssertEqual(model.deletedAttachmentEntries.map(\.fileName), ["old-contract.pdf"])
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, false, true])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, false, false, true])
     }
 
     func testVaultQuickFiltersResetWhenVaultLocks() throws {
