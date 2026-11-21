@@ -118,19 +118,12 @@ jobs:
             [ -x "$path" ] || { echo "::error::$path must be executable"; exit 1; }
           done
           for path in \
-            Artifacts/MSAL/MSAL.xcframework \
             Monica.xcodeproj/xcshareddata/xcschemes/Monica.xcscheme \
             README.md \
             LICENSE
           do
             [ -e "$path" ] || { echo "::error::$path is missing"; exit 1; }
           done
-
-      - name: Verify vendored MSAL
-        run: |
-          set -euo pipefail
-          # vendored binary 无法靠 SwiftPM 校验，改由 pin 文件 + 脚本比对版本/slice/privacy manifest。
-          Scripts/update-msal.sh --verify
 
       - name: Reject tracked build artifacts
         run: |
@@ -144,6 +137,45 @@ jobs:
             echo "::error::Generated/MDBXUniFFI must not be tracked"
             exit 1
           fi
+          if git ls-files --error-unmatch Artifacts/MSAL >/dev/null 2>&1; then
+            echo "::error::Artifacts/MSAL must not be tracked (run Scripts/update-msal.sh --update)"
+            exit 1
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 唯一产出 MSAL 产物的 job（下载官方 release → 校验 sha256 → 重新打包）。
+  # Artifacts/MSAL 不入库，其余 macOS job 复用这里的 artifact。
+  # ---------------------------------------------------------------------------
+  msal-artifact:
+    name: MSAL artifact
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: Scripts/select-xcode.sh
+
+      - uses: actions/cache@v4
+        with:
+          path: Artifacts/MSAL
+          key: msal-${{ runner.os }}-${{ hashFiles('Scripts/update-msal.sh') }}
+          restore-keys: msal-${{ runner.os }}-
+
+      - name: Fetch MSAL
+        run: |
+          set -euo pipefail
+          if [ -f Artifacts/MSAL/MSAL.xcframework/Info.plist ]; then
+            Scripts/update-msal.sh --verify
+          else
+            Scripts/update-msal.sh --update
+          fi
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msal
+          path: Artifacts/MSAL
+          retention-days: 7
 
   # ---------------------------------------------------------------------------
   # 唯一产出 MDBX 产物的 job。其余 macOS job 全部复用它的 artifact，
@@ -264,6 +296,7 @@ jobs:
     name: SwiftPM ${{ matrix.package }}
     runs-on: macos-26
     timeout-minutes: 25
+    needs: msal-artifact
     strategy:
       fail-fast: false
       matrix:
@@ -273,6 +306,11 @@ jobs:
 
       - name: Select Xcode
         run: Scripts/select-xcode.sh
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msal
+          path: Artifacts/MSAL
 
       - uses: actions/cache@v4
         with:
@@ -296,7 +334,7 @@ jobs:
     name: App build and tests
     runs-on: macos-26
     timeout-minutes: 60
-    needs: mdbx-artifact
+    needs: [mdbx-artifact, msal-artifact]
     steps:
       - uses: actions/checkout@v4
 
@@ -309,6 +347,11 @@ jobs:
 
       - name: Unpack MDBX artifact
         run: tar -xzf mdbx-ios.tgz
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: msal
+          path: Artifacts/MSAL
 
       - uses: actions/cache@v4
         with:

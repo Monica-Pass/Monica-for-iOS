@@ -97,4 +97,4 @@ iOS 会把这类注册凭据判为不可用，浏览器侧只看到通用的 `No
 `BS` 只允许与 `BE` 同时置位。
 
 遗留：保险库条目（RP、用户名、credentialID 等元数据）仍是设备本地的，跨设备恢复需要同步
-保险库本身；这一条记录在 `PR_ANDROID_PARITY.md` 的待验项里。
+保险库本身；这一条记录在 `docs/notes/PR_ANDROID_PARITY.md` 的待验项里。

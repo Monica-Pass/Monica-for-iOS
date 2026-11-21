@@ -18,3 +18,7 @@ SwiftPackages/**/.swiftpm/xcode/xcuserdata/
 Generated/MDBXUniFFI/*
 
 Artifacts/MDBX/*
+Artifacts/MSAL/*
+
+# 测试结果包
+*.xcresult/
