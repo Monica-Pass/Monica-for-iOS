@@ -44,6 +44,8 @@
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
 		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
+		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
+		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
 		A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000011 /* AppVaultLayoutPreferences.swift */; };
 		A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000011 /* AppUpdateCheckView.swift */; };
 		A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */; };
@@ -180,6 +182,8 @@
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
 		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
+		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
+		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
 		A90000000000000000000011 /* AppVaultLayoutPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultLayoutPreferences.swift; sourceTree = "<group>"; };
 		A91000000000000000000011 /* AppUpdateCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckView.swift; sourceTree = "<group>"; };
 		A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAuthenticatorLiveActivity.swift; sourceTree = "<group>"; };
@@ -342,6 +346,8 @@
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
 				A100000000000000000000F8 /* AppLanSyncView.swift */,
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
+				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
+				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
@@ -756,6 +762,8 @@
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
 				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
+				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
+				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
 				A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */,
