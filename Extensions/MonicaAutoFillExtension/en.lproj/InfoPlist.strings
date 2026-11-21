@@ -1,2 +1,2 @@
 "CFBundleDisplayName" = "Monica AutoFill";
-"NSFaceIDUsageDescription" = "Verify the device owner before creating or using a Monica passkey.";
+"NSFaceIDUsageDescription" = "Verify the device owner before using a Monica passkey or auto-filling a password.";
