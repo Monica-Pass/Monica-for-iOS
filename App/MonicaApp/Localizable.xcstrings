@@ -419,6 +419,22 @@
         }
       }
     },
+    "%lld 位": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld digits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%1$lld 位"
+          }
+        }
+      }
+    },
     "%lld 分钟": {
       "localizations": {
         "en": {
@@ -569,12 +585,76 @@
         }
       }
     },
+    "1 天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 day"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 天"
+          }
+        }
+      }
+    },
+    "1 小时": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 hour"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "1 小时"
+          }
+        }
+      }
+    },
     "2026-03-11": {
       "localizations": {
         "zh-Hans": {
           "stringUnit": {
             "state": "translated",
             "value": "2026-03-11"
+          }
+        }
+      }
+    },
+    "30 天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "30 天"
+          }
+        }
+      }
+    },
+    "7 天": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 days"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "7 天"
           }
         }
       }
@@ -1017,6 +1097,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "Entry"
+          }
+        }
+      }
+    },
+    "GPG / OpenPGP": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG / OpenPGP"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG / OpenPGP"
           }
         }
       }
@@ -1626,6 +1722,22 @@
         }
       }
     },
+    "OpenPGP 生成依赖 #12；依赖合入前只显示状态，不提供入口。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenPGP generation depends on #12; until it lands, only the status is shown and no entry point is offered."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "OpenPGP 生成依赖 #12；依赖合入前只显示状态，不提供入口。"
+          }
+        }
+      }
+    },
     "Passkey 已保存：%@": {
       "localizations": {
         "en": {
@@ -1807,6 +1919,22 @@
         }
       }
     },
+    "SSH / GPG 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH / GPG keys"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH / GPG 密钥"
+          }
+        }
+      }
+    },
     "SSH 密钥": {
       "localizations": {
         "en": {
@@ -1819,6 +1947,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "SSH 密钥"
+          }
+        }
+      }
+    },
+    "SSH 密钥生成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH key generation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 密钥生成"
+          }
+        }
+      }
+    },
+    "SSH 私钥生成尚未实现（跟踪 #20），本版本不会生成伪密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH private key generation is not implemented yet (tracked in #20); this version will not produce fake keys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 私钥生成尚未实现（跟踪 #20），本版本不会生成伪密钥。"
           }
         }
       }
@@ -2095,6 +2255,38 @@
         }
       }
     },
+    "一般": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fair"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
+        }
+      }
+    },
+    "下划线": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Underscore"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下划线"
+          }
+        }
+      }
+    },
     "不可用": {
       "localizations": {
         "en": {
@@ -2111,6 +2303,22 @@
         }
       }
     },
+    "不评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not scored"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不评分"
+          }
+        }
+      }
+    },
     "不过期": {
       "localizations": {
         "en": {
@@ -2123,6 +2331,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "不过期"
+          }
+        }
+      }
+    },
+    "与现有登录用户名不冲突": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No conflict with existing login usernames"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与现有登录用户名不冲突"
+          }
+        }
+      }
+    },
+    "与现有登录用户名重复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Duplicates an existing login username"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与现有登录用户名重复"
           }
         }
       }
@@ -2368,6 +2608,38 @@
         }
       }
     },
+    "令牌字节不足": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Token is too short"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "令牌字节不足"
+          }
+        }
+      }
+    },
+    "以年份结尾": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Year suffix"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以年份结尾"
+          }
+        }
+      }
+    },
     "优先处理命中泄露指纹的登录条目，并同步更新对应服务。": {
       "localizations": {
         "en": {
@@ -2529,6 +2801,22 @@
         }
       }
     },
+    "依赖未就绪": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dependency not ready"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "依赖未就绪"
+          }
+        }
+      }
+    },
     "保存": {
       "localizations": {
         "en": {
@@ -2577,6 +2865,22 @@
         }
       }
     },
+    "保存生成历史": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save generation history"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存生成历史"
+          }
+        }
+      }
+    },
     "保留 %@，预览合并 %lld 个重复条目。": {
       "localizations": {
         "en": {
@@ -2617,6 +2921,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "保留 %lld 天"
+          }
+        }
+      }
+    },
+    "保留时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retention"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保留时间"
           }
         }
       }
@@ -3005,6 +3325,38 @@
         }
       }
     },
+    "分隔符": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separator"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分隔符"
+          }
+        }
+      }
+    },
+    "分隔符不受支持": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unsupported separator"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分隔符不受支持"
+          }
+        }
+      }
+    },
     "创建": {
       "localizations": {
         "en": {
@@ -3049,6 +3401,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "删除并写回"
+          }
+        }
+      }
+    },
+    "到期：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Expires: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "到期：%1$@"
           }
         }
       }
@@ -3113,6 +3481,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "剩余查看"
+          }
+        }
+      }
+    },
+    "加号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Plus"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加号"
           }
         }
       }
@@ -3197,6 +3581,22 @@
         }
       }
     },
+    "包含数字后缀": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Include numeric suffix"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含数字后缀"
+          }
+        }
+      }
+    },
     "包含符号 (!@#)": {
       "localizations": {
         "en": {
@@ -3241,6 +3641,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "单色"
+          }
+        }
+      }
+    },
+    "单词数偏少": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too few words"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "单词数偏少"
           }
         }
       }
@@ -3445,6 +3861,22 @@
         }
       }
     },
+    "只在本机登录条目中比较，不会联网查询。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compared only against local login entries; nothing is sent over the network."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只在本机登录条目中比较，不会联网查询。"
+          }
+        }
+      }
+    },
     "只显示已收藏条目。": {
       "localizations": {
         "en": {
@@ -3457,6 +3889,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "只显示已收藏条目。"
+          }
+        }
+      }
+    },
+    "只有数字": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digits only"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "只有数字"
           }
         }
       }
@@ -4053,6 +4501,22 @@
         }
       }
     },
+    "字符种类偏少": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Low character variety"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字符种类偏少"
+          }
+        }
+      }
+    },
     "字符类型": {
       "localizations": {
         "en": {
@@ -4065,6 +4529,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "字符类型"
+          }
+        }
+      }
+    },
+    "字符类型单一": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Single character class"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "字符类型单一"
           }
         }
       }
@@ -4097,6 +4577,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "存储"
+          }
+        }
+      }
+    },
+    "存在连续序列": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sequential characters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在连续序列"
+          }
+        }
+      }
+    },
+    "存在重复字符": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Repeated characters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在重复字符"
+          }
+        }
+      }
+    },
+    "存在键盘序列": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard sequence"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "存在键盘序列"
           }
         }
       }
@@ -4177,6 +4705,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "安全类型"
+          }
+        }
+      }
+    },
+    "安全随机数不可用，请重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure randomness is unavailable; try again"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全随机数不可用，请重试"
           }
         }
       }
@@ -4293,6 +4837,70 @@
         }
       }
     },
+    "尚未打开 Vault，生成历史不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation history is unavailable until a vault is open"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未打开 Vault，生成历史不可用"
+          }
+        }
+      }
+    },
+    "已关闭：只在本次页面内保留，离开页面即清除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off: kept only on this screen and cleared when you leave."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已关闭：只在本次页面内保留，离开页面即清除。"
+          }
+        }
+      }
+    },
+    "已在本机 %lld 个登录用户名中比较「%@」，未发现重复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compared against %lld local login usernames (including \"%@\"); no duplicate found."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在本机 %1$lld 个登录用户名中比较「%2$@」，未发现重复。"
+          }
+        }
+      }
+    },
+    "已开启：历史加密存入当前 Vault，锁库后不可读。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On: history is encrypted into the current vault and unreadable while locked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已开启：历史加密存入当前 Vault，锁库后不可读。"
+          }
+        }
+      }
+    },
     "布局": {
       "localizations": {
         "en": {
@@ -4321,6 +4929,358 @@
           "stringUnit": {
             "state": "translated",
             "value": "密码页模块"
+          }
+        }
+      }
+    },
+    "常见弱口令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Common weak password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "常见弱口令"
+          }
+        }
+      }
+    },
+    "弱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Weak"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "弱"
+          }
+        }
+      }
+    },
+    "待生成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not generated yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "待生成"
+          }
+        }
+      }
+    },
+    "很弱": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Very weak"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "很弱"
+          }
+        }
+      }
+    },
+    "很强": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Very strong"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "很强"
+          }
+        }
+      }
+    },
+    "数字位数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数字位数"
+          }
+        }
+      }
+    },
+    "数字位数需在 2 到 4 之间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Digit count must be between 2 and 4"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "数字位数需在 2 到 4 之间"
+          }
+        }
+      }
+    },
+    "无": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "None"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无"
+          }
+        }
+      }
+    },
+    "本机 %lld 个登录用户名中有 %lld 个与「%@」相同（忽略大小写），建议换一个。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld of %lld local login usernames match \"%@\" (ignoring case); choose another."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机 %1$lld 个登录用户名中有 %2$lld 个与「%3$@」相同（忽略大小写），建议换一个。"
+          }
+        }
+      }
+    },
+    "清空全部生成历史？": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear all generation history?"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空全部生成历史？"
+          }
+        }
+      }
+    },
+    "清空历史": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear history"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空历史"
+          }
+        }
+      }
+    },
+    "清空后无法恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This cannot be undone."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清空后无法恢复。"
+          }
+        }
+      }
+    },
+    "点": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点"
+          }
+        }
+      }
+    },
+    "生成一次后，结果会出现在这里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generated values will appear here."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成一次后，结果会出现在这里。"
+          }
+        }
+      }
+    },
+    "生成历史": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation history"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成历史"
+          }
+        }
+      }
+    },
+    "生成历史密钥或密文损坏，已停止读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation history key or ciphertext is corrupted; reading stopped"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成历史密钥或密文损坏，已停止读取"
+          }
+        }
+      }
+    },
+    "生成历史暂不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation history is unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成历史暂不可用"
+          }
+        }
+      }
+    },
+    "用户名不做密码强度评分": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usernames are not scored for password strength"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名不做密码强度评分"
+          }
+        }
+      }
+    },
+    "用户名生成器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Username generator"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名生成器"
+          }
+        }
+      }
+    },
+    "用户名词典不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Username word list unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名词典不可用"
+          }
+        }
+      }
+    },
+    "约 %lld bit（估算）· %lld 类字符": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "About %lld bits (estimated) · %lld character classes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "约 %1$lld bit（估算）· %2$lld 类字符"
+          }
+        }
+      }
+    },
+    "解锁 Vault 后才能查看已保存的历史。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault to view saved history."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁 Vault 后才能查看已保存的历史。"
           }
         }
       }
@@ -10901,6 +11861,22 @@
         }
       }
     },
+    "还没有登录条目可供比对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No login entries to compare yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有登录条目可供比对"
+          }
+        }
+      }
+    },
     "这些网站或应用不会自动创建保存草稿。": {
       "localizations": {
         "en": {
@@ -10977,6 +11953,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "远端文件"
+          }
+        }
+      }
+    },
+    "连字符": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hyphen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "连字符"
           }
         }
       }
@@ -11393,6 +12385,38 @@
         }
       }
     },
+    "锁库后无法访问生成历史": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generation history is inaccessible while the vault is locked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁库后无法访问生成历史"
+          }
+        }
+      }
+    },
+    "锁库状态下不显示历史内容。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "History is hidden while the vault is locked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁库状态下不显示历史内容。"
+          }
+        }
+      }
+    },
     "长度": {
       "localizations": {
         "en": {
@@ -11405,6 +12429,86 @@
           "stringUnit": {
             "state": "translated",
             "value": "长度"
+          }
+        }
+      }
+    },
+    "长度上限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Length limit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长度上限"
+          }
+        }
+      }
+    },
+    "长度上限过小，无法容纳词典组合，请调大上限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The length limit is too small for word combinations; raise it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长度上限过小，无法容纳词典组合，请调大上限"
+          }
+        }
+      }
+    },
+    "长度上限：%lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Length limit: %lld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长度上限：%1$lld"
+          }
+        }
+      }
+    },
+    "长度偏短": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Too short"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长度偏短"
+          }
+        }
+      }
+    },
+    "长度范围无效": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Invalid length range"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "长度范围无效"
           }
         }
       }
