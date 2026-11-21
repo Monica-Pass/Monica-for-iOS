@@ -1084,6 +1084,10 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: String(localized: "格式导入导出")) {
+                VaultFormatImportExportCard(session: session)
+            }
+
             AndroidParitySection(title: "OneDrive") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "账号"), value: session.oneDriveAuthenticationState.label)

@@ -1496,3 +1496,11 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 	};
 	rootObject = A10000000000000000000080 /* Project object */;
 }
+		B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000011 /* AppImportExportFormatsView.swift */; };
+		B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000001 /* AppImportExportFormatsSupport.swift */; };
+		B37000000000000000000011 /* AppImportExportFormatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppImportExportFormatsView.swift; sourceTree = "<group>"; };
+		B37000000000000000000001 /* AppImportExportFormatsSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportFormatsSupport.swift"; sourceTree = "<group>"; };
+				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
+				B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
+				B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */,
+				B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */,
