@@ -364,64 +364,7 @@ struct SettingsRootView: View {
                 }
             }
 
-            AndroidParitySection(title: "Monica Plus") {
-                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    AndroidParityInfoRow(
-                        title: session.plusEntitlementStatusRow.title,
-                        value: session.plusEntitlementStatusRow.value
-                    )
-                    Text(session.plusEntitlementStatusRow.detail)
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(AndroidParityPalette.textSecondary)
-                    AndroidParityInfoRow(title: String(localized: "激活"), value: session.plusActivationState.label)
-                    if session.isPlusActive {
-                        Button(role: .destructive) {
-                            session.deactivatePlus()
-                        } label: {
-                            Label("关闭 Plus", systemImage: "seal")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
-                        .disabled(session.plusActivationState.isRunning)
-                    } else {
-                        Button {
-                            Task {
-                                try? await session.activatePlusFromResource()
-                            }
-                        } label: {
-                            Label("激活 Plus", systemImage: "checkmark.seal")
-                                .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(AndroidParityButtonStyle(tone: .filled))
-                        .disabled(!session.canActivatePlusFromResource || session.plusActivationState.isRunning)
-                    }
-                    AndroidParityDivider()
-                    ForEach(session.plusFeatureRows) { row in
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: row.systemImage)
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(row.isUnlocked ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
-                                .frame(width: 24)
-                            VStack(alignment: .leading, spacing: 4) {
-                                HStack(spacing: 8) {
-                                    Text(row.title)
-                                        .font(.subheadline.weight(.heavy))
-                                    Spacer(minLength: 8)
-                                    Text(row.value)
-                                        .font(.caption.weight(.heavy))
-                                        .foregroundStyle(row.isUnlocked ? AndroidParityPalette.primary : AndroidParityPalette.textSecondary)
-                                }
-                                Text(row.detail)
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(AndroidParityPalette.textSecondary)
-                            }
-                        }
-                        if row.id != session.plusFeatureRows.last?.id {
-                            AndroidParityDivider()
-                        }
-                    }
-                }
-            }
+            AppPlusSettingsView(session: session)
 
             AndroidParitySection(title: "主密码") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {

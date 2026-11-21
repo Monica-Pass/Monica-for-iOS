@@ -397,8 +397,13 @@ final class AppSessionModel {
     /// 自动填充诊断面板：只读系统状态与发布记录，不读取凭据内容。
     let autoFillDiagnostics: AppAutoFillDiagnosticsModel
     var vaultKeychainState: VaultKeychainState = .idle
-    private var plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
-    var plusActivationState: PlusActivationState = .idle
+    /// Monica Plus 支持者权益：离线时来自上次已验证快照，联网后由 StoreKit 校准。
+    private(set) var plusEntitlement = PlusEntitlement.inactive(verifiedAt: Date())
+    /// 购买 / 恢复的状态机。失败或取消只影响提示，不影响任何功能可用性。
+    private(set) var plusPurchaseState: AppPlusPurchaseState = .idle
+    private(set) var plusProducts: [AppPlusProductInfo] = []
+    private(set) var plusProductLoadState: AppPlusProductLoadState = .idle
+    private var plusPurchaseUpdatesTask: Task<Void, Never>?
     var webDAVBaseURL = ""
     var webDAVUsername = ""
     var webDAVPassword = ""
@@ -541,7 +546,7 @@ final class AppSessionModel {
     private let autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)?
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
-    private let plusResourceUnlockService: (any AppPlusResourceUnlockService)?
+    private let plusPurchaseService: (any AppPlusPurchaseService)?
     private let plusEntitlementStore: any AppPlusEntitlementStore
     private let androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore
     private let keePassDatabaseReader: any KeePassDatabaseReader
@@ -626,7 +631,7 @@ final class AppSessionModel {
         autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)? = nil,
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
-        plusResourceUnlockService: (any AppPlusResourceUnlockService)? = nil,
+        plusPurchaseService: (any AppPlusPurchaseService)? = nil,
         plusEntitlementStore: any AppPlusEntitlementStore = MemoryAppPlusEntitlementStore(),
         androidBackupAttachmentBlobStore: any AndroidBackupAttachmentBlobStore = FileAndroidBackupAttachmentBlobStore(),
         keePassDatabaseReader: any KeePassDatabaseReader = DefaultKeePassDatabaseReader(),
@@ -703,7 +708,7 @@ final class AppSessionModel {
         self.autoFillIndexKeyMaterialProvider = autoFillIndexKeyMaterialProvider
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
-        self.plusResourceUnlockService = plusResourceUnlockService
+        self.plusPurchaseService = plusPurchaseService
         self.plusEntitlementStore = plusEntitlementStore
         self.androidBackupAttachmentBlobStore = androidBackupAttachmentBlobStore
         self.keePassDatabaseReader = keePassDatabaseReader
@@ -736,8 +741,11 @@ final class AppSessionModel {
         self.sensitivePasteboard = sensitivePasteboard
             ?? MonicaSensitivePasteboard(pasteboard: UnavailableSensitivePasteboard())
         self.autoFillPolicy = autoFillPolicyStore.loadPolicy()
-        if plusEntitlementStore.loadIsResourceUnlocked() {
-            self.plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
+        if let snapshot = plusEntitlementStore.loadEntitlement() {
+            // 离线时只用上次已验证快照做展示；联网后由 StoreKit 的当前权益重新校准。
+            self.plusEntitlement = snapshot.isActive(at: Date())
+                ? snapshot
+                : .inactive(verifiedAt: snapshot.verifiedAt)
         }
         if let remembered = try? rememberedVaultStore.load() {
             self.rememberedVaultDescriptor = LocalVaultDescriptor(
@@ -1583,9 +1591,7 @@ final class AppSessionModel {
         entryOperationState = .running
 
         do {
-            guard isPlusActive else {
-                throw AppPlusResourceUnlockError.serviceUnavailable
-            }
+            // 附件编辑与其他功能一样永久免费，不再受 Monica Plus 影响。
             let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
             defer {
                 if didStartAccessing {
@@ -1621,9 +1627,7 @@ final class AppSessionModel {
         entryOperationState = .running
 
         do {
-            guard isPlusActive else {
-                throw AppPlusResourceUnlockError.serviceUnavailable
-            }
+            // 附件编辑与其他功能一样永久免费，不再受 Monica Plus 影响。
             let vaultSession = try requireActiveVaultSession()
             guard let entryRepository = activeEntryRepository,
                   let projectID = activeProject?.id
@@ -2587,89 +2591,176 @@ final class AppSessionModel {
     }
 
     var plusEntitlementStatusRow: AppPlusEntitlementStatusRow {
-        return AppPlusEntitlementStatusRow(
+        AppPlusEntitlementStatusRow(
             id: "plus-entitlement",
             title: "Monica Plus",
-            value: isPlusActive ? String(localized: "已激活") : String(localized: "未激活"),
-            detail: plusEntitlementDetail(for: plusEntitlementSnapshot),
-            systemImage: isPlusActive ? "checkmark.seal.fill" : "seal"
+            value: isPlusSupporter ? String(localized: "支持者") : String(localized: "免费使用"),
+            detail: plusEntitlementDetail,
+            systemImage: isPlusSupporter ? "checkmark.seal.fill" : "seal"
         )
     }
 
-    var isPlusActive: Bool {
-        plusEntitlementSnapshot.isActive
+    /// 支持者徽章只用于展示与感谢，绝不参与任何功能可用性判断。
+    var isPlusSupporter: Bool {
+        plusEntitlement.isActive(at: Date())
     }
 
+    /// 所有功能永久免费；这里列出的每一项都不受 Monica Plus 影响。
     var plusFeatureRows: [AppPlusFeatureRow] {
-        return [
+        [
             AppPlusFeatureRow(
-                id: "premium_themes",
-                title: String(localized: "会员专属主题"),
-                detail: String(localized: "解锁 Monica Plus 专属主题配色。"),
-                systemImage: "paintpalette",
-                isUnlocked: isPlusActive
+                id: "vault",
+                title: String(localized: "密码库与附件"),
+                detail: String(localized: "登录、笔记、卡片、身份、通行密钥、SSH、API Token、Wi-Fi、Send 与加密附件。"),
+                systemImage: "key.horizontal"
             ),
             AppPlusFeatureRow(
-                id: "validator_vibration",
-                title: String(localized: "验证器震动提醒"),
-                detail: String(localized: "验证码即将刷新时的本机提醒能力。"),
-                systemImage: "waveform",
-                isUnlocked: isPlusActive
+                id: "autofill",
+                title: String(localized: "自动填充与通行密钥"),
+                detail: String(localized: "系统自动填充、通行密钥提供器与安全策略。"),
+                systemImage: "key.viewfinder"
             ),
             AppPlusFeatureRow(
-                id: "copy_next_code",
-                title: String(localized: "智能复制下一个验证码"),
-                detail: String(localized: "倒计时过短时可切换到下一枚 TOTP。"),
-                systemImage: "arrow.triangle.2.circlepath",
-                isUnlocked: isPlusActive
+                id: "totp",
+                title: String(localized: "验证器与安全中心"),
+                detail: String(localized: "TOTP、Steam 令牌、安全洞察与安全中心。"),
+                systemImage: "shield.lefthalf.filled"
             ),
             AppPlusFeatureRow(
-                id: "bitwarden_sync",
-                title: String(localized: "Bitwarden 同步"),
-                detail: String(localized: "解锁 Bitwarden 同步能力。"),
-                systemImage: "cloud",
-                isUnlocked: isPlusActive
+                id: "sync",
+                title: String(localized: "同步与备份"),
+                detail: String(localized: "WebDAV、OneDrive、iCloud、局域网同步与加密备份。"),
+                systemImage: "arrow.triangle.2.circlepath"
             )
         ]
     }
 
-    var canActivatePlusFromResource: Bool {
-        plusResourceUnlockService != nil
-    }
-
-    func activatePlusFromResource(now: Date = Date()) async throws {
-        recordUserActivity()
-        plusActivationState = .running
+    /// 商品列表：未配置或加载失败时为空，界面显示「暂不可用」，免费功能照常。
+    func loadPlusProducts() async {
+        guard let plusPurchaseService else {
+            plusProducts = []
+            plusProductLoadState = .unavailable(String(localized: "Monica Plus 尚未在此版本开放。"))
+            return
+        }
+        plusProductLoadState = .loading
         do {
-            guard let plusResourceUnlockService else {
-                throw AppPlusResourceUnlockError.serviceUnavailable
-            }
-            guard try await plusResourceUnlockService.unlockPlus() else {
-                throw AppPlusResourceUnlockError.activationRejected
-            }
-            plusEntitlementSnapshot = AppPlusEntitlementSnapshot(source: .resourceUnlock, expiresAt: nil)
-            plusEntitlementStore.saveIsResourceUnlocked(true)
-            plusActivationState = .activated
-            recordUserActivity(at: now)
+            let products = try await plusPurchaseService.loadProducts()
+            plusProducts = products
+            plusProductLoadState = products.isEmpty
+                ? .unavailable(String(localized: "Monica Plus 尚未在此版本开放。"))
+                : .loaded
         } catch {
-            plusActivationState = .failed(readablePlusResourceUnlockErrorMessage(for: error))
-            throw error
+            plusProducts = []
+            plusProductLoadState = .unavailable(readablePlusPurchaseErrorMessage(for: error))
         }
     }
 
-    func deactivatePlus(now: Date = Date()) {
+    func purchasePlus(productID: String, now: Date = Date()) async {
         recordUserActivity()
-        plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
-        plusEntitlementStore.saveIsResourceUnlocked(false)
-        plusActivationState = .deactivated
+        guard let plusPurchaseService else {
+            plusPurchaseState = .failed(String(localized: "Monica Plus 尚未在此版本开放。"))
+            return
+        }
+        plusPurchaseState = .purchasing(productID: productID)
+        do {
+            let result = try await plusPurchaseService.purchase(productID: productID)
+            switch result {
+            case .purchased:
+                // 购买成功后仍以 StoreKit 的当前权益为准，避免把未验证事务当成权益。
+                await refreshPlusEntitlement(now: now)
+                plusPurchaseState = plusEntitlement.isActive(at: now)
+                    ? .succeeded
+                    : .failed(String(localized: "购买已完成，但未取得有效支持者权益。"))
+            case .userCancelled:
+                plusPurchaseState = .userCancelled
+            case .pending:
+                plusPurchaseState = .pending
+            case .unverified:
+                plusPurchaseState = .failed(String(localized: "购买凭据未通过验证，未取得支持者身份。"))
+            case .nothingToRestore:
+                plusPurchaseState = .nothingToRestore
+            }
+        } catch {
+            if let appError = error as? AppPlusPurchaseError, appError == .userCancelled {
+                plusPurchaseState = .userCancelled
+            } else {
+                plusPurchaseState = .failed(readablePlusPurchaseErrorMessage(for: error))
+            }
+        }
         recordUserActivity(at: now)
     }
 
-    private func readablePlusResourceUnlockErrorMessage(for error: Error) -> String {
-        if let appError = error as? AppPlusResourceUnlockError {
+    func restorePlusPurchases(now: Date = Date()) async {
+        recordUserActivity()
+        guard let plusPurchaseService else {
+            plusPurchaseState = .failed(String(localized: "Monica Plus 尚未在此版本开放。"))
+            return
+        }
+        plusPurchaseState = .restoring
+        do {
+            let entitlement = try await plusPurchaseService.restore()
+            applyPlusEntitlement(entitlement, now: now)
+            plusPurchaseState = entitlement.isActive(at: now) ? .succeeded : .nothingToRestore
+        } catch {
+            if let appError = error as? AppPlusPurchaseError, appError == .userCancelled {
+                plusPurchaseState = .userCancelled
+            } else {
+                plusPurchaseState = .failed(readablePlusPurchaseErrorMessage(for: error))
+            }
+        }
+        recordUserActivity(at: now)
+    }
+
+    /// 以 StoreKit 的当前已验证权益校准本地快照；无购买服务（测试 / 未配置）时保留快照。
+    func refreshPlusEntitlement(now: Date = Date()) async {
+        guard let plusPurchaseService else {
+            return
+        }
+        applyPlusEntitlement(await plusPurchaseService.currentEntitlement(), now: now)
+    }
+
+    /// 监听 Ask-to-Buy 批准、退款与撤销；只接受已验证事务（由服务层过滤）。
+    func startObservingPlusPurchases() {
+        guard plusPurchaseUpdatesTask == nil, let plusPurchaseService else {
+            return
+        }
+        plusPurchaseUpdatesTask = Task { [weak self] in
+            for await entitlement in plusPurchaseService.updatesStream {
+                guard !Task.isCancelled, let self else {
+                    return
+                }
+                self.applyPlusEntitlement(entitlement, now: Date())
+            }
+        }
+    }
+
+    private func applyPlusEntitlement(_ entitlement: PlusEntitlement, now: Date) {
+        if entitlement.isActive(at: now) {
+            plusEntitlement = entitlement
+            plusEntitlementStore.saveEntitlement(entitlement)
+        } else {
+            plusEntitlement = .inactive(verifiedAt: entitlement.verifiedAt)
+            plusEntitlementStore.clearEntitlement()
+        }
+    }
+
+    private func readablePlusPurchaseErrorMessage(for error: Error) -> String {
+        if let appError = error as? AppPlusPurchaseError {
             return appError.localizedDescription
         }
-        return String(localized: "Plus 解锁失败，请稍后重试。")
+        return String(localized: "购买失败，请稍后重试。")
+    }
+
+    private var plusEntitlementDetail: String {
+        guard isPlusSupporter else {
+            return String(localized: "Monica Plus 只是支持作者的心意，所有功能永久免费，无需购买。")
+        }
+        if let expiresAt = plusEntitlement.expiresAt {
+            return String(
+                localized: "感谢支持！支持者身份有效期至 \(expiresAt.formatted(date: .numeric, time: .omitted))。"
+            )
+        }
+        return String(localized: "感谢支持！你的支持者身份永久有效。")
     }
 
     var permissionStatusRows: [AppPermissionStatusRow] {
@@ -2766,8 +2857,8 @@ final class AppSessionModel {
             AppExtensionCapabilityRow(
                 id: "plus",
                 title: "Monica Plus",
-                value: isPlusActive ? String(localized: "已解锁") : String(localized: "可一键解锁"),
-                detail: String(localized: "使用本地授权资源解锁可用能力。"),
+                value: String(localized: "永久免费"),
+                detail: String(localized: "支持作者的可选赞助，不会解锁或锁定任何功能。"),
                 systemImage: "checkmark.seal"
             )
         ]
@@ -3184,15 +3275,6 @@ final class AppSessionModel {
 
     private func itemCountLabel(_ count: Int) -> String {
         String(localized: "\(count) 项")
-    }
-
-    private func plusEntitlementDetail(for snapshot: AppPlusEntitlementSnapshot) -> String {
-        switch snapshot.source {
-        case .none:
-            return String(localized: "点击资源激活按钮即可解锁 Monica Plus。")
-        case .resourceUnlock:
-            return String(localized: "已通过本地授权资源解锁 Monica Plus。")
-        }
     }
 
     private func loginStackedGroupKey(for entry: LocalLoginEntry) -> AppLoginStackedGroupKey {

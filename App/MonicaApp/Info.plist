@@ -24,6 +24,12 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>MonicaAppStoreID</key>
 	<string></string>
+	<!-- issue #66：Monica Plus 支持作者型非消耗商品的 App Store Connect 产品 ID。
+	     必须与 App Store Connect 中真实存在的商品一致；留空表示当前版本不开放购买。
+	     价格与名称由 StoreKit 的 displayPrice / displayName 提供，代码里不硬编码。 -->
+	<key>MonicaPlusProductIDs</key>
+	<array>
+	</array>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
