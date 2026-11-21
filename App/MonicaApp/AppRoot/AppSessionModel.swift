@@ -303,6 +303,22 @@ final class AppSessionModel {
     var editingSSONotes = ""
     var editingSSOSecret = ""
     var editingSSOFavorite = false
+    var barcodeEntries: [LocalBarcodeEntry] = []
+    var deletedBarcodeEntries: [LocalBarcodeEntry] = []
+    var barcodeTitle = ""
+    var barcodeSymbology: BarcodeSymbology = .qr
+    var barcodePayload = ""
+    var barcodeLabel = ""
+    var barcodeNotes = ""
+    var barcodeSearchQuery = ""
+    var showFavoriteBarcodeEntriesOnly = false
+    var editingBarcodeEntryID: String?
+    var editingBarcodeTitle = ""
+    var editingBarcodeSymbology: BarcodeSymbology = .qr
+    var editingBarcodePayload = ""
+    var editingBarcodeLabel = ""
+    var editingBarcodeNotes = ""
+    var editingBarcodeFavorite = false
     var sendEntries: [LocalSendEntry] = []
     var deletedSendEntries: [LocalSendEntry] = []
     var sendCreateType: SendCreateType = .text
@@ -962,6 +978,51 @@ final class AppSessionModel {
         ).qrCodePayload
     }
 
+    var filteredBarcodeEntries: [LocalBarcodeEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
+        let query = barcodeSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filteredFavoriteEntries(
+            barcodeEntries,
+            query: query,
+            favoritesOnly: showFavoriteBarcodeEntriesOnly,
+            isFavorite: { $0.favorite }
+        ) { entry, query in
+            entry.title.localizedCaseInsensitiveContains(query)
+                || entry.payload.localizedCaseInsensitiveContains(query)
+                || entry.label.localizedCaseInsensitiveContains(query)
+                || entry.symbology.displayName.localizedCaseInsensitiveContains(query)
+                || entry.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
+    var editingBarcodeDraft: LocalBarcodeEntryDraft {
+        LocalBarcodeEntryDraft(
+            title: editingBarcodeTitle,
+            symbology: editingBarcodeSymbology,
+            payload: editingBarcodePayload,
+            label: editingBarcodeLabel,
+            notes: editingBarcodeNotes
+        )
+    }
+
+    var editingBarcodePreviewPayload: String {
+        guard let entryID = editingBarcodeEntryID else {
+            return ""
+        }
+        return LocalBarcodeEntry(
+            id: entryID,
+            projectID: activeProject?.id ?? "",
+            title: editingBarcodeTitle,
+            symbology: editingBarcodeSymbology,
+            payload: editingBarcodePayload,
+            label: editingBarcodeLabel,
+            notes: editingBarcodeNotes,
+            favorite: editingBarcodeFavorite
+        ).payload
+    }
+
     var filteredSendEntries: [LocalSendEntry] {
         guard !isTrashQuickFilterSelected else {
             return []
@@ -1152,6 +1213,8 @@ final class AppSessionModel {
             return wifiEntries.contains { $0.id == summary.id }
         case .sso:
             return ssoEntries.contains { $0.id == summary.id }
+        case .barcode:
+            return barcodeEntries.contains { $0.id == summary.id }
         case .send:
             return sendEntries.contains { $0.id == summary.id }
         case .steam:
@@ -1259,6 +1322,7 @@ final class AppSessionModel {
         summaries += apiTokenEntries.map(shortcutSummary(for:))
         summaries += wifiEntries.map(shortcutSummary(for:))
         summaries += ssoEntries.map(shortcutSummary(for:))
+        summaries += barcodeEntries.map(shortcutSummary(for:))
         summaries += sendEntries.map(shortcutSummary(for:))
         summaries += steamEntries.map(shortcutSummary(for:))
         return summaries
@@ -1373,6 +1437,16 @@ final class AppSessionModel {
         )
     }
 
+    private func shortcutSummary(for entry: LocalBarcodeEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .barcode,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.symbology.displayName, entry.label]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.barcode.localizedDisplayName, entry.title, entry.symbology.displayName, entry.label])
+        )
+    }
+
     private func shortcutSummary(for entry: LocalSendEntry) -> AppShortcutEntrySummary {
         AppShortcutEntrySummary(
             id: entry.id,
@@ -1422,7 +1496,7 @@ final class AppSessionModel {
             return VaultShortcutDestination(tab: .passwords, passwordModule: .note, otherKind: nil)
         case .passkey:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .passkey, otherKind: nil)
-        case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
+        case .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
         case .totp, .steam:
             return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
@@ -3147,6 +3221,7 @@ final class AppSessionModel {
             + sshKeyEntries.count
             + apiTokenEntries.count
             + wifiEntries.count
+            + barcodeEntries.count
             + sendEntries.count
             + steamEntries.count
             + attachmentEntries.count
@@ -3162,6 +3237,7 @@ final class AppSessionModel {
             + sshKeyEntries.filter(\.favorite).count
             + apiTokenEntries.filter(\.favorite).count
             + wifiEntries.filter(\.favorite).count
+            + barcodeEntries.filter(\.favorite).count
             + sendEntries.filter(\.favorite).count
             + steamEntries.filter(\.favorite).count
     }
@@ -3176,6 +3252,7 @@ final class AppSessionModel {
             + deletedSshKeyEntries.count
             + deletedApiTokenEntries.count
             + deletedWifiEntries.count
+            + deletedBarcodeEntries.count
             + deletedSendEntries.count
             + deletedSteamEntries.count
             + deletedAttachmentEntries.count
@@ -3408,6 +3485,8 @@ final class AppSessionModel {
                 return deletedWifiEntries.map(\.id)
             case .sso:
                 return deletedSSOEntries.map(\.id)
+            case .barcode:
+                return deletedBarcodeEntries.map(\.id)
             case .send:
                 return deletedSendEntries.map(\.id)
             case .steam:
@@ -3438,6 +3517,8 @@ final class AppSessionModel {
             return filteredWifiEntries.map(\.id)
         case .sso:
             return filteredSSOEntries.map(\.id)
+        case .barcode:
+            return filteredBarcodeEntries.map(\.id)
         case .send:
             return filteredSendEntries.map(\.id)
         case .steam:
@@ -3558,6 +3639,9 @@ final class AppSessionModel {
             case .sso:
                 guard let entry = ssoEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteSSOEntry(projectID: projectID, entryID: id)
+            case .barcode:
+                guard let entry = barcodeEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteBarcodeEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
             case .send:
                 guard let entry = sendEntries.first(where: { $0.id == id }) else { continue }
@@ -3614,6 +3698,8 @@ final class AppSessionModel {
                 events.append((id, entry.title))
             case .sso:
                 let entry = try entryRepository.restoreSSOEntry(projectID: projectID, entryID: id)
+            case .barcode:
+                let entry = try entryRepository.restoreBarcodeEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
             case .send:
                 let entry = try entryRepository.restoreSendEntry(projectID: projectID, entryID: id)
@@ -3660,6 +3746,7 @@ final class AppSessionModel {
         apiTokenSearchQuery = ""
         wifiSearchQuery = ""
         ssoSearchQuery = ""
+        barcodeSearchQuery = ""
         sendSearchQuery = ""
         steamSearchQuery = ""
         attachmentSearchQuery = ""
@@ -3676,6 +3763,7 @@ final class AppSessionModel {
         showFavoriteApiTokenEntriesOnly = favoritesOnly
         showFavoriteWifiEntriesOnly = favoritesOnly
         showFavoriteSSOEntriesOnly = favoritesOnly
+        showFavoriteBarcodeEntriesOnly = favoritesOnly
         showFavoriteSendEntriesOnly = favoritesOnly
         showFavoriteSteamEntriesOnly = favoritesOnly
     }
@@ -4241,6 +4329,11 @@ final class AppSessionModel {
         presentedEditorMode = .edit(VaultItemRoute(kind: .wifi, entryID: entry.id))
     }
 
+    func presentEditEditor(for entry: LocalBarcodeEntry) {
+        selectBarcodeEntryForEditing(entry)
+        presentedEditorMode = .edit(VaultItemRoute(kind: .barcode, entryID: entry.id))
+    }
+
     func presentEditEditor(for entry: LocalSendEntry) {
         selectSendEntryForEditing(entry)
         presentedEditorMode = .edit(VaultItemRoute(kind: .send, entryID: entry.id))
@@ -4287,6 +4380,8 @@ final class AppSessionModel {
             if let entry = wifiEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .sso:
             if let entry = ssoEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .barcode:
+            if let entry = barcodeEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .send:
             if let entry = sendEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .steam:
@@ -4319,6 +4414,8 @@ final class AppSessionModel {
             return wifiEntries.first { $0.id == entryID }?.title ?? "Wi-Fi"
         case .sso:
             return ssoEntries.first { $0.id == entryID }?.title ?? "SSO"
+        case .barcode:
+            return barcodeEntries.first { $0.id == entryID }?.title ?? String(localized: "条码")
         case .send:
             return sendEntries.first { $0.id == entryID }?.title ?? "Send"
         case .steam:
@@ -4404,6 +4501,8 @@ final class AppSessionModel {
             try createWifiEntry(projectTitle: projectTitle)
         case .sso:
             try createSSOEntry(projectTitle: projectTitle)
+        case .barcode:
+            try createBarcodeEntry(projectTitle: projectTitle)
         case .send:
             try createSendEntry(projectTitle: projectTitle)
         case .steam:
@@ -4435,6 +4534,8 @@ final class AppSessionModel {
             try updateSelectedWifiEntry()
         case .sso:
             try updateSelectedSSOEntry()
+        case .barcode:
+            try updateSelectedBarcodeEntry()
         case .send:
             try updateSelectedSendEntry()
         case .steam:
@@ -6639,6 +6740,170 @@ final class AppSessionModel {
         }
     }
 
+
+    func createBarcodeEntry(projectTitle: String) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+            let entry = try entryRepository.createBarcodeEntry(
+                projectID: project.id,
+                draft: LocalBarcodeEntryDraft(
+                    title: barcodeTitle,
+                    symbology: barcodeSymbology,
+                    payload: barcodePayload,
+                    label: barcodeLabel,
+                    notes: barcodeNotes
+                )
+            )
+            barcodePayload = ""
+            barcodeEntries = try entryRepository.listBarcodeEntries(projectID: project.id)
+            deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: project.id)
+            appendOperationTimelineEvent(
+                action: .created,
+                itemKind: .barcode,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func selectBarcodeEntryForEditing(_ entry: LocalBarcodeEntry) {
+        recordUserActivity()
+        editingBarcodeEntryID = entry.id
+        editingBarcodeTitle = entry.title
+        editingBarcodeSymbology = entry.symbology
+        editingBarcodePayload = entry.payload
+        editingBarcodeLabel = entry.label
+        editingBarcodeNotes = entry.notes
+        editingBarcodeFavorite = entry.favorite
+    }
+
+    func updateSelectedBarcodeEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingBarcodeEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let entry = try entryRepository.updateBarcodeEntry(
+                projectID: projectID,
+                entryID: entryID,
+                draft: LocalBarcodeEntryDraft(
+                    title: editingBarcodeTitle,
+                    symbology: editingBarcodeSymbology,
+                    payload: editingBarcodePayload,
+                    label: editingBarcodeLabel,
+                    notes: editingBarcodeNotes
+                )
+            )
+            barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
+            deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: projectID)
+            selectBarcodeEntryForEditing(entry)
+            appendOperationTimelineEvent(
+                action: .updated,
+                itemKind: .barcode,
+                itemID: entry.id,
+                itemTitle: entry.title
+            )
+            entryOperationState = .succeeded(entry.title)
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func setSelectedBarcodeFavorite(_ favorite: Bool) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingBarcodeEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let updated = try entryRepository.setBarcodeEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
+            barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
+            selectBarcodeEntryForEditing(updated)
+            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func deleteSelectedBarcodeEntry() throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id,
+                  let entryID = editingBarcodeEntryID
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let deletedTitle = editingBarcodeTitle
+            try entryRepository.deleteBarcodeEntry(projectID: projectID, entryID: entryID)
+            barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
+            deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: projectID)
+            clearEditingBarcodeEntry()
+            appendOperationTimelineEvent(
+                action: .deleted,
+                itemKind: .barcode,
+                itemID: entryID,
+                itemTitle: deletedTitle
+            )
+            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    func restoreBarcodeEntry(_ entry: LocalBarcodeEntry) throws {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+
+            let restored = try entryRepository.restoreBarcodeEntry(projectID: projectID, entryID: entry.id)
+            barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
+            deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: projectID)
+            appendOperationTimelineEvent(
+                action: .restored,
+                itemKind: .barcode,
+                itemID: restored.id,
+                itemTitle: restored.title
+            )
+            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
     func createSendEntry(projectTitle: String) throws {
         recordUserActivity()
         entryOperationState = .running
@@ -7176,6 +7441,8 @@ final class AppSessionModel {
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
             ssoEntries = try entryRepository.listSSOEntries(projectID: projectID)
             deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
+            barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
+            deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: projectID)
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
             steamEntries = try entryRepository.listSteamEntries(projectID: projectID)
@@ -11965,6 +12232,12 @@ final class AppSessionModel {
         showFavoriteSSOEntriesOnly = false
         ssoSecret = ""
         clearEditingSSOEntry()
+        barcodeEntries = []
+        deletedBarcodeEntries = []
+        barcodeSearchQuery = ""
+        showFavoriteBarcodeEntriesOnly = false
+        barcodePayload = ""
+        clearEditingBarcodeEntry()
         sendEntries = []
         deletedSendEntries = []
         sendSearchQuery = ""
@@ -12282,6 +12555,8 @@ final class AppSessionModel {
             return try entryRepository.createWifiEntry(projectID: projectID, draft: draft).id
         case .sso(let draft):
             return try entryRepository.createSSOEntry(projectID: projectID, draft: draft).id
+        case .barcode(let draft):
+            return try entryRepository.createBarcodeEntry(projectID: projectID, draft: draft).id
         case .send(let draft):
             return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
         case .steam(let draft):
@@ -12316,6 +12591,8 @@ final class AppSessionModel {
             try entryRepository.deleteWifiEntry(projectID: projectID, entryID: entryID)
         case .sso:
             try entryRepository.deleteSSOEntry(projectID: projectID, entryID: entryID)
+        case .barcode:
+            try entryRepository.deleteBarcodeEntry(projectID: projectID, entryID: entryID)
         case .send:
             try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
         case .steam:
@@ -12347,6 +12624,8 @@ final class AppSessionModel {
         deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
         ssoEntries = try entryRepository.listSSOEntries(projectID: projectID)
         deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
+        barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
+        deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: projectID)
         sendEntries = try entryRepository.listSendEntries(projectID: projectID)
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
         steamEntries = try entryRepository.listSteamEntries(projectID: projectID)
@@ -12577,6 +12856,15 @@ final class AppSessionModel {
                 linkedLoginEntryID: $0.linkedLoginEntryID,
                 notes: $0.notes,
                 secret: $0.secret
+            )))
+        }
+        rows += barcodeEntries.map {
+            (itemID: $0.id, draft: .barcode(LocalBarcodeEntryDraft(
+                title: $0.title,
+                symbology: $0.symbology,
+                payload: $0.payload,
+                label: $0.label,
+                notes: $0.notes
             )))
         }
         rows += sendEntries.map {
@@ -12919,6 +13207,16 @@ final class AppSessionModel {
         editingWifiHidden = false
         editingWifiNotes = ""
         editingWifiFavorite = false
+    }
+
+    func clearEditingBarcodeEntry() {
+        editingBarcodeEntryID = nil
+        editingBarcodeTitle = ""
+        editingBarcodeSymbology = .qr
+        editingBarcodePayload = ""
+        editingBarcodeLabel = ""
+        editingBarcodeNotes = ""
+        editingBarcodeFavorite = false
     }
 
     func clearEditingSendEntry() {

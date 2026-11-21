@@ -5831,6 +5831,7 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
     case send
     case attachmentRef
     case steam
+    case barcode
 
     public var displayName: String {
         switch self {
@@ -5860,6 +5861,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
             return "附件"
         case .steam:
             return "Steam"
+        case .barcode:
+            return "条码"
         }
     }
 
@@ -5884,7 +5887,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
         .sso,
         .send,
         .attachmentRef,
-        .steam
+        .steam,
+        .barcode
     ]
 }
 
@@ -5943,6 +5947,7 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
     case sso(LocalSSOEntryDraft)
     case send(LocalSendEntryDraft)
     case steam(LocalSteamEntryDraft)
+    case barcode(LocalBarcodeEntryDraft)
 
     public var kind: UnifiedVaultItemKind {
         switch self {
@@ -5958,6 +5963,7 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
         case .sso: return .sso
         case .send: return .send
         case .steam: return .steam
+        case .barcode: return .barcode
         }
     }
 }
@@ -6485,7 +6491,7 @@ public enum AndroidBackupCodec {
 
     private static func backupKind(for item: VaultCSVItemDraft) -> BackupKind {
         switch item {
-        case .login, .sshKey, .apiToken, .wifi, .sso:
+        case .login, .sshKey, .apiToken, .wifi, .sso, .barcode:
             return .password
         case .totp, .steam:
             return .totp
@@ -6573,13 +6579,15 @@ public enum AndroidBackupCodec {
                 AndroidBackupImportedItem(
                     sourceID: object.contains("id") ? Int64(object.int("id", defaultValue: 0)) : nil,
                     deletedAt: object.contains("deletedAt") ? Int64(object.int("deletedAt", defaultValue: 0)) : nil,
-                    draft: .login(LocalLoginEntryDraft(
-                        title: object.string("title"),
-                        username: object.string("username"),
-                        password: object.string("password"),
-                        url: object.string("website"),
-                        notes: object.string("notes")
-                    ))
+                    draft: object.string("loginType").trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == "BARCODE"
+                        ? barcodeDraft(from: object, payload: object.string("password"))
+                        : .login(LocalLoginEntryDraft(
+                            title: object.string("title"),
+                            username: object.string("username"),
+                            password: object.string("password"),
+                            url: object.string("website"),
+                            notes: object.string("notes")
+                        ))
                 )
             }
         } catch {
@@ -6906,6 +6914,8 @@ public enum AndroidBackupCodec {
                         notes: object.string("notes"),
                         secret: metadata.string("secret")
                     ))
+                } else if loginType == "BARCODE" {
+                    draft = barcodeDraft(from: object, payload: object.string("password"))
                 } else {
                     draft = .login(LocalLoginEntryDraft(
                         title: object.string("title"),
@@ -7009,6 +7019,8 @@ public enum AndroidBackupCodec {
         case .wifi:
             return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
         case .sso:
+            return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
+        case .barcode:
             return "folders/\(folder)/passwords/password_\(id)_\(timestamp).json"
         case .send:
             return "folders/\(folder)/notes/note_\(id)_\(timestamp).json"
@@ -7141,6 +7153,19 @@ public enum AndroidBackupCodec {
                     "secret": draft.secret
                 ])
             )
+        case .barcode(let draft):
+            object = passwordObject(
+                id: id,
+                timestamp: timestamp,
+                folderName: folderName,
+                title: draft.title,
+                username: "",
+                password: draft.payload,
+                website: "",
+                notes: draft.notes,
+                loginType: "BARCODE",
+                barcodeMetadata: jsonStringObject(["symbology": draft.symbology.rawValue, "label": draft.label])
+            )
         case .send(let draft):
             object = secureItemObject(id: id, timestamp: timestamp, folderName: folderName, itemType: "NOTE", title: draft.title, itemData: draft.body, notes: draft.notes)
         }
@@ -7160,7 +7185,8 @@ public enum AndroidBackupCodec {
         sshKeyData: String = "",
         wifiMetadata: String = "",
         ssoProvider: String = "",
-        ssoMetadata: String = ""
+        ssoMetadata: String = "",
+        barcodeMetadata: String = ""
     ) -> [String: Any] {
         [
             "id": id,
@@ -7180,8 +7206,27 @@ public enum AndroidBackupCodec {
             "wifiMetadata": wifiMetadata,
             "ssoProvider": ssoProvider,
             "ssoMetadata": ssoMetadata,
+            "barcodeMetadata": barcodeMetadata,
             "customFields": []
         ]
+    }
+
+    /// 条码在 Android 备份中复用密码对象：`loginType == "BARCODE"`，原文放在
+    /// `password` 字段，制式与展示标签放在 `barcodeMetadata`（JSON 字符串）。
+    /// 缺少元数据时按 QR 回读，保证 Android 端导出的条码仍可导入。
+    private static func barcodeDraft(from object: JSONObject, payload: String) -> VaultCSVItemDraft {
+        let metadataData = Data(object.string("barcodeMetadata").utf8)
+        let metadata = (try? JSONSerialization.jsonObject(with: metadataData)) as? [String: Any] ?? [:]
+        let symbology = (metadata["symbology"] as? String)
+            .flatMap(BarcodeSymbology.init(rawValue:)) ?? .qr
+        let label = metadata["label"] as? String ?? ""
+        return .barcode(LocalBarcodeEntryDraft(
+            title: object.string("title"),
+            symbology: symbology,
+            payload: payload,
+            label: label,
+            notes: object.string("notes")
+        ))
     }
 
     private static func secureItemObject(
@@ -7428,7 +7473,10 @@ public enum VaultCSVCodec {
         "notes",
         // 追加列：旧 CSV 没有这两列时按空值回落，保证旧文件仍可导入。
         "urls",
-        "customFields"
+        "customFields",
+        "payload",
+        "symbology",
+        "label"
     ]
 
     public static let headerLine = columns.joined(separator: ",")
@@ -7627,6 +7675,19 @@ public enum VaultCSVCodec {
                 notes: record.value("notes"),
                 secret: record.value("secret")
             ))
+        case .barcode:
+            let symbologyValue = record.value("symbology", fallback: BarcodeSymbology.qr.rawValue)
+            guard let symbology = BarcodeSymbology(rawValue: symbologyValue) else {
+                issues.append(issue(row: rowNumber, code: .unsupportedKind, field: "symbology", detail: "不支持的条码制式"))
+                return nil
+            }
+            return .barcode(LocalBarcodeEntryDraft(
+                title: title,
+                symbology: symbology,
+                payload: record.value("payload"),
+                label: record.value("label"),
+                notes: record.value("notes")
+            ))
         case .send:
             guard let maxViews = int(record.value("maxViews"), defaultValue: 1, row: rowNumber, field: "maxViews", issues: &issues) else {
                 return nil
@@ -7740,6 +7801,12 @@ public enum VaultCSVCodec {
             values["ssoProvider"] = draft.provider.rawValue
             values["ssoProviderName"] = draft.providerName
             values["linkedLoginEntryID"] = draft.linkedLoginEntryID ?? ""
+            values["notes"] = draft.notes
+        case .barcode(let draft):
+            values["title"] = draft.title
+            values["payload"] = draft.payload
+            values["symbology"] = draft.symbology.rawValue
+            values["label"] = draft.label
             values["notes"] = draft.notes
         case .send(let draft):
             values["title"] = draft.title
@@ -8478,7 +8545,38 @@ public protocol LocalVaultEngine {
         favorite: Bool
     ) throws -> LocalSSOEntry
 
+    func createBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalBarcodeEntryDraft
+    ) throws -> LocalBarcodeEntry
+
+    func listBarcodeEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBarcodeEntry]
+
+    func updateBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalBarcodeEntryDraft
+    ) throws -> LocalBarcodeEntry
+
+    func setBarcodeEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalBarcodeEntry
+
     func deleteSSOEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws
+
+    func deleteBarcodeEntry(
         in handle: LocalVaultHandle,
         projectID: String,
         entryID: String
@@ -8536,6 +8634,17 @@ public protocol LocalVaultEngine {
         projectID: String,
         entryID: String
     ) throws -> LocalSteamEntry
+
+    func listDeletedBarcodeEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalBarcodeEntry]
+
+    func restoreBarcodeEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalBarcodeEntry
 
     func createSendEntry(
         in handle: LocalVaultHandle,
@@ -8740,6 +8849,14 @@ public extension LocalVaultEngine {
     func deleteSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
     func listDeletedSteamEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSteamEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
     func restoreSteamEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSteamEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.steam) }
+
+    func createBarcodeEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
+    func listBarcodeEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBarcodeEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
+    func updateBarcodeEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
+    func setBarcodeEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalBarcodeEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
+    func deleteBarcodeEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
+    func listDeletedBarcodeEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBarcodeEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
+    func restoreBarcodeEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalBarcodeEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.barcode) }
 
     func createSendEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.send) }
     func listSendEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSendEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.send) }
@@ -11304,6 +11421,34 @@ public struct LocalVaultEntryRepository {
         try engine.restoreSteamEntry(in: session.handle, projectID: projectID, entryID: entryID)
     }
 
+    public func createBarcodeEntry(projectID: String, draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntry {
+        try engine.createBarcodeEntry(in: session.handle, projectID: projectID, draft: normalizedBarcodeEntryDraft(draft))
+    }
+
+    public func listBarcodeEntries(projectID: String) throws -> [LocalBarcodeEntry] {
+        try engine.listBarcodeEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func updateBarcodeEntry(projectID: String, entryID: String, draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntry {
+        try engine.updateBarcodeEntry(in: session.handle, projectID: projectID, entryID: entryID, draft: normalizedBarcodeEntryDraft(draft))
+    }
+
+    public func setBarcodeEntryFavorite(projectID: String, entryID: String, favorite: Bool) throws -> LocalBarcodeEntry {
+        try engine.setBarcodeEntryFavorite(in: session.handle, projectID: projectID, entryID: entryID, favorite: favorite)
+    }
+
+    public func deleteBarcodeEntry(projectID: String, entryID: String) throws {
+        try engine.deleteBarcodeEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
+    public func listDeletedBarcodeEntries(projectID: String) throws -> [LocalBarcodeEntry] {
+        try engine.listDeletedBarcodeEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func restoreBarcodeEntry(projectID: String, entryID: String) throws -> LocalBarcodeEntry {
+        try engine.restoreBarcodeEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
     public func createSendEntry(projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
         try engine.createSendEntry(in: session.handle, projectID: projectID, draft: normalizedSendEntryDraft(draft))
     }
@@ -11603,6 +11748,18 @@ public struct LocalVaultEntryRepository {
         )
     }
 
+    private func normalizedBarcodeEntryDraft(_ draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntryDraft {
+        let normalizedTitle = try normalizedEntryTitle(draft.title)
+        let validatedDraft = try draft.validated()
+        return LocalBarcodeEntryDraft(
+            title: normalizedTitle,
+            symbology: validatedDraft.symbology,
+            payload: validatedDraft.payload,
+            label: draft.label,
+            notes: draft.notes
+        )
+    }
+
     private func normalizedSendEntryDraft(_ draft: LocalSendEntryDraft) throws -> LocalSendEntryDraft {
         let normalizedTitle = try normalizedEntryTitle(draft.title)
         return LocalSendEntryDraft(
@@ -11823,7 +11980,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
                 targetProjectID: toProjectID
             )
             return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
-        case .passkey, .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef, .steam:
+    case .passkey, .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef, .steam:
             let mapping = parityMoveMapping(for: kind)
             let entry = try moveParityEntry(
                 in: handle,
@@ -12655,6 +12812,52 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         try LocalSteamEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "steam"))
     }
 
+    public func createBarcodeEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntry {
+        let entry = try createParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryType: "document-ref",
+            kind: "barcode",
+            title: draft.title,
+            payload: BarcodeEntryPayloadCodec.encoded(draft)
+        )
+        return try LocalBarcodeEntry(entry)
+    }
+
+    public func listBarcodeEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBarcodeEntry] {
+        try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "barcode").map(LocalBarcodeEntry.init)
+    }
+
+    public func updateBarcodeEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalBarcodeEntryDraft) throws -> LocalBarcodeEntry {
+        let entry = try updateParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryID: entryID,
+            entryType: "document-ref",
+            kind: "barcode",
+            title: draft.title,
+            payload: BarcodeEntryPayloadCodec.encoded(draft)
+        )
+        return try LocalBarcodeEntry(entry)
+    }
+
+    public func setBarcodeEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalBarcodeEntry {
+        try LocalBarcodeEntry(setParityEntryFavorite(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "barcode", favorite: favorite))
+    }
+
+    public func deleteBarcodeEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        try deleteParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "barcode")
+    }
+
+    public func listDeletedBarcodeEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalBarcodeEntry] {
+        try listDeletedParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "barcode").map(LocalBarcodeEntry.init)
+    }
+
+    public func restoreBarcodeEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalBarcodeEntry {
+        try LocalBarcodeEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "barcode"))
+
+    }
+
     public func createSendEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalSendEntryDraft) throws -> LocalSendEntry {
         let entry = try createParityEntry(
             in: handle,
@@ -12870,6 +13073,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             || !listDeletedWifiEntries(in: handle, projectID: projectID).isEmpty
             || !listSSOEntries(in: handle, projectID: projectID).isEmpty
             || !listDeletedSSOEntries(in: handle, projectID: projectID).isEmpty
+            || !listBarcodeEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedBarcodeEntries(in: handle, projectID: projectID).isEmpty
             || !listSendEntries(in: handle, projectID: projectID).isEmpty
             || !listDeletedSendEntries(in: handle, projectID: projectID).isEmpty
             || !listAttachmentMetadata(in: handle, projectID: projectID).isEmpty
@@ -13006,6 +13211,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             return ("document-ref", "wifi")
         case .sso:
             return ("document-ref", "sso")
+        case .barcode:
+            return ("document-ref", "barcode")
         case .send:
             return ("document-ref", "send")
         case .attachmentRef:
@@ -13452,6 +13659,19 @@ private extension LocalWifiEntry {
             password: payload.string("password"),
             hidden: payload.bool("hidden"),
             notes: payload.string("notes"),
+            favorite: entry.favorite
+        )
+    }
+}
+
+private extension LocalBarcodeEntry {
+    init(_ entry: MonicaMDBXParityEntry) throws {
+        let payload = try entry.payloadDictionary()
+        self = BarcodeEntryPayloadCodec.decoded(
+            payload,
+            entryID: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
             favorite: entry.favorite
         )
     }
