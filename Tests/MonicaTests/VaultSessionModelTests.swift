@@ -13078,6 +13078,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var sendEntries: [String: [LocalSendEntry]] = [:]
     private var deletedSends: [String: [LocalSendEntry]] = [:]
     private var steamEntries: [String: [LocalSteamEntry]] = [:]
+    private var deletedSteamEntries: [String: [LocalSteamEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
 
@@ -14650,6 +14651,108 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedSSOEntries[projectID, default: []].removeAll { $0.id == entryID }
         ssoEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalSteamEntryDraft
+    ) throws -> LocalSteamEntry {
+        let entry = LocalSteamEntry(
+            id: "steam-\(steamEntries[projectID, default: []].count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            accountName: draft.accountName,
+            steamID: draft.steamID,
+            sharedSecret: draft.sharedSecret,
+            issuer: draft.issuer,
+            notes: draft.notes
+        )
+        steamEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listSteamEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalSteamEntry] {
+        steamEntries[projectID, default: []]
+    }
+
+    func updateSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalSteamEntryDraft
+    ) throws -> LocalSteamEntry {
+        let currentFavorite = steamEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalSteamEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            accountName: draft.accountName,
+            steamID: draft.steamID,
+            sharedSecret: draft.sharedSecret,
+            issuer: draft.issuer,
+            notes: draft.notes,
+            favorite: currentFavorite
+        )
+        steamEntries[projectID, default: []] = steamEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setSteamEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalSteamEntry {
+        guard let current = steamEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalSteamEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            accountName: current.accountName,
+            steamID: current.steamID,
+            sharedSecret: current.sharedSecret,
+            issuer: current.issuer,
+            notes: current.notes,
+            favorite: favorite
+        )
+        steamEntries[projectID, default: []] = steamEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        guard let entry = steamEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        steamEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedSteamEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedSteamEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalSteamEntry] {
+        deletedSteamEntries[projectID, default: []]
+    }
+
+    func restoreSteamEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalSteamEntry {
+        guard let entry = deletedSteamEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedSteamEntries[projectID, default: []].removeAll { $0.id == entryID }
+        steamEntries[projectID, default: []].append(entry)
         return entry
     }
 
