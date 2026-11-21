@@ -183,6 +183,16 @@ public struct CloudKitCloudVaultRemoteStore: CloudVaultRemoteStore {
     public func pollChanges(since changeToken: Data?) async throws -> CloudKitZoneChangeSet {
         do {
             return try await transport.fetchZoneChanges(configuration, since: changeToken)
+        } catch let failure as CloudKitVaultFailure
+            where failure == .zoneNotFound || failure == .userDeletedZone {
+            // A vault that was never uploaded has no zone yet; "nothing changed"
+            // is the honest answer and keeps the first-run check quiet.
+            return CloudKitZoneChangeSet(
+                changed: [],
+                deletedRecordNames: [],
+                changeToken: nil,
+                didReset: false
+            )
         } catch let failure as CloudKitVaultFailure {
             throw map(failure, operation: .changes)
         } catch {
