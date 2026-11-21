@@ -22,6 +22,8 @@ extension AppSessionModel {
             return passkeyEntries.map(\.id)
         case .sshKey:
             return sshKeyEntries.map(\.id)
+        case .gpgKey:
+            return gpgKeyEntries.map(\.id)
         case .apiToken:
             return apiTokenEntries.map(\.id)
         case .wifi:
@@ -49,7 +51,7 @@ extension AppSessionModel {
         descriptors.reserveCapacity(
             loginEntries.count + noteEntries.count + totpEntries.count
                 + cardEntries.count + identityEntries.count + passkeyEntries.count
-                + sshKeyEntries.count + apiTokenEntries.count + wifiEntries.count
+                + sshKeyEntries.count + gpgKeyEntries.count + apiTokenEntries.count + wifiEntries.count
                 + sendEntries.count + attachmentEntries.count
         )
 
@@ -79,6 +81,9 @@ extension AppSessionModel {
         }
         for entry in sshKeyEntries {
             append(entry.id, .sshKey, entry.title, false)
+        }
+        for entry in gpgKeyEntries {
+            append(entry.id, .gpgKey, entry.title, false)
         }
         for entry in apiTokenEntries {
             append(entry.id, .apiToken, entry.title, false)
@@ -117,6 +122,9 @@ extension AppSessionModel {
         }
         for entry in deletedSshKeyEntries {
             append(entry.id, .sshKey, entry.title, true)
+        }
+        for entry in deletedGPGKeyEntries {
+            append(entry.id, .gpgKey, entry.title, true)
         }
         for entry in deletedApiTokenEntries {
             append(entry.id, .apiToken, entry.title, true)
