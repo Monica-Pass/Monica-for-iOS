@@ -36,6 +36,10 @@ extension AppSessionModel {
             return sendEntries.map(\.id)
         case .attachmentRef:
             return attachmentEntries.map(\.id)
+        case .billingAddress:
+            return billingAddressEntries.map(\.id)
+        case .paymentAccount:
+            return paymentAccountEntries.map(\.id)
         }
     }
 

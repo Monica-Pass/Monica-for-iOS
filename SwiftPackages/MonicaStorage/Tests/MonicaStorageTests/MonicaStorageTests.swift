@@ -3425,7 +3425,9 @@ import MonicaStorage
         .send,
         .attachmentRef,
         .steam,
-        .barcode
+        .barcode,
+        .billingAddress,
+        .paymentAccount
     ])
     #expect(UnifiedVaultItemKind.passkey.displayName == "通行密钥")
     #expect(UnifiedVaultItemKind.sshKey.displayName == "SSH 密钥")
@@ -6268,6 +6270,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
         case .steam:
             throw LocalVaultRepositoryError.unsupportedEntryType(.steam)
+        case .billingAddress, .paymentAccount:
+            throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(

@@ -730,6 +730,10 @@ public struct VaultSearchEntrySnapshot: Sendable, Equatable {
     public var deletedSteamEntries: [LocalSteamEntry] = []
     public var attachmentEntries: [LocalAttachmentMetadata] = []
     public var deletedAttachmentEntries: [LocalAttachmentMetadata] = []
+    public var billingAddressEntries: [LocalBillingAddressEntry] = []
+    public var deletedBillingAddressEntries: [LocalBillingAddressEntry] = []
+    public var paymentAccountEntries: [LocalPaymentAccountEntry] = []
+    public var deletedPaymentAccountEntries: [LocalPaymentAccountEntry] = []
 
     public init() {}
 }
@@ -747,6 +751,7 @@ public enum VaultSearchDocumentBuilder {
             snapshot.loginEntries.count + snapshot.noteEntries.count
                 + snapshot.totpEntries.count + snapshot.cardEntries.count
                 + snapshot.passkeyEntries.count + snapshot.identityEntries.count
+                + snapshot.billingAddressEntries.count + snapshot.paymentAccountEntries.count
         )
 
         append(
@@ -832,6 +837,20 @@ public enum VaultSearchDocumentBuilder {
             deleted: snapshot.deletedAttachmentEntries,
             usage: usage,
             make: attachmentDocument
+        )
+        append(
+            documents: &documents,
+            entries: snapshot.billingAddressEntries,
+            deleted: snapshot.deletedBillingAddressEntries,
+            usage: usage,
+            make: billingAddressDocument
+        )
+        append(
+            documents: &documents,
+            entries: snapshot.paymentAccountEntries,
+            deleted: snapshot.deletedPaymentAccountEntries,
+            usage: usage,
+            make: paymentAccountDocument
         )
         return documents
     }
@@ -1024,6 +1043,44 @@ public enum VaultSearchDocumentBuilder {
             title: entry.fileName,
             details: joined(entry.mediaType, entry.storageMode, entry.downloadState),
             isDeleted: deleted || entry.deleted
+        )
+    }
+
+    /// 账单地址只投影收件人、地址文本与备注；电话与关联 ID 不参与匹配，
+    /// 门牌号等地址细节本身不含 secret，但也不复制任何校验结果或卡片信息。
+    private static func billingAddressDocument(
+        _ entry: LocalBillingAddressEntry,
+        deleted: Bool
+    ) -> VaultSearchDocument {
+        VaultSearchDocument(
+            kind: .billingAddress,
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            username: entry.fullName,
+            details: entry.formattedAddress,
+            notes: entry.notes,
+            isFavorite: entry.favorite,
+            isDeleted: deleted
+        )
+    }
+
+    /// 支付账户只投影账号名称、机构、类型与币种；IBAN / 路由号 / 账号 /
+    /// 掩码账号等金融字段一律不进入索引。
+    private static func paymentAccountDocument(
+        _ entry: LocalPaymentAccountEntry,
+        deleted: Bool
+    ) -> VaultSearchDocument {
+        VaultSearchDocument(
+            kind: .paymentAccount,
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            username: entry.accountName,
+            details: joined(entry.provider, entry.kind.displayName, entry.currency),
+            notes: entry.notes,
+            isFavorite: entry.favorite,
+            isDeleted: deleted
         )
     }
 
