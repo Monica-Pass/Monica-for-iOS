@@ -411,6 +411,8 @@ struct SettingsRootView: View {
                 }
             }
 
+            AppTotpCardStyleSettingsView(session: session)
+
             AppPlusSettingsView(session: session)
 
             AndroidParitySection(title: "主密码") {

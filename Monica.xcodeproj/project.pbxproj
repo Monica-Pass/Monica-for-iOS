@@ -12,8 +12,11 @@
 C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
 		A153000000000000000000A1 /* AppSearchAutoFocusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A153000000000000000000A2 /* AppSearchAutoFocusSupport.swift */; };
 		A153000000000000000000B1 /* SearchAutoFocusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A153000000000000000000B2 /* SearchAutoFocusTests.swift */; };
-		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
-		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
+		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
+C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
+		AF1B0000000000000000A101 /* AppTotpProgressViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1B0000000000000000A102 /* AppTotpProgressViews.swift */; };
+		AF1B0000000000000000A103 /* AppTotpCardStyleSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1B0000000000000000A104 /* AppTotpCardStyleSettingsView.swift */; };
+		AF1B0000000000000000A105 /* TotpCardStyleSettingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1B0000000000000000A106 /* TotpCardStyleSettingsTests.swift */; };		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
 		AA2A00000000000000000002 /* AppLanguageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000002 /* AppLanguageController.swift */; };
 		A530000000000000000000F1 /* AppHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A530000000000000000000F2 /* AppHaptics.swift */; };
 		AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000003 /* AppLanguageSettingsView.swift */; };
@@ -237,8 +240,11 @@ C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa =
 C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
 		A153000000000000000000A2 /* AppSearchAutoFocusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSearchAutoFocusSupport.swift; sourceTree = "<group>"; };
 		A153000000000000000000B2 /* SearchAutoFocusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchAutoFocusTests.swift; sourceTree = "<group>"; };
-		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
-		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
+		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
+C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
+		AF1B0000000000000000A102 /* AppTotpProgressViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTotpProgressViews.swift; sourceTree = "<group>"; };
+		AF1B0000000000000000A104 /* AppTotpCardStyleSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTotpCardStyleSettingsView.swift; sourceTree = "<group>"; };
+		AF1B0000000000000000A106 /* TotpCardStyleSettingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TotpCardStyleSettingsTests.swift; sourceTree = "<group>"; };		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000002 /* AppLanguageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageController.swift; sourceTree = "<group>"; };
 		A530000000000000000000F2 /* AppHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHaptics.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000003 /* AppLanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettingsView.swift; sourceTree = "<group>"; };
@@ -497,6 +503,8 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */,
 				A530000000000000000000F2 /* AppHaptics.swift */,
 				AA2B00000000000000000003 /* AppLanguageSettingsView.swift */,
+				AF1B0000000000000000A102 /* AppTotpProgressViews.swift */,
+				AF1B0000000000000000A104 /* AppTotpCardStyleSettingsView.swift */,
 				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */,
@@ -672,6 +680,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				A510000000000000000000F3 /* NoteTileGridTests.swift */,
 				AB2000000000000000000001 /* BillingItemsTests.swift */,
 				AA2B00000000000000000004 /* AppLanguageTests.swift */,
+				AF1B0000000000000000A106 /* TotpCardStyleSettingsTests.swift */,
 				A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */,
 				B9C200000000000000000004 /* AppKeePassCloudBrowserTests.swift */,
 			);
@@ -1057,6 +1066,8 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
 				A530000000000000000000F1 /* AppHaptics.swift in Sources */,
 				AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */,
+				AF1B0000000000000000A101 /* AppTotpProgressViews.swift in Sources */,
+				AF1B0000000000000000A103 /* AppTotpCardStyleSettingsView.swift in Sources */,
 				AA000000000000000000000E /* AppUnlockSupport.swift in Sources */,
 				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
 				AA20000000000000000000F2 /* AppVaultTagsSupport.swift in Sources */,
@@ -1107,6 +1118,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */,
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */,
+				AF1B0000000000000000A105 /* TotpCardStyleSettingsTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				A153000000000000000000B1 /* SearchAutoFocusTests.swift in Sources */,
