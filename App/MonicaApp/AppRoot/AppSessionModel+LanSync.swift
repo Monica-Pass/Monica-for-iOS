@@ -338,7 +338,7 @@ extension AppSessionModel {
         if let existing = try entryRepository.listProjects().first(where: { $0.title == targetTitle }) {
             return existing
         }
-        return try entryRepository.createProject(title: targetTitle)
+        return try createOrReuseVaultProject(title: targetTitle, entryRepository: entryRepository)
     }
 
     @MainActor
