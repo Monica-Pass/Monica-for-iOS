@@ -15,7 +15,7 @@ import UIKit
 /// Everything here runs on the main actor. The entire local vault is encrypted
 /// at rest and all repository writes are serialized on the main actor, so a
 /// snapshot taken here is consistent enough for the manual, foreground-only MVP
-/// documented in `CLOUD_VAULT_SYNC_NOTES.md`.
+/// documented in `docs/notes/CLOUD_VAULT_SYNC_NOTES.md`.
 enum AppCloudVaultSyncError: Error, LocalizedError {
     case vaultLocked
     case vaultUnavailable

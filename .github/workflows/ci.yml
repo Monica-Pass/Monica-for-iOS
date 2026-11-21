@@ -118,19 +118,12 @@ jobs:
             [ -x "$path" ] || { echo "::error::$path must be executable"; exit 1; }
           done
           for path in \
-            Artifacts/MSAL/MSAL.xcframework \
             Monica.xcodeproj/xcshareddata/xcschemes/Monica.xcscheme \
             README.md \
             LICENSE
           do
             [ -e "$path" ] || { echo "::error::$path is missing"; exit 1; }
           done
-
-      - name: Verify vendored MSAL
-        run: |
-          set -euo pipefail
-          # vendored binary 无法靠 SwiftPM 校验，改由 pin 文件 + 脚本比对版本/slice/privacy manifest。
-          Scripts/update-msal.sh --verify
 
       - name: Reject tracked build artifacts
         run: |
@@ -142,6 +135,10 @@ jobs:
           fi
           if git ls-files --error-unmatch Generated/MDBXUniFFI >/dev/null 2>&1; then
             echo "::error::Generated/MDBXUniFFI must not be tracked"
+            exit 1
+          fi
+          if git ls-files --error-unmatch Artifacts/MSAL >/dev/null 2>&1; then
+            echo "::error::Artifacts/MSAL must not be tracked (run Scripts/update-msal.sh --update)"
             exit 1
           fi
 
@@ -276,6 +273,21 @@ jobs:
 
       - uses: actions/cache@v4
         with:
+          path: Artifacts/MSAL
+          key: msal-${{ runner.os }}-${{ hashFiles('Scripts/update-msal.sh') }}
+          restore-keys: msal-${{ runner.os }}-
+
+      - name: Fetch MSAL
+        run: |
+          set -euo pipefail
+          if [ -f Artifacts/MSAL/MSAL.xcframework/Info.plist ]; then
+            Scripts/update-msal.sh --verify
+          else
+            Scripts/update-msal.sh --update
+          fi
+
+      - uses: actions/cache@v4
+        with:
           path: SwiftPackages/${{ matrix.package }}/.build
           key: spm-${{ runner.os }}-${{ matrix.package }}-${{ hashFiles('SwiftPackages/**/Package.swift', 'SwiftPackages/**/Package.resolved') }}
           restore-keys: spm-${{ runner.os }}-${{ matrix.package }}-
@@ -309,6 +321,21 @@ jobs:
 
       - name: Unpack MDBX artifact
         run: tar -xzf mdbx-ios.tgz
+
+      - uses: actions/cache@v4
+        with:
+          path: Artifacts/MSAL
+          key: msal-${{ runner.os }}-${{ hashFiles('Scripts/update-msal.sh') }}
+          restore-keys: msal-${{ runner.os }}-
+
+      - name: Fetch MSAL
+        run: |
+          set -euo pipefail
+          if [ -f Artifacts/MSAL/MSAL.xcframework/Info.plist ]; then
+            Scripts/update-msal.sh --verify
+          else
+            Scripts/update-msal.sh --update
+          fi
 
       - uses: actions/cache@v4
         with:

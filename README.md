@@ -40,8 +40,8 @@ Monica for iOS 是 Monica 密码库生态的 SwiftUI 客户端。项目以本地
 - OneDrive：已接入 MSAL 多账号切换、app-folder 内备份目录选择/新建、固定文件名覆盖或按时间戳保留版本；真实账号与网络验收仍在推进。
 - KeePass / KDBX：已完成现代 KDBX3/KDBX4 主链路读写兼容，后续继续扩展真实场景验收。
 - 凭据交换（CXF，iOS 26+）：与支持 Apple Credential Exchange Format 的密码管理器互导密码与 TOTP；导入先预览、按登录 URL/用户名/密码与 TOTP 密钥去重，写入失败会回滚本次新增条目；Passkey、备注、银行卡等类型暂不导出。
-- 局域网同步（实验性）：两台 iPhone 在同一 Wi-Fi/热点下通过 Bonjour 手动配对，端到端加密同步登录项、安全笔记与 TOTP；详见 [`LAN_SYNC_NOTES.md`](LAN_SYNC_NOTES.md)。
-- 云端保险库（实验性）：把完整加密的 MDBX 保险库文件与版本清单手动 Push/Pull 到 WebDAV/OneDrive，ETag 条件写避免覆盖，冲突时三选一（保留本机/保留云端/先传冲突副本）；详见 [`CLOUD_VAULT_SYNC_NOTES.md`](CLOUD_VAULT_SYNC_NOTES.md)。
+- 局域网同步（实验性）：两台 iPhone 在同一 Wi-Fi/热点下通过 Bonjour 手动配对，端到端加密同步登录项、安全笔记与 TOTP；详见 [`LAN_SYNC_NOTES.md`](docs/notes/LAN_SYNC_NOTES.md)。
+- 云端保险库（实验性）：把完整加密的 MDBX 保险库文件与版本清单手动 Push/Pull 到 WebDAV/OneDrive，ETag 条件写避免覆盖，冲突时三选一（保留本机/保留云端/先传冲突副本）；详见 [`CLOUD_VAULT_SYNC_NOTES.md`](docs/notes/CLOUD_VAULT_SYNC_NOTES.md)。
 
 ### 已知状态
 
@@ -106,15 +106,17 @@ Rust 侧桥接 crate 位于上游 MDBX workspace：
 mdbx/crates/mdbx-ffi
 ```
 
-`Artifacts/MDBX/`（约 70MB）与 `Generated/MDBXUniFFI/` 都是 `.gitignore` 排除的构建产物，不入库。
+`Artifacts/MDBX/`（约 70MB）、`Artifacts/MSAL/`（约 30MB）与 `Generated/MDBXUniFFI/`
+都是 `.gitignore` 排除的构建产物，不入库，分别由下面两个脚本准备。
 
 #### 一键准备（推荐）
 
 ```bash
-Scripts/bootstrap.sh
+Scripts/bootstrap.sh            # MDBX 原生产物
+Scripts/update-msal.sh --update # MSAL（OneDrive 登录），约 30MB
 ```
 
-脚本会自动检查前置条件、补齐缺失的 Rust target、安装与上游版本匹配的 UniFFI CLI，
+`bootstrap.sh` 会自动检查前置条件、补齐缺失的 Rust target、安装与上游版本匹配的 UniFFI CLI，
 并生成 xcframework。产物已存在时直接跳过（此时不需要任何 Rust 工具链）；
 强制重生成用 `Scripts/bootstrap.sh --force`。
 
@@ -175,15 +177,20 @@ UniFFI 版本不是本仓库写死的常量：`Scripts/uniffi-version.sh` 默认
 
 ### MSAL（OneDrive 登录）
 
-MSAL 以 vendored binary framework 的形式入库（`Artifacts/MSAL/MSAL.xcframework`），
-没有 SwiftPM 版本号可以 pin，所以版本、下载地址与 sha256 统一由
-`Scripts/update-msal.sh` 声明：
+MSAL 不再入库，由 `Scripts/update-msal.sh` 按 pin 的版本下载、校验 sha256 后
+重新打包到 `Artifacts/MSAL/MSAL.xcframework`（该目录已 gitignore）。首次构建前运行：
+
+```bash
+Scripts/update-msal.sh --update
+```
+
+版本、下载地址与 sha256 统一由脚本声明：
 
 | 项目 | 值 |
 | --- | --- |
 | 版本 | 2.18.1（`AzureAD/microsoft-authentication-library-for-objc` 官方 release） |
 | slice | `ios-arm64`、`ios-arm64_x86_64-simulator`、`macos-arm64_x86_64` |
-| 版本校验 | `Scripts/update-msal.sh --verify`（CI lint job 会跑） |
+| 版本校验 | `Scripts/update-msal.sh --verify`（本地已有产物时可校验） |
 
 升级步骤：改脚本里的 `MSAL_VERSION` / `MSAL_SHA256`，执行
 `Scripts/update-msal.sh --update`（下载 → 校验 sha256 → 用 `xcodebuild
