@@ -277,7 +277,18 @@ final class BillingItemsTests: XCTestCase {
     }
 
     func testSessionModelWiresBillingEntryLifecycle() throws {
-        let sessionModel = try String(contentsOf: try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift"), encoding: .utf8)
+        // slice B 起 AppSessionModel 按域拆成 AppSessionModel+<Domain>.swift 多个 extension 文件，
+        // 账单接线的一部分（批量删除/恢复分支）随之搬进了扩展文件。这里只把读取范围扩大到
+        // 类文件 + 全部扩展文件，断言本身保持原样，不放宽。
+        let appRootURL = try repositoryFileURL("App/MonicaApp/AppRoot")
+        let sessionModelFiles = try FileManager.default
+            .contentsOfDirectory(at: appRootURL, includingPropertiesForKeys: nil)
+            .filter { $0.lastPathComponent.hasPrefix("AppSessionModel") && $0.pathExtension == "swift" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+        XCTAssertFalse(sessionModelFiles.isEmpty)
+        let sessionModel = try sessionModelFiles
+            .map { try String(contentsOf: $0, encoding: .utf8) }
+            .joined(separator: "\n")
 
         XCTAssertTrue(sessionModel.contains("try createBillingAddressEntry(projectTitle: projectTitle)"))
         XCTAssertTrue(sessionModel.contains("try updateSelectedPaymentAccountEntry()"))
