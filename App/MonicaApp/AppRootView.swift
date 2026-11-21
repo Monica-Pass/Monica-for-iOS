@@ -350,6 +350,9 @@ struct AppRootView: View {
             setSelectedSshKeyFavorite: setSelectedSshKeyFavorite,
             deleteSshKeyEntry: deleteSshKeyEntry,
             restoreSshKeyEntry: restoreSshKeyEntry,
+            setSelectedGPGKeyFavorite: setSelectedGPGKeyFavorite,
+            deleteGPGKeyEntry: deleteGPGKeyEntry,
+            restoreGPGKeyEntry: restoreGPGKeyEntry,
             setSelectedApiTokenFavorite: setSelectedApiTokenFavorite,
             deleteApiTokenEntry: deleteApiTokenEntry,
             restoreApiTokenEntry: restoreApiTokenEntry,
@@ -738,6 +741,30 @@ struct AppRootView: View {
     private func restoreSshKeyEntry(_ entry: LocalSshKeyEntry) {
         do {
             try session.restoreSshKeyEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedGPGKeyFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedGPGKeyFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteGPGKeyEntry() {
+        do {
+            try session.deleteSelectedGPGKeyEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreGPGKeyEntry(_ entry: LocalGPGKeyEntry) {
+        do {
+            try session.restoreGPGKeyEntry(entry)
         } catch {
             // AppSessionModel owns user-visible failure state.
         }

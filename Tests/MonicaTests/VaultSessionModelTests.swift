@@ -73,7 +73,7 @@ final class VaultSessionModelTests: XCTestCase {
         )
         XCTAssertEqual(
             PasswordModule.otherKinds,
-            [.sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef]
+            [.sshKey, .apiToken, .wifi, .gpgKey, .sso, .send, .attachmentRef]
         )
     }
 
@@ -13078,6 +13078,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var sendEntries: [String: [LocalSendEntry]] = [:]
     private var deletedSends: [String: [LocalSendEntry]] = [:]
     private var steamEntries: [String: [LocalSteamEntry]] = [:]
+    private var gpgKeyEntries: [String: [LocalGPGKeyEntry]] = [:]
+    private var deletedGPGKeyEntries: [String: [LocalGPGKeyEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
 
@@ -13490,6 +13492,32 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     sharedSecret: entry.sharedSecret,
                     issuer: entry.issuer,
                     notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .gpgKey:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &gpgKeyEntries, title: \.title) { entry, projectID in
+                LocalGPGKeyEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    ownerName: entry.ownerName,
+                    ownerEmail: entry.ownerEmail,
+                    userID: entry.userID,
+                    fingerprint: entry.fingerprint,
+                    keyID: entry.keyID,
+                    algorithm: entry.algorithm,
+                    keyVersion: entry.keyVersion,
+                    algorithmID: entry.algorithmID,
+                    keyCreatedAt: entry.keyCreatedAt,
+                    keyExpiresAt: entry.keyExpiresAt,
+                    isRevoked: entry.isRevoked,
+                    isSecretKey: entry.isSecretKey,
+                    secretKeyIsEncrypted: entry.secretKeyIsEncrypted,
+                    notes: entry.notes,
+                    armoredPublicKey: entry.armoredPublicKey,
+                    armoredPrivateKey: entry.armoredPrivateKey,
+                    importedAt: entry.importedAt,
                     favorite: entry.favorite
                 )
             }
@@ -14650,6 +14678,145 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedSSOEntries[projectID, default: []].removeAll { $0.id == entryID }
         ssoEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalGPGKeyEntryDraft
+    ) throws -> LocalGPGKeyEntry {
+        let entry = LocalGPGKeyEntry(
+            id: "gpg-\(gpgKeyEntries[projectID, default: []].count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            ownerName: draft.metadata.ownerName,
+            ownerEmail: draft.metadata.ownerEmail,
+            userID: draft.metadata.userID,
+            fingerprint: draft.metadata.fingerprint,
+            keyID: draft.metadata.keyID,
+            algorithm: draft.metadata.algorithm,
+            keyVersion: draft.metadata.keyVersion,
+            algorithmID: draft.metadata.algorithmID,
+            keyCreatedAt: draft.metadata.keyCreatedAt,
+            keyExpiresAt: draft.metadata.keyExpiresAt,
+            isRevoked: draft.metadata.isRevoked,
+            isSecretKey: draft.metadata.isSecretKey,
+            secretKeyIsEncrypted: draft.metadata.secretKeyIsEncrypted,
+            notes: draft.notes,
+            armoredPublicKey: draft.armoredPublicKey,
+            armoredPrivateKey: draft.armoredPrivateKey,
+            importedAt: draft.importedAt,
+            favorite: false
+        )
+        gpgKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listGPGKeyEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalGPGKeyEntry] {
+        gpgKeyEntries[projectID, default: []]
+    }
+
+    func updateGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalGPGKeyEntryDraft
+    ) throws -> LocalGPGKeyEntry {
+        let currentFavorite = gpgKeyEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalGPGKeyEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            ownerName: draft.metadata.ownerName,
+            ownerEmail: draft.metadata.ownerEmail,
+            userID: draft.metadata.userID,
+            fingerprint: draft.metadata.fingerprint,
+            keyID: draft.metadata.keyID,
+            algorithm: draft.metadata.algorithm,
+            keyVersion: draft.metadata.keyVersion,
+            algorithmID: draft.metadata.algorithmID,
+            keyCreatedAt: draft.metadata.keyCreatedAt,
+            keyExpiresAt: draft.metadata.keyExpiresAt,
+            isRevoked: draft.metadata.isRevoked,
+            isSecretKey: draft.metadata.isSecretKey,
+            secretKeyIsEncrypted: draft.metadata.secretKeyIsEncrypted,
+            notes: draft.notes,
+            armoredPublicKey: draft.armoredPublicKey,
+            armoredPrivateKey: draft.armoredPrivateKey,
+            importedAt: draft.importedAt,
+            favorite: currentFavorite
+        )
+        gpgKeyEntries[projectID, default: []] = gpgKeyEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setGPGKeyEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalGPGKeyEntry {
+        guard let current = gpgKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalGPGKeyEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            ownerName: current.ownerName,
+            ownerEmail: current.ownerEmail,
+            userID: current.userID,
+            fingerprint: current.fingerprint,
+            keyID: current.keyID,
+            algorithm: current.algorithm,
+            keyVersion: current.keyVersion,
+            algorithmID: current.algorithmID,
+            keyCreatedAt: current.keyCreatedAt,
+            keyExpiresAt: current.keyExpiresAt,
+            isRevoked: current.isRevoked,
+            isSecretKey: current.isSecretKey,
+            secretKeyIsEncrypted: current.secretKeyIsEncrypted,
+            notes: current.notes,
+            armoredPublicKey: current.armoredPublicKey,
+            armoredPrivateKey: current.armoredPrivateKey,
+            importedAt: current.importedAt,
+            favorite: favorite
+        )
+        gpgKeyEntries[projectID, default: []] = gpgKeyEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        guard let entry = gpgKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        gpgKeyEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedGPGKeyEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedGPGKeyEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalGPGKeyEntry] {
+        deletedGPGKeyEntries[projectID, default: []]
+    }
+
+    func restoreGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalGPGKeyEntry {
+        guard let entry = deletedGPGKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedGPGKeyEntries[projectID, default: []].removeAll { $0.id == entryID }
+        gpgKeyEntries[projectID, default: []].append(entry)
         return entry
     }
 
