@@ -24838,6 +24838,390 @@
           }
         }
       }
+    },
+    "条码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barcode"
+          }
+        }
+      }
+    },
+    "制式": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "制式"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Symbology"
+          }
+        }
+      }
+    },
+    "原始内容": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始内容"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raw content"
+          }
+        }
+      }
+    },
+    "原始内容（必填）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原始内容（必填）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Raw content (required)"
+          }
+        }
+      }
+    },
+    "显示标签": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示标签"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display label"
+          }
+        }
+      }
+    },
+    "显示标签（可选）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示标签（可选）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Display label (optional)"
+          }
+        }
+      }
+    },
+    "码图预览": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "码图预览"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code preview"
+          }
+        }
+      }
+    },
+    "码图": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "码图"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Code"
+          }
+        }
+      }
+    },
+    "%@ 码图": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ 码图"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ code"
+          }
+        }
+      }
+    },
+    "当前设备无法生成 %@ 码图。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前设备无法生成 %@ 码图。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device cannot generate a %@ code."
+          }
+        }
+      }
+    },
+    "EAN-13 支持 12 位数字（自动补校验位）或 13 位带校验位数字。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EAN-13 支持 12 位数字（自动补校验位）或 13 位带校验位数字。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "EAN-13 accepts 12 digits (the check digit is added automatically) or 13 digits with a check digit."
+          }
+        }
+      }
+    },
+    "这里保存并显示条码的原始内容，不会解析或重建登机牌等票据的航空数据。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里保存并显示条码的原始内容，不会解析或重建登机牌等票据的航空数据。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Only the raw barcode content is stored and displayed. Airline data from boarding passes and other tickets is never parsed or rebuilt."
+          }
+        }
+      }
+    },
+    "未填写内容": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未填写内容"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No content"
+          }
+        }
+      }
+    },
+    "分享条码内容": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享条码内容"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Share barcode content"
+          }
+        }
+      }
+    },
+    "显示敏感字段后可查看并扫描条码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示敏感字段后可查看并扫描条码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reveal sensitive fields to view and scan the barcode"
+          }
+        }
+      }
+    },
+    "没有匹配的条码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的条码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching barcodes"
+          }
+        }
+      }
+    },
+    "已删除条码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除条码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted barcodes"
+          }
+        }
+      }
+    },
+    "扫描条码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描条码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan barcode"
+          }
+        }
+      }
+    },
+    "扫描现有条码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扫描现有条码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Scan an existing barcode"
+          }
+        }
+      }
+    },
+    "将条码放入取景框内": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将条码放入取景框内"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Place the barcode inside the frame"
+          }
+        }
+      }
+    },
+    "相机权限未开启，请在「设置 › Monica」中允许相机访问后再扫描。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "相机权限未开启，请在「设置 › Monica」中允许相机访问后再扫描。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Camera access is off. Allow camera access in Settings › Monica, then scan again."
+          }
+        }
+      }
+    },
+    "此设备没有可用的摄像头，请手动输入条码内容。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "此设备没有可用的摄像头，请手动输入条码内容。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No camera is available on this device. Enter the barcode content manually."
+          }
+        }
+      }
+    },
+    "无法启动相机，请手动输入条码内容。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法启动相机，请手动输入条码内容。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The camera could not start. Enter the barcode content manually."
+          }
+        }
+      }
+    },
+    "当前设备不支持扫描这些条码格式，请手动输入内容。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前设备不支持扫描这些条码格式，请手动输入内容。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device cannot scan these barcode formats. Enter the content manually."
+          }
+        }
+      }
     }
   },
   "version": "1.0"

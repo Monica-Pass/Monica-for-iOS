@@ -61,6 +61,9 @@ struct AndroidParityVaultHomeView: View {
     let setSelectedWifiFavorite: (Bool) -> Void
     let deleteWifiEntry: () -> Void
     let restoreWifiEntry: (LocalWifiEntry) -> Void
+    let setSelectedBarcodeFavorite: (Bool) -> Void
+    let deleteBarcodeEntry: () -> Void
+    let restoreBarcodeEntry: (LocalBarcodeEntry) -> Void
     let setSelectedSendFavorite: (Bool) -> Void
     let deleteSendEntry: () -> Void
     let restoreSendEntry: (LocalSendEntry) -> Void
@@ -228,6 +231,8 @@ struct AndroidParityVaultHomeView: View {
             wifiList
         case .sso:
             ssoList
+        case .barcode:
+            barcodeList
         case .send:
             sendList
         case .attachmentRef:
@@ -537,6 +542,22 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    private var barcodeList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredBarcodeEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .barcode) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidBarcodeListCard(entry: entry)
+                    }
+                }
+            }
+            if session.filteredBarcodeEntries.isEmpty {
+                emptyList(String(localized: "没有匹配的条码"), icon: "barcode.viewfinder")
+            }
+            deletedBarcodeRows
+        }
+    }
+
     private var sendList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSendEntries) { entry in
@@ -720,6 +741,18 @@ struct AndroidParityVaultHomeView: View {
                 ForEach(session.deletedSSOEntries) { entry in
                     restoreButton(id: entry.id, kind: .sso, title: entry.title, subtitle: entry.displayProviderName) {
                         try? session.restoreSSOEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private var deletedBarcodeRows: some View {
+        if !session.deletedBarcodeEntries.isEmpty {
+            restoreSection("已删除条码") {
+                ForEach(session.deletedBarcodeEntries) { entry in
+                    restoreButton(id: entry.id, kind: .barcode, title: entry.title, subtitle: entry.displaySubtitle) {
+                        restoreBarcodeEntry(entry)
                     }
                 }
             }
@@ -911,6 +944,7 @@ struct AndroidParityVaultHomeView: View {
                 case .apiToken: return session.apiTokenSearchQuery
                 case .wifi: return session.wifiSearchQuery
                 case .sso: return session.ssoSearchQuery
+                case .barcode: return session.barcodeSearchQuery
                 case .send: return session.sendSearchQuery
                 case .steam: return session.steamSearchQuery
                 case .attachmentRef: return session.attachmentSearchQuery
@@ -930,6 +964,7 @@ struct AndroidParityVaultHomeView: View {
                 case .apiToken: session.apiTokenSearchQuery = value
                 case .wifi: session.wifiSearchQuery = value
                 case .sso: session.ssoSearchQuery = value
+                case .barcode: session.barcodeSearchQuery = value
                 case .send: session.sendSearchQuery = value
                 case .steam: session.steamSearchQuery = value
                 case .attachmentRef: session.attachmentSearchQuery = value
@@ -952,6 +987,7 @@ struct AndroidParityVaultHomeView: View {
                 case .apiToken: return session.showFavoriteApiTokenEntriesOnly
                 case .wifi: return session.showFavoriteWifiEntriesOnly
                 case .sso: return session.showFavoriteSSOEntriesOnly
+                case .barcode: return session.showFavoriteBarcodeEntriesOnly
                 case .send: return session.showFavoriteSendEntriesOnly
                 case .steam: return session.showFavoriteSteamEntriesOnly
                 case .attachmentRef: return false
@@ -971,6 +1007,7 @@ struct AndroidParityVaultHomeView: View {
                 case .apiToken: session.showFavoriteApiTokenEntriesOnly = value
                 case .wifi: session.showFavoriteWifiEntriesOnly = value
                 case .sso: session.showFavoriteSSOEntriesOnly = value
+                case .barcode: session.showFavoriteBarcodeEntriesOnly = value
                 case .send: session.showFavoriteSendEntriesOnly = value
                 case .steam: session.showFavoriteSteamEntriesOnly = value
                 case .attachmentRef: break
@@ -1118,6 +1155,7 @@ struct AndroidParityVaultHomeView: View {
         case .apiToken: setSelectedApiTokenFavorite(favorite)
         case .wifi: setSelectedWifiFavorite(favorite)
         case .sso: try? session.setSelectedSSOFavorite(favorite)
+        case .barcode: setSelectedBarcodeFavorite(favorite)
         case .send: setSelectedSendFavorite(favorite)
         case .steam: try? session.setSelectedSteamFavorite(favorite)
         case .attachmentRef: break
@@ -1137,6 +1175,7 @@ struct AndroidParityVaultHomeView: View {
         case .apiToken: deleteApiTokenEntry()
         case .wifi: deleteWifiEntry()
         case .sso: try? session.deleteSelectedSSOEntry()
+        case .barcode: deleteBarcodeEntry()
         case .send: deleteSendEntry()
         case .steam: try? session.deleteSelectedSteamEntry()
         case .attachmentRef: break
@@ -1914,6 +1953,7 @@ struct AddEditVaultItemView: View {
     let dismiss: () -> Void
 
     @State private var isTotpScannerPresented = false
+    @State private var isBarcodeScannerPresented = false
     @State private var isSendFileImporterPresented = false
     @State private var isAttachmentImporterPresented = false
     @State private var sendLinkCopyFeedback: String?
@@ -1961,6 +2001,14 @@ struct AddEditVaultItemView: View {
                     return false
                 },
                 onCancel: { isTotpScannerPresented = false }
+            )
+        }
+        .sheet(isPresented: $isBarcodeScannerPresented) {
+            BarcodeScannerSheet(
+                onCode: { value, symbology in
+                    applyScannedBarcode(value, symbology: symbology)
+                },
+                onCancel: { isBarcodeScannerPresented = false }
             )
         }
         .fileImporter(
@@ -2077,6 +2125,7 @@ struct AddEditVaultItemView: View {
             case .apiToken: apiTokenFields
             case .wifi: wifiFields
             case .sso: SSOEntryEditorFields(session: session, isAdding: mode.isAdding)
+            case .barcode: barcodeFields
             case .send: sendFields
             case .steam: SteamEntryEditorFields(session: session, isAdding: mode.isAdding)
             case .attachmentRef:
@@ -2432,6 +2481,28 @@ struct AddEditVaultItemView: View {
         }
     }
 
+    private var barcodeFields: some View {
+        BarcodeEditorFields(
+            title: mode.isAdding ? $session.barcodeTitle : $session.editingBarcodeTitle,
+            symbology: mode.isAdding ? $session.barcodeSymbology : $session.editingBarcodeSymbology,
+            payload: mode.isAdding ? $session.barcodePayload : $session.editingBarcodePayload,
+            label: mode.isAdding ? $session.barcodeLabel : $session.editingBarcodeLabel,
+            notes: mode.isAdding ? $session.barcodeNotes : $session.editingBarcodeNotes,
+            onScan: { isBarcodeScannerPresented = true }
+        )
+    }
+
+    private func applyScannedBarcode(_ value: String, symbology: BarcodeSymbology) {
+        if mode.isAdding {
+            session.barcodeSymbology = symbology
+            session.barcodePayload = value
+        } else {
+            session.editingBarcodeSymbology = symbology
+            session.editingBarcodePayload = value
+        }
+        isBarcodeScannerPresented = false
+    }
+
     private var sendFields: some View {
         VStack(spacing: 18) {
             field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.sendTitle : $session.editingSendTitle)
@@ -2545,7 +2616,7 @@ struct AddEditVaultItemView: View {
         case .card: return String(localized: "银行卡")
         case .identity: return String(localized: "证件")
         case .passkey: return String(localized: "通行密钥")
-        case .sshKey, .apiToken, .wifi, .sso, .send, .steam, .attachmentRef: return mode.kind.localizedDisplayName
+        case .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .steam, .attachmentRef: return mode.kind.localizedDisplayName
         }
     }
 
@@ -2561,6 +2632,7 @@ struct AddEditVaultItemView: View {
         case .apiToken: return session.editingApiTokenFavorite
         case .wifi: return session.editingWifiFavorite
         case .sso: return session.editingSSOFavorite
+        case .barcode: return session.editingBarcodeFavorite
         case .send: return session.editingSendFavorite
         case .steam: return session.editingSteamFavorite
         case .attachmentRef: return false
@@ -2581,6 +2653,7 @@ private extension UnifiedVaultItemKind {
         case .apiToken: return "text.badge.key"
         case .wifi: return "wifi"
         case .sso: return "person.badge.key.fill"
+        case .barcode: return "barcode.viewfinder"
         case .send: return "paperplane.fill"
         case .steam: return "shield.lefthalf.filled"
         case .attachmentRef: return "paperclip"
@@ -2662,6 +2735,16 @@ struct VaultItemDetailView: View {
                     artwork: entry.cardArtwork,
                     masksNumber: masksSensitiveFields
                 )
+            }
+            if route.kind == .barcode,
+               let entry = session.barcodeEntries.first(where: { $0.id == route.entryID }) {
+                AndroidParitySection(title: String(localized: "条码")) {
+                    BarcodeDetailCodeCard(
+                        payload: entry.payload,
+                        symbology: entry.symbology,
+                        isRevealed: session.isSensitivePreviewRevealed(entryID: route.entryID)
+                    )
+                }
             }
 
             AndroidParitySection(title: String(localized: "详情")) {
@@ -2906,6 +2989,16 @@ struct VaultItemDetailView: View {
         case .wifi:
             guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password, .password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
+        case .barcode:
+            guard let entry = session.barcodeEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return [
+                row("title", String(localized: "标题"), entry.title),
+                row("symbology", String(localized: "制式"), entry.symbology.displayName),
+                row("payload", String(localized: "原始内容"), sensitive(entry.payload, .otherSecret)),
+                row("label", String(localized: "显示标签"), entry.label),
+                row("notes", String(localized: "备注"), entry.notes),
+                row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))
+            ]
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt.isEmpty ? String(localized: "不过期") : entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
@@ -2979,6 +3072,9 @@ struct VaultItemDetailView: View {
         case .sso:
             guard let entry = session.ssoEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return session.ssoDetailSecrets(for: entry)
+        case .barcode:
+            guard let entry = session.barcodeEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return ["payload": entry.payload]
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["body": entry.body]

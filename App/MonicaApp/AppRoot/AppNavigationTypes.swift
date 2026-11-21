@@ -97,6 +97,7 @@ enum PasswordModule: String, CaseIterable, Hashable, Identifiable, Sendable {
         .apiToken,
         .wifi,
         .sso,
+        .barcode,
         .send,
         .attachmentRef
     ]
@@ -138,7 +139,7 @@ extension UnifiedVaultItemKind {
             return .passkey
         case .note:
             return .note
-        case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
+        case .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef:
             return .other
         case .totp, .card, .identity, .steam:
             return nil

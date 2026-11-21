@@ -30,6 +30,8 @@ extension AppSessionModel {
             return ssoEntries.map(\.id)
         case .steam:
             return steamEntries.map(\.id)
+        case .barcode:
+            return barcodeEntries.map(\.id)
         case .send:
             return sendEntries.map(\.id)
         case .attachmentRef:
