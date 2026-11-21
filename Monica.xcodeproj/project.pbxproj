@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B5E000000000000000000001 /* VaultSessionTestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000005 /* VaultSessionTestDoubles.swift */; };
+		B5E000000000000000000002 /* GeneratorSaveLoginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */; };
+		B5E000000000000000000003 /* VaultLayoutPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */; };
+		B5E000000000000000000004 /* InterfaceDensityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000008 /* InterfaceDensityTests.swift */; };
 		B5D000000000000000000005 /* AppSessionModel+CloudBackup.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D000000000000000000006 /* AppSessionModel+CloudBackup.swift */; };
 		B5D000000000000000000003 /* AppSessionModel+BitwardenSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D000000000000000000004 /* AppSessionModel+BitwardenSync.swift */; };
 		B5D000000000000000000001 /* AppSessionModel+KeePassReadOnly.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D000000000000000000002 /* AppSessionModel+KeePassReadOnly.swift */; };
@@ -258,6 +262,10 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B5E000000000000000000005 /* VaultSessionTestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSessionTestDoubles.swift; sourceTree = "<group>"; };
+		B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorSaveLoginTests.swift; sourceTree = "<group>"; };
+		B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultLayoutPreferencesTests.swift; sourceTree = "<group>"; };
+		B5E000000000000000000008 /* InterfaceDensityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InterfaceDensityTests.swift; sourceTree = "<group>"; };
 		B5D000000000000000000006 /* AppSessionModel+CloudBackup.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CloudBackup.swift"; sourceTree = "<group>"; };
 		B5D000000000000000000004 /* AppSessionModel+BitwardenSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+BitwardenSync.swift"; sourceTree = "<group>"; };
 		B5D000000000000000000002 /* AppSessionModel+KeePassReadOnly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+KeePassReadOnly.swift"; sourceTree = "<group>"; };
@@ -735,6 +743,10 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				C3B0000000000000000000A6 /* AppVaultRecoveryTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
+				B5E000000000000000000005 /* VaultSessionTestDoubles.swift */,
+				B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */,
+				B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */,
+				B5E000000000000000000008 /* InterfaceDensityTests.swift */,
 				A153000000000000000000B2 /* SearchAutoFocusTests.swift */,
 		A149A0000000000000000004 /* ItemIconPreferencesTests.swift */,				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
@@ -1209,6 +1221,10 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				AF1B0000000000000000A105 /* TotpCardStyleSettingsTests.swift in Sources */,
 				F142000000000000000000A3 /* AppSettingsSearchTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
+				B5E000000000000000000001 /* VaultSessionTestDoubles.swift in Sources */,
+				B5E000000000000000000002 /* GeneratorSaveLoginTests.swift in Sources */,
+				B5E000000000000000000003 /* VaultLayoutPreferencesTests.swift in Sources */,
+				B5E000000000000000000004 /* InterfaceDensityTests.swift in Sources */,
 				C3B0000000000000000000A5 /* AppVaultRecoveryTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				A153000000000000000000B1 /* SearchAutoFocusTests.swift in Sources */,
