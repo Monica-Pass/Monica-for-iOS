@@ -843,20 +843,23 @@ public enum NoteMarkdownImageInspector {
             )
         }
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              CGImageSourceGetCount(source) > 0,
-              let rawProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) else {
+              CGImageSourceGetCount(source) > 0 else {
+            throw NoteMarkdownImageError.unreadableImage
+        }
+        // 先判格式：完全不是图片的数据应报 unsupportedFormat，而“像图片但读不出尺寸”才算 unreadableImage。
+        guard let typeIdentifier = CGImageSourceGetType(source),
+              let unifiedType = UTType(typeIdentifier as String),
+              let mediaType = unifiedType.preferredMIMEType,
+              NoteMarkdownImageLimits.supportedMediaTypes.contains(mediaType) else {
+            throw NoteMarkdownImageError.unsupportedFormat
+        }
+        guard let rawProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) else {
             throw NoteMarkdownImageError.unreadableImage
         }
         let properties = rawProperties as NSDictionary
         guard let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
               let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue else {
             throw NoteMarkdownImageError.unreadableImage
-        }
-        guard let typeIdentifier = CGImageSourceGetType(source),
-              let unifiedType = UTType(typeIdentifier as String),
-              let mediaType = unifiedType.preferredMIMEType,
-              NoteMarkdownImageLimits.supportedMediaTypes.contains(mediaType) else {
-            throw NoteMarkdownImageError.unsupportedFormat
         }
         try NoteMarkdownImageLimits.validate(pixelWidth: width, pixelHeight: height)
         return NoteMarkdownImageProperties(
