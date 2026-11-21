@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B5B000000000000000000009 /* AppSessionModel+WidgetShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B00000000000000000000A /* AppSessionModel+WidgetShortcuts.swift */; };
 		B5B000000000000000000007 /* AppSessionModel+SensitiveValues.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B000000000000000000008 /* AppSessionModel+SensitiveValues.swift */; };
 		B5B000000000000000000005 /* AppSessionModel+VaultBatch.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B000000000000000000006 /* AppSessionModel+VaultBatch.swift */; };
 		B5B000000000000000000003 /* AppSessionModel+VaultFolders.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B000000000000000000004 /* AppSessionModel+VaultFolders.swift */; };
@@ -245,6 +246,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B5B00000000000000000000A /* AppSessionModel+WidgetShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+WidgetShortcuts.swift"; sourceTree = "<group>"; };
 		B5B000000000000000000008 /* AppSessionModel+SensitiveValues.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+SensitiveValues.swift"; sourceTree = "<group>"; };
 		B5B000000000000000000006 /* AppSessionModel+VaultBatch.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultBatch.swift"; sourceTree = "<group>"; };
 		B5B000000000000000000004 /* AppSessionModel+VaultFolders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultFolders.swift"; sourceTree = "<group>"; };
@@ -634,6 +636,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 			C3A0000000000000000000A4 /* VaultSnapshotViews.swift */,
 			AA2B00000000000000000001 /* AppLanguagePreferences.swift */,
 			AA2B00000000000000000002 /* AppLanguageController.swift */,
+				B5B00000000000000000000A /* AppSessionModel+WidgetShortcuts.swift */,
 				B5B000000000000000000008 /* AppSessionModel+SensitiveValues.swift */,
 				B5B000000000000000000006 /* AppSessionModel+VaultBatch.swift */,
 				B5B000000000000000000004 /* AppSessionModel+VaultFolders.swift */,
@@ -1115,6 +1118,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				C39100000000000000000007 /* AppSessionModel+GeneratedLogin.swift in Sources */,
 				B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */,
 				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
+				B5B000000000000000000009 /* AppSessionModel+WidgetShortcuts.swift in Sources */,
 				B5B000000000000000000007 /* AppSessionModel+SensitiveValues.swift in Sources */,
 				B5B000000000000000000005 /* AppSessionModel+VaultBatch.swift in Sources */,
 				B5B000000000000000000003 /* AppSessionModel+VaultFolders.swift in Sources */,
