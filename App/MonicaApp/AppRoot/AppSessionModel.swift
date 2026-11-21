@@ -334,6 +334,14 @@ final class AppSessionModel {
     var attachmentSearchQuery = ""
     var attachmentQuickLookPreviewURL: URL?
     var vaultProjects: [LocalVaultProject] = []
+    /// #27：文件夹森林（父/子目录 + 面包屑）。主键是 projectID，绝不用显示路径。
+    var vaultFolderTree: VaultFolderTree = .empty
+    /// #27：总览统计（每类条目数、收藏、回收站、最近使用）。
+    var vaultFolderOverview: VaultFolderOverview = .builder(documents: [], tree: .empty)
+    /// #27：是否正在展示保险箱总览页。
+    var isVaultOverviewPresented = false
+    /// #27：保存文件夹索引锚点的本地存储（只存一个 UUID，不含用户内容）。
+    var vaultFolderAnchorStore: any VaultFolderAnchorStore = appDefaultVaultFolderAnchorStore()
     var selectedVaultQuickFilterID = "all"
     var selectedVaultBatchItemIDs: Set<String> = []
     private var vaultBatchSelectionKind: UnifiedVaultItemKind?
@@ -1873,8 +1881,12 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            let project = try entryRepository.createProject(title: title)
-            vaultProjects.append(project)
+            let node = try createVaultFolder(
+                title: title,
+                parentID: activeVaultFolder?.id,
+                entryRepository: entryRepository
+            )
+            let project = LocalVaultProject(id: node.id, title: node.title)
             try activateVaultCategory(project, entryRepository: entryRepository)
             entryOperationState = .succeeded(project.title)
             return project
@@ -1911,7 +1923,12 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            let renamed = try entryRepository.renameProject(projectID: projectID, title: title)
+            let node = try renameVaultFolder(
+                folderID: projectID,
+                title: title,
+                entryRepository: entryRepository
+            )
+            let renamed = LocalVaultProject(id: node.id, title: node.title)
             vaultProjects = vaultProjects.map { $0.id == projectID ? renamed : $0 }
             if activeProject?.id == projectID {
                 activeProject = renamed
@@ -1933,7 +1950,16 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            try entryRepository.deleteProject(projectID: projectID)
+            guard let folderRepository = vaultFolderRepository(entryRepository: entryRepository) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            // 保留旧行为：非空分类仍然拒绝删除，需要走新的文件夹删除流程显式选择处置方式。
+            let plan = try folderRepository.deletionPlan(folderID: projectID)
+            guard plan.isEffectivelyEmpty else {
+                throw VaultFolderError.folderNotEmpty
+            }
+            _ = try folderRepository.deleteFolder(folderID: projectID, strategy: .reparent)
+            refreshVaultFolders(entryRepository: entryRepository)
             vaultProjects.removeAll { $0.id == projectID }
             if activeProject?.id == projectID {
                 if let next = vaultProjects.first {
@@ -1951,6 +1977,177 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    // MARK: - #27 文件夹层级与保险箱总览
+
+    private func vaultFolderRepository(
+        entryRepository: LocalVaultEntryRepository
+    ) -> VaultFolderRepository? {
+        guard let session = activeVaultSession else { return nil }
+        return VaultFolderRepository(
+            entryRepository: entryRepository,
+            session: session,
+            anchorStore: vaultFolderAnchorStore
+        )
+    }
+
+    /// 解锁或结构变更后重读文件夹森林，并把 `vaultProjects` 同步成文件夹列表。
+    func refreshVaultFolders(entryRepository: LocalVaultEntryRepository) {
+        guard let repository = vaultFolderRepository(entryRepository: entryRepository) else {
+            vaultFolderTree = .empty
+            vaultProjects = []
+            return
+        }
+        if let tree = try? repository.tree() {
+            vaultFolderTree = tree
+            vaultProjects = tree.folders.map { LocalVaultProject(id: $0.id, title: $0.title) }
+        }
+        // 读取失败时保留上一次的树，避免瞬时错误把界面清空成「没有文件夹」。
+        if let activeProject, let node = vaultFolderTree.folder(id: activeProject.id) {
+            self.activeProject = LocalVaultProject(id: node.id, title: node.title)
+        }
+        refreshVaultSearchIndex(entryRepository: entryRepository)
+    }
+
+    /// 当前所在的文件夹；`nil` 表示停在「全部条目」这一层。
+    var activeVaultFolder: VaultFolderNode? {
+        guard let activeProject else { return nil }
+        return vaultFolderTree.folder(id: activeProject.id)
+    }
+
+    /// 面包屑：从根到当前文件夹。
+    var activeVaultFolderBreadcrumb: [VaultFolderNode] {
+        activeVaultFolder.map { vaultFolderTree.path(to: $0.id) } ?? []
+    }
+
+    /// 当前层级下可直接进入的子文件夹。
+    var activeVaultChildFolders: [VaultFolderNode] {
+        vaultFolderTree.children(of: activeVaultFolder?.id)
+    }
+
+    /// 当前层级是否还能再建子文件夹（受最大层级约束）。
+    var canCreateVaultFolder: Bool {
+        let depth = activeVaultFolder.map { vaultFolderTree.depth(of: $0.id) } ?? 0
+        return depth < VaultFolderNameRules.maxDepth
+    }
+
+    @discardableResult
+    func createVaultFolder(
+        title: String,
+        parentID: String?,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> VaultFolderNode {
+        guard let repository = vaultFolderRepository(entryRepository: entryRepository) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let node = try repository.createFolder(title: title, parentID: parentID)
+        refreshVaultFolders(entryRepository: entryRepository)
+        return node
+    }
+
+    /// 在指定父目录下新建文件夹；不传父目录时建在当前文件夹里。
+    @discardableResult
+    func createVaultFolder(title: String, parentID: String? = nil) throws -> VaultFolderNode {
+        guard let entryRepository = activeEntryRepository else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let resolvedParentID = parentID ?? activeVaultFolder?.id
+        return try createVaultFolder(
+            title: title,
+            parentID: resolvedParentID,
+            entryRepository: entryRepository
+        )
+    }
+
+    @discardableResult
+    func renameVaultFolder(
+        folderID: String,
+        title: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> VaultFolderNode {
+        guard let repository = vaultFolderRepository(entryRepository: entryRepository) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let node = try repository.renameFolder(id: folderID, title: title)
+        refreshVaultFolders(entryRepository: entryRepository)
+        return node
+    }
+
+    @discardableResult
+    func renameVaultFolder(folderID: String, title: String) throws -> VaultFolderNode {
+        guard let entryRepository = activeEntryRepository else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        return try renameVaultFolder(folderID: folderID, title: title, entryRepository: entryRepository)
+    }
+
+    /// 移动文件夹（含整棵子树）。禁止移入自身/后代，由仓储层拦截。
+    @discardableResult
+    func moveVaultFolder(folderID: String, parentID: String?) throws -> VaultFolderNode {
+        guard let entryRepository = activeEntryRepository,
+              let repository = vaultFolderRepository(entryRepository: entryRepository)
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let node = try repository.moveFolder(id: folderID, newParentID: parentID)
+        refreshVaultFolders(entryRepository: entryRepository)
+        publishWidgetSnapshots()
+        return node
+    }
+
+    func vaultFolderDeletionPlan(folderID: String) throws -> VaultFolderDeletionPlan {
+        guard let entryRepository = activeEntryRepository,
+              let repository = vaultFolderRepository(entryRepository: entryRepository)
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        return try repository.deletionPlan(folderID: folderID)
+    }
+
+    /// 按显式策略删除文件夹：内容上移或递归进回收站，绝不静默永久删除条目。
+    @discardableResult
+    func deleteVaultFolder(
+        folderID: String,
+        strategy: VaultFolderDeleteStrategy
+    ) throws -> VaultFolderDeletionResult {
+        guard let entryRepository = activeEntryRepository,
+              let repository = vaultFolderRepository(entryRepository: entryRepository)
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let removedIDs = Set(vaultFolderTree.subtree(rootedAt: folderID).map(\.id))
+        let wasActive = activeProject.map { removedIDs.contains($0.id) } ?? false
+        let result = try repository.deleteFolder(folderID: folderID, strategy: strategy)
+        refreshVaultFolders(entryRepository: entryRepository)
+        // 正停在被删子树里就退回「全部条目」，不要把人留在已经不存在的层级。
+        if wasActive, activeProject.map({ vaultFolderTree.folder(id: $0.id) == nil }) ?? false {
+            activeProject = nil
+            clearAllEntryLists()
+            resetVaultQuickFilters()
+        }
+        publishWidgetSnapshots()
+        return result
+    }
+
+    /// 进入某个文件夹（`nil` 回到「全部条目」），面包屑据此渲染。
+    func openVaultFolder(_ folderID: String?) throws {
+        guard let folderID else {
+            activeProject = nil
+            clearAllEntryLists()
+            resetVaultQuickFilters()
+            return
+        }
+        try switchVaultCategory(projectID: folderID)
+    }
+
+    func presentVaultOverview() {
+        isVaultOverviewPresented = true
+        recordUserActivity()
+    }
+
+    func dismissVaultOverview() {
+        isVaultOverviewPresented = false
     }
 
     func clearVaultBatchSelection() {
@@ -3451,7 +3648,7 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            vaultProjects = try entryRepository.listProjects()
+            refreshVaultFolders(entryRepository: entryRepository)
             rememberVault(session)
             bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
                 vaultID: session.handle.vaultID
@@ -3503,7 +3700,7 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            vaultProjects = try entryRepository.listProjects()
+            refreshVaultFolders(entryRepository: entryRepository)
             rememberVault(session)
             bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
                 vaultID: session.handle.vaultID
@@ -8449,7 +8646,7 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            vaultProjects = try entryRepository.listProjects()
+            refreshVaultFolders(entryRepository: entryRepository)
             rememberVault(session)
             loginEntries = []
             deletedLoginEntries = []
@@ -11151,6 +11348,9 @@ final class AppSessionModel {
         activeEntryRepository = nil
         activeProject = nil
         vaultProjects = []
+        vaultFolderTree = .empty
+        vaultFolderOverview = .builder(documents: [], tree: .empty)
+        isVaultOverviewPresented = false
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -11206,6 +11406,9 @@ final class AppSessionModel {
         activeEntryRepository = nil
         activeProject = nil
         vaultProjects = []
+        vaultFolderTree = .empty
+        vaultFolderOverview = .builder(documents: [], tree: .empty)
+        isVaultOverviewPresented = false
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -11719,9 +11922,9 @@ final class AppSessionModel {
             snapshot.deletedAttachmentEntries += (try? entryRepository.listDeletedAttachmentMetadata(projectID: projectID)) ?? []
         }
 
-        vaultSearch.replaceDocuments(
-            VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
-        )
+        let documents = VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
+        vaultSearch.replaceDocuments(documents)
+        vaultFolderOverview = VaultFolderOverview.builder(documents: documents, tree: vaultFolderTree)
         vaultSearchRevision += 1
     }
 
@@ -11759,6 +11962,7 @@ final class AppSessionModel {
         vaultSearch.lock()
         vaultSearchRevision += 1
         isGlobalSearchPresented = false
+        vaultFolderOverview = .builder(documents: [], tree: .empty)
     }
 
     private func clearAllEntryLists() {
@@ -12395,4 +12599,22 @@ final class AppSessionModel {
             }
         }
     }
+}
+
+// MARK: - #27 文件夹锚点存储
+
+/// 文件夹索引锚点落在 App 支持目录下的独立命名空间文件里。
+///
+/// 文件内容只有一个随机 UUID（锚点 project 的 id），不含任何用户内容；
+/// 文件夹名与层级仍然只存在于 MDBX 的加密侧表里。
+private func appDefaultVaultFolderAnchorStore() -> any VaultFolderAnchorStore {
+    guard let supportURL = try? FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+    ) else {
+        return InMemoryVaultFolderAnchorStore()
+    }
+    return FileVaultFolderAnchorStore(directoryURL: supportURL)
 }
