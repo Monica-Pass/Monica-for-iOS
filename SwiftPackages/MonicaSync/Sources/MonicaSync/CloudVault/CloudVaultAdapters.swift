@@ -33,12 +33,15 @@ private struct WebDAVTransportBox: @unchecked Sendable {
     let transport: any WebDAVTransport
 }
 
-private func cloudVaultSHA256Hex(_ data: Data) -> String {
+func cloudVaultSHA256Hex(_ data: Data) -> String {
     LanSyncEncoding.hex(LanSyncEncoding.sha256(data))
 }
 
-/// Verifies downloaded vault bytes against the manifest digest that pins them.
-private func verifyCloudVaultIntegrity(_ data: Data, manifest: CloudVaultManifest) throws {
+/// Verifies vault bytes (upload or download) against the manifest digest that pins
+/// them. Shared by every adapter, including the CloudKit one in
+/// `CloudKitVaultRemoteStore.swift`.
+///
+func verifyCloudVaultIntegrity(_ data: Data, manifest: CloudVaultManifest) throws {
     let actualSHA256 = cloudVaultSHA256Hex(data)
     guard data.count == manifest.byteCount, actualSHA256 == manifest.contentSHA256 else {
         throw CloudVaultError.integrityMismatch(

@@ -34,6 +34,10 @@ extension CloudVaultError: DiagnosticCodedError {
             return .cloudSyncVaultIDMismatch
         case .conflictRequiresResolution:
             return .cloudSyncConflict
+        case .cloudAccountUnavailable:
+            return .cloudSyncUnauthorized
+        case .cloudQuotaExceeded:
+            return .cloudSyncServerFailure
         case .network:
             return .cloudSyncNetworkFailure
         case .server:
@@ -69,6 +73,10 @@ extension CloudVaultError: DiagnosticCodedError {
             return .vaultIDMismatch
         case .conflictRequiresResolution:
             return .conflict
+        case .cloudAccountUnavailable:
+            return .unauthorized
+        case .cloudQuotaExceeded:
+            return .storage
         case .network:
             return .network
         case .server:
@@ -85,7 +93,8 @@ extension CloudVaultError: DiagnosticCodedError {
             return .bytes(byteCount)
         case .server(let statusCode, _):
             return .status(statusCode)
-        case .unauthorized(let kind), .forbidden(let kind), .unsupportedProvider(let kind):
+        case .unauthorized(let kind), .forbidden(let kind), .unsupportedProvider(let kind),
+             .cloudAccountUnavailable(let kind), .cloudQuotaExceeded(let kind):
             return .provider(kind.diagnosticProviderTag)
         default:
             return DiagnosticMetadata()
@@ -99,6 +108,7 @@ extension CloudVaultRemoteKind {
         switch self {
         case .webDAV: return .webDAV
         case .oneDrive: return .oneDrive
+        case .iCloud: return .iCloud
         }
     }
 }
