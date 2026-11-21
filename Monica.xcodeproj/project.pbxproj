@@ -7,7 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
+				A4C0000000000000000000F1 /* AppDataClearView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0000000000000000000F2 /* AppDataClearView.swift */; };
+		A4C0000000000000000000F3 /* AppDataClearSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0000000000000000000F4 /* AppDataClearSupport.swift */; };
+C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
 		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
 		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
 		AA2A00000000000000000002 /* AppLanguageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000002 /* AppLanguageController.swift */; };
@@ -221,7 +223,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
+				A4C0000000000000000000F2 /* AppDataClearView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataClearView.swift; sourceTree = "<group>"; };
+		A4C0000000000000000000F4 /* AppDataClearSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataClearSupport.swift; sourceTree = "<group>"; };
+C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000002 /* AppLanguageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageController.swift; sourceTree = "<group>"; };
@@ -533,6 +537,7 @@
 				B9C200000000000000000001 /* AppGoogleDriveAuthenticationService.swift */,
 				B9C200000000000000000002 /* AppKeePassCloudSupport.swift */,
 				B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */,
+				A4C0000000000000000000F2 /* AppDataClearView.swift */,
 				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
@@ -574,6 +579,7 @@
 			C3A0000000000000000000A4 /* VaultSnapshotViews.swift */,
 			AA2B00000000000000000001 /* AppLanguagePreferences.swift */,
 			AA2B00000000000000000002 /* AppLanguageController.swift */,
+				A4C0000000000000000000F4 /* AppDataClearSupport.swift */,
 			B1270000000000000000A003 /* AppSessionModel+AccountTemplates.swift */,
 			B1270000000000000000A005 /* AppAccountTemplateSupport.swift */,
 			);
@@ -954,6 +960,8 @@
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				C39100000000000000000005 /* GeneratorSaveLoginSheet.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
+				A4C0000000000000000000F1 /* AppDataClearView.swift in Sources */,
+				A4C0000000000000000000F3 /* AppDataClearSupport.swift in Sources */,
 				A10000000000000000000103 /* AppDiagnostics.swift in Sources */,
 				A10000000000000000000105 /* AppDeveloperSettingsView.swift in Sources */,
 				A100000000000000000000F1 /* NFCBankCardProbeView.swift in Sources */,
