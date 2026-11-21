@@ -22,6 +22,18 @@ final class CredentialExchangePasskeyTests: XCTestCase {
         #endif
     }
 
+    /// slice 拆分后成员分散在 AppSessionModel.swift 与同目录 AppSessionModel+*.swift，
+    /// 源码断言按「类文件 + 全部扩展」拼接读取（只改读取路径，不断言内容）。
+    private func sessionModelSource() throws -> String {
+        let directory = try repositoryFileURL("App/MonicaApp/AppRoot")
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("AppSessionModel") && $0.hasSuffix(".swift") }
+            .sorted()
+        return try names
+            .map { try String(contentsOf: directory.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
     /// Fixed scalar so the PKCS#8 envelope below stays byte-stable across runs.
     private static func fixedPrivateKey() throws -> P256.Signing.PrivateKey {
         try P256.Signing.PrivateKey(rawRepresentation: Data(repeating: 1, count: 32))
@@ -191,10 +203,7 @@ final class CredentialExchangePasskeyTests: XCTestCase {
     }
 
     func testCredentialExchangeExportConfirmsDeviceOwnerBeforeReadingPrivateKeys() throws {
-        let session = try String(
-            contentsOf: try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift"),
-            encoding: .utf8
-        )
+        let session = try sessionModelSource()
         let start = try XCTUnwrap(session.range(of: "func performCredentialExchangeExport() async -> Bool"))
         let remainder = session[start.upperBound...]
         let end = try XCTUnwrap(remainder.range(of: "func cancelCredentialExchangeExport()"))

@@ -28,6 +28,18 @@ final class VaultSessionModelTests: XCTestCase {
         #endif
     }
 
+    /// slice 拆分后成员分散在 AppSessionModel.swift 与同目录 AppSessionModel+*.swift，
+    /// 源码断言按「类文件 + 全部扩展」拼接读取（只改读取路径，不断言内容）。
+    private func sessionModelSource() throws -> String {
+        let directory = try repositoryFileURL("App/MonicaApp/AppRoot")
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+            .filter { $0.hasPrefix("AppSessionModel") && $0.hasSuffix(".swift") }
+            .sorted()
+        return try names
+            .map { try String(contentsOf: directory.appendingPathComponent($0), encoding: .utf8) }
+            .joined(separator: "\n")
+    }
+
     private func propertyListDictionary(at url: URL) throws -> [String: Any] {
         guard let dictionary = try PropertyListSerialization.propertyList(
             from: try Data(contentsOf: url),
@@ -2463,8 +2475,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(bridge.contains("NSLog("))
         XCTAssertFalse(bridge.contains("UIPasteboard"))
 
-        let sessionURL = try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift")
-        let session = try String(contentsOf: sessionURL, encoding: .utf8)
+        let session = try sessionModelSource()
         XCTAssertTrue(session.contains("ASCredentialExchangeActivity"))
         XCTAssertTrue(session.contains("ASCredentialImportToken"))
         XCTAssertTrue(session.contains("importCredentials(token:"))
@@ -2574,8 +2585,7 @@ final class VaultSessionModelTests: XCTestCase {
     func testCredentialExchangeImportIsPreviewedAndRolledBackOnFailure() throws {
         let viewSourceURL = try repositoryFileURL("App/MonicaApp/AppRootView.swift")
         let viewSource = try String(contentsOf: viewSourceURL, encoding: .utf8)
-        let sessionSourceURL = try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift")
-        let sessionSource = try String(contentsOf: sessionSourceURL, encoding: .utf8)
+        let sessionSource = try sessionModelSource()
 
         XCTAssertTrue(viewSource.contains(".handlesCredentialExchangeActivity {"))
         XCTAssertTrue(sessionSource.contains("func confirmCredentialExchangeImport() throws"))
