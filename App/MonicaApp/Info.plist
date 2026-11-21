@@ -75,6 +75,8 @@
 	</array>
 	<key>NSFaceIDUsageDescription</key>
 	<string>用于解锁保险库，以及在开启生物识别解锁时验证你的身份。生物识别数据由系统处理，不会上传或存储。</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>NSUserActivityTypes</key>
 	<array>
 		<string>ASCredentialExchangeActivity</string>
