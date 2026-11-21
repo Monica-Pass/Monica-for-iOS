@@ -73,6 +73,7 @@
 		B42040000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */; };
 		C39100000000000000000001 /* AppAutoFillCapabilitySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000002 /* AppAutoFillCapabilitySection.swift */; };
 		C39100000000000000000003 /* AppAutoFillEnablementSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000004 /* AppAutoFillEnablementSection.swift */; };
+		A4D0000000000000000000F1 /* AppAutoFillDeviceVerificationSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4D0000000000000000000F2 /* AppAutoFillDeviceVerificationSection.swift */; };
 		AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
 		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
@@ -276,6 +277,7 @@
 		B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDefaultManagerGuideView.swift; sourceTree = "<group>"; };
 		C39100000000000000000002 /* AppAutoFillCapabilitySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillCapabilitySection.swift; sourceTree = "<group>"; };
 		C39100000000000000000004 /* AppAutoFillEnablementSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillEnablementSection.swift; sourceTree = "<group>"; };
+		A4D0000000000000000000F2 /* AppAutoFillDeviceVerificationSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDeviceVerificationSection.swift; sourceTree = "<group>"; };
 		AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
 		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
@@ -492,6 +494,7 @@
 				B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */,
 				C39100000000000000000002 /* AppAutoFillCapabilitySection.swift */,
 				C39100000000000000000004 /* AppAutoFillEnablementSection.swift */,
+				A4D0000000000000000000F2 /* AppAutoFillDeviceVerificationSection.swift */,
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
@@ -969,6 +972,7 @@
 				B42040000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift in Sources */,
 				C39100000000000000000001 /* AppAutoFillCapabilitySection.swift in Sources */,
 				C39100000000000000000003 /* AppAutoFillEnablementSection.swift in Sources */,
+				A4D0000000000000000000F1 /* AppAutoFillDeviceVerificationSection.swift in Sources */,
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,

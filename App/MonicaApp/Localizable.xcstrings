@@ -32649,6 +32649,118 @@
           }
         }
       }
+    },
+    "自动填充前要求设备验证": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Require device verification before autofill"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充前要求设备验证"
+          }
+        }
+      }
+    },
+    "打开后，每次用 Monica 自动填充密码前都要先用 Face ID、Touch ID 或设备口令确认。取消、验证失败或无法验证时，扩展不会返回密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When enabled, every Monica password autofill requires Face ID, Touch ID, or the device passcode first. If you cancel, verification fails, or verification is unavailable, the extension returns no password."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开后，每次用 Monica 自动填充密码前都要先用 Face ID、Touch ID 或设备口令确认。取消、验证失败或无法验证时，扩展不会返回密码。"
+          }
+        }
+      }
+    },
+    "填充前会要求 Face ID 或 Touch ID，必要时回落到设备口令。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autofill first asks for Face ID or Touch ID, falling back to the device passcode when needed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "填充前会要求 Face ID 或 Touch ID，必要时回落到设备口令。"
+          }
+        }
+      }
+    },
+    "这台设备没有可用的 Face ID 或 Touch ID，填充前会要求输入设备口令。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device has no Face ID or Touch ID available, so autofill asks for the device passcode."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备没有可用的 Face ID 或 Touch ID，填充前会要求输入设备口令。"
+          }
+        }
+      }
+    },
+    "这台设备还没有设置设备口令，系统无法验证设备所有者；打开这个开关后，Monica 自动填充会拒绝返回密码。请先在系统设置里给设备设置密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device has no passcode set, so the system cannot verify the device owner. With this switch on, Monica autofill refuses to return passwords. Set a device passcode in Settings first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备还没有设置设备口令，系统无法验证设备所有者；打开这个开关后，Monica 自动填充会拒绝返回密码。请先在系统设置里给设备设置密码。"
+          }
+        }
+      }
+    },
+    "共享配置不可用：扩展读不到这个开关，会按「开启」处理，静默填充会被拒绝。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Shared settings are unavailable: the extension cannot read this switch, treats it as on, and refuses silent autofill."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共享配置不可用：扩展读不到这个开关，会按「开启」处理，静默填充会被拒绝。"
+          }
+        }
+      }
+    },
+    "Monica 只使用验证是否通过这一结果；生物识别数据始终由系统处理，不会被保存或写进日志。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica only uses whether verification succeeded; biometric data is handled by the system and is never stored or logged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 只使用验证是否通过这一结果；生物识别数据始终由系统处理，不会被保存或写进日志。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

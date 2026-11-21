@@ -62,6 +62,13 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             return
         }
 
+        // #146：静默路径没有交互机会，无法在返回密码前验证设备所有者。
+        // 开关打开时把请求交回系统 UI，由用户点选凭据后走一次验证，绝不直接给密码。
+        guard deviceVerificationPolicy.authorizeSilentFill().isAuthorized else {
+            cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
+            return
+        }
+
         if let recordIdentifier = credentialIdentity.recordIdentifier,
            let secret = try? credentialResolver?.credential(recordIdentifier: recordIdentifier) {
             let credential = ASPasswordCredential(
@@ -272,16 +279,11 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
                     self.domainRules = rules
                     self.matchedCredentialRecords = records
                     if let preferredRecordIdentifier,
-                       let secret = try? resolver.credential(
-                        recordIdentifier: preferredRecordIdentifier
-                       ) {
-                        let credential = ASPasswordCredential(
-                            user: secret.username,
-                            password: secret.password
-                        )
-                        self.extensionContext.completeRequest(
-                            withSelectedCredential: credential,
-                            completionHandler: nil
+                       (try? resolver.credential(recordIdentifier: preferredRecordIdentifier)) != nil {
+                        // #146：命中用户点选的那条记录时同样要先过门禁。
+                        // 开关关闭时这里直接返回密码，与历史行为一致；打开时先验证设备所有者。
+                        self.completePasswordCredentialAfterDeviceVerification(
+                            recordIdentifier: preferredRecordIdentifier
                         )
                         return
                     }
@@ -364,7 +366,16 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         )
     }
 
-    private func configureStatusView(title: String, status: String) {
+    private struct StatusAction {
+        let title: String
+        let handler: () -> Void
+    }
+
+    private func configureStatusView(
+        title: String,
+        status: String,
+        actions: [StatusAction] = []
+    ) {
         view.backgroundColor = .systemBackground
 
         let titleLabel = UILabel()
@@ -382,7 +393,16 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         statusLabel.numberOfLines = 0
         statusLabel.adjustsFontForContentSizeCategory = true
 
-        let stack = UIStackView(arrangedSubviews: [titleLabel, statusLabel])
+        var arrangedSubviews: [UIView] = [titleLabel, statusLabel]
+        for action in actions {
+            let button = UIButton(type: .system)
+            button.setTitle(action.title, for: .normal)
+            button.titleLabel?.font = .preferredFont(forTextStyle: .headline)
+            button.addAction(UIAction { _ in action.handler() }, for: .touchUpInside)
+            arrangedSubviews.append(button)
+        }
+
+        let stack = UIStackView(arrangedSubviews: arrangedSubviews)
         stack.translatesAutoresizingMaskIntoConstraints = false
         stack.axis = .vertical
         stack.alignment = .center
@@ -932,9 +952,65 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     }
 
     private func completeCredentialSelection(_ record: AutoFillCredentialIndexRecord) {
+        // #146：列表点选也要过门禁；开关关闭时这里等价于历史行为（直接返回密码）。
+        completePasswordCredentialAfterDeviceVerification(recordIdentifier: record.id)
+    }
+
+    /// 「自动填充前要求设备验证」的当前取值（#146）。
+    ///
+    /// 每次填充都重新读一次 App Group 共享偏好：用户在 Monica 里改了开关后，
+    /// 下一次填充立即生效，扩展不缓存这个值，也不缓存任何验证结果。
+    private var deviceVerificationPolicy: AutoFillDeviceVerificationPolicy {
+        AutoFillDeviceVerificationPolicy(
+            requiresVerificationBeforeFilling: AutoFillDeviceVerificationPreferenceStore()
+                .requiresVerificationBeforeFilling
+        )
+    }
+
+    /// 返回密码前的唯一门禁（#146）。
+    ///
+    /// - 开关关闭：立即按历史行为返回密码。
+    /// - 开关打开：先做一次设备所有者验证（Face ID / Touch ID / 设备口令），
+    ///   只有验证通过才读取并返回密码；取消、失败、不可用一律不返回密码。
+    private func completePasswordCredentialAfterDeviceVerification(recordIdentifier: String) {
+        let policy = deviceVerificationPolicy
+        guard policy.requiresVerificationBeforeFilling else {
+            completePasswordCredential(recordIdentifier: recordIdentifier)
+            return
+        }
+
+        configureStatusView(title: "Monica", status: "正在验证设备所有者…")
+        Task { @MainActor [weak self] in
+            guard let self else {
+                return
+            }
+            let verification = await self.verifyDeviceOwnerAfterAppearing(
+                reason: "验证设备所有者后才能返回 Monica 中的密码",
+                // 密码门禁不写通行密钥诊断：这里不是通行密钥流程，也不记录验证结果。
+                logsDiagnostics: false
+            )
+            switch policy.authorizeInteractiveFill(after: verification.deviceVerificationOutcome) {
+            case .authorized(var grant):
+                // 一次验证只放行一次填充：结果既不缓存，也不复用。
+                guard grant.consume() else {
+                    return
+                }
+                self.completePasswordCredential(recordIdentifier: recordIdentifier)
+            case .refused(let failure):
+                self.showDeviceVerificationFailure(
+                    failure,
+                    recordIdentifier: recordIdentifier
+                )
+            case .interactionRequired:
+                self.cancelRequest(code: ASExtensionError.Code.userInteractionRequired)
+            }
+        }
+    }
+
+    /// 唯一把密码交给系统的位置：调用方必须先通过 `completePasswordCredentialAfterDeviceVerification`。
+    private func completePasswordCredential(recordIdentifier: String) {
         do {
-            let secret = try credentialResolver?.credential(for: record)
-            guard let secret else {
+            guard let secret = try credentialResolver?.credential(recordIdentifier: recordIdentifier) else {
                 throw AutoFillExtensionError.credentialSecretUnavailable
             }
             let credential = ASPasswordCredential(
@@ -951,10 +1027,62 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
         }
     }
 
-    enum PasskeyUserVerification: Equatable {
+    /// 验证没通过时的诚实降级：绝不返回密码，并明确告诉用户为什么。
+    private func showDeviceVerificationFailure(
+        _ failure: AutoFillDeviceVerificationFailure,
+        recordIdentifier: String
+    ) {
+        switch failure {
+        case .userCancelled:
+            cancelRequest(code: ASExtensionError.Code.userCanceled)
+        case .verificationUnavailable:
+            configureStatusView(
+                title: "Monica",
+                status: failure.message,
+                actions: [
+                    StatusAction(title: "关闭") { [weak self] in
+                        self?.cancelRequest(code: ASExtensionError.Code.failed)
+                    }
+                ]
+            )
+        case .verificationFailed:
+            configureStatusView(
+                title: "Monica",
+                status: failure.message,
+                actions: [
+                    StatusAction(title: "重试") { [weak self] in
+                        self?.completePasswordCredentialAfterDeviceVerification(
+                            recordIdentifier: recordIdentifier
+                        )
+                    },
+                    StatusAction(title: "关闭") { [weak self] in
+                        self?.cancelRequest(code: ASExtensionError.Code.failed)
+                    }
+                ]
+            )
+        }
+    }
+
+    /// 设备所有者验证结果。通行密钥与密码填充共用同一套 `LAContext` 封装（#146），
+    /// 不重复实现第二份验证逻辑。
+    enum AutoFillDeviceOwnerVerification: Equatable {
         case verified
         case unavailable
+        case failed
         case cancelled
+
+        var deviceVerificationOutcome: AutoFillDeviceVerificationOutcome {
+            switch self {
+            case .verified:
+                return .verified
+            case .unavailable:
+                return .unavailable
+            case .failed:
+                return .failed
+            case .cancelled:
+                return .cancelled
+            }
+        }
     }
 
     /// Runs device-owner verification (biometrics with passcode fallback) and reports why it
@@ -962,21 +1090,27 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
     /// Local Authentication refuses to show its UI (`LAError.notInteractive`) while the
     /// extension's view controller has not been presented yet, so wait until the AutoFill
     /// sheet is actually on screen before asking for the device owner.
-    private func verifyDeviceOwnerAfterAppearing(reason: String) async -> PasskeyUserVerification {
+    private func verifyDeviceOwnerAfterAppearing(
+        reason: String,
+        logsDiagnostics: Bool = true
+    ) async -> AutoFillDeviceOwnerVerification {
         for _ in 0..<40 where !hasAppeared {
             try? await Task.sleep(nanoseconds: 25_000_000)
         }
-        if !hasAppeared {
+        if !hasAppeared, logsDiagnostics {
             Self.logPasskeyDiagnostic(
                 .passkeyDeviceOwnerVerificationFailed,
                 level: .info,
                 metadata: .merged(.stage(.verifyDeviceOwner), .reason(.interactionRequired))
             )
         }
-        return await Self.verifyDeviceOwner(reason: reason)
+        return await Self.verifyDeviceOwner(reason: reason, logsDiagnostics: logsDiagnostics)
     }
 
-    static func verifyDeviceOwner(reason: String) async -> PasskeyUserVerification {
+    static func verifyDeviceOwner(
+        reason: String,
+        logsDiagnostics: Bool = true
+    ) async -> AutoFillDeviceOwnerVerification {
         // `notInteractive` is usually a presentation-timing artefact, so give the system a
         // second chance with a fresh context before degrading to an unverified credential.
         for attempt in 1...2 {
@@ -984,11 +1118,17 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
             context.interactionNotAllowed = false
             var canEvaluateError: NSError?
             guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &canEvaluateError) else {
-                logPasskeyDiagnostic(
-                    .passkeyDeviceOwnerVerificationFailed,
-                    level: .warning,
-                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.policyBlocked), .status(canEvaluateError?.code ?? -1))
-                )
+                if logsDiagnostics {
+                    logPasskeyDiagnostic(
+                        .passkeyDeviceOwnerVerificationFailed,
+                        level: .warning,
+                        metadata: .merged(
+                            .stage(.verifyDeviceOwner),
+                            .reason(.policyBlocked),
+                            .status(canEvaluateError?.code ?? -1)
+                        )
+                    )
+                }
                 return .unavailable
             }
             do {
@@ -996,26 +1136,42 @@ final class AutoFillCredentialProviderViewController: ASCredentialProviderViewCo
 
                 return .verified
             } catch let error as LAError {
-                logPasskeyDiagnostic(
-                    .passkeyDeviceOwnerVerificationFailed,
-                    level: .warning,
-                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.verificationFailed), .status(Int(error.code.rawValue)))
-                )
-                // Only an explicit user cancel should abort the ceremony.
+                if logsDiagnostics {
+                    logPasskeyDiagnostic(
+                        .passkeyDeviceOwnerVerificationFailed,
+                        level: .warning,
+                        metadata: .merged(
+                            .stage(.verifyDeviceOwner),
+                            .reason(.verificationFailed),
+                            .status(Int(error.code.rawValue))
+                        )
+                    )
+                }
+                // 只有用户主动取消才算取消；设备没有可用的验证方式归为 unavailable，
+                // 其余（匹配失败、系统取消、锁定等）归为 failed，好让密码门禁给出对应文案。
                 if error.code == .userCancel {
                     return .cancelled
                 }
-                if error.code == .notInteractive, attempt == 1 {
-                    try? await Task.sleep(nanoseconds: 300_000_000)
-                    continue
+                switch error.code {
+                case .biometryNotAvailable, .biometryNotEnrolled, .passcodeNotSet:
+                    return .unavailable
+                case .notInteractive:
+                    if attempt == 1 {
+                        try? await Task.sleep(nanoseconds: 300_000_000)
+                        continue
+                    }
+                    return .unavailable
+                default:
+                    return .failed
                 }
-                return .unavailable
             } catch {
-                logPasskeyDiagnostic(
-                    .passkeyDeviceOwnerVerificationFailed,
-                    level: .warning,
-                    metadata: .merged(.stage(.verifyDeviceOwner), .reason(.commandFailed))
-                )
+                if logsDiagnostics {
+                    logPasskeyDiagnostic(
+                        .passkeyDeviceOwnerVerificationFailed,
+                        level: .warning,
+                        metadata: .merged(.stage(.verifyDeviceOwner), .reason(.commandFailed))
+                    )
+                }
                 return .unavailable
             }
         }
