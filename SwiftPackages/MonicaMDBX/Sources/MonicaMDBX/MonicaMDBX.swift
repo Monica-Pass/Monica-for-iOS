@@ -47,17 +47,73 @@ public struct MonicaMDBXProject: Sendable, Equatable, Identifiable {
     public let title: String
 }
 
+/// 登录条目的密码历史记录：只保存「上一份密码密文 + 变更时间」。
+///
+/// 记录本身仍然写在 login 条目的 payload 里，与条目一起由 MDBX/Vault 加密落盘，
+/// 不会出现在日志、UserDefaults 或明文缓存中。
+public struct MonicaMDBXLoginPasswordHistoryEntry: Sendable, Equatable, Identifiable, Codable {
+    public let id: String
+    /// 密码被替换的时间（写入时截断到毫秒，保证 MDBX 往返后仍可比较）。
+    public let changedAt: Date
+    public let password: String
+
+    public init(id: String = UUID().uuidString, changedAt: Date, password: String) {
+        self.id = id
+        self.changedAt = changedAt
+        self.password = password
+    }
+}
+
 public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
     public let id: String
     public let projectID: String
     public let title: String
     public let username: String
     public let password: String
+    /// 主 URL（旧字段 `website`），始终等于 `urls.first`；保留它是为了旧版本/iOS 旧库兼容。
     public let url: String
     public let notes: String
     public let favorite: Bool
     /// 条目图标的稳定资源 ID（`sf:…` / `catalog:…`），空值表示使用默认图标。
     public let icon: String?
+    /// 有序、去重后的 URL 列表；旧库只有 `website` 时会回退成 `[url]`。
+    public let urls: [String]
+    /// 应用绑定的 bundle identifier（仅作可编辑的关联 metadata）。
+    public let appBundleID: String
+    /// 应用绑定的可读名称（仅展示/筛选，不影响系统自动填充边界）。
+    public let appName: String
+    /// 旧密码历史，默认不展示；读取方需自行决定是否解密/显示。
+    public let passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry]
+
+    public init(
+        id: String,
+        projectID: String,
+        title: String,
+        username: String,
+        password: String,
+        url: String,
+        notes: String,
+        favorite: Bool,
+        icon: String? = nil,
+        urls: [String]? = nil,
+        appBundleID: String = "",
+        appName: String = "",
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
+    ) {
+        self.id = id
+        self.projectID = projectID
+        self.title = title
+        self.username = username
+        self.password = password
+        self.url = url
+        self.notes = notes
+        self.favorite = favorite
+        self.icon = icon
+        self.urls = urls ?? (url.isEmpty ? [] : [url])
+        self.appBundleID = appBundleID
+        self.appName = appName
+        self.passwordHistory = passwordHistory
+    }
 }
 
 public struct MonicaMDBXNoteEntry: Sendable, Equatable, Identifiable {
@@ -157,7 +213,11 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         username: String,
         password: String,
         url: String,
-        notes: String = ""
+        notes: String = "",
+        urls: [String] = [],
+        appBundleID: String = "",
+        appName: String = "",
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
     ) throws -> MonicaMDBXLoginEntry {
         let entry = try rawVault.createLoginEntry(
             projectId: projectID,
@@ -165,7 +225,11 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             username: username,
             password: password,
             url: url,
-            notes: notes
+            notes: notes,
+            urls: urls,
+            appBundleID: appBundleID,
+            appName: appName,
+            passwordHistory: passwordHistory
         )
         return MonicaMDBXLoginEntry(raw: entry)
     }
@@ -185,7 +249,11 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         username: String,
         password: String,
         url: String,
-        notes: String = ""
+        notes: String = "",
+        urls: [String]? = nil,
+        appBundleID: String? = nil,
+        appName: String? = nil,
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry]? = nil
     ) throws -> MonicaMDBXLoginEntry {
         let entry = try rawVault.updateLoginEntry(
             projectId: projectID,
@@ -194,7 +262,11 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             username: username,
             password: password,
             url: url,
-            notes: notes
+            notes: notes,
+            urls: urls,
+            appBundleID: appBundleID,
+            appName: appName,
+            passwordHistory: passwordHistory
         )
         return MonicaMDBXLoginEntry(raw: entry)
     }
@@ -769,6 +841,24 @@ fileprivate struct LoginEntryRecord {
     let notes: String
     let favorite: Bool
     let icon: String?
+    var urls: [String] = []
+    var appBundleID: String = ""
+    var appName: String = ""
+    var passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
+}
+
+extension MonicaMDBXLoginEntry {
+    /// 测试专用：从 payload JSON 直接解码条目，用来验证旧版库（只有 `website` 键）的迁移路径。
+    static func decodePayloadForTesting(_ payloadJSON: String) throws -> MonicaMDBXLoginEntry {
+        MonicaMDBXLoginEntry(raw: try LoginEntryRecord(raw: EntryRecord(
+            entryId: "testing-entry",
+            projectId: "testing-project",
+            entryType: "login",
+            title: "Testing",
+            payloadJson: payloadJSON,
+            deleted: false
+        )))
+    }
 }
 
 fileprivate struct NoteEntryRecord {
@@ -860,6 +950,63 @@ fileprivate enum MDBXBusinessPayload {
         return value
     }
 
+    /// 读取字符串数组：缺失、类型不符或空数组都回退成 `[]`，保证旧库/旧备份可解码。
+    static func strings(_ object: [String: Any], _ key: String) -> [String] {
+        guard let raw = object[key] as? [Any] else { return [] }
+        return raw.compactMap { $0 as? String }
+    }
+
+    /// 密码历史以「密文 + 时间」的 JSON 对象数组存放在 login payload 内，随条目一起被 Vault 加密。
+    static func passwordHistory(_ object: [String: Any]) throws -> [MonicaMDBXLoginPasswordHistoryEntry] {
+        guard let raw = object["passwordHistory"] as? [Any] else { return [] }
+        return raw.compactMap { element in
+            guard let dictionary = element as? [String: Any],
+                  let password = dictionary["password"] as? String,
+                  !password.isEmpty
+            else {
+                return nil
+            }
+            let changedAt = date(from: dictionary["changedAt"]) ?? Date(timeIntervalSince1970: 0)
+            let id = (dictionary["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString
+            return MonicaMDBXLoginPasswordHistoryEntry(id: id, changedAt: changedAt, password: password)
+        }
+    }
+
+    static func passwordHistoryJSON(_ history: [MonicaMDBXLoginPasswordHistoryEntry]) -> [[String: Any]] {
+        history.map { entry in
+            [
+                "id": entry.id,
+                // 用毫秒时间戳存时间：没有时区/格式化器歧义，MDBX 往返后 `Date` 精确相等。
+                "changedAt": normalizedMilliseconds(entry.changedAt),
+                "password": entry.password
+            ]
+        }
+    }
+
+    /// MDBX 往返必须保持 `Date` 相等：写入前先按毫秒截断，读回时精度一致。
+    static func normalizedDate(_ date: Date) -> Date {
+        Date(timeIntervalSince1970: Double(normalizedMilliseconds(date)) / 1_000)
+    }
+
+    static func normalizedMilliseconds(_ date: Date) -> Int64 {
+        Int64((date.timeIntervalSince1970 * 1_000).rounded())
+    }
+
+    static func date(from value: Any?) -> Date? {
+        if let number = value as? NSNumber {
+            return Date(timeIntervalSince1970: number.doubleValue / 1_000)
+        }
+        // 兼容手写/外部工具产生的 ISO-8601 字符串。
+        guard let string = value as? String, !string.isEmpty else { return nil }
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let date = formatter.date(from: string) {
+            return date
+        }
+        formatter.formatOptions = [.withInternetDateTime]
+        return formatter.date(from: string)
+    }
+
     static func bool(_ object: [String: Any], _ key: String) -> Bool {
         object[key] as? Bool ?? false
     }
@@ -891,6 +1038,18 @@ fileprivate enum MDBXBusinessPayload {
     static func kind(from payloadJSON: String) throws -> String {
         try string(object(from: payloadJSON), "kind")
     }
+
+    /// URL 列表：保留顺序、去掉首尾空白与空串、按出现顺序去重；主 URL 永远排在第一位。
+    static func normalizedURLList(primary: String, additional: [String]) -> [String] {
+        var seen = Set<String>()
+        var result: [String] = []
+        for candidate in [primary] + additional {
+            let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty, seen.insert(trimmed).inserted else { continue }
+            result.append(trimmed)
+        }
+        return result
+    }
 }
 
 fileprivate extension EntryRecord {
@@ -902,16 +1061,23 @@ fileprivate extension EntryRecord {
 fileprivate extension LoginEntryRecord {
     init(raw: EntryRecord) throws {
         let payload = try raw.payloadObject
+        let primaryURL = MDBXBusinessPayload.string(payload, "website")
+        let storedURLs = MDBXBusinessPayload.strings(payload, "urls")
         self.init(
             entryId: raw.entryId,
             projectId: raw.projectId,
             title: raw.title,
             username: MDBXBusinessPayload.string(payload, "username"),
             password: MDBXBusinessPayload.string(payload, "password"),
-            url: MDBXBusinessPayload.string(payload, "website"),
+            url: primaryURL,
             notes: MDBXBusinessPayload.string(payload, "notes"),
             favorite: MDBXBusinessPayload.bool(payload, "favorite"),
-            icon: MDBXBusinessPayload.optionalString(payload, "icon")
+            icon: MDBXBusinessPayload.optionalString(payload, "icon"),
+            // 旧库只有 `website`：无损迁移成单元素列表，不丢弃原值。
+            urls: storedURLs.isEmpty ? (primaryURL.isEmpty ? [] : [primaryURL]) : storedURLs,
+            appBundleID: MDBXBusinessPayload.string(payload, "appBundleId"),
+            appName: MDBXBusinessPayload.string(payload, "appName"),
+            passwordHistory: try MDBXBusinessPayload.passwordHistory(payload)
         )
     }
 }
@@ -1010,22 +1176,69 @@ fileprivate extension MdbxVault {
         username: String,
         password: String,
         url: String,
-        notes: String
+        notes: String,
+        urls: [String] = [],
+        appBundleID: String = "",
+        appName: String = "",
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
     ) throws -> LoginEntryRecord {
-        let payload = try MDBXBusinessPayload.jsonString([
-            "kind": "password",
-            "username": username,
-            "password": password,
-            "website": url,
-            "notes": notes,
-            "favorite": false
-        ])
+        let payload = try loginPayload(
+            username: username,
+            password: password,
+            url: url,
+            notes: notes,
+            favorite: false,
+            urls: urls,
+            appBundleID: appBundleID,
+            appName: appName,
+            passwordHistory: passwordHistory
+        )
         return try LoginEntryRecord(raw: createEntry(
             projectId: projectId,
             entryType: "login",
             title: title,
             payloadJson: payload
         ))
+    }
+
+    /// 统一的 login payload 编码。
+    ///
+    /// - `website` 仍是主 URL，供旧版本/旧备份读取；
+    /// - `urls` 保存完整有序列表（空时省略，读取方回退到 `website`）；
+    /// - `passwordHistory` 只在非空时写入，旧库缺键即为空历史。
+    private func loginPayload(
+        username: String,
+        password: String,
+        url: String,
+        notes: String,
+        favorite: Bool,
+        urls: [String],
+        appBundleID: String,
+        appName: String,
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry]
+    ) throws -> String {
+        let normalizedURLs = MDBXBusinessPayload.normalizedURLList(primary: url, additional: urls)
+        var object: [String: Any] = [
+            "kind": "password",
+            "username": username,
+            "password": password,
+            "website": normalizedURLs.first ?? url,
+            "notes": notes,
+            "favorite": favorite
+        ]
+        if !normalizedURLs.isEmpty {
+            object["urls"] = normalizedURLs
+        }
+        if !appBundleID.isEmpty {
+            object["appBundleId"] = appBundleID
+        }
+        if !appName.isEmpty {
+            object["appName"] = appName
+        }
+        if !passwordHistory.isEmpty {
+            object["passwordHistory"] = MDBXBusinessPayload.passwordHistoryJSON(passwordHistory)
+        }
+        return try MDBXBusinessPayload.jsonString(object)
     }
 
     func listEntries(projectId: String) throws -> [LoginEntryRecord] {
@@ -1043,23 +1256,39 @@ fileprivate extension MdbxVault {
         username: String,
         password: String,
         url: String,
-        notes: String
+        notes: String,
+        urls: [String]? = nil,
+        appBundleID: String? = nil,
+        appName: String? = nil,
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry]? = nil
     ) throws -> LoginEntryRecord {
-        let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "login")
-        // 图标不属于编辑表单字段，更新时必须原样保留，否则会被 payload 重写丢弃。
-        let icon = try currentPayloadIcon(projectId: projectId, entryId: entryId, entryType: "login")
-        var fields: [String: Any] = [
-            "kind": "password",
-            "username": username,
-            "password": password,
-            "website": url,
-            "notes": notes,
-            "favorite": favorite
-        ]
-        if let icon {
-            fields["icon"] = icon
+        let existing = try LoginEntryRecord(raw: activeEntry(projectId: projectId, entryId: entryId, entryType: "login"))
+        // 未显式提供列表时保留原有次级 URL，只替换主 URL，避免旧调用点静默丢数据。
+        let effectiveURLs: [String]
+        if let urls {
+            effectiveURLs = urls
+        } else if url.isEmpty {
+            effectiveURLs = []
+        } else {
+            effectiveURLs = [url] + existing.urls.dropFirst()
         }
-        let payload = try MDBXBusinessPayload.jsonString(fields)
+        var payload = try loginPayload(
+            username: username,
+            password: password,
+            url: url,
+            notes: notes,
+            favorite: existing.favorite,
+            urls: effectiveURLs,
+            appBundleID: appBundleID ?? existing.appBundleID,
+            appName: appName ?? existing.appName,
+            passwordHistory: passwordHistory ?? existing.passwordHistory
+        )
+        // 图标不属于编辑表单字段，更新时必须原样保留，否则会被 payload 重写丢弃。
+        if let icon = existing.icon {
+            var object = try MDBXBusinessPayload.object(from: payload)
+            object["icon"] = icon
+            payload = try MDBXBusinessPayload.jsonString(object)
+        }
         return try LoginEntryRecord(raw: updateEntry(
             projectId: projectId,
             entryId: entryId,
@@ -1408,7 +1637,11 @@ extension MonicaMDBXLoginEntry {
             url: raw.url,
             notes: raw.notes,
             favorite: raw.favorite,
-            icon: raw.icon
+            icon: raw.icon,
+            urls: raw.urls,
+            appBundleID: raw.appBundleID,
+            appName: raw.appName,
+            passwordHistory: raw.passwordHistory
         )
     }
 }
@@ -1513,7 +1746,11 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         username: String,
         password: String,
         url: String,
-        notes: String = ""
+        notes: String = "",
+        urls: [String] = [],
+        appBundleID: String = "",
+        appName: String = "",
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
     ) throws -> MonicaMDBXLoginEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
@@ -1533,7 +1770,11 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         username: String,
         password: String,
         url: String,
-        notes: String = ""
+        notes: String = "",
+        urls: [String]? = nil,
+        appBundleID: String? = nil,
+        appName: String? = nil,
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry]? = nil
     ) throws -> MonicaMDBXLoginEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
