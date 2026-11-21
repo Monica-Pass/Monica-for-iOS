@@ -3421,6 +3421,7 @@ import MonicaStorage
         .sshKey,
         .apiToken,
         .wifi,
+        .sso,
         .send,
         .attachmentRef
     ])
@@ -3428,6 +3429,7 @@ import MonicaStorage
     #expect(UnifiedVaultItemKind.sshKey.displayName == "SSH 密钥")
     #expect(UnifiedVaultItemKind.apiToken.displayName == "API Token")
     #expect(UnifiedVaultItemKind.wifi.displayName == "Wi-Fi")
+    #expect(UnifiedVaultItemKind.sso.displayName == "SSO")
     #expect(UnifiedVaultItemKind.send.displayName == "安全发送")
     #expect(UnifiedVaultItemKind.attachmentRef.displayName == "附件")
 }
@@ -5632,6 +5634,208 @@ import MonicaStorage
     }
 }
 
+@Test func ssoEntryURLValidatorAcceptsRepresentableHTTPSAddresses() {
+    let valid = [
+        "https://accounts.google.com",
+        "https://accounts.google.com/o/oauth2/v2/auth?client_id=abc#frag",
+        "http://localhost:8080/login",
+        "HTTP://idp.example.com/sso",
+        "https://login.microsoftonline.com/common/v2.0"
+    ]
+    for value in valid {
+        #expect(SSOEntryURLValidator.error(for: value) == nil, "应接受合法地址：\(value)")
+        #expect(SSOEntryURLValidator.sanitizedURL(from: value) != nil, "应可生成可打开地址：\(value)")
+    }
+}
+
+@Test func ssoEntryURLValidatorRejectsEmptyAndUnsafeSchemes() {
+    #expect(SSOEntryURLValidator.error(for: "") == .empty)
+    #expect(SSOEntryURLValidator.error(for: "   \n") == .empty)
+    #expect(SSOEntryURLValidator.error(for: "javascript:alert(1)") == .unsupportedScheme("javascript"))
+    #expect(SSOEntryURLValidator.error(for: "JavaScript:alert(1)") == .unsupportedScheme("javascript"))
+    #expect(SSOEntryURLValidator.error(for: "file:///etc/passwd") == .unsupportedScheme("file"))
+    #expect(SSOEntryURLValidator.error(for: "data:text/html,<html>") == .unsupportedScheme("data"))
+    #expect(SSOEntryURLValidator.error(for: "ftp://idp.example.com") == .unsupportedScheme("ftp"))
+    #expect(SSOEntryURLValidator.error(for: "https://") == .missingHost)
+    #expect(SSOEntryURLValidator.error(for: "https:///login") == .missingHost)
+    #expect(SSOEntryURLValidator.error(for: "//idp.example.com/login") == .malformed)
+    #expect(SSOEntryURLValidator.error(for: "https://exa mple.com/login") == .malformed)
+    #expect(SSOEntryURLValidator.error(for: "idp.example.com") == .malformed)
+    #expect(SSOEntryURLValidator.sanitizedURL(from: "javascript:alert(1)") == nil)
+}
+
+@Test func ssoEntryURLValidatorRequiresHTTPSForIssuer() {
+    #expect(SSOEntryURLValidator.issuerError(for: "") == nil)
+    #expect(SSOEntryURLValidator.issuerError(for: "https://idp.example.com") == nil)
+    #expect(SSOEntryURLValidator.issuerError(for: "http://idp.example.com") == .insecureScheme)
+    #expect(SSOEntryURLValidator.issuerError(for: "javascript:alert(1)") == .unsupportedScheme("javascript"))
+}
+
+@Test func ssoProviderBridgesAndroidNamesAndStoredValues() {
+    #expect(SSOProvider.fromAndroidName("GOOGLE") == .google)
+    #expect(SSOProvider.fromAndroidName("microsoft") == .microsoft)
+    #expect(SSOProvider.fromAndroidName("OTHER") == .custom)
+    #expect(SSOProvider.fromAndroidName("") == .custom)
+    #expect(SSOProvider.fromAndroidName("从未见过的 IdP") == .custom)
+    #expect(SSOProvider.fromStoredValue("keycloak") == .keycloak)
+    #expect(SSOProvider.fromStoredValue("ONELOGIN") == .onelogin)
+    for provider in SSOProvider.allCases {
+        #expect(SSOProvider.fromStoredValue(provider.rawValue) == provider)
+        #expect(SSOProvider.fromAndroidName(provider.androidName) == provider)
+    }
+    #expect(SSOProvider.google.defaultIssuer == "https://accounts.google.com")
+    #expect(SSOProvider.custom.displayName == "自建 / 其他 IdP")
+}
+
+@Test func localSSOEntryDraftKeepsSecretOutOfSearchableMetadata() throws {
+    let draft = LocalSSOEntryDraft(
+        title: "工作 Google",
+        provider: .google,
+        issuer: "https://accounts.google.com",
+        accountName: "alice@example.com",
+        loginURL: "https://accounts.google.com/signin",
+        linkedLoginEntryID: "login-1",
+        notes: "主账号",
+        secret: "sso-client-secret"
+    )
+    let entry = LocalSSOEntry(
+        id: "sso-1",
+        projectID: "project-1",
+        title: draft.title,
+        provider: draft.provider,
+        providerName: draft.providerName,
+        issuer: draft.issuer,
+        accountName: draft.accountName,
+        loginURL: draft.loginURL,
+        linkedLoginEntryID: draft.linkedLoginEntryID,
+        notes: draft.notes,
+        secret: draft.secret,
+        favorite: false
+    )
+
+    #expect(entry.displayProviderName == "Google")
+    #expect(entry.sanitizedLoginURL == URL(string: "https://accounts.google.com/signin"))
+    #expect(entry.searchableText.contains("alice@example.com"))
+    #expect(entry.searchableText.contains("工作 Google"))
+    #expect(!entry.searchableText.contains("sso-client-secret"), "secret 不应进入可搜索元数据")
+}
+
+@Test func ssoEntryRepositoryRejectsUnsafeLoginURLBeforePersistence() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Personal")
+
+    #expect(throws: LocalVaultRepositoryError.invalidEntryPayload) {
+        _ = try entryRepository.createSSOEntry(
+            projectID: project.id,
+            draft: LocalSSOEntryDraft(title: "恶意 IdP", loginURL: "javascript:alert(1)")
+        )
+    }
+    #expect(throws: LocalVaultRepositoryError.invalidEntryPayload) {
+        _ = try entryRepository.createSSOEntry(
+            projectID: project.id,
+            draft: LocalSSOEntryDraft(title: "自建 IdP", issuer: "http://idp.example.com")
+        )
+    }
+    // 合法草稿通过归一化后落到引擎层；RecordingVaultEngine 未实现 SSO，因此抛 unsupportedEntryType。
+    #expect(throws: LocalVaultRepositoryError.unsupportedEntryType(.sso)) {
+        _ = try entryRepository.createSSOEntry(
+            projectID: project.id,
+            draft: LocalSSOEntryDraft(
+                title: "Google",
+                provider: .google,
+                issuer: "https://accounts.google.com",
+                accountName: "alice@example.com",
+                loginURL: "https://accounts.google.com/signin"
+            )
+        )
+    }
+}
+
+@Test func ssoCSVExportImportRoundTripPreservesMetadata() {
+    let draft = LocalSSOEntryDraft(
+        title: "工作 Google",
+        provider: .google,
+        issuer: "https://accounts.google.com",
+        accountName: "alice@example.com",
+        loginURL: "https://accounts.google.com/signin",
+        linkedLoginEntryID: "login-1",
+        notes: "主账号",
+        secret: "sso-client-secret"
+    )
+    let csv = VaultCSVCodec.exportItems([.sso(draft)])
+
+    #expect(csv.hasPrefix(VaultCSVCodec.headerLine))
+    #expect(csv.contains("ssoProvider"))
+    let report = VaultCSVCodec.importItems(from: csv)
+    #expect(report.issues.isEmpty)
+    #expect(report.items == [.sso(draft)])
+}
+
+@Test func ssoCSVImportRejectsUnsafeLoginURL() {
+    var row = Dictionary(uniqueKeysWithValues: VaultCSVCodec.columns.map { ($0, "") })
+    row["kind"] = "sso"
+    row["title"] = "恶意 IdP"
+    row["url"] = "javascript:alert(1)"
+    let csv = [
+        VaultCSVCodec.headerLine,
+        VaultCSVCodec.columns.map { row[$0] ?? "" }.joined(separator: ",")
+    ].joined(separator: "\n")
+
+    let report = VaultCSVCodec.importItems(from: csv)
+    #expect(report.items.isEmpty)
+    #expect(report.issues.contains { $0.code == .invalidNumber && $0.field == "url" })
+}
+
+@Test func androidBackupRoundTripPreservesSSOEntries() throws {
+    let draft = LocalSSOEntryDraft(
+        title: "Microsoft 工作",
+        provider: .microsoft,
+        issuer: "https://login.microsoftonline.com/common/v2.0",
+        accountName: "alice@contoso.com",
+        loginURL: "https://login.microsoftonline.com/common/v2.0",
+        linkedLoginEntryID: nil,
+        notes: "单点登录",
+        secret: "client-secret"
+    )
+    let backup = try AndroidBackupCodec.exportItems([.sso(draft)], folderName: "Imported")
+    let names = try AndroidBackupCodec.inspectEntryNames(in: backup)
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(names.contains { $0.hasPrefix("folders/Imported/passwords/password_") })
+    #expect(report.issues.isEmpty)
+    #expect(report.items == [.sso(draft)])
+}
+
+@Test func androidBackupImportsNativeSSOEntriesWithoutiOSMetadata() throws {
+    let json = """
+    {"id":7,"title":"Microsoft 单点登录","username":"alice@contoso.com","password":"","website":"https://login.microsoftonline.com/","notes":"来自 Android","isFavorite":false,"createdAt":1700000000000,"updatedAt":1700000000000,"loginType":"SSO","ssoProvider":"MICROSOFT"}
+    """
+    let backup = try AndroidBackupCodec.exportZip(entries: [
+        "folders/Personal/passwords/password_7_1700000000000.json": json
+    ])
+    let report = try AndroidBackupCodec.importItems(from: backup)
+
+    #expect(report.issues.isEmpty)
+    guard case .sso(let draft)? = report.items.first else {
+        Issue.record("Android 原生 SSO 条目应导入为 .sso")
+        return
+    }
+    #expect(draft.title == "Microsoft 单点登录")
+    #expect(draft.provider == .microsoft)
+    #expect(draft.accountName == "alice@contoso.com")
+    #expect(draft.loginURL == "https://login.microsoftonline.com/")
+    #expect(draft.secret.isEmpty)
+    #expect(draft.providerName.isEmpty)
+}
+
 private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var createdVaults: [RecordedVaultCall] = []
     private(set) var openedVaults: [RecordedVaultCall] = []
@@ -5988,6 +6192,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     favorite: entry.favorite
                 )
             }
+        case .sso:
+            throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(
