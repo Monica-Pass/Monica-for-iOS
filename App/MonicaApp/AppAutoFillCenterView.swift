@@ -30,14 +30,14 @@ struct AppAutoFillCenterView: View {
     // MARK: - 默认密码管理器
 
     private var defaultManagerSection: some View {
-        AndroidParitySection(title: String(localized: "默认密码管理器")) {
+        AndroidParitySection(title: appLocalized("默认密码管理器")) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                 AndroidParityInfoRow(
-                    title: String(localized: "Monica 自动填充"),
+                    title: appLocalized("Monica 自动填充"),
                     value: providerStatusText
                 )
                 AndroidParityInfoRow(
-                    title: String(localized: "系统侧身份条目"),
+                    title: appLocalized("系统侧身份条目"),
                     value: identityCountText
                 )
                 Text("iOS 不允许 App 读取或设置「系统默认密码管理器」是谁，也不允许 App 监听其它 App 里出现的密码输入框。Monica 只能把自己注册为自动填充来源，是否启用由你在系统设置里决定。")
@@ -51,8 +51,8 @@ struct AppAutoFillCenterView: View {
                     AppAutoFillDefaultManagerGuideView()
                 } label: {
                     navigationRow(
-                        title: String(localized: "设为自动填充来源"),
-                        subtitle: String(localized: "查看系统设置路径、测试步骤与 iOS 限制")
+                        title: appLocalized("设为自动填充来源"),
+                        subtitle: appLocalized("查看系统设置路径、测试步骤与 iOS 限制")
                     )
                 }
                 .buttonStyle(.plain)
@@ -63,11 +63,11 @@ struct AppAutoFillCenterView: View {
     // MARK: - 自动填充守护
 
     private var guardSection: some View {
-        AndroidParitySection(title: String(localized: "自动填充守护")) {
+        AndroidParitySection(title: appLocalized("自动填充守护")) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                 AndroidParityInfoRow(
-                    title: String(localized: "仅在保险库解锁时发布"),
-                    value: String(localized: "始终开启")
+                    title: appLocalized("仅在保险库解锁时发布"),
+                    value: appLocalized("始终开启")
                 )
                 Text("身份条目由解密后的条目生成，锁定状态下无法发布。这一项由架构保证，不能关闭。")
                     .font(.caption.weight(.semibold))
@@ -111,7 +111,7 @@ struct AppAutoFillCenterView: View {
                 if let blockedReason = session.autoFillGuardBlockedReason {
                     AndroidParityDivider()
                     AndroidParityInfoRow(
-                        title: String(localized: "最近一次未发布"),
+                        title: appLocalized("最近一次未发布"),
                         value: blockedReason.displayText
                     )
                 }
@@ -126,8 +126,8 @@ struct AppAutoFillCenterView: View {
                     .navigationBarTitleDisplayMode(.inline)
                 } label: {
                     navigationRow(
-                        title: String(localized: "域名规则"),
-                        subtitle: String(localized: "指定哪些站点可以或不可以被自动填充")
+                        title: appLocalized("域名规则"),
+                        subtitle: appLocalized("指定哪些站点可以或不可以被自动填充")
                     )
                 }
                 .buttonStyle(.plain)
@@ -138,7 +138,7 @@ struct AppAutoFillCenterView: View {
     // MARK: - 自动填充诊断
 
     private var diagnosticsSection: some View {
-        AndroidParitySection(title: String(localized: "自动填充诊断")) {
+        AndroidParitySection(title: appLocalized("自动填充诊断")) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                 ForEach(diagnosticRows) { row in
                     AndroidParityInfoRow(title: row.title, value: row.value)
@@ -217,21 +217,21 @@ struct AppAutoFillCenterView: View {
 
     private var providerStatusText: String {
         guard let status = session.autoFillDiagnostics.snapshot.status else {
-            return String(localized: "未知（点击刷新）")
+            return appLocalized("未知（点击刷新）")
         }
         return status.isEnabled
-            ? String(localized: "已在系统设置中启用")
-            : String(localized: "系统设置中未启用")
+            ? appLocalized("已在系统设置中启用")
+            : appLocalized("系统设置中未启用")
     }
 
     private var identityCountText: String {
         guard let status = session.autoFillDiagnostics.snapshot.status else {
-            return String(localized: "未知（点击刷新）")
+            return appLocalized("未知（点击刷新）")
         }
         guard let count = status.identityCount else {
-            return String(localized: "当前 iOS 版本无法读取")
+            return appLocalized("当前 iOS 版本无法读取")
         }
-        return String(count) + " " + String(localized: "条身份")
+        return String(count) + " " + appLocalized("条身份")
     }
 
     private var diagnosticRows: [DiagnosticRow] {
@@ -239,17 +239,17 @@ struct AppAutoFillCenterView: View {
         var rows: [DiagnosticRow] = [
             DiagnosticRow(
                 id: "extension-state",
-                title: String(localized: "扩展启用"),
+                title: appLocalized("扩展启用"),
                 value: providerStatusText
             ),
             DiagnosticRow(
                 id: "extension-version",
-                title: String(localized: "扩展版本"),
-                value: snapshot.extensionVersion ?? String(localized: "未找到扩展")
+                title: appLocalized("扩展版本"),
+                value: snapshot.extensionVersion ?? appLocalized("未找到扩展")
             ),
             DiagnosticRow(
                 id: "identity-count",
-                title: String(localized: "系统侧身份条目"),
+                title: appLocalized("系统侧身份条目"),
                 value: identityCountText
             ),
         ]
@@ -258,8 +258,8 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "status-read",
-                    title: String(localized: "状态读取"),
-                    value: String(localized: "系统未返回状态")
+                    title: appLocalized("状态读取"),
+                    value: appLocalized("系统未返回状态")
                 )
             )
         }
@@ -268,10 +268,10 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "last-success",
-                    title: String(localized: "上次成功发布"),
+                    title: appLocalized("上次成功发布"),
                     value: joinedLine(
                         succeededAt.formatted(date: .numeric, time: .shortened),
-                        String(snapshot.log.lastSucceededCount ?? 0) + " " + String(localized: "条身份")
+                        String(snapshot.log.lastSucceededCount ?? 0) + " " + appLocalized("条身份")
                     )
                 )
             )
@@ -279,8 +279,8 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "last-success",
-                    title: String(localized: "上次成功发布"),
-                    value: String(localized: "暂无记录")
+                    title: appLocalized("上次成功发布"),
+                    value: appLocalized("暂无记录")
                 )
             )
         }
@@ -289,10 +289,10 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "last-failure",
-                    title: String(localized: "上次失败原因"),
+                    title: appLocalized("上次失败原因"),
                     value: joinedLine(
                         failedAt.formatted(date: .numeric, time: .shortened),
-                        snapshot.log.lastFailureMessage ?? String(localized: "未记录原因")
+                        snapshot.log.lastFailureMessage ?? appLocalized("未记录原因")
                     )
                 )
             )
@@ -300,8 +300,8 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "last-failure",
-                    title: String(localized: "上次失败原因"),
-                    value: String(localized: "暂无失败记录")
+                    title: appLocalized("上次失败原因"),
+                    value: appLocalized("暂无失败记录")
                 )
             )
         }
@@ -310,10 +310,10 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "last-skip",
-                    title: String(localized: "上次跳过发布"),
+                    title: appLocalized("上次跳过发布"),
                     value: joinedLine(
                         skippedAt.formatted(date: .numeric, time: .shortened),
-                        snapshot.log.lastSkippedReason ?? String(localized: "未记录原因")
+                        snapshot.log.lastSkippedReason ?? appLocalized("未记录原因")
                     )
                 )
             )
@@ -323,7 +323,7 @@ struct AppAutoFillCenterView: View {
             rows.append(
                 DiagnosticRow(
                     id: "last-clear",
-                    title: String(localized: "上次清空身份"),
+                    title: appLocalized("上次清空身份"),
                     value: clearedAt.formatted(date: .numeric, time: .shortened)
                 )
             )
@@ -339,15 +339,15 @@ struct AppAutoFillCenterView: View {
     private var republishStatusText: String {
         switch session.autoFillDiagnostics.republishState {
         case .idle:
-            return String(localized: "尚未手动重新发布。")
+            return appLocalized("尚未手动重新发布。")
         case .running:
-            return String(localized: "正在发布身份……")
+            return appLocalized("正在发布身份……")
         case .submitted:
-            return String(localized: "已提交发布，系统侧条数以上方诊断为准。")
+            return appLocalized("已提交发布，系统侧条数以上方诊断为准。")
         case .failed(let message):
-            return String(localized: "发布失败：") + message
+            return appLocalized("发布失败：") + message
         case .skipped(let reason):
-            return String(localized: "已跳过：") + reason
+            return appLocalized("已跳过：") + reason
         }
     }
 

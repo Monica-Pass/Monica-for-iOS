@@ -14,7 +14,9 @@ final class AppLanguageController {
 
     init(store: any AppLanguageStore = UserDefaultsAppLanguageStore()) {
         self.store = store
-        self.language = store.loadLanguage()
+        let storedLanguage = store.loadLanguage()
+        self.language = storedLanguage
+        AppLocalizationRuntime.shared.set(storedLanguage)
     }
 
     /// 注入 `\.locale` 的值；`.system` 沿用系统当前 locale。
@@ -32,6 +34,7 @@ final class AppLanguageController {
             return
         }
         self.language = language
+        AppLocalizationRuntime.shared.set(language)
         store.saveLanguage(language)
     }
 }
