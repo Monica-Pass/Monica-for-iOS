@@ -49,24 +49,32 @@ struct AppRootView: View {
     var body: some View {
         ZStack {
             if session.vaultState == .locked {
-                MonicaLockScreen(
-                    session: session,
-                    deviceID: environment.localDeviceIdentifier,
-                    submitPassword: submitLockScreenPassword,
-                    unlockWithKeychain: {
-                        Task {
-                            try? await session.unlockRememberedVaultWithKeychain(
-                                deviceID: environment.localDeviceIdentifier,
-                                fallbackDirectory: vaultDirectory
-                            )
-                            importPendingExtensionInboxItems()
-                            session.maybePresentQuickSetupAfterUnlock()
-                        }
-                    },
-                    createVault: createLocalVault,
-                    openVault: openLocalVault,
-                    forgotPassword: session.showForgotPasswordGuidance
-                )
+                // issue #144：打开/解锁失败时不静默删库或重建，而是进入恢复页。
+                if session.vaultRecoveryContext != nil {
+                    AppVaultRecoveryView(
+                        session: session,
+                        deviceID: environment.localDeviceIdentifier
+                    )
+                } else {
+                    MonicaLockScreen(
+                        session: session,
+                        deviceID: environment.localDeviceIdentifier,
+                        submitPassword: submitLockScreenPassword,
+                        unlockWithKeychain: {
+                            Task {
+                                try? await session.unlockRememberedVaultWithKeychain(
+                                    deviceID: environment.localDeviceIdentifier,
+                                    fallbackDirectory: vaultDirectory
+                                )
+                                importPendingExtensionInboxItems()
+                                session.maybePresentQuickSetupAfterUnlock()
+                            }
+                        },
+                        createVault: createLocalVault,
+                        openVault: openLocalVault,
+                        forgotPassword: session.showForgotPasswordGuidance
+                    )
+                }
             } else {
                 TabView(selection: $session.selectedTab) {
                     ForEach(MonicaAppTab.rootTabs, id: \.self) { tab in
