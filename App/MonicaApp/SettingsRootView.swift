@@ -185,6 +185,8 @@ struct SettingsRootView: View {
             }
             AppThemeSettingsView(session: session)
 
+            AppLanguageSettingsView()
+
             AndroidParitySection(title: String(localized: "本地保险库")) {
                 VaultRegistrySettingsCard(
                     session: session,
