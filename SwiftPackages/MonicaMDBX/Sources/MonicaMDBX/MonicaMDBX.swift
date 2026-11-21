@@ -84,6 +84,8 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
     public let appName: String
     /// 旧密码历史，默认不展示；读取方需自行决定是否解密/显示。
     public let passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry]
+    /// 本地扩展元数据（归档、标签、时间戳）；旧 payload 缺 `monicaMeta` 键时为空。
+    public let metadata: MDBXEntryMetadata
 
     public init(
         id: String,
@@ -98,7 +100,8 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
         urls: [String]? = nil,
         appBundleID: String = "",
         appName: String = "",
-        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
+        passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = [],
+        metadata: MDBXEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -113,6 +116,7 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
         self.appBundleID = appBundleID
         self.appName = appName
         self.passwordHistory = passwordHistory
+        self.metadata = metadata
     }
 }
 
@@ -122,6 +126,7 @@ public struct MonicaMDBXNoteEntry: Sendable, Equatable, Identifiable {
     public let title: String
     public let body: String
     public let favorite: Bool
+    public let metadata: MDBXEntryMetadata
 }
 
 public struct MonicaMDBXTotpEntry: Sendable, Equatable, Identifiable {
@@ -138,6 +143,7 @@ public struct MonicaMDBXTotpEntry: Sendable, Equatable, Identifiable {
     public let counter: UInt64
     public let favorite: Bool
     public let iconName: String
+    public let metadata: MDBXEntryMetadata
 }
 
 public struct MonicaMDBXCardEntry: Sendable, Equatable, Identifiable {
@@ -153,6 +159,7 @@ public struct MonicaMDBXCardEntry: Sendable, Equatable, Identifiable {
     public let network: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: MDBXEntryMetadata
 }
 
 public struct MonicaMDBXIdentityEntry: Sendable, Equatable, Identifiable {
@@ -168,6 +175,7 @@ public struct MonicaMDBXIdentityEntry: Sendable, Equatable, Identifiable {
     public let expiryDate: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: MDBXEntryMetadata
 }
 
 public struct MonicaMDBXParityEntry: Sendable, Equatable, Identifiable {
@@ -178,6 +186,7 @@ public struct MonicaMDBXParityEntry: Sendable, Equatable, Identifiable {
     public let kind: String
     public let payloadJSON: String
     public let favorite: Bool
+    public let metadata: MDBXEntryMetadata
 }
 
 public struct MonicaMDBXSmokeTestResult: Sendable, Equatable {
@@ -189,7 +198,7 @@ public struct MonicaMDBXSmokeTestResult: Sendable, Equatable {
 
 #if canImport(mdbx_ffiFFI)
 public final class MonicaMDBXVault: @unchecked Sendable {
-    private let rawVault: MdbxVault
+    let rawVault: MdbxVault
 
     fileprivate init(rawVault: MdbxVault) {
         self.rawVault = rawVault
@@ -850,6 +859,7 @@ fileprivate struct LoginEntryRecord {
     var appBundleID: String = ""
     var appName: String = ""
     var passwordHistory: [MonicaMDBXLoginPasswordHistoryEntry] = []
+    let metadata: MDBXEntryMetadata
 }
 
 extension MonicaMDBXLoginEntry {
@@ -872,6 +882,7 @@ fileprivate struct NoteEntryRecord {
     let title: String
     let body: String
     let favorite: Bool
+    let metadata: MDBXEntryMetadata
 }
 
 fileprivate struct TotpEntryRecord {
@@ -888,6 +899,7 @@ fileprivate struct TotpEntryRecord {
     let counter: UInt64
     let favorite: Bool
     let iconName: String
+    let metadata: MDBXEntryMetadata
 }
 
 fileprivate struct CardEntryRecord {
@@ -903,6 +915,7 @@ fileprivate struct CardEntryRecord {
     let network: String
     let notes: String
     let favorite: Bool
+    let metadata: MDBXEntryMetadata
 }
 
 fileprivate struct IdentityEntryRecord {
@@ -918,6 +931,7 @@ fileprivate struct IdentityEntryRecord {
     let expiryDate: String
     let notes: String
     let favorite: Bool
+    let metadata: MDBXEntryMetadata
 }
 
 fileprivate struct ParityEntryRecord {
@@ -927,6 +941,7 @@ fileprivate struct ParityEntryRecord {
     let kind: String
     let payloadJson: String
     let favorite: Bool
+    let metadata: MDBXEntryMetadata
 }
 
 fileprivate enum MDBXBusinessPayload {
@@ -1083,7 +1098,8 @@ fileprivate extension LoginEntryRecord {
             urls: storedURLs.isEmpty ? (primaryURL.isEmpty ? [] : [primaryURL]) : storedURLs,
             appBundleID: MDBXBusinessPayload.string(payload, "appBundleId"),
             appName: MDBXBusinessPayload.string(payload, "appName"),
-            passwordHistory: try MDBXBusinessPayload.passwordHistory(payload)
+            passwordHistory: try MDBXBusinessPayload.passwordHistory(payload),
+            metadata: MDBXEntryMetadata(payloadObject: payload)
         )
     }
 }
@@ -1096,7 +1112,8 @@ fileprivate extension NoteEntryRecord {
             projectId: raw.projectId,
             title: raw.title,
             body: MDBXBusinessPayload.string(payload, "body"),
-            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+            favorite: MDBXBusinessPayload.bool(payload, "favorite"),
+            metadata: MDBXEntryMetadata(payloadObject: payload)
         )
     }
 }
@@ -1117,7 +1134,8 @@ fileprivate extension TotpEntryRecord {
             otpType: MDBXBusinessPayload.string(payload, "otpType").isEmpty ? "TOTP" : MDBXBusinessPayload.string(payload, "otpType"),
             counter: MDBXBusinessPayload.uint64(payload, "counter"),
             favorite: MDBXBusinessPayload.bool(payload, "favorite"),
-            iconName: MDBXBusinessPayload.string(payload, "iconName")
+            iconName: MDBXBusinessPayload.string(payload, "iconName"),
+            metadata: MDBXEntryMetadata(payloadObject: payload)
         )
     }
 }
@@ -1137,7 +1155,8 @@ fileprivate extension CardEntryRecord {
             issuer: MDBXBusinessPayload.string(payload, "issuer"),
             network: MDBXBusinessPayload.string(payload, "network"),
             notes: MDBXBusinessPayload.string(payload, "notes"),
-            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+            favorite: MDBXBusinessPayload.bool(payload, "favorite"),
+            metadata: MDBXEntryMetadata(payloadObject: payload)
         )
     }
 }
@@ -1157,7 +1176,8 @@ fileprivate extension IdentityEntryRecord {
             issueDate: MDBXBusinessPayload.string(payload, "issueDate"),
             expiryDate: MDBXBusinessPayload.string(payload, "expiryDate"),
             notes: MDBXBusinessPayload.string(payload, "notes"),
-            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+            favorite: MDBXBusinessPayload.bool(payload, "favorite"),
+            metadata: MDBXEntryMetadata(payloadObject: payload)
         )
     }
 }
@@ -1171,7 +1191,8 @@ fileprivate extension ParityEntryRecord {
             title: raw.title,
             kind: MDBXBusinessPayload.string(payload, "kind"),
             payloadJson: raw.payloadJson,
-            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+            favorite: MDBXBusinessPayload.bool(payload, "favorite"),
+            metadata: MDBXEntryMetadata(payloadObject: payload)
         )
     }
 }
@@ -1200,7 +1221,7 @@ fileprivate extension MdbxVault {
             appName: appName,
             passwordHistory: passwordHistory
         )
-        return try LoginEntryRecord(raw: createEntry(
+        return try LoginEntryRecord(raw: createEntryStampingMetadata(
             projectId: projectId,
             entryType: "login",
             title: title,
@@ -1296,7 +1317,7 @@ fileprivate extension MdbxVault {
             object["icon"] = icon
             payload = try MDBXBusinessPayload.jsonString(object)
         }
-        return try LoginEntryRecord(raw: updateEntry(
+        return try LoginEntryRecord(raw: updateEntryPreservingMetadata(
             projectId: projectId,
             entryId: entryId,
             entryType: "login",
@@ -1348,7 +1369,7 @@ fileprivate extension MdbxVault {
 
     func createNoteEntry(projectId: String, title: String, body: String) throws -> NoteEntryRecord {
         let payload = try MDBXBusinessPayload.jsonString(["kind": "note", "body": body, "favorite": false])
-        return try NoteEntryRecord(raw: createEntry(projectId: projectId, entryType: "note", title: title, payloadJson: payload))
+        return try NoteEntryRecord(raw: createEntryStampingMetadata(projectId: projectId, entryType: "note", title: title, payloadJson: payload))
     }
 
     func listNoteEntries(projectId: String) throws -> [NoteEntryRecord] {
@@ -1362,7 +1383,7 @@ fileprivate extension MdbxVault {
     func updateNoteEntry(projectId: String, entryId: String, title: String, body: String) throws -> NoteEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "note")
         let payload = try MDBXBusinessPayload.jsonString(["kind": "note", "body": body, "favorite": favorite])
-        return try NoteEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "note", title: title, payloadJson: payload))
+        return try NoteEntryRecord(raw: updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: "note", title: title, payloadJson: payload))
     }
 
     func setNoteFavorite(projectId: String, entryId: String, favorite: Bool) throws -> NoteEntryRecord {
@@ -1385,7 +1406,7 @@ fileprivate extension MdbxVault {
 
     func createTotpEntry(projectId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, iconName: String) throws -> TotpEntryRecord {
         let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, iconName: iconName, favorite: false)
-        return try TotpEntryRecord(raw: createEntry(projectId: projectId, entryType: "totp", title: title, payloadJson: payload))
+        return try TotpEntryRecord(raw: createEntryStampingMetadata(projectId: projectId, entryType: "totp", title: title, payloadJson: payload))
     }
 
     func listTotpEntries(projectId: String) throws -> [TotpEntryRecord] {
@@ -1399,7 +1420,7 @@ fileprivate extension MdbxVault {
     func updateTotpEntry(projectId: String, entryId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, iconName: String) throws -> TotpEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "totp")
         let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, iconName: iconName, favorite: favorite)
-        return try TotpEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "totp", title: title, payloadJson: payload))
+        return try TotpEntryRecord(raw: updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: "totp", title: title, payloadJson: payload))
     }
 
     func setTotpFavorite(projectId: String, entryId: String, favorite: Bool) throws -> TotpEntryRecord {
@@ -1422,7 +1443,7 @@ fileprivate extension MdbxVault {
 
     func createCardEntry(projectId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws -> CardEntryRecord {
         let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, notes: notes, favorite: false)
-        return try CardEntryRecord(raw: createEntry(projectId: projectId, entryType: "card", title: title, payloadJson: payload))
+        return try CardEntryRecord(raw: createEntryStampingMetadata(projectId: projectId, entryType: "card", title: title, payloadJson: payload))
     }
 
     func listCardEntries(projectId: String) throws -> [CardEntryRecord] {
@@ -1436,7 +1457,7 @@ fileprivate extension MdbxVault {
     func updateCardEntry(projectId: String, entryId: String, title: String, cardholderName: String, number: String, expiryMonth: String, expiryYear: String, cvv: String, issuer: String, network: String, notes: String) throws -> CardEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "card")
         let payload = try cardPayload(cardholderName: cardholderName, number: number, expiryMonth: expiryMonth, expiryYear: expiryYear, cvv: cvv, issuer: issuer, network: network, notes: notes, favorite: favorite)
-        return try CardEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "card", title: title, payloadJson: payload))
+        return try CardEntryRecord(raw: updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: "card", title: title, payloadJson: payload))
     }
 
     func setCardFavorite(projectId: String, entryId: String, favorite: Bool) throws -> CardEntryRecord {
@@ -1459,7 +1480,7 @@ fileprivate extension MdbxVault {
 
     func createIdentityEntry(projectId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String) throws -> IdentityEntryRecord {
         let payload = try identityPayload(documentType: documentType, fullName: fullName, documentNumber: documentNumber, issuer: issuer, country: country, issueDate: issueDate, expiryDate: expiryDate, notes: notes, favorite: false)
-        return try IdentityEntryRecord(raw: createEntry(projectId: projectId, entryType: "identity", title: title, payloadJson: payload))
+        return try IdentityEntryRecord(raw: createEntryStampingMetadata(projectId: projectId, entryType: "identity", title: title, payloadJson: payload))
     }
 
     func listIdentityEntries(projectId: String) throws -> [IdentityEntryRecord] {
@@ -1473,7 +1494,7 @@ fileprivate extension MdbxVault {
     func updateIdentityEntry(projectId: String, entryId: String, title: String, documentType: String, fullName: String, documentNumber: String, issuer: String, country: String, issueDate: String, expiryDate: String, notes: String) throws -> IdentityEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "identity")
         let payload = try identityPayload(documentType: documentType, fullName: fullName, documentNumber: documentNumber, issuer: issuer, country: country, issueDate: issueDate, expiryDate: expiryDate, notes: notes, favorite: favorite)
-        return try IdentityEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "identity", title: title, payloadJson: payload))
+        return try IdentityEntryRecord(raw: updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: "identity", title: title, payloadJson: payload))
     }
 
     func setIdentityFavorite(projectId: String, entryId: String, favorite: Bool) throws -> IdentityEntryRecord {
@@ -1496,7 +1517,7 @@ fileprivate extension MdbxVault {
 
     func createParityEntry(projectId: String, entryType: String, kind: String, title: String, payloadJson: String) throws -> ParityEntryRecord {
         let payload = try parityPayload(kind: kind, payloadJSON: payloadJson, favorite: false)
-        return try ParityEntryRecord(raw: createEntry(projectId: projectId, entryType: entryType, title: title, payloadJson: payload))
+        return try ParityEntryRecord(raw: createEntryStampingMetadata(projectId: projectId, entryType: entryType, title: title, payloadJson: payload))
     }
 
     func listParityEntries(projectId: String, entryType: String, kind: String) throws -> [ParityEntryRecord] {
@@ -1515,13 +1536,13 @@ fileprivate extension MdbxVault {
         let current = try activeParityEntry(projectId: projectId, entryId: entryId, entryType: entryType, kind: kind)
         let favorite = try MDBXBusinessPayload.favorite(from: current.payloadJson)
         let payload = try parityPayload(kind: kind, payloadJSON: payloadJson, favorite: favorite)
-        return try ParityEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: title, payloadJson: payload))
+        return try ParityEntryRecord(raw: updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: entryType, title: title, payloadJson: payload))
     }
 
     func setParityEntryFavorite(projectId: String, entryId: String, entryType: String, kind: String, favorite: Bool) throws -> ParityEntryRecord {
         let current = try activeParityEntry(projectId: projectId, entryId: entryId, entryType: entryType, kind: kind)
         let payload = try MDBXBusinessPayload.withFavorite(current.payloadJson, favorite: favorite)
-        return try ParityEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload))
+        return try ParityEntryRecord(raw: updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload))
     }
 
     func deleteParityEntry(projectId: String, entryId: String, entryType: String, kind: String) throws {
@@ -1557,6 +1578,51 @@ fileprivate extension MdbxVault {
         return entry
     }
 
+    /// 新建条目时写入 `monicaMeta`：记录创建/修改时间，供“按创建时间/最近使用排序”使用。
+    private func createEntryStampingMetadata(
+        projectId: String,
+        entryType: String,
+        title: String,
+        payloadJson: String
+    ) throws -> EntryRecord {
+        var object = try MDBXBusinessPayload.object(from: payloadJson)
+        let now = Date()
+        var metadata = MDBXEntryMetadata(payloadObject: object)
+        metadata.createdAt = metadata.createdAt ?? now
+        metadata.updatedAt = now
+        object[MDBXEntryMetadata.payloadKey] = metadata.payloadObject
+        return try createEntry(
+            projectId: projectId,
+            entryType: entryType,
+            title: title,
+            payloadJson: try MDBXBusinessPayload.jsonString(object)
+        )
+    }
+
+    /// 更新条目时保留 `monicaMeta`（归档状态、标签、创建时间），并刷新修改时间。
+    private func updateEntryPreservingMetadata(
+        projectId: String,
+        entryId: String,
+        entryType: String,
+        title: String,
+        payloadJson: String
+    ) throws -> EntryRecord {
+        var object = try MDBXBusinessPayload.object(from: payloadJson)
+        if let current = try? activeEntry(projectId: projectId, entryId: entryId, entryType: entryType),
+           let currentObject = try? MDBXBusinessPayload.object(from: current.payloadJson) {
+            var metadata = MDBXEntryMetadata(payloadObject: currentObject)
+            metadata.updatedAt = Date()
+            object[MDBXEntryMetadata.payloadKey] = metadata.payloadObject
+        }
+        return try updateEntry(
+            projectId: projectId,
+            entryId: entryId,
+            entryType: entryType,
+            title: title,
+            payloadJson: try MDBXBusinessPayload.jsonString(object)
+        )
+    }
+
     private func currentPayloadFavorite(projectId: String, entryId: String, entryType: String) throws -> Bool {
         try MDBXBusinessPayload.favorite(from: activeEntry(projectId: projectId, entryId: entryId, entryType: entryType).payloadJson)
     }
@@ -1569,7 +1635,7 @@ fileprivate extension MdbxVault {
     private func setFavorite(projectId: String, entryId: String, entryType: String, favorite: Bool) throws -> EntryRecord {
         let current = try activeEntry(projectId: projectId, entryId: entryId, entryType: entryType)
         let payload = try MDBXBusinessPayload.withFavorite(current.payloadJson, favorite: favorite)
-        return try updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload)
+        return try updateEntryPreservingMetadata(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload)
     }
 
     private func totpPayload(secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, iconName: String, favorite: Bool) throws -> String {
@@ -1649,7 +1715,8 @@ extension MonicaMDBXLoginEntry {
             urls: raw.urls,
             appBundleID: raw.appBundleID,
             appName: raw.appName,
-            passwordHistory: raw.passwordHistory
+            passwordHistory: raw.passwordHistory,
+            metadata: raw.metadata
         )
     }
 }
@@ -1661,7 +1728,8 @@ extension MonicaMDBXNoteEntry {
             projectID: raw.projectId,
             title: raw.title,
             body: raw.body,
-            favorite: raw.favorite
+            favorite: raw.favorite,
+            metadata: raw.metadata
         )
     }
 }
@@ -1681,7 +1749,8 @@ extension MonicaMDBXTotpEntry {
             otpType: raw.otpType,
             counter: raw.counter,
             favorite: raw.favorite,
-            iconName: raw.iconName
+            iconName: raw.iconName,
+            metadata: raw.metadata
         )
     }
 }
@@ -1700,7 +1769,8 @@ extension MonicaMDBXCardEntry {
             issuer: raw.issuer,
             network: raw.network,
             notes: raw.notes,
-            favorite: raw.favorite
+            favorite: raw.favorite,
+            metadata: raw.metadata
         )
     }
 }
@@ -1719,7 +1789,8 @@ extension MonicaMDBXIdentityEntry {
             issueDate: raw.issueDate,
             expiryDate: raw.expiryDate,
             notes: raw.notes,
-            favorite: raw.favorite
+            favorite: raw.favorite,
+            metadata: raw.metadata
         )
     }
 }
@@ -1733,7 +1804,8 @@ extension MonicaMDBXParityEntry {
             entryType: entryType,
             kind: raw.kind,
             payloadJSON: raw.payloadJson,
-            favorite: raw.favorite
+            favorite: raw.favorite,
+            metadata: raw.metadata
         )
     }
 }
