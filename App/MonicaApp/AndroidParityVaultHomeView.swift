@@ -88,6 +88,7 @@ struct AndroidParityVaultHomeView: View {
     @State private var isTotpScannerPresented = false
     @State private var now = Date()
     @State private var isGeneratorPresented = false
+    @State private var isAutoFillGuidePresented = false
     @State private var totpActionFeedback: String?
     @State private var isTrashPurgeConfirmationPresented = false
     @State private var isEmptyTrashConfirmationPresented = false
@@ -172,6 +173,9 @@ struct AndroidParityVaultHomeView: View {
         .toolbar(.hidden, for: .navigationBar)
         .navigationDestination(isPresented: $isGeneratorPresented) {
             GeneratorRootView(session: session)
+        }
+        .navigationDestination(isPresented: $isAutoFillGuidePresented) {
+            AppAutoFillDefaultManagerGuideView(title: String(localized: "系统自动填充说明"))
         }
         .navigationDestination(isPresented: $session.isGlobalSearchPresented) {
             AppGlobalSearchView(session: session)
@@ -1122,25 +1126,44 @@ struct AndroidParityVaultHomeView: View {
 
                 // 生成器作为可见的二级模块时，以胶囊入口出现在模块栏（#63）；
                 // 默认隐藏，此时 UI 与 #77 的分段控件完全一致。
-                if !session.vaultLayoutPreferences.isHidden(.generator) {
+                // 「自动填充说明」是密码页固定可见的入口（#39），解释 iOS 的公开 API 边界。
+                HStack(spacing: 10) {
+                    if !session.vaultLayoutPreferences.isHidden(.generator) {
+                        Button {
+                            isGeneratorPresented = true
+                        } label: {
+                            Label(
+                                PasswordLayoutModule.generator.title,
+                                systemImage: PasswordLayoutModule.generator.systemImage
+                            )
+                            .font(.subheadline.weight(.heavy))
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 44)
+                            .background(
+                                AndroidParityPalette.primaryContainer,
+                                in: Capsule(style: .continuous)
+                            )
+                            .foregroundStyle(AndroidParityPalette.textPrimary)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(PasswordLayoutModule.generator.title)
+                    }
+
                     Button {
-                        isGeneratorPresented = true
+                        isAutoFillGuidePresented = true
                     } label: {
-                        Label(
-                            PasswordLayoutModule.generator.title,
-                            systemImage: PasswordLayoutModule.generator.systemImage
-                        )
-                        .font(.subheadline.weight(.heavy))
-                        .padding(.horizontal, 14)
-                        .frame(minHeight: 44)
-                        .background(
-                            AndroidParityPalette.primaryContainer,
-                            in: Capsule(style: .continuous)
-                        )
-                        .foregroundStyle(AndroidParityPalette.textPrimary)
+                        Label("自动填充说明", systemImage: "questionmark.circle")
+                            .font(.subheadline.weight(.heavy))
+                            .padding(.horizontal, 14)
+                            .frame(minHeight: 44)
+                            .background(
+                                AndroidParityPalette.surfaceVariant,
+                                in: Capsule(style: .continuous)
+                            )
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(PasswordLayoutModule.generator.title)
+                    .accessibilityLabel("系统自动填充说明")
                 }
 
                 if session.passwordModule == .other {
