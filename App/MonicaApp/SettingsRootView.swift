@@ -1652,6 +1652,7 @@ struct SettingsRootView: View {
                         .buttonStyle(AndroidParityButtonStyle(tone: .destructiveOutlined))
                         .disabled(session.webDAVBackupState.isRunning || session.webDAVRestoreVaultPassword.isEmpty)
                     }
+                    AppWebDAVCertificateTrustSection(session: session)
                 }
             }
 

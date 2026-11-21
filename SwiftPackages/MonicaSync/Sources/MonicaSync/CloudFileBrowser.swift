@@ -745,10 +745,10 @@ public struct WebDAVCloudFileBrowser: CloudFileBrowser, @unchecked Sendable {
 
     public init(
         endpoint: WebDAVEndpoint,
-        transport: any WebDAVTransport = URLSessionWebDAVTransport()
+        transport: (any WebDAVTransport)? = nil
     ) {
         self.endpoint = endpoint
-        self.transport = transport
+        self.transport = transport ?? URLSessionWebDAVTransport(identity: WebDAVTrustIdentity(endpoint: endpoint))
     }
 
     public var availability: CloudFileBrowserAvailability {

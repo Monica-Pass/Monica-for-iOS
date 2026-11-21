@@ -127,7 +127,7 @@ public struct WebDAVCloudVaultRemoteStore: CloudVaultRemoteStore {
     public init(
         endpoint: WebDAVEndpoint,
         vaultFileName: String,
-        transport: any WebDAVTransport = URLSessionWebDAVTransport(),
+        transport: (any WebDAVTransport)? = nil,
         now: @escaping @Sendable () -> Date = Date.init
     ) {
         let sanitized = CloudVaultNaming.sanitizedFileName(
@@ -137,7 +137,9 @@ public struct WebDAVCloudVaultRemoteStore: CloudVaultRemoteStore {
         self.endpoint = endpoint
         self.remotePath = sanitized
         self.manifestFileName = CloudVaultNaming.manifestFileName(forVaultFileName: sanitized)
-        self.transportBox = WebDAVTransportBox(transport: transport)
+        self.transportBox = WebDAVTransportBox(
+            transport: transport ?? URLSessionWebDAVTransport(identity: WebDAVTrustIdentity(endpoint: endpoint))
+        )
         self.clock = now
     }
 
