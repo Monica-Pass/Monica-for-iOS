@@ -93,6 +93,8 @@ struct AndroidParityVaultHomeView: View {
     @State private var isTrashPurgeConfirmationPresented = false
     @State private var isEmptyTrashConfirmationPresented = false
     @State private var loginActionFeedback: String?
+    /// 笔记列表的布局偏好（#152）：默认列表，切换后写入 UserDefaults。
+    @State private var noteLayout = UserDefaultsNoteListLayoutStore.shared.loadLayout()
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -563,10 +565,21 @@ struct AndroidParityVaultHomeView: View {
 
     private var noteList: some View {
         VStack(spacing: 14) {
-            ForEach(session.filteredNoteEntries) { entry in
-                batchAwareButton(id: entry.id, kind: .note) {
-                    batchSelectableCard(id: entry.id) {
-                        AndroidNoteListCard(entry: entry, previewBody: session.maskedSensitivePreview(entry.body))
+            noteLayoutSwitcher
+            if noteLayout == .grid {
+                AppNoteTileGrid(entries: session.filteredNoteEntries) { entry in
+                    batchAwareButton(id: entry.id, kind: .note) {
+                        batchSelectableCard(id: entry.id) {
+                            AppNoteTileCard(content: noteTileContent(for: entry))
+                        }
+                    }
+                }
+            } else {
+                ForEach(session.filteredNoteEntries) { entry in
+                    batchAwareButton(id: entry.id, kind: .note) {
+                        batchSelectableCard(id: entry.id) {
+                            AndroidNoteListCard(entry: entry, previewBody: session.maskedSensitivePreview(entry.body))
+                        }
                     }
                 }
             }
@@ -575,6 +588,67 @@ struct AndroidParityVaultHomeView: View {
             }
             deletedNoteRows
         }
+    }
+
+    private var noteLayoutSwitcher: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            HStack(spacing: 4) {
+                noteLayoutButton(.list, systemImage: "list.bullet", title: String(localized: "列表"))
+                noteLayoutButton(.grid, systemImage: "square.grid.2x2", title: String(localized: "瓷砖"))
+            }
+            .padding(4)
+            .background(AndroidParityPalette.surfaceVariant.opacity(0.78), in: Capsule())
+            .accessibilityElement(children: .contain)
+            .accessibilityLabel(Text(String(localized: "笔记布局")))
+        }
+    }
+
+    private func noteLayoutButton(_ layout: AppNoteListLayout, systemImage: String, title: String) -> some View {
+        Button {
+            guard noteLayout != layout else {
+                return
+            }
+            noteLayout = layout
+            UserDefaultsNoteListLayoutStore.shared.saveLayout(layout)
+        } label: {
+            Image(systemName: systemImage)
+                .font(AndroidParityTypography.controlIcon(weight: .semibold))
+                .foregroundStyle(noteLayout == layout ? AndroidParityPalette.onPrimary : AndroidParityPalette.textSecondary)
+                .frame(minWidth: 44, minHeight: 36)
+                .background(
+                    noteLayout == layout ? AndroidParityPalette.primary : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+                )
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(title))
+        .accessibilityAddTraits(noteLayout == layout ? [.isSelected] : [])
+    }
+
+    private func noteTileContent(for entry: LocalNoteEntry) -> AppNoteTileContent {
+        let title = entry.title.isEmpty ? String(localized: "未命名") : entry.title
+        let updatedAt = entry.metadata.updatedAt ?? entry.metadata.createdAt
+
+        // 打开「始终遮蔽敏感预览」时，瓷砖沿用列表既有的遮蔽文案，也不显示图片数量，
+        // 避免在可能被他人看到的列表页泄露摘要内容或图片数量。
+        if session.sensitivePreviewPreferences.alwaysMask {
+            return AppNoteTileContent(
+                title: title,
+                summary: session.maskedSensitivePreview(entry.body),
+                imageCount: 0,
+                updatedAt: updatedAt
+            )
+        }
+
+        let summary = NoteListSummary.summarize(entry.body)
+        return AppNoteTileContent(
+            title: title,
+            summary: summary.plainText,
+            imageCount: summary.imageAttachmentCount,
+            updatedAt: updatedAt
+        )
     }
 
     private var passkeyList: some View {
