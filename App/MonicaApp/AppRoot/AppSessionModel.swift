@@ -639,6 +639,8 @@ final class AppSessionModel {
     private let deviceOwnerAuthenticator: any BiometricUnlockAuthorizer
     /// 通行密钥导入准备、钥匙串写入与导出读取；私钥只停留在钥匙串与内存。
     private let passkeyExchangeService: PasskeyExchangeService
+    /// #154：SSH 生成器保存条目时把 OpenSSH 私钥写入钥匙串，条目里只保留引用。
+    let sshPrivateKeyStore: any SSHPrivateKeyStore
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
     private let securityQuestionVerifier: SecurityQuestionAnswerVerifier
@@ -731,6 +733,7 @@ final class AppSessionModel {
         passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
             privateKeyStore: KeychainPasskeyPrivateKeyStore()
         ),
+        sshPrivateKeyStore: any SSHPrivateKeyStore = KeychainSSHPrivateKeyStore(),
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
         securityQuestionStore: any SecurityQuestionRecoveryStore = MigratingSecurityQuestionRecoveryStore(),
         securityQuestionVerifier: SecurityQuestionAnswerVerifier = SecurityQuestionAnswerVerifier(),
@@ -811,6 +814,7 @@ final class AppSessionModel {
         self.itemIconPreferenceStore = itemIconPreferenceStore
         self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
         self.passkeyExchangeService = passkeyExchangeService
+        self.sshPrivateKeyStore = sshPrivateKeyStore
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
         self.securityQuestionVerifier = securityQuestionVerifier
@@ -6833,6 +6837,9 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
 
+            // #154：算法、位数与指纹是生成器写入的只读元数据，编辑其它字段时原样保留，
+            // 避免手工修改标题就把「Ed25519 / 256 位 / SHA256:…」抹掉。
+            let currentEntry = sshKeyEntries.first(where: { $0.id == entryID })
             let entry = try entryRepository.updateSshKeyEntry(
                 projectID: projectID,
                 entryID: entryID,
@@ -6843,7 +6850,10 @@ final class AppSessionModel {
                     publicKey: editingSshKeyPublicKey,
                     privateKeyReference: editingSshKeyPrivateKeyReference,
                     passphraseHint: editingSshKeyPassphraseHint,
-                    notes: editingSshKeyNotes
+                    notes: editingSshKeyNotes,
+                    algorithm: currentEntry?.algorithm ?? "",
+                    keySize: currentEntry?.keySize ?? 0,
+                    fingerprint: currentEntry?.fingerprint ?? ""
                 )
             )
             sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)

@@ -35485,6 +35485,390 @@
           }
         }
       }
+    },
+    "生成 Ed25519 或 RSA 密钥对。公钥与 SHA-256 指纹可以直接复制；私钥只在保存时写入本机钥匙串，不会出现在条目详情、日志或备份明文里。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate an Ed25519 or RSA key pair. The public key and SHA-256 fingerprint can be copied directly; the private key is written to this device's Keychain only when you save, and never appears in entry details, logs, or plaintext backups."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成 Ed25519 或 RSA 密钥对。公钥与 SHA-256 指纹可以直接复制；私钥只在保存时写入本机钥匙串，不会出现在条目详情、日志或备份明文里。"
+          }
+        }
+      }
+    },
+    "生成密钥对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate key pair"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成密钥对"
+          }
+        }
+      }
+    },
+    "正在生成…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在生成…"
+          }
+        }
+      }
+    },
+    "正在生成密钥对…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating key pair…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在生成密钥对…"
+          }
+        }
+      }
+    },
+    "生成结果": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Result"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成结果"
+          }
+        }
+      }
+    },
+    "RSA 位数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSA key size"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSA 位数"
+          }
+        }
+      }
+    },
+    "RSA 4096 生成较慢（约十几秒），请保持应用在前台。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSA 4096 takes longer to generate (around ten seconds or more); please keep the app in the foreground."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "RSA 4096 生成较慢（约十几秒），请保持应用在前台。"
+          }
+        }
+      }
+    },
+    "%@ · %lld 位": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %lld bits"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%@ · %lld 位"
+          }
+        }
+      }
+    },
+    "私钥只保存在本机钥匙串（解锁后可读、不随备份同步），条目里仅保存公钥、指纹与引用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The private key is stored only in this device's Keychain (readable after unlock, not synced with backups); the entry keeps only the public key, fingerprint, and reference."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥只保存在本机钥匙串（解锁后可读、不随备份同步），条目里仅保存公钥、指纹与引用。"
+          }
+        }
+      }
+    },
+    "保存为 SSH 条目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as SSH entry"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存为 SSH 条目"
+          }
+        }
+      }
+    },
+    "保险库已锁定，请先解锁再保存。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault is locked. Unlock it before saving."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库已锁定，请先解锁再保存。"
+          }
+        }
+      }
+    },
+    "已保存到保险库：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saved to vault: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存到保险库：%@"
+          }
+        }
+      }
+    },
+    "保存 SSH 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save SSH key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存 SSH 密钥"
+          }
+        }
+      }
+    },
+    "SSH 密钥信息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH key details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "SSH 密钥信息"
+          }
+        }
+      }
+    },
+    "条目信息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entry details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条目信息"
+          }
+        }
+      }
+    },
+    "例如：GitHub 部署密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "For example: GitHub deploy key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如：GitHub 部署密钥"
+          }
+        }
+      }
+    },
+    "可选，例如：github.com": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional, for example: github.com"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选，例如：github.com"
+          }
+        }
+      }
+    },
+    "私钥只会写入本机钥匙串，不随条目导出，也不会同步到其它设备；条目里保存公钥、指纹、引用与位数。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The private key is written only to this device's Keychain; it is not exported with the entry or synced to other devices. The entry stores the public key, fingerprint, reference, and key size."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥只会写入本机钥匙串，不随条目导出，也不会同步到其它设备；条目里保存公钥、指纹、引用与位数。"
+          }
+        }
+      }
+    },
+    "请填写 SSH 密钥标题。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a title for the SSH key."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请填写 SSH 密钥标题。"
+          }
+        }
+      }
+    },
+    "私钥为空，无法保存。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The private key is empty and cannot be saved."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥为空，无法保存。"
+          }
+        }
+      }
+    },
+    "请先解锁保险库再保存 SSH 密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault before saving the SSH key."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先解锁保险库再保存 SSH 密钥。"
+          }
+        }
+      }
+    },
+    "GPG / OpenPGP 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG / OpenPGP keys"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG / OpenPGP 密钥"
+          }
+        }
+      }
+    },
+    "GPG / OpenPGP 生成": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG / OpenPGP generation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG / OpenPGP 生成"
+          }
+        }
+      }
+    },
+    "正在生成密钥对": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generating key pair"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在生成密钥对"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
