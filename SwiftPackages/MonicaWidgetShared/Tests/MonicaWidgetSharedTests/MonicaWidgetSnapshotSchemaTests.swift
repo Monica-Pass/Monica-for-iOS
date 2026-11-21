@@ -250,6 +250,13 @@ struct MonicaWidgetSnapshotSchemaTests {
             try JSONSerialization.jsonObject(with: Data(contentsOf: widgetStore.snapshotFileURL))
                 as? [String: Any]
         )
-        #expect(Set(json.keys) == ["schemaVersion", "vaultState", "totalEntryCount", "totpItems", "shortcutItems"])
+        // #155 起多了一个只影响展示的 `totpProgressStyle`；旧快照缺少该字段时按线性解码。
+        #expect(
+            Set(json.keys) == [
+                "schemaVersion", "vaultState", "totalEntryCount", "totpItems", "shortcutItems",
+                "totpProgressStyle",
+            ]
+        )
+        #expect(json["totpProgressStyle"] as? String == "linear")
     }
 }
