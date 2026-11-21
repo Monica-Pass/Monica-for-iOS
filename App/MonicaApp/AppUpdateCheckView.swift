@@ -20,7 +20,7 @@ struct AppUpdateCheckSectionView: View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
             VStack(alignment: .leading, spacing: 12) {
                 AndroidParityInfoRow(
-                    title: String(localized: "当前版本"),
+                    title: appLocalized("当前版本"),
                     value: Self.displayVersion
                 )
 
@@ -43,7 +43,7 @@ struct AppUpdateCheckSectionView: View {
                         Task { await checkForUpdate() }
                     } label: {
                         Label(
-                            isChecking ? String(localized: "正在检查…") : String(localized: "检查更新"),
+                            isChecking ? appLocalized("正在检查…") : appLocalized("检查更新"),
                             systemImage: "arrow.triangle.2.circlepath"
                         )
                         .frame(maxWidth: .infinity)
@@ -66,7 +66,7 @@ struct AppUpdateCheckSectionView: View {
             statusRow(
                 systemImage: "clock.arrow.circlepath",
                 tint: AndroidParityPalette.textSecondary,
-                text: String(localized: "正在向 App Store 查询最新版本…")
+                text: appLocalized("正在向 App Store 查询最新版本…")
             )
         } else if let availability {
             switch availability {
@@ -74,31 +74,31 @@ struct AppUpdateCheckSectionView: View {
                 statusRow(
                     systemImage: "questionmark.circle",
                     tint: AndroidParityPalette.textSecondary,
-                    text: String(localized: "当前构建未配置 App Store ID（开发版或尚未上架），无法检查更新。")
+                    text: appLocalized("当前构建未配置 App Store ID（开发版或尚未上架），无法检查更新。")
                 )
             case .notFoundInStore:
                 statusRow(
                     systemImage: "magnifyingglass",
                     tint: AndroidParityPalette.textSecondary,
-                    text: String(localized: "App Store 中暂时查不到这个应用。")
+                    text: appLocalized("App Store 中暂时查不到这个应用。")
                 )
             case .upToDate(_, let latestVersion):
                 statusRow(
                     systemImage: "checkmark.seal",
                     tint: AndroidParityPalette.primary,
-                    text: String(localized: "已是最新版本（商店版本 \(latestVersion)）。")
+                    text: appLocalized("已是最新版本（商店版本 \(latestVersion)）。")
                 )
             case .updateAvailable(_, let latestVersion, _):
                 statusRow(
                     systemImage: "arrow.down.circle",
                     tint: AndroidParityPalette.primary,
-                    text: String(localized: "发现新版本 \(latestVersion)。")
+                    text: appLocalized("发现新版本 \(latestVersion)。")
                 )
             case .untrustedStoreURL(_, let latestVersion):
                 statusRow(
                     systemImage: "exclamationmark.triangle",
                     tint: AndroidParityPalette.textSecondary,
-                    text: String(localized: "商店返回了 \(latestVersion)，但下载链接不是受信任的 Apple 域名，已阻止打开。")
+                    text: appLocalized("商店返回了 \(latestVersion)，但下载链接不是受信任的 Apple 域名，已阻止打开。")
                 )
             case .failed(_, let error):
                 statusRow(
@@ -111,13 +111,13 @@ struct AppUpdateCheckSectionView: View {
             statusRow(
                 systemImage: "info.circle",
                 tint: AndroidParityPalette.textSecondary,
-                text: String(localized: "点击「检查更新」向 App Store 查询是否有新版本。")
+                text: appLocalized("点击「检查更新」向 App Store 查询是否有新版本。")
             )
         } else {
             statusRow(
                 systemImage: "questionmark.circle",
                 tint: AndroidParityPalette.textSecondary,
-                text: String(localized: "当前构建未配置 App Store ID（开发版或尚未上架），无法检查更新。")
+                text: appLocalized("当前构建未配置 App Store ID（开发版或尚未上架），无法检查更新。")
             )
         }
     }
@@ -171,7 +171,7 @@ struct AppUpdateCheckSectionView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines),
             !version.isEmpty
         else {
-            return String(localized: "未知版本")
+            return appLocalized("未知版本")
         }
         return version
     }
@@ -179,13 +179,13 @@ struct AppUpdateCheckSectionView: View {
     static func failureText(for error: AppStoreUpdateError) -> String {
         switch error {
         case .transport:
-            return String(localized: "无法连接 App Store，请稍后重试。")
+            return appLocalized("无法连接 App Store，请稍后重试。")
         case .httpStatus(let status):
-            return String(localized: "App Store 返回异常状态码 \(status)，请稍后重试。")
+            return appLocalized("App Store 返回异常状态码 \(status)，请稍后重试。")
         case .malformedResponse:
-            return String(localized: "App Store 返回的数据无法解析，请稍后重试。")
+            return appLocalized("App Store 返回的数据无法解析，请稍后重试。")
         case .currentVersionUnparsable(let version):
-            return String(localized: "当前版本号「\(version)」不是标准格式，无法比较。")
+            return appLocalized("当前版本号「\(version)」不是标准格式，无法比较。")
         }
     }
 }

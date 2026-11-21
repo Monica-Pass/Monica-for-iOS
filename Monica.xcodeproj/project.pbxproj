@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A149B0000000000000000001 /* AppLocalizationRuntime.swift in Sources */ = {isa = PBXBuildFile; fileRef = A149B0000000000000000002 /* AppLocalizationRuntime.swift */; };
 				A4C0000000000000000000F1 /* AppDataClearView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0000000000000000000F2 /* AppDataClearView.swift */; };
 		A4C0000000000000000000F3 /* AppDataClearSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0000000000000000000F4 /* AppDataClearSupport.swift */; };
 C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
@@ -241,6 +242,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A149B0000000000000000002 /* AppLocalizationRuntime.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalizationRuntime.swift; sourceTree = "<group>"; };
 				A4C0000000000000000000F2 /* AppDataClearView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataClearView.swift; sourceTree = "<group>"; };
 		A4C0000000000000000000F4 /* AppDataClearSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataClearSupport.swift; sourceTree = "<group>"; };
 C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
@@ -626,6 +628,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 			C3A0000000000000000000A4 /* VaultSnapshotViews.swift */,
 			AA2B00000000000000000001 /* AppLanguagePreferences.swift */,
 			AA2B00000000000000000002 /* AppLanguageController.swift */,
+			A149B0000000000000000002 /* AppLocalizationRuntime.swift */,
 				A4C0000000000000000000F4 /* AppDataClearSupport.swift */,
 			B1270000000000000000A003 /* AppSessionModel+AccountTemplates.swift */,
 			B1270000000000000000A005 /* AppAccountTemplateSupport.swift */,
@@ -1084,6 +1087,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */,
 				A153000000000000000000A1 /* AppSearchAutoFocusSupport.swift in Sources */,
 				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
+				A149B0000000000000000001 /* AppLocalizationRuntime.swift in Sources */,
 				A530000000000000000000F1 /* AppHaptics.swift in Sources */,
 				AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */,
 				AF1B0000000000000000A101 /* AppTotpProgressViews.swift in Sources */,

@@ -205,7 +205,7 @@ extension AppSessionModel {
     func billingAddressWarnings(for form: BillingAddressFormState) -> [String] {
         var warnings: [String] = []
         if let issue = BillingFieldValidator.postalCodeIssue(form.postalCode) {
-            warnings.append(billingFieldWarningTitle(for: issue, field: String(localized: "邮编")))
+            warnings.append(billingFieldWarningTitle(for: issue, field: appLocalized("邮编")))
         }
         return warnings
     }
@@ -219,10 +219,10 @@ extension AppSessionModel {
             warnings.append(billingFieldWarningTitle(for: issue, field: "SWIFT/BIC"))
         }
         if let issue = BillingFieldValidator.routingNumberIssue(form.routingNumber) {
-            warnings.append(billingFieldWarningTitle(for: issue, field: String(localized: "路由号")))
+            warnings.append(billingFieldWarningTitle(for: issue, field: appLocalized("路由号")))
         }
         if let issue = BillingFieldValidator.currencyIssue(form.currency) {
-            warnings.append(billingFieldWarningTitle(for: issue, field: String(localized: "币种")))
+            warnings.append(billingFieldWarningTitle(for: issue, field: appLocalized("币种")))
         }
         return warnings
     }
@@ -231,23 +231,23 @@ extension AppSessionModel {
         let detail: String
         switch issue {
         case .ibanCharacters:
-            detail = String(localized: "只包含字母和数字")
+            detail = appLocalized("只包含字母和数字")
         case .ibanLength:
-            detail = String(localized: "长度通常在 15–34 位之间")
+            detail = appLocalized("长度通常在 15–34 位之间")
         case .ibanChecksum:
-            detail = String(localized: "校验位对不上，请再确认一遍")
+            detail = appLocalized("校验位对不上，请再确认一遍")
         case .swiftCharacters:
-            detail = String(localized: "只包含字母和数字")
+            detail = appLocalized("只包含字母和数字")
         case .swiftLength:
-            detail = String(localized: "通常是 8 位或 11 位")
+            detail = appLocalized("通常是 8 位或 11 位")
         case .routingNumberFormat:
-            detail = String(localized: "只包含字母、数字、空格或连字符，且不超过 34 位")
+            detail = appLocalized("只包含字母、数字、空格或连字符，且不超过 34 位")
         case .postalCodeFormat:
-            detail = String(localized: "只包含字母、数字、空格或连字符，且不超过 16 位")
+            detail = appLocalized("只包含字母、数字、空格或连字符，且不超过 16 位")
         case .currencyFormat:
-            detail = String(localized: "通常是 3 位字母，例如 CNY、USD")
+            detail = appLocalized("通常是 3 位字母，例如 CNY、USD")
         }
-        return String(localized: "\(field)格式可能不正确：\(detail)")
+        return appLocalized("\(field)格式可能不正确：\(detail)")
     }
 
     // MARK: 账单地址 CRUD
@@ -553,34 +553,34 @@ extension AppSessionModel {
 
     func billingAddressDetailRows(for entry: LocalBillingAddressEntry) -> [AppExtensionCapabilityRow] {
         var rows: [AppExtensionCapabilityRow] = [
-            billingDetailRow(id: "title", title: String(localized: "标题"), value: entry.title)
+            billingDetailRow(id: "title", title: appLocalized("标题"), value: entry.title)
         ]
         if !entry.fullName.isEmpty {
-            rows.append(billingDetailRow(id: "fullName", title: String(localized: "收件人"), value: entry.fullName))
+            rows.append(billingDetailRow(id: "fullName", title: appLocalized("收件人"), value: entry.fullName))
         }
         if !entry.addressLines.isEmpty {
             rows.append(billingDetailRow(
                 id: "address",
-                title: String(localized: "地址"),
+                title: appLocalized("地址"),
                 value: entry.formattedAddress
             ))
         }
         if !entry.phone.isEmpty {
             rows.append(billingDetailRow(
                 id: "phone",
-                title: String(localized: "电话"),
+                title: appLocalized("电话"),
                 value: sensitivePreviewValue(entry.phone, category: .otherSecret, entryID: entry.id)
             ))
         }
         rows.append(billingDetailRow(
             id: "linkedCards",
-            title: String(localized: "关联银行卡"),
+            title: appLocalized("关联银行卡"),
             value: billingLinkedCardsDescription(for: entry)
         ))
         if !entry.notes.isEmpty {
             rows.append(billingDetailRow(
                 id: "notes",
-                title: String(localized: "备注"),
+                title: appLocalized("备注"),
                 value: sensitivePreviewValue(entry.notes, category: .noteBody, entryID: entry.id)
             ))
         }
@@ -603,21 +603,21 @@ extension AppSessionModel {
 
     func paymentAccountDetailRows(for entry: LocalPaymentAccountEntry) -> [AppExtensionCapabilityRow] {
         var rows: [AppExtensionCapabilityRow] = [
-            billingDetailRow(id: "title", title: String(localized: "标题"), value: entry.title),
-            billingDetailRow(id: "kind", title: String(localized: "账户类型"), value: entry.kind.displayName)
+            billingDetailRow(id: "title", title: appLocalized("标题"), value: entry.title),
+            billingDetailRow(id: "kind", title: appLocalized("账户类型"), value: entry.kind.displayName)
         ]
         if !entry.provider.isEmpty {
-            rows.append(billingDetailRow(id: "provider", title: String(localized: "机构/钱包"), value: entry.provider))
+            rows.append(billingDetailRow(id: "provider", title: appLocalized("机构/钱包"), value: entry.provider))
         }
         if !entry.accountName.isEmpty {
             rows.append(billingDetailRow(
                 id: "accountName",
-                title: String(localized: "账户名"),
+                title: appLocalized("账户名"),
                 value: sensitivePreviewValue(entry.accountName, category: .otherSecret, entryID: entry.id)
             ))
         }
         if !entry.accountHolderName.isEmpty {
-            rows.append(billingDetailRow(id: "holder", title: String(localized: "持有人"), value: entry.accountHolderName))
+            rows.append(billingDetailRow(id: "holder", title: appLocalized("持有人"), value: entry.accountHolderName))
         }
         if !entry.iban.isEmpty {
             rows.append(billingDetailRow(
@@ -632,34 +632,34 @@ extension AppSessionModel {
         if !entry.routingNumber.isEmpty {
             rows.append(billingDetailRow(
                 id: "routing",
-                title: String(localized: "路由号"),
+                title: appLocalized("路由号"),
                 value: sensitivePreviewValue(entry.routingNumber, category: .otherSecret, entryID: entry.id)
             ))
         }
         if !entry.accountNumber.isEmpty {
             rows.append(billingDetailRow(
                 id: "accountNumber",
-                title: String(localized: "账号"),
+                title: appLocalized("账号"),
                 value: sensitivePreviewValue(entry.accountNumber, category: .otherSecret, entryID: entry.id)
             ))
         }
         if !entry.currency.isEmpty {
-            rows.append(billingDetailRow(id: "currency", title: String(localized: "币种"), value: entry.currency))
+            rows.append(billingDetailRow(id: "currency", title: appLocalized("币种"), value: entry.currency))
         }
         rows.append(billingDetailRow(
             id: "billingAddress",
-            title: String(localized: "账单地址"),
+            title: appLocalized("账单地址"),
             value: paymentBillingAddressDescription(for: entry)
         ))
         rows.append(billingDetailRow(
             id: "linkedCard",
-            title: String(localized: "关联银行卡"),
+            title: appLocalized("关联银行卡"),
             value: paymentLinkedCardDescription(for: entry)
         ))
         if !entry.notes.isEmpty {
             rows.append(billingDetailRow(
                 id: "notes",
-                title: String(localized: "备注"),
+                title: appLocalized("备注"),
                 value: sensitivePreviewValue(entry.notes, category: .noteBody, entryID: entry.id)
             ))
         }
@@ -688,16 +688,16 @@ extension AppSessionModel {
 
     func billingLinkedCardsDescription(for entry: LocalBillingAddressEntry) -> String {
         guard !entry.linkedCardIDs.isEmpty else {
-            return String(localized: "未关联")
+            return appLocalized("未关联")
         }
         let linked = entry.linkedCards(in: cardEntries)
         let missingCount = entry.missingLinkedCardIDs(in: cardEntries).count
         if linked.isEmpty {
-            return String(localized: "关联的银行卡已删除")
+            return appLocalized("关联的银行卡已删除")
         }
         let titles = linked.map(\.title).joined(separator: "、")
         if missingCount > 0 {
-            return String(localized: "\(titles)（另有 \(missingCount) 张银行卡已删除）")
+            return appLocalized("\(titles)（另有 \(missingCount) 张银行卡已删除）")
         }
         return titles
     }
@@ -705,22 +705,22 @@ extension AppSessionModel {
     func paymentBillingAddressDescription(for entry: LocalPaymentAccountEntry) -> String {
         switch entry.billingAddressReferenceStatus(in: billingAddressEntries) {
         case .none:
-            return String(localized: "未关联")
+            return appLocalized("未关联")
         case .missing:
-            return String(localized: "关联的账单地址已删除")
+            return appLocalized("关联的账单地址已删除")
         case .linked:
-            return entry.billingAddress(in: billingAddressEntries)?.title ?? String(localized: "关联的账单地址已删除")
+            return entry.billingAddress(in: billingAddressEntries)?.title ?? appLocalized("关联的账单地址已删除")
         }
     }
 
     func paymentLinkedCardDescription(for entry: LocalPaymentAccountEntry) -> String {
         switch entry.linkedCardReferenceStatus(in: cardEntries) {
         case .none:
-            return String(localized: "未关联")
+            return appLocalized("未关联")
         case .missing:
-            return String(localized: "关联的银行卡已删除")
+            return appLocalized("关联的银行卡已删除")
         case .linked:
-            return entry.linkedCard(in: cardEntries)?.title ?? String(localized: "关联的银行卡已删除")
+            return entry.linkedCard(in: cardEntries)?.title ?? appLocalized("关联的银行卡已删除")
         }
     }
 
@@ -734,7 +734,7 @@ extension AppSessionModel {
         return AppExtensionCapabilityRow(
             id: id,
             title: title,
-            value: trimmed.isEmpty ? String(localized: "空") : trimmed,
+            value: trimmed.isEmpty ? appLocalized("空") : trimmed,
             detail: "",
             systemImage: ""
         )
@@ -757,22 +757,22 @@ struct BillingAddressEditorFields: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            BillingFormField(icon: "folder.fill", title: String(localized: "标题 *"), text: form.title)
-            BillingFormField(icon: "person.fill", title: String(localized: "收件人"), text: form.fullName)
-            BillingFormField(icon: "house.fill", title: String(localized: "地址行 1"), text: form.streetAddress)
-            BillingFormField(icon: "building.2.fill", title: String(localized: "地址行 2 / 房间号"), text: form.apartment)
-            BillingFormField(icon: "mappin.and.ellipse", title: String(localized: "城市"), text: form.city)
-            BillingFormField(icon: "map.fill", title: String(localized: "省 / 州"), text: form.stateProvince)
-            BillingFormField(icon: "number", title: String(localized: "邮编"), text: form.postalCode)
+            BillingFormField(icon: "folder.fill", title: appLocalized("标题 *"), text: form.title)
+            BillingFormField(icon: "person.fill", title: appLocalized("收件人"), text: form.fullName)
+            BillingFormField(icon: "house.fill", title: appLocalized("地址行 1"), text: form.streetAddress)
+            BillingFormField(icon: "building.2.fill", title: appLocalized("地址行 2 / 房间号"), text: form.apartment)
+            BillingFormField(icon: "mappin.and.ellipse", title: appLocalized("城市"), text: form.city)
+            BillingFormField(icon: "map.fill", title: appLocalized("省 / 州"), text: form.stateProvince)
+            BillingFormField(icon: "number", title: appLocalized("邮编"), text: form.postalCode)
                 .textInputAutocapitalization(.characters)
-            BillingFormField(icon: "globe", title: String(localized: "国家 / 地区"), text: form.country)
-            BillingFormField(icon: "phone.fill", title: String(localized: "电话"), text: form.phone)
+            BillingFormField(icon: "globe", title: appLocalized("国家 / 地区"), text: form.country)
+            BillingFormField(icon: "phone.fill", title: appLocalized("电话"), text: form.phone)
                 .keyboardType(.phonePad)
             BillingCardReferenceEditor(
                 selection: form.linkedCardIDs,
                 entries: session.billingLinkableCardEntries
             )
-            BillingFormField(icon: "note.text", title: String(localized: "备注"), text: form.notes)
+            BillingFormField(icon: "note.text", title: appLocalized("备注"), text: form.notes)
             BillingValidationWarnings(warnings: warnings)
             Text("地址与税号只做格式提示，不校验真实有效性；各国地址格式差异不会被拒绝保存。")
                 .font(.caption.weight(.semibold))
@@ -796,19 +796,19 @@ struct PaymentAccountEditorFields: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            BillingFormField(icon: "folder.fill", title: String(localized: "标题 *"), text: form.title)
+            BillingFormField(icon: "folder.fill", title: appLocalized("标题 *"), text: form.title)
             BillingPaymentKindPicker(selection: form.kind)
-            BillingFormField(icon: "building.columns.fill", title: String(localized: "机构 / 钱包"), text: form.provider)
-            BillingFormField(icon: "person.text.rectangle.fill", title: String(localized: "账户名"), text: form.accountName)
-            BillingFormField(icon: "person.fill", title: String(localized: "持有人"), text: form.accountHolderName)
+            BillingFormField(icon: "building.columns.fill", title: appLocalized("机构 / 钱包"), text: form.provider)
+            BillingFormField(icon: "person.text.rectangle.fill", title: appLocalized("账户名"), text: form.accountName)
+            BillingFormField(icon: "person.fill", title: appLocalized("持有人"), text: form.accountHolderName)
             BillingSecureFormField(icon: "number", title: "IBAN", text: form.iban)
             BillingSecureFormField(icon: "arrow.left.arrow.right", title: "SWIFT/BIC", text: form.swiftBIC)
-            BillingSecureFormField(icon: "point.3.connected.trianglepath.dotted", title: String(localized: "路由号 / 清算号"), text: form.routingNumber)
-            BillingSecureFormField(icon: "creditcard.fill", title: String(localized: "账号"), text: form.accountNumber)
-            BillingFormField(icon: "coloncurrencysign.circle.fill", title: String(localized: "币种（3 位字母）"), text: form.currency)
+            BillingSecureFormField(icon: "point.3.connected.trianglepath.dotted", title: appLocalized("路由号 / 清算号"), text: form.routingNumber)
+            BillingSecureFormField(icon: "creditcard.fill", title: appLocalized("账号"), text: form.accountNumber)
+            BillingFormField(icon: "coloncurrencysign.circle.fill", title: appLocalized("币种（3 位字母）"), text: form.currency)
             BillingCardPicker(selection: form.linkedCardID, entries: session.billingLinkableCardEntries)
             BillingAddressPicker(selection: form.billingAddressID, entries: session.billingLinkableAddressEntries)
-            BillingFormField(icon: "note.text", title: String(localized: "备注"), text: form.notes)
+            BillingFormField(icon: "note.text", title: appLocalized("备注"), text: form.notes)
             BillingValidationWarnings(warnings: warnings)
             Text("IBAN、路由号与账号只做格式提示，不按任何单一国家的规则拒绝保存；账户内容随条目加密存储，详情页默认掩码显示。")
                 .font(.caption.weight(.semibold))
@@ -847,7 +847,7 @@ struct BillingPaymentKindPicker: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .frame(minWidth: 34)
-            Picker(String(localized: "账户类型"), selection: $selection) {
+            Picker(appLocalized("账户类型"), selection: $selection) {
                 ForEach(LocalPaymentAccountKind.allCases, id: \.self) { kind in
                     Text(kind.displayName).tag(kind)
                 }
@@ -869,7 +869,7 @@ struct BillingCardReferenceEditor: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label(String(localized: "关联银行卡"), systemImage: "creditcard.and.123")
+            Label(appLocalized("关联银行卡"), systemImage: "creditcard.and.123")
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
             if entries.isEmpty {
@@ -900,8 +900,8 @@ struct BillingCardReferenceEditor: View {
                         .overlay { RoundedRectangle(cornerRadius: 16).stroke(AndroidParityPalette.outline, lineWidth: 1.2) }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(Text(String(localized: "关联银行卡 \(entry.title)")))
-                    .accessibilityValue(Text(selection.contains(entry.id) ? String(localized: "已选中") : String(localized: "未选中")))
+                    .accessibilityLabel(Text(appLocalized("关联银行卡 \(entry.title)")))
+                    .accessibilityValue(Text(selection.contains(entry.id) ? appLocalized("已选中") : appLocalized("未选中")))
                 }
             }
         }
@@ -927,8 +927,8 @@ struct BillingCardPicker: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .frame(minWidth: 34)
-            Picker(String(localized: "关联银行卡"), selection: $selection) {
-                Text(String(localized: "不关联")).tag("")
+            Picker(appLocalized("关联银行卡"), selection: $selection) {
+                Text(appLocalized("不关联")).tag("")
                 ForEach(entries) { entry in
                     Text(entry.title).tag(entry.id)
                 }
@@ -953,8 +953,8 @@ struct BillingAddressPicker: View {
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .frame(minWidth: 34)
-            Picker(String(localized: "账单地址"), selection: $selection) {
-                Text(String(localized: "不关联")).tag("")
+            Picker(appLocalized("账单地址"), selection: $selection) {
+                Text(appLocalized("不关联")).tag("")
                 ForEach(entries) { entry in
                     Text(entry.title).tag(entry.id)
                 }
