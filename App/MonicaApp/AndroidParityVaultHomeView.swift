@@ -1861,6 +1861,9 @@ struct AddEditVaultItemView: View {
                 session.entryOperationState = .failed(error.localizedDescription)
             }
         }
+        .task {
+            session.loadPresentedItemExtras()
+        }
     }
 
     private var header: some View {
@@ -1949,6 +1952,9 @@ struct AddEditVaultItemView: View {
                     .foregroundStyle(AndroidParityPalette.textSecondary)
             }
             attachmentEditSection
+            if mode.kind != .attachmentRef {
+                VaultItemExtrasEditorSection(session: session, itemKind: mode.kind)
+            }
             AndroidParityInfoRow(title: String(localized: "状态"), value: session.entryOperationState.label)
             if !mode.isAdding {
                 Button(role: .destructive, action: deleteEntry) {
@@ -2512,6 +2518,14 @@ struct VaultItemDetailView: View {
                         .padding(.horizontal, 4)
                 }
             }
+
+            VaultItemExtrasDetailSection(
+                customFields: session.presentedDetailExtras?.customFields ?? [],
+                relations: session.resolvedPresentedDetailRelations()
+            )
+        }
+        .task {
+            session.loadPresentedDetailExtras()
         }
         .onDisappear {
             copyFeedbackDismissTask?.cancel()
