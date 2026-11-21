@@ -132,6 +132,7 @@ struct AndroidParityVaultHomeView: View {
             quickFilterRows: session.vaultQuickFilterRows,
             sectionBar: { sectionBarContent },
             categoryBar: { categoryBar },
+            tagBar: { VaultTagToolsBar(session: session) },
             onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
             onAdd: { session.presentAddEditor(forItemKind: itemKind) },
@@ -1536,7 +1537,7 @@ struct AndroidParityVaultHomeView: View {
 
 }
 
-struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: View, Content: View>: View {
+struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, TagBar: View, BatchBar: View, Content: View>: View {
     let title: String
     @Binding var selectedAction: AndroidParityToolbarAction?
     @Binding var searchText: String
@@ -1546,6 +1547,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
     let quickFilterRows: [AppVaultQuickFilterRow]
     @ViewBuilder var sectionBar: SectionBar
     @ViewBuilder var categoryBar: CategoryBar
+    @ViewBuilder var tagBar: TagBar
     let onQuickFilter: (String) -> Void
     let onOpenVault: () -> Void
     let onAdd: () -> Void
@@ -1568,6 +1570,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                     sectionBar
                     categoryBar
                     quickFilterStrip
+                    tagBar
                     batchBar
                     if selectedAction == .search { searchPanel }
                     content
@@ -3155,9 +3158,8 @@ struct VaultItemDetailView: View {
                     }
                 }
             }
-        }
-        .task {
-            session.loadPresentedDetailExtras()
+
+            VaultEntryTagsSection(session: session, entryID: route.entryID)
         }
         .onDisappear {
             copyFeedbackDismissTask?.cancel()

@@ -128,6 +128,8 @@
 		AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* AppAppearancePreferences.swift */; };
 		AA000000000000000000000E /* AppUnlockSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000D /* AppUnlockSupport.swift */; };
 		AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000F /* AppNavigationTypes.swift */; };
+		AA20000000000000000000F2 /* AppVaultTagsSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA20000000000000000000F1 /* AppVaultTagsSupport.swift */; };
+		AA20000000000000000000F4 /* AppVaultTagViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA20000000000000000000F3 /* AppVaultTagViews.swift */; };
 		AA0000000000000000000012 /* AppOperationTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* AppOperationTimeline.swift */; };
 		AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* AppQuickSetupSupport.swift */; };
 		AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000015 /* AppShortcutEntrySummary.swift */; };
@@ -310,6 +312,8 @@
 		AA000000000000000000000B /* AppAppearancePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAppearancePreferences.swift"; sourceTree = "<group>"; };
 		AA000000000000000000000D /* AppUnlockSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppUnlockSupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000000F /* AppNavigationTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppNavigationTypes.swift"; sourceTree = "<group>"; };
+		AA20000000000000000000F1 /* AppVaultTagsSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppVaultTagsSupport.swift"; sourceTree = "<group>"; };
+		AA20000000000000000000F3 /* AppVaultTagViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppVaultTagViews.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000011 /* AppOperationTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppOperationTimeline.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000013 /* AppQuickSetupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppQuickSetupSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000015 /* AppShortcutEntrySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppShortcutEntrySummary.swift"; sourceTree = "<group>"; };
@@ -453,6 +457,8 @@
 				B17000000000000000000001 /* BankCardFaceView.swift */,
 				B17000000000000000000011 /* IdentityDocumentPhotoSection.swift */,
 				A94000000000000000000001 /* VaultItemExtrasViews.swift */,
+				AA20000000000000000000F1 /* AppVaultTagsSupport.swift */,
+				AA20000000000000000000F3 /* AppVaultTagViews.swift */,
 				A13000000000000000000011 /* SensitivePrivacyService.swift */,
 				AF1600000000000000000011 /* AppLoginDetailSupport.swift */,
 				A13000000000000000000012 /* SensitivePrivacySettingsView.swift */,
@@ -929,6 +935,8 @@
 				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
 				AA000000000000000000000E /* AppUnlockSupport.swift in Sources */,
 				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
+				AA20000000000000000000F2 /* AppVaultTagsSupport.swift in Sources */,
+				AA20000000000000000000F4 /* AppVaultTagViews.swift in Sources */,
 				AA0000000000000000000012 /* AppOperationTimeline.swift in Sources */,
 				AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */,
 				AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */,

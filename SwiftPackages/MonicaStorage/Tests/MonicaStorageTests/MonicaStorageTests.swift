@@ -8097,4 +8097,251 @@ private func littleEndianUInt64(_ value: UInt64) -> Data {
         )
     }
     #expect(try entryRepository.listGPGKeyEntries(projectID: personal.id).isEmpty)
+// MARK: - 标签 / 归档 / 备份元数据
+
+private enum VaultTagTestStore {
+    private static let lock = NSLock()
+    nonisolated(unsafe) private static var storage: [String: [String: [String: VaultEntryMetadata]]] = [:]
+
+    static func metadata(vaultID: String, projectID: String) -> [String: VaultEntryMetadata] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage[vaultID]?[projectID] ?? [:]
+    }
+
+    static func allProjects(vaultID: String) -> [String: [String: VaultEntryMetadata]] {
+        lock.lock()
+        defer { lock.unlock() }
+        return storage[vaultID] ?? [:]
+    }
+
+    static func set(_ metadata: VaultEntryMetadata, vaultID: String, projectID: String, entryID: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        storage[vaultID, default: [:]][projectID, default: [:]][entryID] = metadata
+    }
+
+    static func reset() {
+        lock.lock()
+        defer { lock.unlock() }
+        storage = [:]
+    }
+}
+
+extension RecordingVaultEngine: LocalVaultMetadataEngine {
+    public func entryMetadata(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [String: VaultEntryMetadata] {
+        VaultTagTestStore.metadata(vaultID: handle.vaultID, projectID: projectID)
+    }
+
+    public func setEntryArchived(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        archived: Bool
+    ) throws {
+        var metadata = VaultTagTestStore.metadata(vaultID: handle.vaultID, projectID: projectID)[entryID] ?? .empty
+        metadata.isArchived = archived
+        metadata.updatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        VaultTagTestStore.set(metadata, vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+    }
+
+    public func setEntryTags(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        tags: [VaultEntryTag]
+    ) throws {
+        var metadata = VaultTagTestStore.metadata(vaultID: handle.vaultID, projectID: projectID)[entryID] ?? .empty
+        metadata.tags = tags
+        metadata.updatedAt = Date(timeIntervalSince1970: 1_700_000_000)
+        VaultTagTestStore.set(metadata, vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+    }
+
+    public func listVaultTags(in handle: LocalVaultHandle) throws -> [VaultTag] {
+        var catalog: [String: (name: String, entryCount: Int)] = [:]
+        for project in VaultTagTestStore.allProjects(vaultID: handle.vaultID).values {
+            for metadata in project.values {
+                for tag in metadata.tags {
+                    var item = catalog[tag.id] ?? (name: tag.name, entryCount: 0)
+                    item.name = tag.name
+                    item.entryCount += 1
+                    catalog[tag.id] = item
+                }
+            }
+        }
+        return catalog
+            .map { VaultTag(id: $0.key, name: $0.value.name, entryCount: $0.value.entryCount) }
+            .sorted { $0.name < $1.name }
+    }
+
+    public func renameVaultTag(in handle: LocalVaultHandle, tagID: String, name: String) throws -> Int {
+        let normalizedName = try VaultTagName.normalize(name)
+        var affected = 0
+        for (projectID, project) in VaultTagTestStore.allProjects(vaultID: handle.vaultID) {
+            for (entryID, metadata) in project where metadata.tags.contains(where: { $0.id == tagID }) {
+                var updated = metadata
+                var tags = updated.tags.map { $0.id == tagID ? VaultEntryTag(id: tagID, name: normalizedName) : $0 }
+                tags = tags.filter { $0.id == tagID || !VaultTagName.matches($0.name, normalizedName) }
+                updated.tags = tags
+                VaultTagTestStore.set(updated, vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+                affected += 1
+            }
+        }
+        return affected
+    }
+
+    public func deleteVaultTag(in handle: LocalVaultHandle, tagID: String) throws -> Int {
+        var affected = 0
+        for (projectID, project) in VaultTagTestStore.allProjects(vaultID: handle.vaultID) {
+            for (entryID, metadata) in project where metadata.tags.contains(where: { $0.id == tagID }) {
+                var updated = metadata
+                updated.tags.removeAll { $0.id == tagID }
+                VaultTagTestStore.set(updated, vaultID: handle.vaultID, projectID: projectID, entryID: entryID)
+                affected += 1
+            }
+        }
+        return affected
+    }
+}
+
+@Suite(.serialized) struct VaultTagTests {
+    private func makeRepository() throws -> (LocalVaultRepository, LocalVaultEntryRepository) {
+        try VaultTagTestStore.reset()
+        let engine = RecordingVaultEngine()
+        let repository = LocalVaultRepository(engine: engine)
+        let session = try repository.createVault(
+            named: "标签测试",
+            in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+            password: "pw-12345",
+            deviceID: "tag-test"
+        )
+        return (repository, LocalVaultEntryRepository(session: session, engine: engine))
+    }
+
+    @Test func normalizeTrimNFCAndRejectInvalidNames() throws {
+        #expect(try VaultTagName.normalize("  工作  标签 ") == "工作 标签")
+        #expect(try VaultTagName.normalize("Cafe\u{301}") == "Café")
+        #expect(VaultTagName.matches("Work", "work"))
+        #expect(VaultTagName.matches("ＷＯＲＫ", "work"))
+        #expect(!VaultTagName.matches("work", "home"))
+        #expect(throws: VaultTagError.emptyName) {
+            try VaultTagName.normalize("   ")
+        }
+        #expect(throws: VaultTagError.nameTooLong) {
+            try VaultTagName.normalize(String(repeating: "a", count: VaultTagName.maxNameLength + 1))
+        }
+    }
+
+    @Test func tagsAttachToManyEntriesAndRenamePropagates() throws {
+        let (_, entryRepository) = try makeRepository()
+        let projectID = "project-a"
+        let tag = VaultEntryTag(id: "tag-1", name: "工作")
+        try entryRepository.setEntryTags(projectID: projectID, entryID: "entry-1", tags: [tag])
+        try entryRepository.setEntryTags(projectID: projectID, entryID: "entry-2", tags: [tag])
+        try entryRepository.setEntryTags(projectID: projectID, entryID: "entry-3", tags: [VaultEntryTag(id: "tag-2", name: "生活")])
+
+        let catalog = try entryRepository.listVaultTags()
+        #expect(catalog.contains(VaultTag(id: "tag-1", name: "工作", entryCount: 2)))
+
+        let affected = try entryRepository.renameVaultTag(tagID: "tag-1", name: "公司")
+        #expect(affected == 2)
+        #expect(try entryRepository.listVaultTags().contains(VaultTag(id: "tag-1", name: "公司", entryCount: 2)))
+        #expect(!(try entryRepository.listVaultTags().contains { $0.name == "工作" }))
+
+        let deleted = try entryRepository.deleteVaultTag(tagID: "tag-1")
+        #expect(deleted == 2)
+        let remaining = try entryRepository.listVaultTags()
+        #expect(remaining.map(\.id) == ["tag-2"])
+    }
+
+    @Test func deletingATagKeepsEntriesAndTheirOtherTags() throws {
+        let (_, entryRepository) = try makeRepository()
+        try entryRepository.setEntryTags(
+            projectID: "project-a",
+            entryID: "entry-1",
+            tags: [VaultEntryTag(id: "tag-1", name: "工作"), VaultEntryTag(id: "tag-2", name: "生活")]
+        )
+        _ = try entryRepository.deleteVaultTag(tagID: "tag-1")
+        let metadata = try entryRepository.entryMetadata(projectID: "project-a")
+        #expect(metadata["entry-1"]?.tags == [VaultEntryTag(id: "tag-2", name: "生活")])
+        #expect(try entryRepository.listVaultTags() == [VaultTag(id: "tag-2", name: "生活", entryCount: 1)])
+    }
+
+    @Test func archiveStateIsStoredPerEntry() throws {
+        let (_, entryRepository) = try makeRepository()
+        try entryRepository.setEntryArchived(projectID: "project-a", entryID: "entry-1", archived: true)
+        try entryRepository.setEntryArchived(projectID: "project-a", entryID: "entry-2", archived: false)
+        let metadata = try entryRepository.entryMetadata(projectID: "project-a")
+        #expect(metadata["entry-1"]?.isArchived == true)
+        #expect(metadata["entry-2"]?.isArchived == false)
+    }
+
+    @Test func addingTagReusesExistingTagIDCaseInsensitively() throws {
+        let (_, entryRepository) = try makeRepository()
+        let existing = [VaultEntryTag(id: "tag-1", name: "工作")]
+        let reused = try entryRepository.addEntryTag(
+            projectID: "project-a",
+            entryID: "entry-1",
+            name: "工作",
+            existingTags: existing
+        )
+        #expect(reused.id == "tag-1")
+        let newTag = try entryRepository.addEntryTag(
+            projectID: "project-a",
+            entryID: "entry-2",
+            name: "生活",
+            existingTags: existing
+        )
+        #expect(newTag.id != "tag-1")
+        #expect(newTag.name == "生活")
+    }
+
+    @Test func backupExportAndImportCarryTagsAndArchiveState() throws {
+        let metadata = VaultEntryMetadata(
+            isArchived: true,
+            tags: [VaultEntryTag(id: "tag-1", name: "工作")]
+        )
+        let drafts: [VaultCSVItemDraft] = [
+            .login(LocalLoginEntryDraft(title: "GitLab", username: "dev", password: "s3cret", url: "", metadata: metadata)),
+            .note(LocalNoteEntryDraft(title: "随口记", body: "正文", metadata: VaultEntryMetadata(tags: [VaultEntryTag(id: "tag-2", name: "生活")]))),
+            .passkey(LocalPasskeyEntryDraft(
+                title: "example.com",
+                relyingPartyID: "example.com",
+                username: "dev",
+                userHandle: "dev",
+                credentialID: "cred-1",
+                publicKeyCOSE: "cose",
+                privateKeyReference: "alias",
+                notes: ""
+            ))
+        ]
+        let archive = try AndroidBackupCodec.exportItems(drafts)
+        let report = try AndroidBackupCodec.importItems(from: archive, fileName: "backup.zip")
+        #expect(report.issues.isEmpty)
+        #expect(report.importedItems.count == 3)
+        let login = try #require(report.importedItems.first { $0.draft.kind == .login })
+        let note = try #require(report.importedItems.first { $0.draft.kind == .note })
+        let passkey = try #require(report.importedItems.first { $0.draft.kind == .passkey })
+        #expect(login.metadata.isArchived)
+        #expect(login.metadata.tags == [VaultEntryTag(id: "tag-1", name: "工作")])
+        #expect(note.metadata.tags == [VaultEntryTag(id: "tag-2", name: "生活")])
+        #expect(passkey.metadata == .empty)
+    }
+
+    @Test func legacyBackupWithoutMetadataDecodesToEmpty() throws {
+        let legacyJSON = """
+        {"id":1,"title":"旧备份","username":"dev","password":"pw","website":"","notes":"","isFavorite":false,"categoryName":"Imported","createdAt":1,"updatedAt":1}
+        """
+        let archive = try AndroidBackupCodec.exportZip(entries: [
+            "folders/Imported/passwords/password_1_1.json": legacyJSON
+        ])
+        let report = try AndroidBackupCodec.importItems(from: archive, fileName: "legacy.zip")
+        #expect(report.issues.isEmpty)
+        #expect(report.importedItems.count == 1)
+        #expect(report.importedItems[0].metadata == .empty)
+    }
+
 }

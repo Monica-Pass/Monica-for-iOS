@@ -3539,7 +3539,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["Apple ID"])
 
         model.loginSearchQuery = "  "
-        XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["GitHub", "Apple ID"])
+        XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["Apple ID", "GitHub"])
 
         model.loginSearchQuery = "apple"
         model.lockLocalVault()
@@ -3957,11 +3957,11 @@ final class VaultSessionModelTests: XCTestCase {
 
         let rows = model.vaultQuickFilterRows
 
-        XCTAssertEqual(rows.map(\.id), ["all", "category-project-1", "favorites", "trash"])
-        XCTAssertEqual(rows.map(\.title), ["全部", "Personal", "收藏", "回收站"])
-        XCTAssertEqual(rows.map(\.value), ["2 项", "2 项", "2 项", "2 项"])
-        XCTAssertEqual(rows.map(\.systemImage), ["tray.full", "folder", "star", "trash"])
-        XCTAssertEqual(rows.map(\.isSelected), [true, false, false, false])
+        XCTAssertEqual(rows.map(\.id), ["all", "category-project-1", "favorites", "archived", "trash"])
+        XCTAssertEqual(rows.map(\.title), ["全部", "Personal", "收藏", "归档", "回收站"])
+        XCTAssertEqual(rows.map(\.value), ["2 项", "2 项", "2 项", "0 项", "2 项"])
+        XCTAssertEqual(rows.map(\.systemImage), ["tray.full", "folder", "star", "archivebox", "trash"])
+        XCTAssertEqual(rows.map(\.isSelected), [true, false, false, false, false])
 
         model.loginSearchQuery = "github"
         model.noteSearchQuery = "recovery"
@@ -3971,13 +3971,13 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.showFavoriteNoteEntriesOnly)
         XCTAssertEqual(model.loginSearchQuery, "")
         XCTAssertEqual(model.noteSearchQuery, "")
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, true, false])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, true, false, false])
 
         model.applyVaultQuickFilter("category-project-1")
 
         XCTAssertFalse(model.showFavoriteLoginEntriesOnly)
         XCTAssertFalse(model.showFavoriteNoteEntriesOnly)
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, true, false, false])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, true, false, false, false])
 
         model.applyVaultQuickFilter("trash")
 
@@ -3986,7 +3986,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertTrue(model.filteredNoteEntries.isEmpty)
         XCTAssertEqual(model.deletedTotpEntries.map(\.title), ["Old TOTP"])
         XCTAssertEqual(model.deletedAttachmentEntries.map(\.fileName), ["old-contract.pdf"])
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, false, true])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.isSelected), [false, false, false, false, true])
     }
 
     func testVaultQuickFiltersResetWhenVaultLocks() throws {
@@ -4056,7 +4056,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertEqual(model.activeVaultCategoryTitle, "Personal")
         XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
-        XCTAssertEqual(model.vaultQuickFilterRows.map(\.title), ["全部", "Personal", "收藏", "回收站"])
+        XCTAssertEqual(model.vaultQuickFilterRows.map(\.title), ["全部", "Personal", "收藏", "归档", "回收站"])
 
         let renamed = try model.renameVaultCategory(projectID: clients.id, title: " Customers ")
         try model.switchVaultCategory(projectID: renamed.id)
@@ -4261,8 +4261,8 @@ final class VaultSessionModelTests: XCTestCase {
         try model.deleteSelectedVaultBatchItems()
 
         XCTAssertEqual(model.loginEntries.map(\.title), ["Bank"])
-        XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["GitHub", "GitLab"])
-        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-1", "entry-2"])
+        XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["GitLab", "GitHub"])
+        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-2", "entry-1"])
         XCTAssertFalse(model.isVaultBatchSelectionActive)
         XCTAssertEqual(model.entryOperationState, .succeeded("已删除 2 项"))
         XCTAssertEqual(model.operationTimelineEvents.prefix(2).map(\.action), [.deleted, .deleted])
@@ -4278,9 +4278,9 @@ final class VaultSessionModelTests: XCTestCase {
 
         try model.restoreSelectedVaultBatchItems()
 
-        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank", "GitHub", "GitLab"])
+        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank", "GitLab", "GitHub"])
         XCTAssertTrue(model.deletedLoginEntries.isEmpty)
-        XCTAssertEqual(engine.restoredLoginEntries.map(\.entryID), ["entry-1", "entry-2"])
+        XCTAssertEqual(engine.restoredLoginEntries.map(\.entryID), ["entry-2", "entry-1"])
         XCTAssertFalse(model.isVaultBatchSelectionActive)
         XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 2 项"))
     }
@@ -4325,14 +4325,14 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.isVaultBatchSelectionActive)
         XCTAssertEqual(model.loginSearchQuery, "")
         XCTAssertEqual(model.entryOperationState, .succeeded("已移动 2 项"))
-        XCTAssertEqual(engine.movedVaultEntries.map(\.entryID), ["entry-1", "entry-2"])
+        XCTAssertEqual(engine.movedVaultEntries.map(\.entryID), ["entry-2", "entry-1"])
         XCTAssertEqual(engine.movedVaultEntries.map(\.toProjectID), [work.id, work.id])
         XCTAssertEqual(model.operationTimelineEvents.prefix(2).map(\.action), [.moved, .moved])
         XCTAssertFalse(model.operationTimelineEvents.map(\.detail).joined().contains("github-secret"))
 
         try model.switchVaultCategory(projectID: work.id)
 
-        XCTAssertEqual(model.loginEntries.map(\.id), ["entry-1", "entry-2"])
+        XCTAssertEqual(model.loginEntries.map(\.id), ["entry-2", "entry-1"])
         XCTAssertEqual(model.loginEntries.map(\.projectID), [work.id, work.id])
     }
 

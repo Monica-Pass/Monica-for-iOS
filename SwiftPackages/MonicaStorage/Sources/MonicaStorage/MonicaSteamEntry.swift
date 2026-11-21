@@ -44,6 +44,8 @@ public struct LocalSteamEntryDraft: Sendable, Equatable {
     public var sharedSecret: String
     public var issuer: String
     public var notes: String
+    /// 归档、标签与时间戳等本地扩展元数据；不进入加密 payload。
+    public var metadata: VaultEntryMetadata
 
     public init(
         title: String,
@@ -51,7 +53,8 @@ public struct LocalSteamEntryDraft: Sendable, Equatable {
         steamID: String = "",
         sharedSecret: String,
         issuer: String = "Steam",
-        notes: String = ""
+        notes: String = "",
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.title = title
         self.accountName = accountName
@@ -59,6 +62,7 @@ public struct LocalSteamEntryDraft: Sendable, Equatable {
         self.sharedSecret = sharedSecret
         self.issuer = issuer
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -74,6 +78,8 @@ public struct LocalSteamEntry: Sendable, Equatable, Identifiable {
     public var issuer: String
     public var notes: String
     public var favorite: Bool
+    /// 归档、标签与时间戳等本地扩展元数据；不进入加密 payload。
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -84,7 +90,8 @@ public struct LocalSteamEntry: Sendable, Equatable, Identifiable {
         sharedSecret: String,
         issuer: String = "Steam",
         notes: String = "",
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -95,6 +102,7 @@ public struct LocalSteamEntry: Sendable, Equatable, Identifiable {
         self.issuer = issuer
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -144,7 +152,8 @@ public enum SteamEntryPayloadCodec {
         entryID: String,
         projectID: String,
         title: String,
-        favorite: Bool
+        favorite: Bool,
+        metadata: VaultEntryMetadata = .empty
     ) -> LocalSteamEntry {
         let secret = payload[Key.sharedSecret] as? String ?? ""
         let issuer = (payload[Key.issuer] as? String ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
@@ -159,7 +168,8 @@ public enum SteamEntryPayloadCodec {
                 : "",
             issuer: issuer.isEmpty ? "Steam" : issuer,
             notes: payload[Key.notes] as? String ?? "",
-            favorite: favorite
+            favorite: favorite,
+            metadata: metadata
         )
     }
 }

@@ -428,6 +428,13 @@ final class AppSessionModel {
     /// #27：保存文件夹索引锚点的本地存储（只存一个 UUID，不含用户内容）。
     var vaultFolderAnchorStore: any VaultFolderAnchorStore = appDefaultVaultFolderAnchorStore()
     var selectedVaultQuickFilterID = "all"
+
+    /// 列表排序偏好（标题/创建时间/修改时间/最近使用 + 升降序），持久化到 UserDefaults。
+    var vaultSortPreference = VaultEntrySortPreferenceStore.load()
+    /// 当前生效的标签筛选（多选为「任一匹配」）。
+    var selectedVaultTagIDs: Set<String> = []
+    /// 当前分类下汇总出来的标签目录，数据来自各条目加密 metadata。
+    var vaultTagCatalog: [VaultTag] = []
     var selectedVaultBatchItemIDs: Set<String> = []
     private var vaultBatchSelectionKind: UnifiedVaultItemKind?
     var vaultDisplayPreferences: VaultDisplayPreferences
@@ -1113,11 +1120,14 @@ final class AppSessionModel {
             return []
         }
         let query = attachmentSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !query.isEmpty else {
-            return attachmentEntries
-        }
-        return attachmentEntries.filter { entry in
-            entry.fileName.localizedCaseInsensitiveContains(query)
+        let filtered = attachmentEntries.enumerated().filter { _, entry in
+            guard vaultEntryPassesArchiveAndTagFilter(entry) else {
+                return false
+            }
+            guard !query.isEmpty else {
+                return true
+            }
+            return entry.fileName.localizedCaseInsensitiveContains(query)
                 || entry.mediaType.localizedCaseInsensitiveContains(query)
                 || entry.storageMode.localizedCaseInsensitiveContains(query)
                 || entry.downloadState.localizedCaseInsensitiveContains(query)
@@ -1126,6 +1136,7 @@ final class AppSessionModel {
                 || (entry.entryID?.localizedCaseInsensitiveContains(query) ?? false)
                 || (entry.localPath?.localizedCaseInsensitiveContains(query) ?? false)
         }
+        return vaultSortedEntries(filtered, isFavorite: { _ in false })
     }
 
     func shortcutEntrySummaries(matching query: String) -> [AppShortcutEntrySummary] {
@@ -1385,22 +1396,23 @@ final class AppSessionModel {
 
     private func allShortcutEntrySummaries() -> [AppShortcutEntrySummary] {
         var summaries: [AppShortcutEntrySummary] = []
-        summaries += loginEntries.map(shortcutSummary(for:))
-        summaries += noteEntries.map(shortcutSummary(for:))
-        summaries += totpEntries.map(shortcutSummary(for:))
-        summaries += cardEntries.map(shortcutSummary(for:))
-        summaries += identityEntries.map(shortcutSummary(for:))
-        summaries += passkeyEntries.map(shortcutSummary(for:))
-        summaries += sshKeyEntries.map(shortcutSummary(for:))
-        summaries += gpgKeyEntries.map(shortcutSummary(for:))
-        summaries += apiTokenEntries.map(shortcutSummary(for:))
-        summaries += wifiEntries.map(shortcutSummary(for:))
-        summaries += ssoEntries.map(shortcutSummary(for:))
-        summaries += barcodeEntries.map(shortcutSummary(for:))
-        summaries += sendEntries.map(shortcutSummary(for:))
-        summaries += steamEntries.map(shortcutSummary(for:))
-        summaries += billingAddressEntries.map(shortcutSummary(for:))
-        summaries += paymentAccountEntries.map(shortcutSummary(for:))
+        // 归档条目不得出现在快捷指令与自动填充候选里。
+        summaries += loginEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += noteEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += totpEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += cardEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += identityEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += passkeyEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += sshKeyEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += apiTokenEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += wifiEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += ssoEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += sendEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += steamEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += gpgKeyEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += barcodeEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += billingAddressEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += paymentAccountEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
         return summaries
     }
 
@@ -2058,6 +2070,16 @@ final class AppSessionModel {
                 detail: String(localized: "只显示已收藏条目。"),
                 systemImage: "star",
                 isSelected: selectedVaultQuickFilterID == "favorites"
+            )
+        )
+        rows.append(
+            AppVaultQuickFilterRow(
+                id: "archived",
+                title: String(localized: "归档"),
+                value: itemCountLabel(archivedVaultEntryCount),
+                detail: String(localized: "只显示已归档条目；归档条目不会出现在默认列表与自动填充候选中。"),
+                systemImage: "archivebox",
+                isSelected: selectedVaultQuickFilterID == "archived"
             )
         )
         rows.append(
@@ -3562,27 +3584,21 @@ final class AppSessionModel {
             && canUnlockRememberedVaultWithKeychain
     }
 
-    func filteredFavoriteEntries<Entry>(
+    func filteredFavoriteEntries<Entry: VaultTaggedEntry>(
         _ entries: [Entry],
         query: String,
         favoritesOnly: Bool,
         isFavorite: (Entry) -> Bool,
         matches: (Entry, String) -> Bool
     ) -> [Entry] {
-        entries.enumerated()
-            .filter { _, entry in
-                (!favoritesOnly || isFavorite(entry))
-                    && (query.isEmpty || matches(entry, query))
+        let filtered = entries.enumerated().filter { _, entry in
+            guard vaultEntryPassesArchiveAndTagFilter(entry) else {
+                return false
             }
-            .sorted { lhs, rhs in
-                let lhsFavorite = isFavorite(lhs.element)
-                let rhsFavorite = isFavorite(rhs.element)
-                if lhsFavorite != rhsFavorite {
-                    return lhsFavorite
-                }
-                return lhs.offset < rhs.offset
-            }
-            .map(\.element)
+            return (!favoritesOnly || isFavorite(entry))
+                && (query.isEmpty || matches(entry, query))
+        }
+        return vaultSortedEntries(filtered, isFavorite: isFavorite)
     }
 
     private func visibleVaultBatchItemIDs(for kind: UnifiedVaultItemKind) -> Set<String> {
@@ -9208,6 +9224,14 @@ final class AppSessionModel {
                     projectID: project.id,
                     entryRepository: entryRepository
                 )
+                if let createdEntryID {
+                    try applyImportedEntryMetadata(
+                        importedItem.metadata,
+                        entryID: createdEntryID,
+                        projectID: project.id,
+                        entryRepository: entryRepository
+                    )
+                }
                 if case .login = importedItem.draft,
                    let sourceID = importedItem.sourceID,
                    let createdEntryID {
@@ -9277,6 +9301,30 @@ final class AppSessionModel {
         } catch {
             entryOperationState = .failed(error.localizedDescription)
             throw error
+        }
+    }
+
+    /// 备份里的标签与归档标记写回到新建条目（旧备份没有这些字段时为元数据为空）。
+    private func applyImportedEntryMetadata(
+        _ metadata: VaultEntryMetadata,
+        entryID: String,
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws {
+        guard metadata.isArchived || !metadata.tags.isEmpty else { return }
+        if !metadata.tags.isEmpty {
+            try entryRepository.setEntryTags(
+                projectID: projectID,
+                entryID: entryID,
+                tags: metadata.tags
+            )
+        }
+        if metadata.isArchived {
+            try entryRepository.setEntryArchived(
+                projectID: projectID,
+                entryID: entryID,
+                archived: true
+            )
         }
     }
 
@@ -9509,6 +9557,9 @@ final class AppSessionModel {
                 throw AppAutoFillIndexError.indexStoreUnavailable
             }
 
+            // 归档条目不参与自动填充候选。
+            let autoFillLoginEntries = loginEntries.filter { !$0.isArchived }
+
             if shouldWriteEncryptedAutoFillArtifacts {
                 guard let autoFillIndexKeyMaterialProvider
                 else {
@@ -9521,7 +9572,7 @@ final class AppSessionModel {
 
                 let storageKey = try AutoFillIndexEncryptionKey(rawValue: keyMaterial.keyMaterial)
                 if let autoFillIndexStore {
-                    let indexRecords = loginEntries.map { entry in
+                    let indexRecords = autoFillLoginEntries.map { entry in
                         AutoFillCredentialIndexRecord(
                             id: entry.id,
                             title: entry.title,
@@ -9540,7 +9591,7 @@ final class AppSessionModel {
                 }
 
                 if let autoFillCredentialSecretStore {
-                    let secretRecords = loginEntries.map { entry in
+                    let secretRecords = autoFillLoginEntries.map { entry in
                         AutoFillCredentialSecretRecord(
                             id: entry.id,
                             username: entry.username,
@@ -9567,7 +9618,7 @@ final class AppSessionModel {
                 )
                 switch publishDecision {
                 case .allowed:
-                    let identities = loginEntries.flatMap { entry in
+                    let identities = autoFillLoginEntries.flatMap { entry in
                         autoFillCredentialIdentities(for: entry)
                     }
                     let passkeyIdentities = passkeyEntries.compactMap { entry in
@@ -13004,6 +13055,7 @@ final class AppSessionModel {
         paymentAccountEntries = try entryRepository.listPaymentAccountEntries(projectID: projectID)
         deletedPaymentAccountEntries = try entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)
             .filter { !trashMaintenance.isPurged($0.id) }
+        refreshVaultTags()
         publishWidgetSnapshots()
         refreshVaultSearchIndex(entryRepository: entryRepository)
         // 锁定清空过系统身份时，条目重新载入后就补一次发布，避免解锁后自动填充一直为空。
@@ -13151,11 +13203,16 @@ final class AppSessionModel {
                 password: $0.password,
                 url: $0.url,
                 notes: $0.notes,
-                urls: $0.effectiveURLs
+                urls: $0.effectiveURLs,
+                metadata: $0.metadata
             )))
         }
         rows += noteEntries.map {
-            (itemID: $0.id, draft: .note(LocalNoteEntryDraft(title: $0.title, body: $0.body)))
+            (itemID: $0.id, draft: .note(LocalNoteEntryDraft(
+                title: $0.title,
+                body: $0.body,
+                metadata: $0.metadata
+            )))
         }
         rows += totpEntries.map {
             (itemID: $0.id, draft: .totp(LocalTotpEntryDraft(
@@ -13167,7 +13224,8 @@ final class AppSessionModel {
                 digits: $0.digits,
                 algorithm: $0.algorithm,
                 otpType: $0.otpType,
-                counter: $0.counter
+                counter: $0.counter,
+                metadata: $0.metadata
             )))
         }
         rows += cardEntries.map {
@@ -13185,6 +13243,7 @@ final class AppSessionModel {
                 billingAddress: $0.billingAddress,
                 cardArtwork: $0.cardArtwork,
                 notes: $0.notes
+                metadata: $0.metadata
             )))
         }
         rows += identityEntries.map {
@@ -13197,7 +13256,8 @@ final class AppSessionModel {
                 country: $0.country,
                 issueDate: $0.issueDate,
                 expiryDate: $0.expiryDate,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += passkeyEntries.map {
@@ -13209,7 +13269,8 @@ final class AppSessionModel {
                 credentialID: $0.credentialID,
                 publicKeyCOSE: $0.publicKeyCOSE,
                 privateKeyReference: $0.privateKeyReference,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += sshKeyEntries.map {
@@ -13220,7 +13281,8 @@ final class AppSessionModel {
                 publicKey: $0.publicKey,
                 privateKeyReference: $0.privateKeyReference,
                 passphraseHint: $0.passphraseHint,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += apiTokenEntries.map {
@@ -13231,7 +13293,8 @@ final class AppSessionModel {
                 token: $0.token,
                 scopes: $0.scopes,
                 expiresAt: $0.expiresAt,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += wifiEntries.map {
@@ -13241,7 +13304,8 @@ final class AppSessionModel {
                 securityType: $0.securityType,
                 password: $0.password,
                 hidden: $0.hidden,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += ssoEntries.map {
@@ -13254,7 +13318,8 @@ final class AppSessionModel {
                 loginURL: $0.loginURL,
                 linkedLoginEntryID: $0.linkedLoginEntryID,
                 notes: $0.notes,
-                secret: $0.secret
+                secret: $0.secret,
+                metadata: $0.metadata
             )))
         }
         rows += barcodeEntries.map {
@@ -13272,7 +13337,8 @@ final class AppSessionModel {
                 body: $0.body,
                 expiresAt: $0.expiresAt,
                 maxViews: $0.maxViews,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += steamEntries.map {
@@ -13282,7 +13348,8 @@ final class AppSessionModel {
                 steamID: $0.steamID,
                 sharedSecret: $0.sharedSecret,
                 issuer: $0.issuer,
-                notes: $0.notes
+                notes: $0.notes,
+                metadata: $0.metadata
             )))
         }
         rows += billingAddressEntries.map {
