@@ -43,6 +43,7 @@ struct AppRootView: View {
             if session.vaultState == .locked {
                 MonicaLockScreen(
                     session: session,
+                    deviceID: environment.localDeviceIdentifier,
                     submitPassword: submitLockScreenPassword,
                     unlockWithKeychain: {
                         Task {
@@ -379,7 +380,7 @@ struct AppRootView: View {
 
     private func submitLockScreenPassword() {
         do {
-            if session.isFirstTimeVaultSetup {
+            if session.isVaultPasswordSetupFlow {
                 switch session.firstTimePasswordSetupStep {
                 case .enterPassword:
                     session.beginFirstTimePasswordConfirmation()
