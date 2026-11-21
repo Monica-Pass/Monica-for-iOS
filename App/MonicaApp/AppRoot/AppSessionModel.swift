@@ -101,12 +101,12 @@ final class AppSessionModel {
     var operationTimelineEvents: [AppOperationTimelineEvent] = []
     var operationTimelineFilterKind: UnifiedVaultItemKind?
     var operationTimelineFilterAction: AppOperationTimelineAction?
-    private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
+    var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
     /// 加密格式文件：保留原始数据，用户重新输入密码时再解析一次。
     private var pendingFormatImportData: Data?
     private var pendingFormatImportFileName: String?
     private var pendingFormatImportContentType: String?
-    private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
+    var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
     private var nextOperationTimelineEventSequence = 0
     var editingLoginEntryID: String?
     var editingLoginTitle = ""
@@ -625,7 +625,7 @@ final class AppSessionModel {
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
     let searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore
-    private let totpCardPreferenceStore: any TotpProgressPreferenceStore
+    let totpCardPreferenceStore: any TotpProgressPreferenceStore
     let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
     private let itemIconPreferenceStore: any AppItemIconPreferenceStore
     let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
@@ -655,12 +655,12 @@ final class AppSessionModel {
     private let cloudFileProviders: [CloudFileProviderKind: any CloudFileProvider]
     private let oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)?
     private let bitwardenPasswordAuthenticationService: (any AppBitwardenPasswordAuthenticationService)?
-    private let bitwardenSyncProvider: (any BitwardenSyncProvider)?
-    private let bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore
+    let bitwardenSyncProvider: (any BitwardenSyncProvider)?
+    let bitwardenAuthenticationSessionStore: any BitwardenAuthenticationSessionStore
     private let bitwardenVaultKeyStore: (any BitwardenVaultKeyStore)?
-    private let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
+    let bitwardenSendSyncStateStore: any AppBitwardenSendSyncStateStore
     private let bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore
-    private let bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore
+    let bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore
     private let bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore
     private let bitwardenSyncCheckpointStore: any AppBitwardenSyncCheckpointStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
@@ -688,9 +688,9 @@ final class AppSessionModel {
     let controlNavigationDefaults: UserDefaults?
     let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
     let androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)?
-    private let passwordGenerator: () throws -> String
-    private let bitwardenFileSendLocalIDProvider: () -> String
-    private let bitwardenTextSendLocalIDProvider: () -> String
+    let passwordGenerator: () throws -> String
+    let bitwardenFileSendLocalIDProvider: () -> String
+    let bitwardenTextSendLocalIDProvider: () -> String
     var activeVaultSession: LocalVaultSession?
     var activeEntryRepository: LocalVaultEntryRepository?
     var activeProject: LocalVaultProject?
@@ -910,55 +910,6 @@ final class AppSessionModel {
         bootstrapVaultRegistry()
     }
 
-    var filteredLoginEntries: [LocalLoginEntry] {
-        guard !isTrashQuickFilterSelected else {
-            return []
-        }
-        let query = loginSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return filteredFavoriteEntries(
-            loginEntries,
-            query: query,
-            favoritesOnly: showFavoriteLoginEntriesOnly,
-            isFavorite: { $0.favorite }
-        ) { entry, query in
-            entry.title.localizedCaseInsensitiveContains(query)
-                || entry.username.localizedCaseInsensitiveContains(query)
-                || entry.url.localizedCaseInsensitiveContains(query)
-        }
-    }
-
-    var loginStackedGroups: [AppLoginStackedGroup] {
-        let grouped = Dictionary(grouping: filteredLoginEntries) { entry in
-            loginStackedGroupKey(for: entry)
-        }
-        return grouped.map { key, entries in
-            let titles = entries
-                .map { $0.title.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            let usernames = entries
-                .map { $0.username.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-            return AppLoginStackedGroup(
-                id: "login-stack-\(key.normalized)",
-                title: key.title,
-                value: itemCountLabel(entries.count),
-                detail: usernames.prefix(3).joined(separator: " / "),
-                preview: titles.prefix(3).joined(separator: " / "),
-                systemImage: key.isWebsite ? "globe" : "textformat",
-                entryIDs: entries.map(\.id)
-            )
-        }
-        .sorted { lhs, rhs in
-            if lhs.entryIDs.count != rhs.entryIDs.count {
-                return lhs.entryIDs.count > rhs.entryIDs.count
-            }
-            if lhs.systemImage != rhs.systemImage {
-                return lhs.systemImage == "globe"
-            }
-            return lhs.title.localizedCaseInsensitiveCompare(rhs.title) == .orderedAscending
-        }
-    }
-
     var filteredNoteEntries: [LocalNoteEntry] {
         guard !isTrashQuickFilterSelected else {
             return []
@@ -972,23 +923,6 @@ final class AppSessionModel {
         ) { entry, query in
             entry.title.localizedCaseInsensitiveContains(query)
                 || entry.body.localizedCaseInsensitiveContains(query)
-        }
-    }
-
-    var filteredTotpEntries: [LocalTotpEntry] {
-        guard !isTrashQuickFilterSelected else {
-            return []
-        }
-        let query = totpSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return filteredFavoriteEntries(
-            totpEntries,
-            query: query,
-            favoritesOnly: showFavoriteTotpEntriesOnly,
-            isFavorite: { $0.favorite }
-        ) { entry, query in
-            entry.title.localizedCaseInsensitiveContains(query)
-                || entry.issuer.localizedCaseInsensitiveContains(query)
-                || entry.accountName.localizedCaseInsensitiveContains(query)
         }
     }
 
@@ -1183,24 +1117,6 @@ final class AppSessionModel {
             notes: editingBarcodeNotes,
             favorite: editingBarcodeFavorite
         ).payload
-    }
-
-    var filteredSendEntries: [LocalSendEntry] {
-        guard !isTrashQuickFilterSelected else {
-            return []
-        }
-        let query = sendSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return filteredFavoriteEntries(
-            sendEntries,
-            query: query,
-            favoritesOnly: showFavoriteSendEntriesOnly,
-            isFavorite: { $0.favorite }
-        ) { entry, query in
-            entry.title.localizedCaseInsensitiveContains(query)
-                || entry.body.localizedCaseInsensitiveContains(query)
-                || entry.expiresAt.localizedCaseInsensitiveContains(query)
-                || entry.notes.localizedCaseInsensitiveContains(query)
-        }
     }
 
     var filteredAttachmentEntries: [LocalAttachmentMetadata] {
@@ -1545,23 +1461,6 @@ final class AppSessionModel {
         appearancePreferences = preferences
         appearancePreferenceStore.savePreferences(preferences)
         recordUserActivity()
-    }
-
-    // MARK: - 验证码卡片进度条（#155）
-
-    /// 把「偏好 + 系统减弱动态效果」解析成卡片实际渲染规则。
-    func totpCardStylePolicy(reduceMotion: Bool) -> TotpCardStylePolicy {
-        TotpCardStylePolicy(preferences: totpCardPreferences, reduceMotion: reduceMotion)
-    }
-
-    func updateTotpCardPreferences(_ preferences: TotpProgressPreferences) {
-        totpCardPreferences = preferences
-        totpCardPreferenceStore.savePreferences(preferences)
-        recordUserActivity()
-    }
-
-    func restoreDefaultTotpCardPreferences() {
-        updateTotpCardPreferences(.default)
     }
 
     func restoreDefaultInterfaceDensity() {
@@ -2183,11 +2082,11 @@ final class AppSessionModel {
         lastDuplicateLoginMergeUndo?.title
     }
 
-    private func sha256Hex(_ data: Data) -> String {
+    func sha256Hex(_ data: Data) -> String {
         Data(SHA256.hash(data: data)).map { String(format: "%02x", $0) }.joined()
     }
 
-    private func duplicateLoginGroups(
+    func duplicateLoginGroups(
         in entries: [LocalLoginEntry],
         excludingIgnored: Bool = true
     ) -> [(key: DuplicateLoginEntryKey, entries: [LocalLoginEntry])] {
@@ -2265,25 +2164,8 @@ final class AppSessionModel {
             + deletedPaymentAccountEntries.count
     }
 
-    private func itemCountLabel(_ count: Int) -> String {
+    func itemCountLabel(_ count: Int) -> String {
         String(localized: "\(count) 项")
-    }
-
-    private func loginStackedGroupKey(for entry: LocalLoginEntry) -> AppLoginStackedGroupKey {
-        if let host = normalizedLoginHost(from: entry.url) {
-            return AppLoginStackedGroupKey(
-                title: host,
-                normalized: host,
-                isWebsite: true
-            )
-        }
-        let title = entry.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        let fallbackTitle = title.isEmpty ? String(localized: "未命名") : title
-        return AppLoginStackedGroupKey(
-            title: fallbackTitle,
-            normalized: fallbackTitle.lowercased(),
-            isWebsite: false
-        )
     }
 
     func normalizedLoginHost(from url: String) -> String? {
@@ -3289,198 +3171,6 @@ final class AppSessionModel {
         }
     }
 
-    func createLoginEntry(projectTitle: String) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            let project: LocalVaultProject
-            if let activeProject {
-                project = activeProject
-            } else {
-                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
-                activeProject = project
-            }
-            var entry = try entryRepository.createLoginEntry(
-                projectID: project.id,
-                draft: LocalLoginEntryDraft(
-                    title: loginTitle,
-                    username: loginUsername,
-                    account: loginAccount,
-                    password: loginPassword,
-                    url: loginURL,
-                    notes: loginNotes,
-                    urls: [loginURL] + loginAdditionalURLs,
-                    appBundleID: loginAppBundleID,
-                    appName: loginAppName
-                )
-            )
-            if let loginIcon {
-                entry = try entryRepository.setLoginEntryIcon(
-                    projectID: project.id,
-                    entryID: entry.id,
-                    icon: loginIcon
-                )
-            }
-            loginPassword = ""
-            loginAdditionalURLs = []
-            loginAppBundleID = ""
-            loginAppName = ""
-            loginNotes = ""
-            loginEntries = try entryRepository.listLoginEntries(projectID: project.id)
-            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: project.id)
-            try refreshAutoFillEncryptedIndexIfConfigured()
-            appendOperationTimelineEvent(
-                action: .created,
-                itemKind: .login,
-                itemID: entry.id,
-                itemTitle: entry.title
-            )
-            entryOperationState = .succeeded(entry.title)
-        } catch {
-            AppDiagnosticEmission.passkeyFailure(error, stage: .create)
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func generateLoginPassword() throws {
-        recordUserActivity()
-        do {
-            loginPassword = try passwordGenerator()
-            entryOperationState = .succeeded(String(localized: "已生成密码"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func selectLoginEntryForEditing(_ entry: LocalLoginEntry) {
-        recordUserActivity()
-        editingLoginEntryID = entry.id
-        editingLoginTitle = entry.title
-        editingLoginUsername = entry.username
-        editingLoginAccount = entry.account
-        editingLoginPassword = entry.password
-        editingLoginURL = entry.url
-        editingLoginFavorite = entry.favorite
-        editingLoginIcon = entry.icon
-        let urls = entry.effectiveURLs
-        editingLoginAdditionalURLs = urls.count > 1 ? Array(urls.dropFirst()) : []
-        editingLoginAppBundleID = entry.appBundleID
-        editingLoginAppName = entry.appName
-        editingLoginNotes = entry.notes
-        editingLoginPasswordHistory = entry.passwordHistory
-    }
-
-    func updateSelectedLoginEntry() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingLoginEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            var entry = try entryRepository.updateLoginEntry(
-                projectID: projectID,
-                entryID: entryID,
-                draft: LocalLoginEntryDraft(
-                    title: editingLoginTitle,
-                    username: editingLoginUsername,
-                    account: editingLoginAccount,
-                    password: editingLoginPassword,
-                    url: editingLoginURL,
-                    notes: editingLoginNotes,
-                    urls: [editingLoginURL] + editingLoginAdditionalURLs,
-                    appBundleID: editingLoginAppBundleID,
-                    appName: editingLoginAppName,
-                    passwordHistory: editingLoginPasswordHistory
-                )
-            )
-            // 图标不属于编辑表单字段：只有用户显式改过才回写，避免把旧值当成变更。
-            if entry.icon != editingLoginIcon {
-                entry = try entryRepository.setLoginEntryIcon(
-                    projectID: projectID,
-                    entryID: entryID,
-                    icon: editingLoginIcon
-                )
-            }
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
-            selectLoginEntryForEditing(entry)
-            try refreshAutoFillEncryptedIndexIfConfigured()
-            appendOperationTimelineEvent(
-                action: .updated,
-                itemKind: .login,
-                itemID: entry.id,
-                itemTitle: entry.title
-            )
-            entryOperationState = .succeeded(entry.title)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    /// 删除详情页里的一条旧密码；密码本身不变，因此不会再被自动补回。
-    func deleteLoginPasswordHistoryEntry(entryID: String, historyEntryID: String) throws {
-        try mutateLoginPasswordHistory(entryID: entryID) { history in
-            LoginPasswordHistoryPolicy.removing(id: historyEntryID, from: history)
-        }
-    }
-
-    /// 清空详情页里展示的密码历史。
-    func clearLoginPasswordHistory(entryID: String) throws {
-        try mutateLoginPasswordHistory(entryID: entryID) { _ in [] }
-    }
-
-    private func mutateLoginPasswordHistory(
-        entryID: String,
-        transform: ([LocalLoginPasswordHistoryEntry]) -> [LocalLoginPasswordHistoryEntry]
-    ) throws {
-        recordUserActivity()
-        guard let entryRepository = activeEntryRepository,
-              let projectID = activeProject?.id,
-              let entry = loginEntries.first(where: { $0.id == entryID })
-        else {
-            throw LocalVaultRepositoryError.vaultUnavailable
-        }
-
-        do {
-            let updated = try entryRepository.updateLoginEntry(
-                projectID: projectID,
-                entryID: entryID,
-                draft: LocalLoginEntryDraft(
-                    title: entry.title,
-                    username: entry.username,
-                    account: entry.account,
-                    password: entry.password,
-                    url: entry.url,
-                    notes: entry.notes,
-                    urls: entry.effectiveURLs,
-                    appBundleID: entry.appBundleID,
-                    appName: entry.appName,
-                    passwordHistory: transform(entry.passwordHistory)
-                )
-            )
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            if editingLoginEntryID == entryID {
-                selectLoginEntryForEditing(updated)
-            }
-            entryOperationState = .succeeded(updated.title)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
     @discardableResult
     func importPendingShareExtensionItems(
         inboxStore: AppShareExtensionInboxStore,
@@ -3693,185 +3383,6 @@ final class AppSessionModel {
         return requests.count
     }
 
-    func generateSelectedLoginPassword() throws {
-        recordUserActivity()
-        do {
-            editingLoginPassword = try passwordGenerator()
-            entryOperationState = .succeeded(String(localized: "已生成密码"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func setSelectedLoginFavorite(_ favorite: Bool) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingLoginEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let updated = try entryRepository.setLoginEntryFavorite(
-                projectID: projectID,
-                entryID: entryID,
-                favorite: favorite
-            )
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            selectLoginEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func deleteSelectedLoginEntry() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingLoginEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let deletedTitle = editingLoginTitle
-            try entryRepository.deleteLoginEntry(projectID: projectID, entryID: entryID)
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
-            clearEditingLoginEntry()
-            try refreshAutoFillEncryptedIndexIfConfigured()
-            appendOperationTimelineEvent(
-                action: .deleted,
-                itemKind: .login,
-                itemID: entryID,
-                itemTitle: deletedTitle
-            )
-            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
-            haptics.play(.error)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            haptics.play(.error)
-            throw error
-        }
-    }
-
-    func mergeDuplicateLoginPreview(_ preview: AppDuplicateLoginMergePreview) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            guard let currentPreview = duplicateLoginMergePreviews.first(where: { $0.id == preview.id }) else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            for entryID in currentPreview.duplicateEntryIDs {
-                try entryRepository.deleteLoginEntry(projectID: projectID, entryID: entryID)
-            }
-            lastDuplicateLoginMergeUndo = AppDuplicateLoginMergeUndo(
-                title: currentPreview.title,
-                restoredEntryIDs: currentPreview.duplicateEntryIDs
-            )
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
-            try refreshAutoFillEncryptedIndexIfConfigured()
-            entryOperationState = .succeeded(String(localized: "已合并 \(currentPreview.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func undoLastDuplicateLoginMerge() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let undo = lastDuplicateLoginMergeUndo,
-                  let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            for entryID in undo.restoredEntryIDs {
-                _ = try entryRepository.restoreLoginEntry(projectID: projectID, entryID: entryID)
-            }
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
-            try refreshAutoFillEncryptedIndexIfConfigured()
-            lastDuplicateLoginMergeUndo = nil
-            entryOperationState = .succeeded(String(localized: "已撤销合并 \(undo.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func ignoreDuplicateLoginPreview(_ preview: AppDuplicateLoginMergePreview) {
-        recordUserActivity()
-
-        guard let group = duplicateLoginGroups(in: loginEntries, excludingIgnored: false)
-            .first(where: { group in
-                "duplicate-login-\(group.entries[0].id)" == preview.id
-            })
-        else {
-            return
-        }
-
-        ignoredDuplicateLoginKeys.insert(group.key)
-        entryOperationState = .succeeded(String(localized: "已忽略 \(preview.title)"))
-    }
-
-    func clearIgnoredDuplicateLoginPreviews() {
-        recordUserActivity()
-        ignoredDuplicateLoginKeys.removeAll()
-        entryOperationState = .succeeded(String(localized: "已恢复重复项提示"))
-    }
-
-    func restoreLoginEntry(_ entry: LocalLoginEntry) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let restored = try entryRepository.restoreLoginEntry(
-                projectID: projectID,
-                entryID: entry.id
-            )
-            loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
-            deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
-            try refreshAutoFillEncryptedIndexIfConfigured()
-            appendOperationTimelineEvent(
-                action: .restored,
-                itemKind: .login,
-                itemID: restored.id,
-                itemTitle: restored.title
-            )
-            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
     func createNoteEntry(projectTitle: String) throws {
         recordUserActivity()
         entryOperationState = .running
@@ -4040,61 +3551,6 @@ final class AppSessionModel {
         }
     }
 
-    func createTotpEntry(projectTitle: String) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            let project: LocalVaultProject
-            if let activeProject {
-                project = activeProject
-            } else {
-                project = try createOrReuseVaultProject(title: projectTitle, entryRepository: entryRepository)
-                activeProject = project
-            }
-            let entry = try entryRepository.createTotpEntry(
-                projectID: project.id,
-                draft: try advancedTotpDraft(
-                    title: totpTitle,
-                    secret: totpSecret,
-                    issuer: totpIssuer,
-                    accountName: totpAccountName,
-                    period: totpPeriod,
-                    digits: totpDigits,
-                    algorithm: totpAlgorithm,
-                    otpType: OtpType(storageValue: totpOtpType),
-                    counter: totpCounter,
-                    iconName: totpIconName
-                )
-            )
-            totpSecret = ""
-            totpCounter = 0
-            totpEntries = try entryRepository.listTotpEntries(projectID: project.id)
-            deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: project.id)
-            appendOperationTimelineEvent(
-                action: .created,
-                itemKind: .totp,
-                itemID: entry.id,
-                itemTitle: entry.title
-            )
-            entryOperationState = .succeeded(entry.title)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func importTotpURI(_ value: String) throws {
-        try importTotpURI(value, source: .manualURI)
-    }
-
-    func importScannedTotpQRCode(_ value: String) throws {
-        try importTotpURI(value, source: .scannedQRCode)
-    }
-
     func importSteamAuthenticator(_ data: Data) throws {
         recordUserActivity()
 
@@ -4125,77 +3581,6 @@ final class AppSessionModel {
         }
     }
 
-    private func importTotpURI(_ value: String, source: TotpImportSource) throws {
-        recordUserActivity()
-
-        do {
-            let draft = try TotpURIParser.parse(value)
-            guard let period = UInt32(exactly: draft.period) else {
-                throw TotpError.invalidPeriod
-            }
-            guard let digits = UInt32(exactly: draft.digits) else {
-                throw TotpError.invalidDigits
-            }
-
-            totpTitle = draft.title
-            totpSecret = draft.secret
-            totpIssuer = draft.issuer
-            totpAccountName = draft.accountName
-            totpPeriod = period
-            totpDigits = digits
-            totpAlgorithm = draft.algorithm.rawValue
-            totpOtpType = draft.otpType.rawValue
-            totpCounter = draft.counter
-            totpIconName = ""
-            totpImportURI = ""
-            entryOperationState = .succeeded(String(localized: "已导入 \(draft.title)"))
-        } catch {
-            entryOperationState = .failed(readableTotpImportErrorMessage(for: error, source: source))
-            throw error
-        }
-    }
-
-    private func readableTotpImportErrorMessage(for error: Error, source: TotpImportSource) -> String {
-        guard let totpError = error as? TotpError else {
-            return error.localizedDescription
-        }
-
-        switch (source, totpError) {
-        case (.scannedQRCode, .invalidURI):
-            return String(localized: "扫描到的二维码不是 TOTP 设置码。")
-        case (.manualURI, .invalidURI):
-            return String(localized: "请输入有效的 otpauth:// TOTP 设置 URI。")
-        case (.scannedQRCode, .invalidSecret):
-            return String(localized: "扫描到的二维码包含无效的 TOTP 密钥。")
-        case (.manualURI, .invalidSecret):
-            return String(localized: "TOTP 设置 URI 包含无效密钥。")
-        case (.scannedQRCode, .invalidDigits):
-            return String(localized: "扫描到的二维码使用了不支持的 TOTP 位数。")
-        case (.manualURI, .invalidDigits):
-            return String(localized: "TOTP 设置 URI 使用了不支持的位数。")
-        case (.scannedQRCode, .invalidPeriod):
-            return String(localized: "扫描到的二维码使用了不支持的 TOTP 周期。")
-        case (.manualURI, .invalidPeriod):
-            return String(localized: "TOTP 设置 URI 使用了不支持的周期。")
-        case (.scannedQRCode, .invalidAlgorithm):
-            return String(localized: "扫描到的二维码使用了不支持的 TOTP 算法。")
-        case (.manualURI, .invalidAlgorithm):
-            return String(localized: "TOTP 设置 URI 使用了不支持的算法。")
-        case (.scannedQRCode, .missingCounter):
-            return String(localized: "扫描到的二维码缺少 HOTP 计数器。")
-        case (.manualURI, .missingCounter):
-            return String(localized: "HOTP 设置 URI 缺少 counter 参数。")
-        case (.scannedQRCode, .invalidCounter):
-            return String(localized: "扫描到的二维码包含无效的 HOTP 计数器。")
-        case (.manualURI, .invalidCounter):
-            return String(localized: "HOTP 设置 URI 的 counter 参数无效。")
-        case (.scannedQRCode, .uriTooLong):
-            return String(localized: "扫描到的二维码内容过长。")
-        case (.manualURI, .uriTooLong):
-            return String(localized: "TOTP 设置 URI 过长。")
-        }
-    }
-
     private func readableSteamImportErrorMessage(for error: Error) -> String {
         guard let totpError = error as? TotpError else {
             return error.localizedDescription
@@ -4208,154 +3593,6 @@ final class AppSessionModel {
             return String(localized: "请输入有效的 Steam maFile/JSON 验证器文件。")
         case .invalidDigits, .invalidPeriod, .invalidAlgorithm, .missingCounter, .invalidCounter, .uriTooLong:
             return String(localized: "无法导入该 Steam 验证器文件。")
-        }
-    }
-
-    func selectTotpEntryForEditing(_ entry: LocalTotpEntry) {
-        recordUserActivity()
-        editingTotpEntryID = entry.id
-        editingTotpTitle = entry.title
-        editingTotpSecret = entry.secret
-        editingTotpIssuer = entry.issuer
-        editingTotpAccountName = entry.accountName
-        editingTotpPeriod = entry.period
-        editingTotpDigits = entry.digits
-        editingTotpAlgorithm = entry.algorithm
-        editingTotpOtpType = OtpType(storageValue: entry.otpType).rawValue
-        editingTotpCounter = entry.counter
-        editingTotpIconName = entry.iconName
-        editingTotpFavorite = entry.favorite
-    }
-
-    func updateSelectedTotpEntry() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingTotpEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let entry = try entryRepository.updateTotpEntry(
-                projectID: projectID,
-                entryID: entryID,
-                draft: try advancedTotpDraft(
-                    title: editingTotpTitle,
-                    secret: editingTotpSecret,
-                    issuer: editingTotpIssuer,
-                    accountName: editingTotpAccountName,
-                    period: editingTotpPeriod,
-                    digits: editingTotpDigits,
-                    algorithm: editingTotpAlgorithm,
-                    otpType: OtpType(storageValue: editingTotpOtpType),
-                    counter: editingTotpCounter,
-                    iconName: editingTotpIconName
-                )
-            )
-            totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
-            deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
-            selectTotpEntryForEditing(entry)
-            appendOperationTimelineEvent(
-                action: .updated,
-                itemKind: .totp,
-                itemID: entry.id,
-                itemTitle: entry.title
-            )
-            entryOperationState = .succeeded(entry.title)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func setSelectedTotpFavorite(_ favorite: Bool) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingTotpEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let updated = try entryRepository.setTotpEntryFavorite(
-                projectID: projectID,
-                entryID: entryID,
-                favorite: favorite
-            )
-            totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
-            selectTotpEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func deleteSelectedTotpEntry() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingTotpEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let deletedTitle = editingTotpTitle
-            try entryRepository.deleteTotpEntry(projectID: projectID, entryID: entryID)
-            totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
-            deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
-            clearEditingTotpEntry()
-            appendOperationTimelineEvent(
-                action: .deleted,
-                itemKind: .totp,
-                itemID: entryID,
-                itemTitle: deletedTitle
-            )
-            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
-            haptics.play(.error)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            haptics.play(.error)
-            throw error
-        }
-    }
-
-    func restoreTotpEntry(_ entry: LocalTotpEntry) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let restored = try entryRepository.restoreTotpEntry(
-                projectID: projectID,
-                entryID: entry.id
-            )
-            totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
-            deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
-            appendOperationTimelineEvent(
-                action: .restored,
-                itemKind: .totp,
-                itemID: restored.id,
-                itemTitle: restored.title
-            )
-            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
         }
     }
 
@@ -5694,471 +4931,6 @@ final class AppSessionModel {
             appendOperationTimelineEvent(
                 action: .restored,
                 itemKind: .barcode,
-                itemID: restored.id,
-                itemTitle: restored.title
-            )
-            entryOperationState = .succeeded(String(localized: "已恢复 \(restored.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-    func createSendEntry(projectTitle: String) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
-            let entry = try entryRepository.createSendEntry(
-                projectID: project.id,
-                draft: LocalSendEntryDraft(
-                    title: sendTitle,
-                    body: sendBody,
-                    expiresAt: sendExpiresAt,
-                    maxViews: sendMaxViews,
-                    notes: sendNotes
-                )
-            )
-            sendBody = ""
-            sendEntries = try entryRepository.listSendEntries(projectID: project.id)
-            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: project.id)
-            appendOperationTimelineEvent(
-                action: .created,
-                itemKind: .send,
-                itemID: entry.id,
-                itemTitle: entry.title
-            )
-            entryOperationState = .succeeded(entry.title)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    @discardableResult
-    func createBitwardenFileSend(
-        title: String,
-        fileName: String,
-        fileContent: Data,
-        mediaType: String,
-        notes: String,
-        expiresAt: String,
-        maxViews: Int,
-        password: String?,
-        hideEmail: Bool
-    ) async throws -> BitwardenSyncPushResult {
-        recordUserActivity()
-        bitwardenSyncState = .running
-        entryOperationState = .running
-
-        do {
-            let session = try requireActiveVaultSession()
-            let provider = try requireBitwardenSyncProvider()
-            let snapshot = try await provider.pullSnapshot()
-            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
-            let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
-            let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
-            try validateBitwardenRemoteSnapshotIsSafe(
-                snapshot,
-                previousItemStates: previousItemStates,
-                previousSendStates: previousSendStates
-            )
-            bitwardenSyncPreview = preview
-            let localID = bitwardenFileSendLocalIDProvider()
-            let sanitizedFileName = sanitizedAttachmentPreviewFileName(fileName)
-            let mutation = BitwardenSyncMutation.upsertFileSend(
-                localID: localID,
-                remoteID: nil,
-                title: title,
-                fileName: sanitizedFileName,
-                fileContent: fileContent,
-                mediaType: mediaType.nonBlankValue ?? "application/octet-stream",
-                notes: notes.nonBlankValue,
-                expiresAt: expiresAt,
-                maxViews: maxViews,
-                password: password?.nonBlankValue,
-                hideEmail: hideEmail
-            )
-            let result: BitwardenSyncPushResult
-            do {
-                result = try await provider.pushMutations([mutation])
-            } catch {
-                throw error
-            }
-
-            var statesByLocalID = Dictionary(uniqueKeysWithValues: previousSendStates.map { ($0.localID, $0) })
-            statesByLocalID[localID] = BitwardenSendSyncState(
-                localID: localID,
-                remoteID: result.assignedRemoteIDs[localID],
-                lastSyncedFingerprint: bitwardenFileSendFingerprint(
-                    title: title,
-                    fileName: sanitizedFileName,
-                    byteCount: fileContent.count,
-                    notes: notes.nonBlankValue,
-                    expiresAt: expiresAt,
-                    maxViews: maxViews,
-                    hideEmail: hideEmail
-                ),
-                lastRemoteRevision: result.revision.nonBlankValue,
-                isDeleted: false
-            )
-            try bitwardenSendSyncStateStore.saveStates(
-                statesByLocalID.values.sorted { $0.localID < $1.localID },
-                vaultID: session.handle.vaultID
-            )
-            bitwardenSyncState = .pushed(
-                acceptedMutationCount: result.acceptedMutationCount,
-                conflictCount: result.conflicts.count
-            )
-            entryOperationState = .succeeded(title)
-            return result
-        } catch {
-            if case .queuedForRetry = bitwardenSyncState {
-                entryOperationState = .failed(readableBitwardenSyncErrorMessage(for: error))
-                throw error
-            }
-            let message = readableBitwardenSyncErrorMessage(for: error)
-            bitwardenSyncState = .failed(message)
-            entryOperationState = .failed(message)
-            throw error
-        }
-    }
-
-    /// 创建文本型 Bitwarden Send 并保留分享链接。
-    /// 与文件型相同，先 pull 一次做安全检查，再推送到远端。
-    @discardableResult
-    func createBitwardenTextSend(
-        title: String,
-        text: String,
-        notes: String,
-        expiresAt: String,
-        maxViews: Int,
-        password: String?,
-        hideEmail: Bool
-    ) async throws -> BitwardenTextSendCreateResult {
-        recordUserActivity()
-        bitwardenSyncState = .running
-        entryOperationState = .running
-
-        do {
-            let session = try requireActiveVaultSession()
-            let provider = try requireBitwardenSyncProvider()
-            let snapshot = try await provider.pullSnapshot()
-            let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
-            let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
-            try validateBitwardenRemoteSnapshotIsSafe(
-                snapshot,
-                previousItemStates: previousItemStates,
-                previousSendStates: previousSendStates
-            )
-
-            let result = try await provider.createTextSend(
-                BitwardenTextSendCreateRequest(
-                    title: title,
-                    text: text,
-                    notes: notes.nonBlankValue,
-                    expiresAt: expiresAt,
-                    maxViews: maxViews,
-                    password: password?.nonBlankValue,
-                    hideEmail: hideEmail
-                )
-            )
-
-            // 记录同步状态，让后续同步不会把它当成新条目重复上传。
-            let localID = bitwardenTextSendLocalIDProvider()
-            var statesByLocalID = Dictionary(uniqueKeysWithValues: previousSendStates.map { ($0.localID, $0) })
-            statesByLocalID[localID] = BitwardenSendSyncState(
-                localID: localID,
-                remoteID: result.remoteID,
-                lastSyncedFingerprint: bitwardenTextSendFingerprint(
-                    title: title,
-                    body: text,
-                    notes: notes.nonBlankValue,
-                    expiresAt: expiresAt,
-                    maxViews: maxViews
-                ),
-                lastRemoteRevision: result.revision.isEmpty ? nil : result.revision
-            )
-            try bitwardenSendSyncStateStore.saveStates(
-                Array(statesByLocalID.values),
-                vaultID: session.handle.vaultID
-            )
-
-            // 链接只在创建时可得；顺带把内容也落成本地 Send 条目，方便在列表里回看。
-            if let entryRepository = activeEntryRepository,
-               let projectID = activeProject?.id {
-                _ = try? entryRepository.createSendEntry(
-                    projectID: projectID,
-                    draft: LocalSendEntryDraft(
-                        title: title,
-                        body: text,
-                        expiresAt: expiresAt,
-                        maxViews: maxViews,
-                        notes: notes
-                    )
-                )
-                sendEntries = (try? entryRepository.listSendEntries(projectID: projectID)) ?? sendEntries
-            }
-
-            bitwardenSendShareLink = result.link.flatMap { link in
-                bitwardenSendLinkURL(link)
-            }
-            bitwardenSyncState = .idle
-            entryOperationState = .succeeded(result.redactedSummary)
-            sendTitle = ""
-            sendBody = ""
-            sendNotes = ""
-            sendPassword = ""
-            sendMaxViews = 1
-            return result
-        } catch {
-            bitwardenSyncState = .failed(readableBitwardenSyncErrorMessage(for: error))
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    /// 用 web vault 地址拼出完整链接；API 地址与 web 域名不同，需从 session 推导。
-    private func bitwardenSendLinkURL(_ link: BitwardenSendLink) -> String? {
-        // Bitwarden 约定：api.bitwarden.com ↔ vault.bitwarden.com。
-        // 自托管时 serverURL 与 apiURL 通常同源，直接用 serverURL。
-        guard let serverURL = bitwardenSendWebVaultURL() else { return nil }
-        return link.url(serverBaseURL: serverURL)?.absoluteString
-    }
-
-    /// web vault 地址：Bitwarden 官方约定 api.bitwarden.com ↔ vault.bitwarden.com；
-    /// 自托管时 serverURL 与 apiURL 同源，直接用 serverURL。
-    private func bitwardenSendWebVaultURL() -> URL? {
-        guard let session = try? bitwardenAuthenticationSessionStore.loadSession() else {
-            return URL(string: "https://vault.bitwarden.com")
-        }
-        let serverURL = session.serverURL
-        if let host = serverURL.host(), !host.isEmpty {
-            if host.hasPrefix("api.") {
-                return URL(string: "https://vault." + host.dropFirst("api.".count))
-            }
-            return serverURL
-        }
-        return URL(string: "https://vault.bitwarden.com")
-    }
-
-    /// 匿名接收 Send：不需要登录，只需要链接（和可能的访问密码）。
-    @discardableResult
-    func receiveBitwardenSend(linkInput: String, password: String) async throws -> BitwardenReceivedSend {
-        recordUserActivity()
-        bitwardenReceiveState = .running
-
-        do {
-            let trimmed = linkInput.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else {
-                throw AppBitwardenSyncError.invalidSendLink
-            }
-            guard let serverURL = bitwardenSendWebVaultURL(),
-                  let apiURL = bitwardenSendAPIURL()
-            else {
-                throw AppBitwardenSyncError.invalidSendLink
-            }
-            guard let link = BitwardenSendLink.parse(urlString: trimmed, serverBaseURL: serverURL) else {
-                throw AppBitwardenSyncError.invalidSendLink
-            }
-            // 接收端不依赖登录态；provider 若未装配就用默认实现（仍可匿名 GET）。
-            let provider = bitwardenSyncProvider ?? DefaultBitwardenSyncProvider()
-            let received = try await provider.fetchSend(
-                BitwardenSendFetchRequest(
-                    link: link,
-                    password: password.nonBlankValue,
-                    apiURL: apiURL
-                )
-            )
-            bitwardenReceivedSend = received
-            bitwardenReceiveState = .succeeded(received.title)
-            bitwardenReceivePassword = ""
-            return received
-        } catch {
-            bitwardenReceivedSend = nil
-            bitwardenReceiveState = .failed(readableBitwardenSyncErrorMessage(for: error))
-            throw error
-        }
-    }
-
-    private func bitwardenSendAPIURL() -> URL? {
-        if let session = try? bitwardenAuthenticationSessionStore.loadSession() {
-            return session.apiURL
-        }
-        return URL(string: "https://api.bitwarden.com")
-    }
-
-    func clearBitwardenReceiveResult() {
-        bitwardenReceivedSend = nil
-        bitwardenReceiveState = .idle
-        bitwardenReceiveLinkInput = ""
-        bitwardenReceivePassword = ""
-    }
-
-    func createSelectedBitwardenFileSend() async throws -> BitwardenSyncPushResult {
-        guard let fileContent = sendFileContent,
-              !sendFileName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        else {
-            throw AppBitwardenSyncError.fileSendUnavailable
-        }
-        let result = try await createBitwardenFileSend(
-            title: sendTitle,
-            fileName: sendFileName,
-            fileContent: fileContent,
-            mediaType: sendFileMediaType,
-            notes: sendNotes,
-            expiresAt: sendExpiresAt,
-            maxViews: sendMaxViews,
-            password: sendPassword,
-            hideEmail: sendHideEmail
-        )
-        sendFileName = ""
-        sendFileContent = nil
-        sendFileMediaType = "application/octet-stream"
-        sendPassword = ""
-        return result
-    }
-
-    func selectBitwardenSendFile(url: URL) throws {
-        recordUserActivity()
-        let didAccess = url.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess {
-                url.stopAccessingSecurityScopedResource()
-            }
-        }
-        sendFileContent = try Data(contentsOf: url)
-        sendFileName = sanitizedAttachmentPreviewFileName(url.lastPathComponent)
-        sendFileMediaType = UTType(filenameExtension: url.pathExtension)?.preferredMIMEType ?? "application/octet-stream"
-        if sendTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            sendTitle = sendFileName
-        }
-    }
-
-    func selectSendEntryForEditing(_ entry: LocalSendEntry) {
-        recordUserActivity()
-        editingSendEntryID = entry.id
-        editingSendTitle = entry.title
-        editingSendBody = entry.body
-        editingSendExpiresAt = entry.expiresAt
-        editingSendMaxViews = entry.maxViews
-        editingSendNotes = entry.notes
-        editingSendFavorite = entry.favorite
-    }
-
-    func updateSelectedSendEntry() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingSendEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let entry = try entryRepository.updateSendEntry(
-                projectID: projectID,
-                entryID: entryID,
-                draft: LocalSendEntryDraft(
-                    title: editingSendTitle,
-                    body: editingSendBody,
-                    expiresAt: editingSendExpiresAt,
-                    maxViews: editingSendMaxViews,
-                    notes: editingSendNotes
-                )
-            )
-            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
-            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
-            selectSendEntryForEditing(entry)
-            appendOperationTimelineEvent(
-                action: .updated,
-                itemKind: .send,
-                itemID: entry.id,
-                itemTitle: entry.title
-            )
-            entryOperationState = .succeeded(entry.title)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func setSelectedSendFavorite(_ favorite: Bool) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingSendEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let updated = try entryRepository.setSendEntryFavorite(projectID: projectID, entryID: entryID, favorite: favorite)
-            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
-            selectSendEntryForEditing(updated)
-            entryOperationState = .succeeded(favorite ? String(localized: "已收藏 \(updated.title)") : String(localized: "已取消收藏 \(updated.title)"))
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            throw error
-        }
-    }
-
-    func deleteSelectedSendEntry() throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id,
-                  let entryID = editingSendEntryID
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let deletedTitle = editingSendTitle
-            try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
-            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
-            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
-            clearEditingSendEntry()
-            appendOperationTimelineEvent(
-                action: .deleted,
-                itemKind: .send,
-                itemID: entryID,
-                itemTitle: deletedTitle
-            )
-            entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
-            haptics.play(.error)
-        } catch {
-            entryOperationState = .failed(error.localizedDescription)
-            haptics.play(.error)
-            throw error
-        }
-    }
-
-    func restoreSendEntry(_ entry: LocalSendEntry) throws {
-        recordUserActivity()
-        entryOperationState = .running
-
-        do {
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
-
-            let restored = try entryRepository.restoreSendEntry(projectID: projectID, entryID: entry.id)
-            sendEntries = try entryRepository.listSendEntries(projectID: projectID)
-            deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
-            appendOperationTimelineEvent(
-                action: .restored,
-                itemKind: .send,
                 itemID: restored.id,
                 itemTitle: restored.title
             )
@@ -8099,35 +6871,6 @@ final class AppSessionModel {
         }
     }
 
-    func totpCode(for entry: LocalTotpEntry, at date: Date = Date()) throws -> String {
-        switch OtpType(storageValue: entry.otpType) {
-        case .totp:
-            return try TotpGenerator.generate(
-                secret: entry.secret,
-                algorithm: totpAlgorithm(from: entry.algorithm),
-                digits: Int(entry.digits),
-                period: Int(entry.period),
-                timestamp: date.timeIntervalSince1970
-            )
-        case .hotp:
-            return try HotpGenerator.generate(
-                secret: entry.secret,
-                algorithm: totpAlgorithm(from: entry.algorithm),
-                digits: Int(entry.digits),
-                counter: entry.counter
-            )
-        }
-    }
-
-    func totpTimeRemaining(for entry: LocalTotpEntry, at date: Date = Date()) -> Int {
-        guard OtpType(storageValue: entry.otpType) == .totp else {
-            return 0
-        }
-        let period = max(Int(entry.period), 1)
-        let elapsed = Int(date.timeIntervalSince1970) % period
-        return elapsed == 0 ? period : period - elapsed
-    }
-
     var canPrepareVaultKeychainUnlock: Bool {
         vaultState == .unlocked
             && vaultKeychainService != nil
@@ -9682,7 +8425,7 @@ final class AppSessionModel {
         return false
     }
 
-    private func validateBitwardenRemoteSnapshotIsSafe(
+    func validateBitwardenRemoteSnapshotIsSafe(
         _ snapshot: BitwardenSyncSnapshot,
         previousItemStates: [BitwardenItemSyncState],
         previousSendStates: [BitwardenSendSyncState]
@@ -9858,7 +8601,7 @@ final class AppSessionModel {
         return provider
     }
 
-    private func requireBitwardenSyncProvider() throws -> any BitwardenSyncProvider {
+    func requireBitwardenSyncProvider() throws -> any BitwardenSyncProvider {
         guard let bitwardenSyncProvider else {
             throw AppBitwardenSyncError.providerUnavailable
         }
@@ -10549,7 +9292,7 @@ final class AppSessionModel {
         }
     }
 
-    private func bitwardenTextSendFingerprint(
+    func bitwardenTextSendFingerprint(
         title: String,
         body: String,
         notes: String?,
@@ -10566,7 +9309,7 @@ final class AppSessionModel {
         ].joined(separator: "\u{1F}")
     }
 
-    private func bitwardenFileSendFingerprint(
+    func bitwardenFileSendFingerprint(
         title: String,
         fileName: String,
         byteCount: Int,
@@ -10890,7 +9633,7 @@ final class AppSessionModel {
         return String(localized: "\(kind.displayName) 操作失败，请稍后重试。")
     }
 
-    private func readableBitwardenSyncErrorMessage(for error: Error) -> String {
+    func readableBitwardenSyncErrorMessage(for error: Error) -> String {
         if let appError = error as? AppBitwardenSyncError {
             return appError.localizedDescription
         }
@@ -12330,38 +11073,11 @@ final class AppSessionModel {
         lockLocalVault()
     }
 
-    func clearEditingLoginEntry() {
-        editingLoginEntryID = nil
-        editingLoginTitle = ""
-        editingLoginUsername = ""
-        editingLoginAccount = ""
-        editingLoginPassword = ""
-        editingLoginURL = ""
-        editingLoginFavorite = false
-        editingLoginAdditionalURLs = []
-        editingLoginAppBundleID = ""
-        editingLoginAppName = ""
-        editingLoginNotes = ""
-        editingLoginPasswordHistory = []
-    }
-
     func clearEditingNoteEntry() {
         editingNoteEntryID = nil
         editingNoteTitle = ""
         editingNoteBody = ""
         editingNoteFavorite = false
-    }
-
-    func clearEditingTotpEntry() {
-        editingTotpEntryID = nil
-        editingTotpTitle = ""
-        editingTotpSecret = ""
-        editingTotpIssuer = ""
-        editingTotpAccountName = ""
-        editingTotpPeriod = 30
-        editingTotpDigits = 6
-        editingTotpAlgorithm = "SHA1"
-        editingTotpFavorite = false
     }
 
     func clearEditingCardEntry() {
@@ -12452,16 +11168,6 @@ final class AppSessionModel {
         editingBarcodeLabel = ""
         editingBarcodeNotes = ""
         editingBarcodeFavorite = false
-    }
-
-    func clearEditingSendEntry() {
-        editingSendEntryID = nil
-        editingSendTitle = ""
-        editingSendBody = ""
-        editingSendExpiresAt = ""
-        editingSendMaxViews = 1
-        editingSendNotes = ""
-        editingSendFavorite = false
     }
 
     private func serviceIdentifiers(for urlString: String) -> [String] {
@@ -12605,10 +11311,6 @@ final class AppSessionModel {
             privateKeyReference: draft.privateKeyReference,
             notes: draft.notes
         )
-    }
-
-    func totpAlgorithm(from value: String) -> TotpAlgorithm {
-        TotpAlgorithm(rawValue: value.uppercased()) ?? .sha1
     }
 
     func runMDBXVerification() {
