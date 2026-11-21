@@ -92,6 +92,17 @@ struct VaultRegistryListView: View {
                 .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
 
+            NavigationLink {
+                VaultSnapshotCenterView(session: session)
+            } label: {
+                Label("保险库快照", systemImage: "clock.arrow.circlepath")
+            }
+            .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+
+            Text("快照可随时查看、预览与恢复。")
+                .font(.footnote)
+                .foregroundStyle(AndroidParityPalette.textSecondary)
+
             if let errorMessage {
                 Text(errorMessage)
                     .font(.footnote.weight(.semibold))
