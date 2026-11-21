@@ -11779,6 +11779,10 @@ final class AppSessionModel {
             snapshot.deletedSendEntries += (try? entryRepository.listDeletedSendEntries(projectID: projectID)) ?? []
             snapshot.attachmentEntries += (try? entryRepository.listAttachmentMetadata(projectID: projectID)) ?? []
             snapshot.deletedAttachmentEntries += (try? entryRepository.listDeletedAttachmentMetadata(projectID: projectID)) ?? []
+            snapshot.billingAddressEntries += (try? entryRepository.listBillingAddressEntries(projectID: projectID)) ?? []
+            snapshot.deletedBillingAddressEntries += (try? entryRepository.listDeletedBillingAddressEntries(projectID: projectID)) ?? []
+            snapshot.paymentAccountEntries += (try? entryRepository.listPaymentAccountEntries(projectID: projectID)) ?? []
+            snapshot.deletedPaymentAccountEntries += (try? entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)) ?? []
         }
 
         vaultSearch.replaceDocuments(

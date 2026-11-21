@@ -547,3 +547,102 @@ private func jsonString(_ object: [String: Any]) throws -> String {
     let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
     return String(decoding: data, as: UTF8.self)
 }
+
+// MARK: - 搜索索引投影
+
+struct BillingSearchIndexTests {
+    private func makeSnapshot() -> VaultSearchEntrySnapshot {
+        var snapshot = VaultSearchEntrySnapshot()
+        snapshot.billingAddressEntries = [
+            LocalBillingAddressEntry(
+                id: "address-1",
+                projectID: "project-1",
+                title: "家庭地址",
+                fullName: "ZHANG SAN",
+                streetAddress: "1 Heping Road",
+                city: "Shanghai",
+                postalCode: "200000",
+                country: "China",
+                phone: "+86 21 1234 5678",
+                notes: "周末收件"
+            )
+        ]
+        snapshot.paymentAccountEntries = [
+            LocalPaymentAccountEntry(
+                id: "account-1",
+                projectID: "project-1",
+                title: "工资卡账户",
+                kind: .bankAccount,
+                provider: "Monica Bank",
+                accountName: "Monica Studio",
+                accountHolderName: "ZHANG SAN",
+                iban: "DE89370400440532013000",
+                swiftBIC: "DEUTDEFF",
+                routingNumber: "021000021",
+                accountNumber: "1234567890",
+                currency: "EUR",
+                billingAddressID: "address-1"
+            )
+        ]
+        snapshot.deletedPaymentAccountEntries = [
+            LocalPaymentAccountEntry(
+                id: "account-deleted",
+                projectID: "project-1",
+                title: "旧账户",
+                kind: .digitalWallet,
+                provider: "Old Wallet",
+                accountName: "legacy",
+                iban: "GB82WEST12345698765432",
+                accountNumber: "9876543210",
+                currency: "GBP"
+            )
+        ]
+        return snapshot
+    }
+
+    @Test func searchIndexProjectsBillingEntriesWithoutSecrets() {
+        let snapshot = makeSnapshot()
+        let documents = VaultSearchDocumentBuilder.documents(from: snapshot)
+
+        #expect(documents.count == 3)
+        #expect(documents.contains { $0.kind == .billingAddress && $0.id == "address-1" })
+        #expect(documents.contains { $0.kind == .paymentAccount && $0.id == "account-1" })
+        #expect(documents.contains { $0.kind == .paymentAccount && $0.id == "account-deleted" && $0.isDeleted })
+
+        let secrets = [
+            "DE89370400440532013000",
+            "GB82WEST12345698765432",
+            "1234567890",
+            "9876543210",
+            "DEUTDEFF",
+            "021000021",
+            "+86 21 1234 5678"
+        ]
+        for document in documents {
+            let searchable = ([document.title, document.username, document.url, document.details, document.notes]
+                + document.tags).joined(separator: "\u{1F}")
+            for secret in secrets {
+                #expect(!searchable.contains(secret), "索引中不允许出现敏感值 \(secret)")
+            }
+        }
+    }
+
+    @Test func searchIndexFindsBillingEntriesByNonSecretFields() {
+        let index = VaultSearchIndex(
+            documents: VaultSearchDocumentBuilder.documents(from: makeSnapshot())
+        )
+
+        let addressHit = index.search("家庭地址")
+        #expect(addressHit.results.contains { $0.kind == .billingAddress })
+
+        let cityHit = index.search("Shanghai")
+        #expect(cityHit.results.contains { $0.id == "address-1" })
+
+        let providerHit = index.search("Monica Bank")
+        #expect(providerHit.results.contains { $0.kind == .paymentAccount })
+
+        #expect(index.search("DE89370400440532013000").results.isEmpty)
+        #expect(index.search("1234567890").results.isEmpty)
+        #expect(index.search("021000021").results.isEmpty)
+    }
+}
