@@ -411,7 +411,6 @@
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
 				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
 				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
-				B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
 				A100000000000000000000FC /* AppCloudVaultSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
@@ -464,6 +463,7 @@
 				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
 A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */,
+			B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
