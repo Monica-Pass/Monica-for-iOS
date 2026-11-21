@@ -6,16 +6,23 @@ import SwiftUI
 @main
 struct MonicaApp: App {
     private let environment: MonicaAppEnvironment
+    /// 应用内语言（#128）：`.system` 时沿用系统语言，其余为显式选择。
+    @State private var appLanguage: AppLanguageController
 
     init() {
         let environment = MonicaAppEnvironment()
         self.environment = environment
+        _appLanguage = State(initialValue: AppLanguageController(store: environment.appLanguageStore))
         AppOneDriveGraphAcceptanceHarness.runIfRequested()
     }
 
     var body: some Scene {
         WindowGroup {
             AppRootView(environment: environment)
+                // 官方方式：`\.locale` 驱动 SwiftUI 文案与日期/数字格式；
+                // 控制器本身供设置页读取与写入。
+                .environment(\.locale, appLanguage.resolvedLocale)
+                .environment(appLanguage)
         }
     }
 }
