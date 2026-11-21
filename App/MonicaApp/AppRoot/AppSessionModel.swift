@@ -645,6 +645,8 @@ final class AppSessionModel {
     private let widgetSnapshotStore: AppWidgetSnapshotFileStore?
     private let shortcutSnapshotStore: AppShortcutSnapshotFileStore?
     private let widgetReloadScheduler: (any MonicaWidgetReloadScheduling)?
+    /// 全 App 唯一触感入口（#147）：关闭总开关后不会触发任何反馈。
+    let haptics: AppHaptics
     private(set) var widgetSnapshotSyncError: String?
     private let controlNavigationDefaults: UserDefaults?
     private let attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)?
@@ -734,6 +736,7 @@ final class AppSessionModel {
         widgetSnapshotStore: AppWidgetSnapshotFileStore? = nil,
         shortcutSnapshotStore: AppShortcutSnapshotFileStore? = nil,
         widgetReloadScheduler: (any MonicaWidgetReloadScheduling)? = nil,
+        haptics: AppHaptics = AppHaptics(),
         controlNavigationDefaults: UserDefaults? = UserDefaults(suiteName: MonicaControlNavigationStore.appGroupIdentifier),
         attachmentContentEncryptionKeyProvider: ((LocalAttachmentMetadata) throws -> Data)? = nil,
         androidAttachmentWrappingKeyProvider: ((LocalAttachmentMetadata) throws -> AndroidAttachmentContentWrappingKey)? = nil,
@@ -813,6 +816,7 @@ final class AppSessionModel {
         self.widgetSnapshotStore = widgetSnapshotStore
         self.shortcutSnapshotStore = shortcutSnapshotStore
         self.widgetReloadScheduler = widgetReloadScheduler
+        self.haptics = haptics
         self.controlNavigationDefaults = controlNavigationDefaults
         self.attachmentContentEncryptionKeyProvider = attachmentContentEncryptionKeyProvider
         self.androidAttachmentWrappingKeyProvider = androidAttachmentWrappingKeyProvider
@@ -2664,6 +2668,14 @@ final class AppSessionModel {
 
     @discardableResult
     func copySensitiveValueToPasteboard(_ secret: String) -> SensitivePasteboardCopyFeedback {
+        let feedback = copySensitiveValueToPasteboardWithoutHaptics(secret)
+        if feedback != .nothingToCopy {
+            haptics.play(.success)
+        }
+        return feedback
+    }
+
+    private func copySensitiveValueToPasteboardWithoutHaptics(_ secret: String) -> SensitivePasteboardCopyFeedback {
         switch sensitivePasteboard.copy(secret: secret, ttl: sensitiveClipboardTTL) {
         case .nothingToCopy:
             return .nothingToCopy
@@ -3847,8 +3859,10 @@ final class AppSessionModel {
             clearVaultBatchSelection()
             let verb = action == .deleted ? String(localized: "删除") : String(localized: "恢复")
             entryOperationState = .succeeded(String(localized: "已\(verb) \(events.count) 项"))
+            haptics.play(action == .deleted ? .error : .success)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -5371,8 +5385,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -5616,8 +5632,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -5921,8 +5939,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -6125,8 +6145,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -6313,8 +6335,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -6573,8 +6597,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -6747,8 +6773,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -6917,8 +6945,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -7084,8 +7114,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -7249,8 +7281,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }
@@ -7712,8 +7746,10 @@ final class AppSessionModel {
                 itemTitle: deletedTitle
             )
             entryOperationState = .succeeded(String(localized: "已删除 \(deletedTitle)"))
+            haptics.play(.error)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
+            haptics.play(.error)
             throw error
         }
     }

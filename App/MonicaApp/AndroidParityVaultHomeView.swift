@@ -135,7 +135,10 @@ struct AndroidParityVaultHomeView: View {
             sectionBar: { sectionBarContent },
             categoryBar: { categoryBar },
             tagBar: { VaultTagToolsBar(session: session) },
-            onQuickFilter: session.applyVaultQuickFilter,
+            onQuickFilter: { filter in
+                session.haptics.play(.selection)
+                session.applyVaultQuickFilter(filter)
+            },
             onOpenVault: { isVaultImporterPresented = true },
             onAdd: { session.presentAddEditor(forItemKind: itemKind) },
             onAddKind: { kind in session.presentAddEditor(forItemKind: kind) },
@@ -385,7 +388,8 @@ struct AndroidParityVaultHomeView: View {
                             entry: entry,
                             code: session.maskedSensitivePreview(totpCode(for: entry)),
                             remaining: session.totpTimeRemaining(for: entry, at: now),
-                            iconSystemName: session.totpIconSystemName(for: entry)
+                            iconSystemName: session.totpIconSystemName(for: entry),
+                            haptics: session.haptics
                         )
                     }
                 }
@@ -1913,6 +1917,7 @@ private struct AndroidTotpListCard: View {
     let code: String
     let remaining: Int
     let iconSystemName: String
+    let haptics: AppHaptics
 
     private var isCounterBased: Bool {
         OtpType(storageValue: entry.otpType) == .hotp
@@ -1955,6 +1960,11 @@ private struct AndroidTotpListCard: View {
                         .foregroundStyle(AndroidParityPalette.primary)
                 }
             }
+        }
+        // 每个新周期轻震一次；关闭总开关或子开关后由 AppHaptics 统一拦截。
+        .onChange(of: code) { _, _ in
+            guard !isCounterBased else { return }
+            haptics.play(.verificationTick)
         }
     }
 }
