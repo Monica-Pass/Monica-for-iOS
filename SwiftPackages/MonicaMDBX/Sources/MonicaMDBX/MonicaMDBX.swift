@@ -69,6 +69,8 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
     public let projectID: String
     public let title: String
     public let username: String
+    /// 登录账号（邮箱 / 手机号 / 账号 ID），与 `username` 分开保存；旧库缺键时为空字符串。
+    public let account: String
     public let password: String
     /// 主 URL（旧字段 `website`），始终等于 `urls.first`；保留它是为了旧版本/iOS 旧库兼容。
     public let url: String
@@ -92,6 +94,7 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
         projectID: String,
         title: String,
         username: String,
+        account: String = "",
         password: String,
         url: String,
         notes: String,
@@ -107,6 +110,7 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
         self.projectID = projectID
         self.title = title
         self.username = username
+        self.account = account
         self.password = password
         self.url = url
         self.notes = notes
@@ -226,6 +230,7 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         projectID: String,
         title: String,
         username: String,
+        account: String = "",
         password: String,
         url: String,
         notes: String = "",
@@ -238,6 +243,7 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             projectId: projectID,
             title: title,
             username: username,
+            account: account,
             password: password,
             url: url,
             notes: notes,
@@ -262,6 +268,7 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         entryID: String,
         title: String,
         username: String,
+        account: String? = nil,
         password: String,
         url: String,
         notes: String = "",
@@ -275,6 +282,7 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             entryId: entryID,
             title: title,
             username: username,
+            account: account,
             password: password,
             url: url,
             notes: notes,
@@ -871,6 +879,7 @@ fileprivate struct LoginEntryRecord {
     let projectId: String
     let title: String
     let username: String
+    let account: String
     let password: String
     let url: String
     let notes: String
@@ -1128,6 +1137,8 @@ fileprivate extension LoginEntryRecord {
             projectId: raw.projectId,
             title: raw.title,
             username: MDBXBusinessPayload.string(payload, "username"),
+            // 旧 payload 没有 `account` 键：解码为空字符串，保持「与旧库完全一致」。
+            account: MDBXBusinessPayload.string(payload, "account"),
             password: MDBXBusinessPayload.string(payload, "password"),
             url: primaryURL,
             notes: MDBXBusinessPayload.string(payload, "notes"),
@@ -1245,6 +1256,7 @@ fileprivate extension MdbxVault {
         projectId: String,
         title: String,
         username: String,
+        account: String = "",
         password: String,
         url: String,
         notes: String,
@@ -1255,6 +1267,7 @@ fileprivate extension MdbxVault {
     ) throws -> LoginEntryRecord {
         let payload = try loginPayload(
             username: username,
+            account: account,
             password: password,
             url: url,
             notes: notes,
@@ -1279,6 +1292,7 @@ fileprivate extension MdbxVault {
     /// - `passwordHistory` 只在非空时写入，旧库缺键即为空历史。
     private func loginPayload(
         username: String,
+        account: String,
         password: String,
         url: String,
         notes: String,
@@ -1297,6 +1311,10 @@ fileprivate extension MdbxVault {
             "notes": notes,
             "favorite": favorite
         ]
+        // 账号为可选字段：空值不写键，旧版本读取方看到的 payload 与旧库一致。
+        if !account.isEmpty {
+            object["account"] = account
+        }
         if !normalizedURLs.isEmpty {
             object["urls"] = normalizedURLs
         }
@@ -1325,6 +1343,7 @@ fileprivate extension MdbxVault {
         entryId: String,
         title: String,
         username: String,
+        account: String? = nil,
         password: String,
         url: String,
         notes: String,
@@ -1345,6 +1364,7 @@ fileprivate extension MdbxVault {
         }
         var payload = try loginPayload(
             username: username,
+            account: account ?? existing.account,
             password: password,
             url: url,
             notes: notes,
@@ -1375,17 +1395,12 @@ fileprivate extension MdbxVault {
 
     func setLoginIcon(projectId: String, entryId: String, icon: String?) throws -> LoginEntryRecord {
         let current = try activeEntry(projectId: projectId, entryId: entryId, entryType: "login")
-        let payload = try current.payloadObject
-        var fields: [String: Any] = [
-            "kind": "password",
-            "username": MDBXBusinessPayload.string(payload, "username"),
-            "password": MDBXBusinessPayload.string(payload, "password"),
-            "website": MDBXBusinessPayload.string(payload, "website"),
-            "notes": MDBXBusinessPayload.string(payload, "notes"),
-            "favorite": MDBXBusinessPayload.bool(payload, "favorite")
-        ]
+        // 就地改写现有 payload：只增删 `icon`，保留 account / urls / 应用绑定 / 密码历史等所有字段。
+        var fields = try current.payloadObject
         if let icon, !icon.isEmpty {
             fields["icon"] = icon
+        } else {
+            fields.removeValue(forKey: "icon")
         }
         return try LoginEntryRecord(raw: updateEntry(
             projectId: projectId,
@@ -1754,6 +1769,7 @@ extension MonicaMDBXLoginEntry {
             projectID: raw.projectId,
             title: raw.title,
             username: raw.username,
+            account: raw.account,
             password: raw.password,
             url: raw.url,
             notes: raw.notes,
@@ -1876,6 +1892,7 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         projectID: String,
         title: String,
         username: String,
+        account: String = "",
         password: String,
         url: String,
         notes: String = "",
@@ -1900,6 +1917,7 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         entryID: String,
         title: String,
         username: String,
+        account: String? = nil,
         password: String,
         url: String,
         notes: String = "",

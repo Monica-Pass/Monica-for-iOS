@@ -34589,6 +34589,70 @@
           }
         }
       }
+    },
+    "用户名与账号分开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Separate Username and Account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名与账号分开"
+          }
+        }
+      }
+    },
+    "开启后，登录编辑页可分别填写并复制「用户名」与「账号（邮箱 / 手机号）」；关闭时保持旧版表单。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, the login editor lets you fill in and copy “Username” and “Account (email / phone)” separately; when off, the classic form is unchanged."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后，登录编辑页可分别填写并复制「用户名」与「账号（邮箱 / 手机号）」；关闭时保持旧版表单。"
+          }
+        }
+      }
+    },
+    "邮箱 / 手机号 / 账号 ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Email / phone / account ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "邮箱 / 手机号 / 账号 ID"
+          }
+        }
+      }
+    },
+    "与用户名分开保存，可单独复制。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stored separately from the username and can be copied on its own."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "与用户名分开保存，可单独复制。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
