@@ -186,6 +186,10 @@ struct SettingsRootView: View {
             }
             AppThemeSettingsView(session: session)
 
+            AndroidParitySection(title: String(localized: "触感反馈")) {
+                AppHapticsSettingsView(haptics: session.haptics)
+            }
+
             AppLanguageSettingsView()
 
             AndroidParitySection(title: String(localized: "本地保险库")) {
