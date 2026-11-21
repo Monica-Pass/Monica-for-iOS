@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B5C000000000000000000005 /* AppSessionModel+SendEntries.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C000000000000000000006 /* AppSessionModel+SendEntries.swift */; };
 		B5C000000000000000000003 /* AppSessionModel+TotpEntries.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C000000000000000000004 /* AppSessionModel+TotpEntries.swift */; };
 		B5C000000000000000000001 /* AppSessionModel+LoginEntries.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5C000000000000000000002 /* AppSessionModel+LoginEntries.swift */; };
 		B5B000000000000000000001 /* AppSessionModel+Attachments.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5B000000000000000000002 /* AppSessionModel+Attachments.swift */; };
@@ -251,6 +252,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B5C000000000000000000006 /* AppSessionModel+SendEntries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+SendEntries.swift"; sourceTree = "<group>"; };
 		B5C000000000000000000004 /* AppSessionModel+TotpEntries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+TotpEntries.swift"; sourceTree = "<group>"; };
 		B5C000000000000000000002 /* AppSessionModel+LoginEntries.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+LoginEntries.swift"; sourceTree = "<group>"; };
 		B5B000000000000000000002 /* AppSessionModel+Attachments.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+Attachments.swift"; sourceTree = "<group>"; };
@@ -660,6 +662,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 			A153000000000000000000A2 /* AppSearchAutoFocusSupport.swift */,
 				B5C000000000000000000002 /* AppSessionModel+LoginEntries.swift */,
 				B5C000000000000000000004 /* AppSessionModel+TotpEntries.swift */,
+				B5C000000000000000000006 /* AppSessionModel+SendEntries.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -1027,6 +1030,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 			buildActionMask = 2147483647;
 			files = (
 				B5B000000000000000000001 /* AppSessionModel+Attachments.swift in Sources */,
+				B5C000000000000000000005 /* AppSessionModel+SendEntries.swift in Sources */,
 				B5C000000000000000000003 /* AppSessionModel+TotpEntries.swift in Sources */,
 				B5C000000000000000000001 /* AppSessionModel+LoginEntries.swift in Sources */,
 				B5B000000000000000000003 /* AppSessionModel+VaultFolders.swift in Sources */,
