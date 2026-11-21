@@ -757,7 +757,17 @@ enum NoteMarkdownParser {
 public enum NoteMarkdownImageSniffer {
     public static func looksLikeSupportedImage(_ data: Data) -> Bool {
         let bytes = [UInt8](data.prefix(32))
-        guard bytes.count >= 12 else { return false }
+        let signatures: [[UInt8]] = [
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+            [0xFF, 0xD8, 0xFF],
+            Array("GIF87a".utf8),
+            Array("GIF89a".utf8)
+        ]
+        // 数据短到还不足以容纳签名时，只要它仍是某个签名的前缀，就按「像是图片」处理，
+        // 让后续 ImageIO 解析失败给出 unreadableImage（例如仅 4 字节的 PNG 头）。
+        if bytes.count < 12 {
+            return signatures.contains { $0.starts(with: bytes) }
+        }
         if bytes.starts(with: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return true } // PNG
         if bytes.starts(with: [0xFF, 0xD8, 0xFF]) { return true }                            // JPEG
         if bytes.starts(with: Array("GIF87a".utf8)) || bytes.starts(with: Array("GIF89a".utf8)) { return true }
