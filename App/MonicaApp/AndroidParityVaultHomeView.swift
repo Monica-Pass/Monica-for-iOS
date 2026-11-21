@@ -241,6 +241,8 @@ struct AndroidParityVaultHomeView: View {
             apiTokenList
         case .wifi:
             wifiList
+        case .sso:
+            ssoList
         case .send:
             sendList
         case .attachmentRef:
@@ -444,6 +446,22 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    private var ssoList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredSSOEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .sso) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidSSOListCard(entry: entry)
+                    }
+                }
+            }
+            if session.filteredSSOEntries.isEmpty {
+                emptyList(String(localized: "没有匹配的 SSO 条目"), icon: "person.badge.key.fill")
+            }
+            deletedSSORows
+        }
+    }
+
     private var sendList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredSendEntries) { entry in
@@ -621,6 +639,18 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    @ViewBuilder private var deletedSSORows: some View {
+        if !session.deletedSSOEntries.isEmpty {
+            restoreSection("已删除 SSO") {
+                ForEach(session.deletedSSOEntries) { entry in
+                    restoreButton(id: entry.id, kind: .sso, title: entry.title, subtitle: entry.displayProviderName) {
+                        try? session.restoreSSOEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder private var deletedSendRows: some View {
         if !session.deletedSendEntries.isEmpty {
             restoreSection("已删除 Send") {
@@ -772,6 +802,7 @@ struct AndroidParityVaultHomeView: View {
                 case .sshKey: return session.sshKeySearchQuery
                 case .apiToken: return session.apiTokenSearchQuery
                 case .wifi: return session.wifiSearchQuery
+                case .sso: return session.ssoSearchQuery
                 case .send: return session.sendSearchQuery
                 case .attachmentRef: return session.attachmentSearchQuery
                 }
@@ -789,6 +820,7 @@ struct AndroidParityVaultHomeView: View {
                 case .sshKey: session.sshKeySearchQuery = value
                 case .apiToken: session.apiTokenSearchQuery = value
                 case .wifi: session.wifiSearchQuery = value
+                case .sso: session.ssoSearchQuery = value
                 case .send: session.sendSearchQuery = value
                 case .attachmentRef: session.attachmentSearchQuery = value
                 }
@@ -809,6 +841,7 @@ struct AndroidParityVaultHomeView: View {
                 case .sshKey: return session.showFavoriteSshKeyEntriesOnly
                 case .apiToken: return session.showFavoriteApiTokenEntriesOnly
                 case .wifi: return session.showFavoriteWifiEntriesOnly
+                case .sso: return session.showFavoriteSSOEntriesOnly
                 case .send: return session.showFavoriteSendEntriesOnly
                 case .attachmentRef: return false
                 }
@@ -826,6 +859,7 @@ struct AndroidParityVaultHomeView: View {
                 case .sshKey: session.showFavoriteSshKeyEntriesOnly = value
                 case .apiToken: session.showFavoriteApiTokenEntriesOnly = value
                 case .wifi: session.showFavoriteWifiEntriesOnly = value
+                case .sso: session.showFavoriteSSOEntriesOnly = value
                 case .send: session.showFavoriteSendEntriesOnly = value
                 case .attachmentRef: break
                 }
@@ -1023,6 +1057,7 @@ struct AndroidParityVaultHomeView: View {
         case .sshKey: setSelectedSshKeyFavorite(favorite)
         case .apiToken: setSelectedApiTokenFavorite(favorite)
         case .wifi: setSelectedWifiFavorite(favorite)
+        case .sso: try? session.setSelectedSSOFavorite(favorite)
         case .send: setSelectedSendFavorite(favorite)
         case .attachmentRef: break
         }
@@ -1040,6 +1075,7 @@ struct AndroidParityVaultHomeView: View {
         case .sshKey: deleteSshKeyEntry()
         case .apiToken: deleteApiTokenEntry()
         case .wifi: deleteWifiEntry()
+        case .sso: try? session.deleteSelectedSSOEntry()
         case .send: deleteSendEntry()
         case .attachmentRef: break
         }
@@ -1747,7 +1783,7 @@ private struct AndroidAttachmentListCard: View {
     }
 }
 
-private struct AndroidExtendedSecretListCard: View {
+struct AndroidExtendedSecretListCard: View {
     let icon: String
     let title: String
     let primary: String
@@ -1943,6 +1979,7 @@ struct AddEditVaultItemView: View {
             case .sshKey: sshKeyFields
             case .apiToken: apiTokenFields
             case .wifi: wifiFields
+            case .sso: SSOEntryEditorFields(session: session, isAdding: mode.isAdding)
             case .send: sendFields
             case .attachmentRef:
                 Text("该类型当前只支持列表展示。")
@@ -2341,7 +2378,7 @@ struct AddEditVaultItemView: View {
         case .card: return String(localized: "银行卡")
         case .identity: return String(localized: "证件")
         case .passkey: return String(localized: "通行密钥")
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef: return mode.kind.localizedDisplayName
+        case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef: return mode.kind.localizedDisplayName
         }
     }
 
@@ -2356,6 +2393,7 @@ struct AddEditVaultItemView: View {
         case .sshKey: return session.editingSshKeyFavorite
         case .apiToken: return session.editingApiTokenFavorite
         case .wifi: return session.editingWifiFavorite
+        case .sso: return session.editingSSOFavorite
         case .send: return session.editingSendFavorite
         case .attachmentRef: return false
         }
@@ -2374,6 +2412,7 @@ private extension UnifiedVaultItemKind {
         case .sshKey: return "key.fill"
         case .apiToken: return "text.badge.key"
         case .wifi: return "wifi"
+        case .sso: return "person.badge.key.fill"
         case .send: return "paperplane.fill"
         case .attachmentRef: return "paperclip"
         }
@@ -2459,6 +2498,11 @@ struct VaultItemDetailView: View {
                         .padding(.horizontal, 4)
                 }
             }
+
+            if route.kind == .sso,
+               let entry = session.ssoEntries.first(where: { $0.id == route.entryID }) {
+                SSOLoginLinkSection(session: session, entry: entry)
+            }
         }
         .onDisappear {
             session.setSensitivePreviewRevealed(false, entryID: route.entryID)
@@ -2501,6 +2545,9 @@ struct VaultItemDetailView: View {
         case .apiToken:
             guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("token", "Token", sensitive(entry.token, .otherSecret)), row("scopes", String(localized: "范围"), entry.scopes), row("expires", String(localized: "过期"), entry.expiresAt)]
+        case .sso:
+            guard let entry = session.ssoEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return session.ssoDetailRows(for: entry)
         case .wifi:
             guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("ssid", "SSID", entry.ssid), row("security", String(localized: "安全类型"), entry.securityType), row("password", String(localized: "密码"), sensitive(entry.password, .password)), row("hidden", String(localized: "隐藏网络"), entry.hidden ? String(localized: "是") : String(localized: "否"))]
@@ -2570,6 +2617,9 @@ struct VaultItemDetailView: View {
         case .wifi:
             guard let entry = session.wifiEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["password": entry.password]
+        case .sso:
+            guard let entry = session.ssoEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return session.ssoDetailSecrets(for: entry)
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["body": entry.body]

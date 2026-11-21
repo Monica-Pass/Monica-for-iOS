@@ -251,6 +251,30 @@ final class AppSessionModel {
     var editingWifiHidden = false
     var editingWifiNotes = ""
     var editingWifiFavorite = false
+    var ssoEntries: [LocalSSOEntry] = []
+    var deletedSSOEntries: [LocalSSOEntry] = []
+    var ssoTitle = ""
+    var ssoProvider: SSOProvider = .custom
+    var ssoProviderName = ""
+    var ssoIssuer = ""
+    var ssoAccountName = ""
+    var ssoLoginURL = ""
+    var ssoLinkedLoginEntryID = ""
+    var ssoNotes = ""
+    var ssoSecret = ""
+    var ssoSearchQuery = ""
+    var showFavoriteSSOEntriesOnly = false
+    var editingSSOEntryID: String?
+    var editingSSOTitle = ""
+    var editingSSOProvider: SSOProvider = .custom
+    var editingSSOProviderName = ""
+    var editingSSOIssuer = ""
+    var editingSSOAccountName = ""
+    var editingSSOLoginURL = ""
+    var editingSSOLinkedLoginEntryID = ""
+    var editingSSONotes = ""
+    var editingSSOSecret = ""
+    var editingSSOFavorite = false
     var sendEntries: [LocalSendEntry] = []
     var deletedSendEntries: [LocalSendEntry] = []
     var sendCreateType: SendCreateType = .text
@@ -1019,6 +1043,8 @@ final class AppSessionModel {
             return apiTokenEntries.contains { $0.id == summary.id }
         case .wifi:
             return wifiEntries.contains { $0.id == summary.id }
+        case .sso:
+            return ssoEntries.contains { $0.id == summary.id }
         case .send:
             return sendEntries.contains { $0.id == summary.id }
         case .attachmentRef:
@@ -1119,6 +1145,7 @@ final class AppSessionModel {
         summaries += sshKeyEntries.map(shortcutSummary(for:))
         summaries += apiTokenEntries.map(shortcutSummary(for:))
         summaries += wifiEntries.map(shortcutSummary(for:))
+        summaries += ssoEntries.map(shortcutSummary(for:))
         summaries += sendEntries.map(shortcutSummary(for:))
         return summaries
     }
@@ -1216,6 +1243,22 @@ final class AppSessionModel {
         )
     }
 
+    private func shortcutSummary(for entry: LocalSSOEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .sso,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.displayProviderName, entry.accountName]),
+            searchableText: shortcutSearchableText([
+                UnifiedVaultItemKind.sso.localizedDisplayName,
+                entry.title,
+                entry.displayProviderName,
+                entry.accountName,
+                entry.issuer
+            ])
+        )
+    }
+
     private func shortcutSummary(for entry: LocalSendEntry) -> AppShortcutEntrySummary {
         AppShortcutEntrySummary(
             id: entry.id,
@@ -1255,7 +1298,7 @@ final class AppSessionModel {
             return VaultShortcutDestination(tab: .passwords, passwordModule: .note, otherKind: nil)
         case .passkey:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .passkey, otherKind: nil)
-        case .sshKey, .apiToken, .wifi, .send, .attachmentRef:
+        case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
         case .totp:
             return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
@@ -2956,6 +2999,8 @@ final class AppSessionModel {
                 return deletedApiTokenEntries.map(\.id)
             case .wifi:
                 return deletedWifiEntries.map(\.id)
+            case .sso:
+                return deletedSSOEntries.map(\.id)
             case .send:
                 return deletedSendEntries.map(\.id)
             case .attachmentRef:
@@ -2982,6 +3027,8 @@ final class AppSessionModel {
             return filteredApiTokenEntries.map(\.id)
         case .wifi:
             return filteredWifiEntries.map(\.id)
+        case .sso:
+            return filteredSSOEntries.map(\.id)
         case .send:
             return filteredSendEntries.map(\.id)
         case .attachmentRef:
@@ -3097,6 +3144,10 @@ final class AppSessionModel {
                 guard let entry = wifiEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteWifiEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .sso:
+                guard let entry = ssoEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteSSOEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .send:
                 guard let entry = sendEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteSendEntry(projectID: projectID, entryID: id)
@@ -3146,6 +3197,9 @@ final class AppSessionModel {
             case .wifi:
                 let entry = try entryRepository.restoreWifiEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .sso:
+                let entry = try entryRepository.restoreSSOEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .send:
                 let entry = try entryRepository.restoreSendEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
@@ -3187,6 +3241,7 @@ final class AppSessionModel {
         sshKeySearchQuery = ""
         apiTokenSearchQuery = ""
         wifiSearchQuery = ""
+        ssoSearchQuery = ""
         sendSearchQuery = ""
         attachmentSearchQuery = ""
     }
@@ -3201,6 +3256,7 @@ final class AppSessionModel {
         showFavoriteSshKeyEntriesOnly = favoritesOnly
         showFavoriteApiTokenEntriesOnly = favoritesOnly
         showFavoriteWifiEntriesOnly = favoritesOnly
+        showFavoriteSSOEntriesOnly = favoritesOnly
         showFavoriteSendEntriesOnly = favoritesOnly
     }
 
@@ -3806,6 +3862,8 @@ final class AppSessionModel {
             if let entry = apiTokenEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .wifi:
             if let entry = wifiEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .sso:
+            if let entry = ssoEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .send:
             if let entry = sendEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .attachmentRef:
@@ -3834,6 +3892,8 @@ final class AppSessionModel {
             return apiTokenEntries.first { $0.id == entryID }?.title ?? "API Token"
         case .wifi:
             return wifiEntries.first { $0.id == entryID }?.title ?? "Wi-Fi"
+        case .sso:
+            return ssoEntries.first { $0.id == entryID }?.title ?? "SSO"
         case .send:
             return sendEntries.first { $0.id == entryID }?.title ?? "Send"
         case .attachmentRef:
@@ -3908,6 +3968,8 @@ final class AppSessionModel {
             try createApiTokenEntry(projectTitle: projectTitle)
         case .wifi:
             try createWifiEntry(projectTitle: projectTitle)
+        case .sso:
+            try createSSOEntry(projectTitle: projectTitle)
         case .send:
             try createSendEntry(projectTitle: projectTitle)
         case .attachmentRef:
@@ -3935,6 +3997,8 @@ final class AppSessionModel {
             try updateSelectedApiTokenEntry()
         case .wifi:
             try updateSelectedWifiEntry()
+        case .sso:
+            try updateSelectedSSOEntry()
         case .send:
             try updateSelectedSendEntry()
         case .attachmentRef:
@@ -6585,6 +6649,8 @@ final class AppSessionModel {
             deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
             wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
             deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+            ssoEntries = try entryRepository.listSSOEntries(projectID: projectID)
+            deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
             sendEntries = try entryRepository.listSendEntries(projectID: projectID)
             deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
             attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
@@ -10988,6 +11054,12 @@ final class AppSessionModel {
         showFavoriteWifiEntriesOnly = false
         wifiPassword = ""
         clearEditingWifiEntry()
+        ssoEntries = []
+        deletedSSOEntries = []
+        ssoSearchQuery = ""
+        showFavoriteSSOEntriesOnly = false
+        ssoSecret = ""
+        clearEditingSSOEntry()
         sendEntries = []
         deletedSendEntries = []
         sendSearchQuery = ""
@@ -11153,7 +11225,7 @@ final class AppSessionModel {
         selectedVaultQuickFilterID = "category-\(project.id)"
     }
 
-    private func ensureActiveProject(
+    func ensureActiveProject(
         projectTitle: String,
         entryRepository: LocalVaultEntryRepository
     ) throws -> LocalVaultProject {
@@ -11296,6 +11368,8 @@ final class AppSessionModel {
             return try entryRepository.createApiTokenEntry(projectID: projectID, draft: draft).id
         case .wifi(let draft):
             return try entryRepository.createWifiEntry(projectID: projectID, draft: draft).id
+        case .sso(let draft):
+            return try entryRepository.createSSOEntry(projectID: projectID, draft: draft).id
         case .send(let draft):
             return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
         }
@@ -11326,6 +11400,8 @@ final class AppSessionModel {
             try entryRepository.deleteApiTokenEntry(projectID: projectID, entryID: entryID)
         case .wifi:
             try entryRepository.deleteWifiEntry(projectID: projectID, entryID: entryID)
+        case .sso:
+            try entryRepository.deleteSSOEntry(projectID: projectID, entryID: entryID)
         case .send:
             try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
         }
@@ -11353,6 +11429,8 @@ final class AppSessionModel {
         deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
         wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
         deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+        ssoEntries = try entryRepository.listSSOEntries(projectID: projectID)
+        deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
         sendEntries = try entryRepository.listSendEntries(projectID: projectID)
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
@@ -11555,6 +11633,19 @@ final class AppSessionModel {
                 notes: $0.notes
             ))
         }
+        drafts += ssoEntries.map {
+            .sso(LocalSSOEntryDraft(
+                title: $0.title,
+                provider: $0.provider,
+                providerName: $0.providerName,
+                issuer: $0.issuer,
+                accountName: $0.accountName,
+                loginURL: $0.loginURL,
+                linkedLoginEntryID: $0.linkedLoginEntryID,
+                notes: $0.notes,
+                secret: $0.secret
+            ))
+        }
         drafts += sendEntries.map {
             .send(LocalSendEntryDraft(
                 title: $0.title,
@@ -11616,7 +11707,7 @@ final class AppSessionModel {
         )
     }
 
-    private func appendOperationTimelineEvent(
+    func appendOperationTimelineEvent(
         action: AppOperationTimelineAction,
         itemKind: UnifiedVaultItemKind,
         itemID: String,
