@@ -8727,6 +8727,7 @@ public struct LocalTotpEntryDraft: Sendable, Equatable {
     public let algorithm: String
     public let otpType: String
     public let counter: UInt64
+    public let iconName: String
 
     public init(
         title: String,
@@ -8737,7 +8738,8 @@ public struct LocalTotpEntryDraft: Sendable, Equatable {
         digits: UInt32,
         algorithm: String,
         otpType: String,
-        counter: UInt64
+        counter: UInt64,
+        iconName: String = ""
     ) {
         self.title = title
         self.secret = secret
@@ -8748,6 +8750,7 @@ public struct LocalTotpEntryDraft: Sendable, Equatable {
         self.algorithm = algorithm
         self.otpType = otpType
         self.counter = counter
+        self.iconName = iconName
     }
 }
 
@@ -8764,6 +8767,7 @@ public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
     public let otpType: String
     public let counter: UInt64
     public let favorite: Bool
+    public let iconName: String
 
     public init(
         id: String,
@@ -8777,7 +8781,8 @@ public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
         algorithm: String,
         otpType: String,
         counter: UInt64,
-        favorite: Bool = false
+        favorite: Bool = false,
+        iconName: String = ""
     ) {
         self.id = id
         self.projectID = projectID
@@ -8791,6 +8796,7 @@ public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
         self.otpType = otpType
         self.counter = counter
         self.favorite = favorite
+        self.iconName = iconName
     }
 }
 
@@ -11245,7 +11251,8 @@ public struct LocalVaultEntryRepository {
             digits: draft.digits,
             algorithm: draft.algorithm,
             otpType: draft.otpType,
-            counter: draft.counter
+            counter: draft.counter,
+            iconName: draft.iconName.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 
@@ -11799,7 +11806,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             digits: draft.digits,
             algorithm: draft.algorithm,
             otpType: draft.otpType,
-            counter: draft.counter
+            counter: draft.counter,
+            iconName: draft.iconName
         )
         return LocalTotpEntry(entry)
     }
@@ -11830,7 +11838,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             digits: draft.digits,
             algorithm: draft.algorithm,
             otpType: draft.otpType,
-            counter: draft.counter
+            counter: draft.counter,
+            iconName: draft.iconName
         )
         return LocalTotpEntry(entry)
     }
@@ -12942,7 +12951,8 @@ private extension LocalTotpEntry {
             algorithm: entry.algorithm,
             otpType: entry.otpType,
             counter: entry.counter,
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            iconName: entry.iconName
         )
     }
 }
