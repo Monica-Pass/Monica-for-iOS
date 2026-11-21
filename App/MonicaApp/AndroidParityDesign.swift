@@ -72,6 +72,10 @@ extension UnifiedVaultItemKind {
             return String(localized: "SSO")
         case .send:
             return String(localized: "安全发送")
+        case .billingAddress:
+            return String(localized: "账单地址")
+        case .paymentAccount:
+            return String(localized: "支付账户")
         case .attachmentRef:
             return String(localized: "附件")
         }

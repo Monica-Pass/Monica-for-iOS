@@ -140,7 +140,7 @@ extension UnifiedVaultItemKind {
             return .note
         case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
             return .other
-        case .totp, .card, .identity:
+        case .totp, .card, .identity, .billingAddress, .paymentAccount:
             return nil
         }
     }

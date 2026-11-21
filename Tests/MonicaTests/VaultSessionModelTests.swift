@@ -13265,6 +13265,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             }
         case .sso:
             throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
+        case .billingAddress, .paymentAccount:
+            throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(
