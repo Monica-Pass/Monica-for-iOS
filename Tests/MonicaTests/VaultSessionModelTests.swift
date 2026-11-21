@@ -2242,7 +2242,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(bridge.contains("NSLog("))
         XCTAssertFalse(bridge.contains("UIPasteboard"))
 
-        let sessionURL = try repositoryFileURL("App/MonicaApp/AppRootView.swift")
+        let sessionURL = try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift")
         let session = try String(contentsOf: sessionURL, encoding: .utf8)
         XCTAssertTrue(session.contains("ASCredentialExchangeActivity"))
         XCTAssertTrue(session.contains("ASCredentialImportToken"))
@@ -2351,15 +2351,17 @@ final class VaultSessionModelTests: XCTestCase {
     }
 
     func testCredentialExchangeImportIsPreviewedAndRolledBackOnFailure() throws {
-        let sourceURL = try repositoryFileURL("App/MonicaApp/AppRootView.swift")
-        let source = try String(contentsOf: sourceURL, encoding: .utf8)
+        let viewSourceURL = try repositoryFileURL("App/MonicaApp/AppRootView.swift")
+        let viewSource = try String(contentsOf: viewSourceURL, encoding: .utf8)
+        let sessionSourceURL = try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift")
+        let sessionSource = try String(contentsOf: sessionSourceURL, encoding: .utf8)
 
-        XCTAssertTrue(source.contains(".handlesCredentialExchangeActivity {"))
-        XCTAssertTrue(source.contains("func confirmCredentialExchangeImport() throws"))
-        XCTAssertTrue(source.contains("func rollbackCredentialExchangeImport("))
-        XCTAssertTrue(source.contains("func performCredentialExchangeExport() async -> Bool"))
-        XCTAssertTrue(source.contains("CredentialExchangeImportSheet("))
-        XCTAssertTrue(source.contains("CredentialExchangeExportSheet("))
+        XCTAssertTrue(viewSource.contains(".handlesCredentialExchangeActivity {"))
+        XCTAssertTrue(sessionSource.contains("func confirmCredentialExchangeImport() throws"))
+        XCTAssertTrue(sessionSource.contains("func rollbackCredentialExchangeImport("))
+        XCTAssertTrue(sessionSource.contains("func performCredentialExchangeExport() async -> Bool"))
+        XCTAssertTrue(viewSource.contains("CredentialExchangeImportSheet("))
+        XCTAssertTrue(viewSource.contains("CredentialExchangeExportSheet("))
     }
 
     func testAutoFillExtensionCompletesPasskeyRegistrationAndAssertionRequests() throws {
@@ -2469,7 +2471,7 @@ final class VaultSessionModelTests: XCTestCase {
 
     func testAppSurfacesSystemAutoFillProviderStateInSettings() throws {
         let source = try String(
-            contentsOf: try repositoryFileURL("App/MonicaApp/AppRootView.swift"),
+            contentsOf: try repositoryFileURL("App/MonicaApp/AppRoot/AppSessionModel.swift"),
             encoding: .utf8
         )
 
