@@ -140,6 +140,13 @@ final class AppSessionModel {
     var totpCounter: UInt64 = 0
     var totpIconName = ""
     var totpImportURI = ""
+    /// otpauth 链接导入面板：粘贴/剪贴板/外部 deep link 都落到同一个确认流程。
+    var isOtpAuthImportSheetPresented = false
+    var otpAuthImportInput = ""
+    var otpAuthImportReview: AppOtpAuthImportReview?
+    var otpAuthImportFeedback: String?
+    /// 锁定时收到的单条 otpauth URI，解锁后再解析并展示确认，不写入任何明文日志。
+    @ObservationIgnored var pendingOtpAuthURIAfterUnlock: String?
     var totpSearchQuery = ""
     var showFavoriteTotpEntriesOnly = false
     var totpEntries: [LocalTotpEntry] = []
@@ -1370,6 +1377,10 @@ final class AppSessionModel {
     /// 统一处理 `monica://` 深链：旧的条目快捷入口与控制中心页面入口共用同一条导航路径。
     @discardableResult
     func openDeepLinkURL(_ url: URL) -> Bool {
+        if url.scheme?.lowercased() == "otpauth" {
+            handleOtpAuthDeepLink(url)
+            return true
+        }
         if openShortcutURL(url) {
             return true
         }
@@ -5793,6 +5804,18 @@ final class AppSessionModel {
             return String(localized: "扫描到的二维码使用了不支持的 TOTP 算法。")
         case (.manualURI, .invalidAlgorithm):
             return String(localized: "TOTP 设置 URI 使用了不支持的算法。")
+        case (.scannedQRCode, .missingCounter):
+            return String(localized: "扫描到的二维码缺少 HOTP 计数器。")
+        case (.manualURI, .missingCounter):
+            return String(localized: "HOTP 设置 URI 缺少 counter 参数。")
+        case (.scannedQRCode, .invalidCounter):
+            return String(localized: "扫描到的二维码包含无效的 HOTP 计数器。")
+        case (.manualURI, .invalidCounter):
+            return String(localized: "HOTP 设置 URI 的 counter 参数无效。")
+        case (.scannedQRCode, .uriTooLong):
+            return String(localized: "扫描到的二维码内容过长。")
+        case (.manualURI, .uriTooLong):
+            return String(localized: "TOTP 设置 URI 过长。")
         }
     }
 
@@ -5806,7 +5829,7 @@ final class AppSessionModel {
             return String(localized: "Steam 验证器文件缺少有效密钥。")
         case .invalidURI:
             return String(localized: "请输入有效的 Steam maFile/JSON 验证器文件。")
-        case .invalidDigits, .invalidPeriod, .invalidAlgorithm:
+        case .invalidDigits, .invalidPeriod, .invalidAlgorithm, .missingCounter, .invalidCounter, .uriTooLong:
             return String(localized: "无法导入该 Steam 验证器文件。")
         }
     }
@@ -12705,6 +12728,11 @@ final class AppSessionModel {
         deletedTotpEntries = []
         totpSecret = ""
         totpImportURI = ""
+        isOtpAuthImportSheetPresented = false
+        otpAuthImportInput = ""
+        otpAuthImportReview = nil
+        otpAuthImportFeedback = nil
+        pendingOtpAuthURIAfterUnlock = nil
         clearEditingTotpEntry()
         cardEntries = []
         deletedCardEntries = []
@@ -12771,6 +12799,11 @@ final class AppSessionModel {
         deletedTotpEntries = []
         totpSecret = ""
         totpImportURI = ""
+        isOtpAuthImportSheetPresented = false
+        otpAuthImportInput = ""
+        otpAuthImportReview = nil
+        otpAuthImportFeedback = nil
+        pendingOtpAuthURIAfterUnlock = nil
         clearEditingTotpEntry()
         cardEntries = []
         deletedCardEntries = []

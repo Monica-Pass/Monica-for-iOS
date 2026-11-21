@@ -358,10 +358,14 @@ struct AndroidParityVaultHomeView: View {
         VStack(spacing: 14) {
             AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.52), cornerRadius: 22) {
                 HStack(spacing: 12) {
-                    SecureField("粘贴 otpauth:// URI", text: $session.totpImportURI)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(String(localized: "导入验证器"))
+                            .font(.subheadline.weight(.semibold))
+                        Text(String(localized: "支持单条或多条 otpauth:// 链接，导入前预览确认。"))
+                            .font(.caption2)
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    }
+                    Spacer(minLength: 4)
                     Button { isTotpScannerPresented = true } label: {
                         Image(systemName: "camera.viewfinder")
                             .font(.subheadline.weight(.semibold))
@@ -369,12 +373,23 @@ struct AndroidParityVaultHomeView: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AndroidParityPalette.primary)
+                    .accessibilityLabel(String(localized: "扫描二维码"))
                 }
-                Button(action: importTotpURI) {
-                    Label("导入验证器", systemImage: "qrcode.viewfinder")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 10) {
+                    Button {
+                        session.beginOtpAuthPasteImport()
+                    } label: {
+                        Label(String(localized: "粘贴导入"), systemImage: "doc.on.clipboard")
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+
+                    Button {
+                        session.importOtpAuthFromClipboard()
+                    } label: {
+                        Label(String(localized: "从剪贴板导入"), systemImage: "clipboard")
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
-                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
             }
             // Issue #47：手动开始/结束的锁屏倒计时试点，只显示别名 + 倒计时。
             AuthenticatorLiveActivityCard(entries: session.filteredTotpEntries, now: now)

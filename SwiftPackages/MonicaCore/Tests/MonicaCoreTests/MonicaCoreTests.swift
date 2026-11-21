@@ -380,7 +380,7 @@ import MonicaCore
     )
 
     #expect(draft.title == "alice@example.com")
-    #expect(draft.secret == "JBSW Y3DP EHPK 3PXP")
+    #expect(draft.secret == "JBSWY3DPEHPK3PXP")
     #expect(draft.issuer == "")
     #expect(draft.accountName == "alice@example.com")
     #expect(draft.period == 30)
