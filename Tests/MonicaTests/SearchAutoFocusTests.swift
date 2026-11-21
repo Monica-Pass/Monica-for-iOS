@@ -87,12 +87,12 @@ final class SearchAutoFocusTests: XCTestCase {
 
     func testDiagnosticContextForColdLaunch() {
         let model = makeUnlockedModel()
-        let context = model.searchAutoFocusContext(
-            isPasswordRoot: model.selectedTab == .passwords,
-            allowsForcedKeyboard: true
-        )
+        let before = model.didHandleLaunchSearchAutoFocus
+        let should = model.shouldFocusSearchOnLaunch(isPasswordRoot: true, allowsForcedKeyboard: true)
+        let taken = model.takeLaunchSearchAutoFocus(isPasswordRoot: true, allowsForcedKeyboard: true)
+        let settled = model.settleLaunchSearchAutoFocus(allowsForcedKeyboard: true)
         print(
-            "DIAG enabled=\(context.isEnabled) unlocked=\(context.isVaultUnlocked) passwordPage=\(context.isPasswordPage) pending=\(context.hasPendingNavigationTarget) forced=\(context.allowsForcedKeyboard) handled=\(context.hasAlreadyHandledLaunch) tab=\(model.selectedTab) state=\(model.vaultState) autoFocusFlag=\(model.isSearchAutoFocusOnLaunchEnabled) route=\(String(describing: model.presentedDetailRoute)) send=\(String(describing: model.monicaSendIncoming)) control=\(String(describing: model.pendingControlPage)) overview=\(model.isVaultOverviewPresented) keepass=\(model.isKeePassLibraryPresented) globalSearch=\(model.isGlobalSearchPresented) editor=\(String(describing: model.presentedEditorMode)) quickSetup=\(model.isQuickSetupPresented) extensions=\(model.isExtensionsPresented) templates=\(model.isAccountTemplatesPresented) launchNav=\(model.didReceiveLaunchNavigationTarget)"
+            "DIAG2 beforeHandled=\(before) shouldFocus=\(should) taken=\(taken) settled=\(settled) afterHandled=\(model.didHandleLaunchSearchAutoFocus) suppressing=\(model.hasPendingSearchAutoFocusSuppressingTarget) action=\(String(describing: model.expandedToolbarAction)) pendingPage=\(model.isSearchAutoFocusPendingForPasswordPage)"
         )
     }
 
