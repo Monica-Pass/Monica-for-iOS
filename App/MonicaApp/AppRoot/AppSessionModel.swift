@@ -298,6 +298,7 @@ final class AppSessionModel {
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
     var autoFillIndexState: AutoFillIndexState = .idle
+    let autoFillDomainRules = AutoFillDomainRuleController()
     var notificationPermissionState: AppPermissionStatusRow.State = .checkable
     var systemAutoFillProviderState: AppPermissionStatusRow.State = .checkable
     var autoFillPolicy: AppAutoFillPolicy
@@ -8150,6 +8151,13 @@ final class AppSessionModel {
 
     func refreshAutoFillEncryptedIndex(updatedAt: Date = Date()) throws {
         recordUserActivity()
+        if let vaultID = activeVaultSession?.handle.vaultID, !vaultID.isEmpty {
+            let controller = autoFillDomainRules
+            Task { @MainActor in
+                await controller.attach(vaultID: vaultID)
+                await controller.reload()
+            }
+        }
         autoFillIndexState = .running
 
         do {
@@ -10805,6 +10813,7 @@ final class AppSessionModel {
     }
 
     private func clearUnlockedVaultSession() {
+        autoFillDomainRules.detach()
         vaultPassword = ""
         clearMasterPasswordChangeInput()
         vaultState = .locked
@@ -11940,7 +11949,9 @@ final class AppSessionModel {
             return []
         }
 
-        return serviceIdentifiers(for: entry.url).map { serviceIdentifier in
+        return serviceIdentifiers(for: entry.url)
+            .filter { !autoFillDomainRules.hidesServiceIdentifier($0) }
+            .map { serviceIdentifier in
             AppAutoFillCredentialIdentity(
                 recordIdentifier: entry.id,
                 serviceIdentifier: serviceIdentifier,

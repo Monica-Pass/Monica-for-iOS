@@ -575,6 +575,10 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: String(localized: "自动填充域名规则")) {
+                AutoFillDomainRulesSettingsView(controller: session.autoFillDomainRules)
+            }
+
             AndroidParitySection(title: String(localized: "Steam 导入")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "格式"), value: "Steam maFile / JSON")
