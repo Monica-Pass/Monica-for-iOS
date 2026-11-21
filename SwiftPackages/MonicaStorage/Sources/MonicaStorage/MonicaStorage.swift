@@ -5817,7 +5817,7 @@ public enum VaultSource: String, Sendable, Equatable, CaseIterable {
     ]
 }
 
-public enum UnifiedVaultItemKind: String, Sendable, Equatable, CaseIterable {
+public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIterable {
     case login
     case totp
     case note
