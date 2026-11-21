@@ -28,6 +28,7 @@
 		A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* MDBXRoundTripTests.swift */; };
 		A10000000000000000000010 /* MonicaMDBX in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DA /* MonicaMDBX */; };
 		A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* VaultSessionModelTests.swift */; };
+		B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000031 /* VaultRegistrySessionTests.swift */; };
 		A97000000000000000000004 /* SSOItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97000000000000000000003 /* SSOItemTests.swift */; };
 		A10000000000000000000019 /* MonicaStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DB /* MonicaStorage */; };
 		A1000000000000000000001A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* Assets.xcassets */; };
@@ -123,6 +124,9 @@
 		AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */; };
 		AA000000000000000000001C /* AppImportExportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001B /* AppImportExportSupport.swift */; };
 		AA000000000000000000001E /* AppSessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001D /* AppSessionModel.swift */; };
+		B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000001 /* AppVaultRegistrySupport.swift */; };
+		B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */; };
+		B29000000000000000000022 /* VaultRegistryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000021 /* VaultRegistryViews.swift */; };
 		AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001F /* AppSessionModel+LanSync.swift */; };
 		AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */; };
 		A97000000000000000000002 /* AppSSOSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97000000000000000000001 /* AppSSOSupport.swift */; };
@@ -188,6 +192,7 @@
 		A10000000000000000000015 /* MonicaApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaApp.entitlements; sourceTree = "<group>"; };
 		A10000000000000000000016 /* MDBXRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBXRoundTripTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000018 /* VaultSessionModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSessionModelTests.swift; sourceTree = "<group>"; };
+		B29000000000000000000031 /* VaultRegistrySessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultRegistrySessionTests.swift; sourceTree = "<group>"; };
 		A97000000000000000000003 /* SSOItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSOItemTests.swift; sourceTree = "<group>"; };
 		A1000000000000000000001C /* AndroidParityDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityDesign.swift; sourceTree = "<group>"; };
 		B56000000000000000000011 /* AppSecurityCenterDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSecurityCenterDashboardView.swift; sourceTree = "<group>"; };
@@ -285,6 +290,9 @@
 		AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBitwardenSyncSupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000001B /* AppImportExportSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportSupport.swift"; sourceTree = "<group>"; };
 		AA000000000000000000001D /* AppSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel.swift"; sourceTree = "<group>"; };
+		B29000000000000000000001 /* AppVaultRegistrySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultRegistrySupport.swift; sourceTree = "<group>"; };
+		B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultRegistry.swift"; sourceTree = "<group>"; };
+		B29000000000000000000021 /* VaultRegistryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultRegistryViews.swift; sourceTree = "<group>"; };
 		AA000000000000000000001F /* AppSessionModel+LanSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+LanSync.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CloudVaultSync.swift"; sourceTree = "<group>"; };
 		A97000000000000000000001 /* AppSSOSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSSOSupport.swift; sourceTree = "<group>"; };
@@ -441,6 +449,9 @@
 				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
+				B29000000000000000000001 /* AppVaultRegistrySupport.swift */,
+				B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */,
+				B29000000000000000000021 /* VaultRegistryViews.swift */,
 				A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */,
 				AA000000000000000000001F /* AppSessionModel+LanSync.swift */,
 				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
@@ -499,6 +510,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
+				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
@@ -864,6 +876,9 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */,
 				AA000000000000000000001C /* AppImportExportSupport.swift in Sources */,
 				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
+				B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */,
+				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
+				B29000000000000000000022 /* VaultRegistryViews.swift in Sources */,
 				A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */,
 				A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */,
 				AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */,
@@ -891,6 +906,7 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
+				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
 				A97000000000000000000004 /* SSOItemTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,

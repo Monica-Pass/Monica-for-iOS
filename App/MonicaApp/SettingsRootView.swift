@@ -185,6 +185,13 @@ struct SettingsRootView: View {
             }
             AppThemeSettingsView(session: session)
 
+            AndroidParitySection(title: String(localized: "本地保险库")) {
+                VaultRegistrySettingsCard(
+                    session: session,
+                    deviceID: environment.localDeviceIdentifier
+                )
+            }
+
             AndroidParitySection(title: String(localized: "应用")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "系统要求"), value: environment.minimumIOSVersion)
