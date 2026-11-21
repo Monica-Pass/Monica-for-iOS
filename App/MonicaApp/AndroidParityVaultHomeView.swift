@@ -2217,6 +2217,10 @@ struct AddEditVaultItemView: View {
 
     private var loginFields: some View {
         VStack(spacing: 18) {
+            if mode.isAdding {
+                // issue #127：新建登录条目时可以从常用账号模板填入空字段。
+                AccountTemplatePrefillSection(session: session)
+            }
             field(icon: "folder.fill", title: String(localized: "标题 *"), text: mode.isAdding ? $session.loginTitle : $session.editingLoginTitle)
             iconRow
             field(icon: "globe", title: String(localized: "网站/网址"), text: mode.isAdding ? $session.loginURL : $session.editingLoginURL)
@@ -2225,7 +2229,14 @@ struct AddEditVaultItemView: View {
                 appName: mode.isAdding ? $session.loginAppName : $session.editingLoginAppName,
                 bundleID: mode.isAdding ? $session.loginAppBundleID : $session.editingLoginAppBundleID
             )
-            field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername)
+            field(
+                icon: "person.fill",
+                title: String(localized: "账号"),
+                placeholder: mode.isAdding && !session.accountTemplateUsernamePrompt.isEmpty
+                    ? session.accountTemplateUsernamePrompt
+                    : nil,
+                text: mode.isAdding ? $session.loginUsername : $session.editingLoginUsername
+            )
             secureField(icon: "lock.fill", title: String(localized: "密码"), text: mode.isAdding ? $session.loginPassword : $session.editingLoginPassword)
             Button(action: mode.isAdding ? generateLoginPassword : generateSelectedLoginPassword) {
                 Label("添加密码", systemImage: "plus")
@@ -2438,13 +2449,18 @@ struct AddEditVaultItemView: View {
         }
     }
 
-    private func field(icon: String, title: String, text: Binding<String>) -> some View {
+    private func field(
+        icon: String,
+        title: String,
+        placeholder: String? = nil,
+        text: Binding<String>
+    ) -> some View {
         HStack(spacing: 16) {
             Image(systemName: icon)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .frame(minWidth: 34)
-            TextField(title, text: text)
+            TextField(placeholder ?? title, text: text)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .font(.subheadline.weight(.semibold))

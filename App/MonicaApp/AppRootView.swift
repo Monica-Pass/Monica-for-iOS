@@ -144,6 +144,11 @@ struct AppRootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
+        .sheet(isPresented: $session.isAccountTemplatesPresented) {
+            AccountTemplatesView(session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
         .sheet(isPresented: credentialExchangeImportSheetBinding) {
             CredentialExchangeImportSheet(session: session)
                 .presentationDetents([.large])
