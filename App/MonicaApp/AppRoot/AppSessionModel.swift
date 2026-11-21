@@ -1089,18 +1089,16 @@ final class AppSessionModel {
             return []
         }
         let query = barcodeSearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return filteredFavoriteEntries(
-            barcodeEntries,
-            query: query,
-            favoritesOnly: showFavoriteBarcodeEntriesOnly,
-            isFavorite: { $0.favorite }
-        ) { entry, query in
-            entry.title.localizedCaseInsensitiveContains(query)
-                || entry.payload.localizedCaseInsensitiveContains(query)
-                || entry.label.localizedCaseInsensitiveContains(query)
-                || entry.symbology.displayName.localizedCaseInsensitiveContains(query)
-                || entry.notes.localizedCaseInsensitiveContains(query)
+        let filtered = barcodeEntries.enumerated().filter { _, entry in
+            (!showFavoriteBarcodeEntriesOnly || entry.favorite)
+                && (query.isEmpty
+                    || entry.title.localizedCaseInsensitiveContains(query)
+                    || entry.payload.localizedCaseInsensitiveContains(query)
+                    || entry.label.localizedCaseInsensitiveContains(query)
+                    || entry.symbology.displayName.localizedCaseInsensitiveContains(query)
+                    || entry.notes.localizedCaseInsensitiveContains(query))
         }
+        return filtered.map(\.element)
     }
 
     var editingBarcodeDraft: LocalBarcodeEntryDraft {
@@ -1442,7 +1440,7 @@ final class AppSessionModel {
         summaries += sendEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
         summaries += steamEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
         summaries += gpgKeyEntries.map(shortcutSummary(for:))
-        summaries += barcodeEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += barcodeEntries.map(shortcutSummary(for:))
         summaries += billingAddressEntries.map(shortcutSummary(for:))
         summaries += paymentAccountEntries.map(shortcutSummary(for:))
         return summaries
