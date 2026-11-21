@@ -186,6 +186,8 @@ struct SettingsRootView: View {
             }
             AppThemeSettingsView(session: session)
 
+            AppItemIconSettingsView(session: session)
+
             AppLanguageSettingsView()
 
             AndroidParitySection(title: String(localized: "本地保险库")) {
