@@ -458,6 +458,8 @@ final class AppSessionModel {
     /// 本次解锁会话内的「显示敏感字段」状态；锁库立即清空，不持久化。
     var sensitivePreviewSession = SensitivePreviewSession()
     var sensitivePasteboardHasPendingAutoClear = false
+    /// #148：验证码到期自动复制下一个码（默认关闭，只对 TOTP 生效）。
+    var totpAutoCopyEnabled: Bool
     var mdbxVerificationState: MDBXVerificationState = .idle
     var isPrivacyShieldVisible = false
     var autoLockPolicy: AppAutoLockPolicy
@@ -625,6 +627,9 @@ final class AppSessionModel {
     private let totpCardPreferenceStore: any TotpProgressPreferenceStore    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
     private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
     private let sensitivePasteboard: MonicaSensitivePasteboard
+    private let totpAutoCopyPreferenceStore: any TotpAutoCopyPreferenceStore
+    /// #148：自动续写下一码的控制器；写入同样经过 #58 的敏感剪贴板与 TTL。
+    let totpAutoCopyController: TotpAutoCopyController
     @ObservationIgnored private var sensitivePasteboardExpiryTask: Task<Void, Never>?
     private let biometricUnlockAuthorizer: any BiometricUnlockAuthorizer
     /// 导出通行密钥前要求生物识别/设备密码确认；复用 MonicaSecurity 的设备所有者认证。
@@ -782,7 +787,8 @@ final class AppSessionModel {
         autoLockPolicy: AppAutoLockPolicy = .default,
         sensitivePasteboard: MonicaSensitivePasteboard? = nil,
         sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore = MemorySensitivePreviewPreferenceStore(),
-        sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore = MemorySensitiveClipboardPreferenceStore()
+        sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore = MemorySensitiveClipboardPreferenceStore(),
+        totpAutoCopyPreferenceStore: any TotpAutoCopyPreferenceStore = MemoryTotpAutoCopyPreferenceStore()
     ) {
         self.vaultRepository = vaultRepository
         self.vaultKeychainService = vaultKeychainService
@@ -871,6 +877,9 @@ final class AppSessionModel {
         self.sensitiveClipboardTTL = sensitiveClipboardPreferenceStore.loadTTL()
         self.sensitivePasteboard = sensitivePasteboard
             ?? MonicaSensitivePasteboard(pasteboard: UnavailableSensitivePasteboard())
+        self.totpAutoCopyPreferenceStore = totpAutoCopyPreferenceStore
+        self.totpAutoCopyEnabled = totpAutoCopyPreferenceStore.loadIsEnabled()
+        self.totpAutoCopyController = TotpAutoCopyController(pasteboard: self.sensitivePasteboard)
         self.autoFillPolicy = autoFillPolicyStore.loadPolicy()
         if let snapshot = plusEntitlementStore.loadEntitlement() {
             // 离线时只用上次已验证快照做展示；联网后由 StoreKit 的当前权益重新校准。
@@ -2710,6 +2719,29 @@ final class AppSessionModel {
             sensitivePasteboardExpiryTask = nil
         }
         recordUserActivity()
+    }
+
+    /// #148：切换「验证码到期自动复制下一个」。
+    ///
+    /// 关闭不会清掉“记住的条目”：用户复制一次验证码、再打开开关时依然生效。
+    func updateTotpAutoCopyEnabled(_ isEnabled: Bool) {
+        guard totpAutoCopyEnabled != isEnabled else {
+            return
+        }
+        totpAutoCopyEnabled = isEnabled
+        totpAutoCopyPreferenceStore.saveIsEnabled(isEnabled)
+        recordUserActivity()
+    }
+
+    /// #148：自动续写成功后同步 #58 的待清理状态，并复用同一套前台到期轮询。
+    func sensitivePasteboardDidCopyAutomatically() {
+        sensitivePasteboardHasPendingAutoClear = sensitivePasteboard.hasPendingAutoClear
+        if sensitivePasteboard.hasPendingAutoClear {
+            startSensitivePasteboardExpiryMonitor()
+        } else {
+            sensitivePasteboardExpiryTask?.cancel()
+            sensitivePasteboardExpiryTask = nil
+        }
     }
 
     @discardableResult

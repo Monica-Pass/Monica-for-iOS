@@ -149,6 +149,9 @@ extension AppSessionModel {
     }
 
     /// 复制「当前验证码」：锁库状态直接拒绝，屏幕掩码不影响复制内容。
+    ///
+    /// 复制成功后同时记住这个条目（#148）：打开「到期自动复制下一个」时，
+    /// 只会为最近一次手动复制的条目续写，不会替用户决定复制哪一个。
     @discardableResult
     func copyOtpCode(for entry: LocalTotpEntry, at date: Date = Date()) -> SensitivePasteboardCopyFeedback {
         guard vaultState == .unlocked else {
@@ -158,7 +161,11 @@ extension AppSessionModel {
             return .nothingToCopy
         }
         recordUserActivity(at: date)
-        return copySensitiveValueToPasteboard(code)
+        let feedback = copySensitiveValueToPasteboard(code)
+        if feedback != .nothingToCopy {
+            totpAutoCopyController.arm(entryID: entry.id)
+        }
+        return feedback
     }
 
     /// HOTP 按用户确认消费：先持久化 counter + 1 并等待写入成功，之后才用新计数器返回验证码。
