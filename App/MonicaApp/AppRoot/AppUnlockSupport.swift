@@ -375,3 +375,6 @@ struct AppAutoLockPolicy: Sendable, Identifiable, Hashable {
         return String(localized: "\(minutes) 分钟")
     }
 }
+
+/// 导出 CXF 通行密钥前复用同一套设备所有者认证（生物识别或设备密码）。
+extension DeviceOwnerLocalAuthenticator: BiometricUnlockAuthorizer {}

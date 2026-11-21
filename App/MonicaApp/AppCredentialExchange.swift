@@ -1,19 +1,28 @@
 import AuthenticationServices
+import MonicaCore
 import MonicaStorage
 import SwiftUI
 import UIKit
 
-/// 凭据交换的 App 会话状态。密码/TOTP 预览只保存在内存里，落库发生在用户确认之后。
+/// 凭据交换的 App 会话状态。密码/TOTP/通行密钥预览只保存在内存里，落库发生在用户确认之后。
 struct AppCredentialExchangeState {
     var pendingImportToken: UUID?
     var isFetchingImport = false
     var importPreview: AppCredentialExchangeImportPreview?
     var importError: String?
     var isImporting = false
+    /// 导入完成后逐条降级出来的问题；`importIsFinished` 为真时在面板里展示，不整批失败。
+    var importIssues: [AppCredentialExchangeIssue] = []
+    var importIsFinished = false
+    var importMessage: String?
     var exportPlan: CredentialExchangeExportPlan?
     var exportError: String?
     var isExporting = false
     var exportMessage: String?
+    /// 设备确认后可尝试导出的通行密钥条数（只做过元数据检查）。
+    var exportPasskeyCount = 0
+    var exportIssues: [AppCredentialExchangeIssue] = []
+    var exportIsFinished = false
 
     var hasPendingImport: Bool {
         pendingImportToken != nil
@@ -22,6 +31,8 @@ struct AppCredentialExchangeState {
 
 struct AppCredentialExchangeImportPreview {
     let plan: CredentialExchangeImportPlan
+    /// 已经通过加密层预检、确认时会写入钥匙串的通行密钥。
+    let passkeys: [PasskeyExchangeImport]
     let exporterDisplayName: String
     let formatVersion: String
 }
@@ -95,8 +106,15 @@ enum AppCredentialExchangeBridge {
                 issuer: totp.issuer ?? "",
                 algorithm: algorithmName(totp.algorithm)
             ))
-        case .passkey:
-            return .unsupported(label: "通行密钥")
+        case .passkey(let passkey):
+            return .passkey(CredentialExchangePasskey(
+                credentialID: passkey.credentialID,
+                relyingPartyIdentifier: passkey.relyingPartyIdentifier,
+                userName: passkey.userName,
+                userDisplayName: passkey.userDisplayName,
+                userHandle: passkey.userHandle,
+                privateKey: passkey.key
+            ))
         default:
             return .unsupported(label: "不支持的凭据")
         }
@@ -127,6 +145,15 @@ enum AppCredentialExchangeBridge {
                 userName: totp.accountName.isEmpty ? nil : totp.accountName,
                 algorithm: appleAlgorithm(totp.algorithm),
                 issuer: totp.issuer.isEmpty ? nil : totp.issuer
+            ))
+        case .passkey(let passkey):
+            return .passkey(ASImportableCredential.Passkey(
+                credentialID: passkey.credentialID,
+                relyingPartyIdentifier: passkey.relyingPartyIdentifier,
+                userName: passkey.userName,
+                userDisplayName: passkey.userDisplayName,
+                userHandle: passkey.userHandle,
+                key: passkey.privateKey
             ))
         case .unsupported:
             return nil
@@ -203,7 +230,9 @@ struct CredentialExchangeImportSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if let preview = session.credentialExchange.importPreview {
+                    if session.credentialExchange.importIsFinished {
+                        finishedContent
+                    } else if let preview = session.credentialExchange.importPreview {
                         previewContent(preview)
                     } else if session.credentialExchange.isFetchingImport {
                         fetchingContent
@@ -218,7 +247,7 @@ struct CredentialExchangeImportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(session.credentialExchange.importIsFinished ? "完成" : "取消") {
                         session.cancelCredentialExchangeImport()
                         dismiss()
                     }
@@ -274,6 +303,9 @@ struct CredentialExchangeImportSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     AndroidParityInfoRow(title: "密码", value: "\(preview.plan.passwordCount)")
                     AndroidParityInfoRow(title: "TOTP", value: "\(preview.plan.totpCount)")
+                    if preview.plan.passkeyCount > 0 {
+                        AndroidParityInfoRow(title: "通行密钥", value: "\(preview.plan.passkeyCount)")
+                    }
                     if preview.plan.skippedDuplicateCount > 0 {
                         AndroidParityInfoRow(title: "重复跳过", value: "\(preview.plan.skippedDuplicateCount)")
                     }
@@ -286,10 +318,15 @@ struct CredentialExchangeImportSheet: View {
                 }
             }
 
-            Text("Passkey 私钥不会通过 CXF 迁移。导入会在当前保险库中新建「凭据交换」项目，且重复条目会自动跳过。")
+            Text("通行密钥私钥只写入系统钥匙串（随系统加密），不会写入日志或偏好设置。导入会在当前保险库中新建「凭据交换」项目，且重复条目会自动跳过。")
                 .font(.footnote)
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
+
+            AppCredentialExchangeIssueList(
+                title: String(localized: "以下条目会被跳过"),
+                issues: session.credentialExchange.importIssues
+            )
 
             if let error = session.credentialExchange.importError {
                 Text(error)
@@ -301,7 +338,6 @@ struct CredentialExchangeImportSheet: View {
             Button {
                 do {
                     try session.confirmCredentialExchangeImport()
-                    dismiss()
                 } catch {
                     // 失败原因由 session 写入 importError，并保留预览供重试或取消。
                 }
@@ -327,6 +363,40 @@ struct CredentialExchangeImportSheet: View {
                 .foregroundStyle(AndroidParityPalette.textSecondary)
         }
     }
+
+    private var finishedContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            AndroidParityCard {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(session.credentialExchange.importMessage ?? String(localized: "导入已完成。"))
+                        .font(.headline)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            AppCredentialExchangeIssueList(
+                title: String(localized: "以下条目未能导入"),
+                issues: session.credentialExchange.importIssues
+            )
+
+            Text("其余条目已写入当前保险库。")
+                .font(.caption)
+                .foregroundStyle(AndroidParityPalette.textSecondary)
+
+            Button {
+                session.cancelCredentialExchangeImport()
+                dismiss()
+            } label: {
+                Text("完成")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AndroidParityPalette.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
+        }
+    }
 }
 
 struct CredentialExchangeExportSheet: View {
@@ -337,7 +407,9 @@ struct CredentialExchangeExportSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    if let plan = session.credentialExchange.exportPlan {
+                    if session.credentialExchange.exportIsFinished {
+                        finishedExportContent
+                    } else if let plan = session.credentialExchange.exportPlan {
                         planContent(plan)
                     } else {
                         Text("没有待导出的条目。")
@@ -352,7 +424,7 @@ struct CredentialExchangeExportSheet: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("取消") {
+                    Button(session.credentialExchange.exportIsFinished ? "完成" : "取消") {
                         session.cancelCredentialExchangeExport()
                         dismiss()
                     }
@@ -367,6 +439,12 @@ struct CredentialExchangeExportSheet: View {
                 VStack(alignment: .leading, spacing: 4) {
                     AndroidParityInfoRow(title: "密码", value: "\(plan.passwordCount)")
                     AndroidParityInfoRow(title: "TOTP", value: "\(plan.totpCount)")
+                    if session.credentialExchange.exportPasskeyCount > 0 {
+                        AndroidParityInfoRow(
+                            title: "通行密钥",
+                            value: String(localized: "\(session.credentialExchange.exportPasskeyCount) 条（需设备确认）")
+                        )
+                    }
                     if plan.skippedCount > 0 {
                         AndroidParityInfoRow(title: "无法导出", value: "\(plan.skippedCount)")
                     }
@@ -374,13 +452,18 @@ struct CredentialExchangeExportSheet: View {
             }
 
             if plan.skippedCount > 0 {
-                Text("有 \(plan.skippedCount) 条 TOTP 密钥不是有效的 Base32，已跳过，不会写入导出数据。")
+                Text("有 \(plan.skippedCount) 条条目密钥无效或重复，已跳过，不会写入导出数据。")
                     .font(.footnote)
                     .foregroundStyle(AndroidParityPalette.textSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
-            Text("下一步会由系统选择接收方 App。Passkey、备注、卡片、身份等类型不会导出。")
+            AppCredentialExchangeIssueList(
+                title: String(localized: "以下通行密钥无法导出"),
+                issues: session.credentialExchange.exportIssues
+            )
+
+            Text("下一步会由系统选择接收方 App。导出前需要生物识别或设备密码确认；备注、卡片、身份等类型不会导出。")
                 .font(.footnote)
                 .foregroundStyle(AndroidParityPalette.textSecondary)
                 .fixedSize(horizontal: false, vertical: true)
@@ -414,6 +497,41 @@ struct CredentialExchangeExportSheet: View {
             }
             .buttonStyle(.plain)
             .disabled(session.credentialExchange.isExporting)
+        }
+    }
+
+    private var finishedExportContent: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            AndroidParityCard {
+                Text(session.credentialExchange.exportMessage ?? String(localized: "导出已完成。"))
+                    .font(.headline)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            AppCredentialExchangeIssueList(
+                title: String(localized: "以下通行密钥未能导出"),
+                issues: session.credentialExchange.exportIssues
+            )
+
+            if let error = session.credentialExchange.exportError {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Button {
+                session.cancelCredentialExchangeExport()
+                dismiss()
+            } label: {
+                Text("完成")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(AndroidParityPalette.primary, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    .foregroundStyle(.white)
+            }
+            .buttonStyle(.plain)
         }
     }
 }

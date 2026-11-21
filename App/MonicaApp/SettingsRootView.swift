@@ -1068,12 +1068,12 @@ struct SettingsRootView: View {
                     AndroidParityDivider()
                     if #available(iOS 26.0, *) {
                         AndroidParityInfoRow(title: "凭据交换（CXF）", value: "iOS 26 系统迁移")
-                        Text("通过系统凭据交换，从其他密码管理器导入密码与 TOTP，或导出给支持 CXF 的 App。Passkey、备注、卡片等类型不会导出。")
+                        Text("通过系统凭据交换，从其他密码管理器导入密码、TOTP 与通行密钥，或导出给支持 CXF 的 App。导出通行密钥前需要生物识别或设备密码确认。")
                             .font(.footnote)
                             .foregroundStyle(AndroidParityPalette.textSecondary)
                         AndroidParityInfoRow(
                             title: "可导出",
-                            value: "密码 \(session.loginEntries.count) · TOTP \(session.totpEntries.count)"
+                            value: "密码 \(session.loginEntries.count) · TOTP \(session.totpEntries.count) · 通行密钥 \(session.passkeyEntries.count)"
                         )
                         Button {
                             _ = session.prepareCredentialExchangeExport()

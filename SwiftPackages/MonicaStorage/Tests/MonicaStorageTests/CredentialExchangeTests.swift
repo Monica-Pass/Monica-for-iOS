@@ -222,3 +222,229 @@ import MonicaStorage
     #expect(plan.sourceAccountCount == 1)
     #expect(plan.sourceItemCount == 0)
 }
+
+@Test func credentialExchangeImportMapsPasskeyForTheCryptoLayer() {
+    let credentialID = Data(repeating: 0x22, count: 32)
+    let passkey = CredentialExchangePasskey(
+        credentialID: credentialID,
+        relyingPartyIdentifier: "github.com",
+        userName: "alice",
+        userDisplayName: "Alice",
+        userHandle: Data("github-handle".utf8),
+        privateKey: Data(repeating: 0x30, count: 48)
+    )
+    let account = CredentialExchangeAccount(
+        userName: "alice",
+        items: [
+            CredentialExchangeItem(
+                title: "GitHub",
+                urls: ["https://github.com/login"],
+                favorite: true,
+                credentials: [.passkey(passkey)]
+            )
+        ]
+    )
+
+    let plan = CredentialExchangeCodec.importPlan(accounts: [account])
+
+    #expect(plan.passkeyCount == 1)
+    #expect(plan.passkeys.count == 1)
+    #expect(plan.importableCount == 1)
+    #expect(!plan.isEmpty)
+    #expect(plan.unsupportedCredentialCount == 0)
+    #expect(plan.invalidCredentialCount == 0)
+    #expect(plan.passkeyIssues.isEmpty)
+
+    let item = plan.passkeys[0]
+    #expect(item.title == "GitHub")
+    #expect(item.urls == ["https://github.com/login"])
+    #expect(item.favorite)
+    #expect(item.credential == passkey)
+    #expect(item.credential.privateKey == Data(repeating: 0x30, count: 48))
+}
+
+@Test func credentialExchangeImportDegradesBadPasskeysToPerItemIssues() {
+    let account = CredentialExchangeAccount(
+        userName: "alice",
+        items: [
+            CredentialExchangeItem(
+                title: "无 ID",
+                credentials: [.passkey(CredentialExchangePasskey(
+                    credentialID: Data(),
+                    relyingPartyIdentifier: "github.com",
+                    userName: "alice",
+                    userHandle: Data("handle".utf8),
+                    privateKey: Data(repeating: 0x30, count: 48)
+                ))]
+            ),
+            CredentialExchangeItem(
+                title: "无 RP",
+                credentials: [.passkey(CredentialExchangePasskey(
+                    credentialID: Data(repeating: 0x01, count: 32),
+                    relyingPartyIdentifier: "   ",
+                    userName: "alice",
+                    userHandle: Data("handle".utf8),
+                    privateKey: Data(repeating: 0x30, count: 48)
+                ))]
+            ),
+            CredentialExchangeItem(
+                title: "无 handle",
+                credentials: [.passkey(CredentialExchangePasskey(
+                    credentialID: Data(repeating: 0x02, count: 32),
+                    relyingPartyIdentifier: "github.com",
+                    userName: "alice",
+                    userHandle: Data(),
+                    privateKey: Data(repeating: 0x30, count: 48)
+                ))]
+            ),
+            CredentialExchangeItem(
+                title: "无私钥",
+                credentials: [.passkey(CredentialExchangePasskey(
+                    credentialID: Data(repeating: 0x03, count: 32),
+                    relyingPartyIdentifier: "github.com",
+                    userName: "alice",
+                    userHandle: Data("handle".utf8),
+                    privateKey: Data()
+                ))]
+            ),
+            CredentialExchangeItem(
+                title: "好的那条",
+                credentials: [.passkey(CredentialExchangePasskey(
+                    credentialID: Data(repeating: 0x04, count: 32),
+                    relyingPartyIdentifier: "example.com",
+                    userName: "bob",
+                    userHandle: Data("bob-handle".utf8),
+                    privateKey: Data(repeating: 0x30, count: 48)
+                ))]
+            )
+        ]
+    )
+
+    let plan = CredentialExchangeCodec.importPlan(accounts: [account])
+
+    // 逐条降级：一条坏数据不影响其余条目。
+    #expect(plan.passkeyCount == 1)
+    #expect(plan.passkeys[0].credential.relyingPartyIdentifier == "example.com")
+    #expect(plan.invalidCredentialCount == 4)
+    #expect(plan.passkeyIssues.count == 4)
+    #expect(plan.passkeyIssues.map(\.title) == ["无 ID", "无 RP", "无 handle", "无私钥"])
+    #expect(plan.passkeyIssues.map(\.reason) == [
+        .missingCredentialID,
+        .missingRelyingPartyIdentifier,
+        .missingUserHandle,
+        .missingPrivateKey
+    ])
+}
+
+@Test func credentialExchangeImportSkipsDuplicatePasskeysAndListsThem() {
+    let existingCredentialID = Data(repeating: 0x05, count: 32)
+    let existing = LocalPasskeyEntry(
+        id: "passkey-1",
+        projectID: "project-1",
+        title: "GitHub",
+        relyingPartyID: "github.com",
+        username: "alice",
+        userHandle: Data("handle".utf8).base64EncodedString(),
+        credentialID: existingCredentialID.base64EncodedString(),
+        publicKeyCOSE: Data(repeating: 0x01, count: 77).base64EncodedString(),
+        privateKeyReference: "monica-passkey://existing",
+        notes: ""
+    )
+    let newCredentialID = Data(repeating: 0x06, count: 32)
+    let account = CredentialExchangeAccount(
+        userName: "alice",
+        items: [
+            CredentialExchangeItem(
+                title: "Already here",
+                credentials: [.passkey(CredentialExchangePasskey(
+                    credentialID: existingCredentialID,
+                    relyingPartyIdentifier: "github.com",
+                    userName: "alice",
+                    userHandle: Data("handle".utf8),
+                    privateKey: Data(repeating: 0x30, count: 48)
+                ))]
+            ),
+            CredentialExchangeItem(
+                title: "New",
+                credentials: [
+                    .passkey(CredentialExchangePasskey(
+                        credentialID: newCredentialID,
+                        relyingPartyIdentifier: "example.com",
+                        userName: "bob",
+                        userHandle: Data("bob-handle".utf8),
+                        privateKey: Data(repeating: 0x30, count: 48)
+                    )),
+                    .passkey(CredentialExchangePasskey(
+                        credentialID: newCredentialID,
+                        relyingPartyIdentifier: "example.com",
+                        userName: "bob",
+                        userHandle: Data("bob-handle".utf8),
+                        privateKey: Data(repeating: 0x30, count: 48)
+                    ))
+                ]
+            )
+        ]
+    )
+
+    let plan = CredentialExchangeCodec.importPlan(
+        accounts: [account],
+        existingPasskeyEntries: [existing]
+    )
+
+    #expect(plan.passkeyCount == 1)
+    #expect(plan.skippedDuplicateCount == 2)
+    #expect(plan.invalidCredentialCount == 0)
+    #expect(plan.passkeyIssues.count == 2)
+    #expect(plan.passkeyIssues.allSatisfy { $0.reason == .duplicate })
+}
+
+@Test func credentialExchangeExportEmitsPasskeyItemsAndSkipsInvalidOnes() {
+    let credentialID = Data(repeating: 0x07, count: 32)
+    let passkey = CredentialExchangePasskey(
+        credentialID: credentialID,
+        relyingPartyIdentifier: "github.com",
+        userName: "alice",
+        userDisplayName: "Alice",
+        userHandle: Data("handle".utf8),
+        privateKey: Data(repeating: 0x30, count: 48)
+    )
+    let plan = CredentialExchangeCodec.exportPlan(
+        loginEntries: [],
+        totpEntries: [],
+        passkeyExports: [
+            CredentialExchangePasskeyExport(title: "GitHub", favorite: true, credential: passkey),
+            // 私钥未加载的条目必须跳过，而不是发出空 key。
+            CredentialExchangePasskeyExport(
+                title: "Broken",
+                credential: CredentialExchangePasskey(
+                    credentialID: Data(repeating: 0x08, count: 32),
+                    relyingPartyIdentifier: "example.com",
+                    userName: "bob",
+                    userHandle: Data("handle".utf8),
+                    privateKey: Data()
+                )
+            ),
+            // 重复 credentialID 只导出一次。
+            CredentialExchangePasskeyExport(title: "Duplicate", credential: passkey)
+        ]
+    )
+
+    #expect(plan.passkeyCount == 1)
+    #expect(plan.skippedCount == 2)
+    #expect(!plan.isEmpty)
+    #expect(plan.account.items.count == 1)
+    #expect(plan.account.items[0].title == "GitHub")
+    #expect(plan.account.items[0].urls == ["https://github.com"])
+    #expect(plan.account.items[0].favorite)
+    guard case .passkey(let exported) = plan.account.items[0].credentials[0] else {
+        Issue.record("导出条目应包含通行密钥凭据")
+        return
+    }
+    #expect(exported == passkey)
+}
+
+@Test func credentialExchangeEmptyExportPlanAccountsForPasskeys() {
+    let plan = CredentialExchangeCodec.exportPlan(loginEntries: [], totpEntries: [])
+    #expect(plan.isEmpty)
+    #expect(plan.passkeyCount == 0)
+}

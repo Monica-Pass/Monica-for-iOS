@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A18100000000000000000003 /* CredentialExchangePasskeyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */; };
+		A18100000000000000000001 /* AppCredentialExchangePasskeys.swift in Sources */ = {isa = PBXBuildFile; fileRef = A18100000000000000000002 /* AppCredentialExchangePasskeys.swift */; };
 		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000002 /* PrivacyInfo.xcprivacy */; };
@@ -187,6 +189,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CredentialExchangePasskeyTests.swift; sourceTree = "<group>"; };
+		A18100000000000000000002 /* AppCredentialExchangePasskeys.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCredentialExchangePasskeys.swift; sourceTree = "<group>"; };
 		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		BA0000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -396,6 +400,7 @@
 				B36000000000000000000002 /* MonicaSendShareView.swift */,
 				B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */,
 				AC0000000000000000000002 /* AppCredentialExchange.swift */,
+				A18100000000000000000002 /* AppCredentialExchangePasskeys.swift */,
 				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
 				A1000000000000000000001C /* AndroidParityDesign.swift */,
 				B56000000000000000000011 /* AppSecurityCenterDashboardView.swift */,
@@ -539,6 +544,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */,
 				AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
+				A18100000000000000000004 /* CredentialExchangePasskeyTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -838,6 +844,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A10000000000000000000001 /* MonicaApp.swift in Sources */,
 				A10000000000000000000002 /* AppRootView.swift in Sources */,
 				AC0000000000000000000001 /* AppCredentialExchange.swift in Sources */,
+				A18100000000000000000001 /* AppCredentialExchangePasskeys.swift in Sources */,
 				A50000000000000000000001 /* OneDriveMSALAuthenticationService.swift in Sources */,
 				A30000000000000000000001 /* AppShareExtensionInboxStore.swift in Sources */,
 				A60000000000000000000001 /* AppAutoFillCredentialSaveInboxStore.swift in Sources */,
@@ -943,6 +950,7 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */,
 				AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
 				A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */,
+				A18100000000000000000003 /* CredentialExchangePasskeyTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
