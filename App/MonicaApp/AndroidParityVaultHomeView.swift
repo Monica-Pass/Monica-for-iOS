@@ -89,6 +89,8 @@ struct AndroidParityVaultHomeView: View {
     @State private var now = Date()
     @State private var isGeneratorPresented = false
     @State private var totpActionFeedback: String?
+    @State private var isTrashPurgeConfirmationPresented = false
+    @State private var isEmptyTrashConfirmationPresented = false
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -153,7 +155,12 @@ struct AndroidParityVaultHomeView: View {
             batchBar: { batchActionBar }
         ) {
             if session.vaultState == .unlocked {
-                unlockedContent
+                VStack(spacing: 14) {
+                    if session.isTrashQuickFilterSelected {
+                        trashMaintenanceCard
+                    }
+                    unlockedContent
+                }
             } else {
                 lockedSummary
             }
@@ -714,6 +721,132 @@ struct AndroidParityVaultHomeView: View {
             }
             deletedIdentityRows
         }
+    }
+
+
+    /// issue #28：回收站保留策略、到期预览与永久清理入口。
+    private var trashMaintenanceCard: some View {
+        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.7), cornerRadius: 20) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 10) {
+                    AndroidParityIconTile(systemImage: "trash.slash.fill", fill: AndroidParityPalette.primaryContainer)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("回收站自动清理")
+                            .font(.subheadline.weight(.semibold))
+                        Text(trashMaintenanceSubtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 8)
+                    Menu {
+                        ForEach(TrashRetentionPolicy.allCases) { policy in
+                            Button {
+                                session.setTrashRetentionPolicy(policy)
+                            } label: {
+                                if policy == session.trashRetentionPolicy {
+                                    Label(policy.displayName, systemImage: "checkmark")
+                                } else {
+                                    Text(policy.displayName)
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(session.trashRetentionPolicy.displayName)
+                            Image(systemName: "chevron.up.chevron.down")
+                                .font(.caption2)
+                        }
+                        .font(.footnote.weight(.semibold))
+                    }
+                }
+
+                if !session.trashRetentionPolicy.isAutomaticPurgeEnabled {
+                    Text("自动清理未开启；选择保留天数后，到期条目才会被自动清理。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("删除后无法恢复；清理只影响已标记删除的条目，不会动正常条目。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                if let message = session.trashMaintenanceMessage {
+                    Text(message)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack(spacing: 12) {
+                    Button(
+                        String(
+                            format: String(localized: "立即清理已到期（%d）"),
+                            session.trashPreviewExpiredCount
+                        )
+                    ) {
+                        isTrashPurgeConfirmationPresented = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(session.trashPreviewExpiredCount == 0)
+
+                    Button("清空回收站", role: .destructive) {
+                        isEmptyTrashConfirmationPresented = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(session.trashPreviewTotalCount == 0)
+                }
+            }
+        }
+        .confirmationDialog(
+            String(
+                format: String(localized: "确定永久清理 %d 项已到期条目吗？此操作无法撤销。"),
+                session.trashPreviewExpiredCount
+            ),
+            isPresented: $isTrashPurgeConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("永久清理", role: .destructive) {
+                do {
+                    _ = try session.purgeExpiredTrashItems()
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                }
+            }
+            Button("取消", role: .cancel) {}
+        }
+        .confirmationDialog(
+            String(
+                format: String(localized: "确定要清空回收站吗？%d 项将被永久删除，无法撤销。"),
+                session.trashPreviewTotalCount
+            ),
+            isPresented: $isEmptyTrashConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("清空回收站", role: .destructive) {
+                do {
+                    _ = try session.emptyTrashNow()
+                } catch {
+                    session.entryOperationState = .failed(error.localizedDescription)
+                }
+            }
+            Button("取消", role: .cancel) {}
+        }
+        .onAppear {
+            session.refreshTrashMaintenancePreview()
+        }
+    }
+
+    private var trashMaintenanceSubtitle: String {
+        if session.trashRetentionPolicy.isAutomaticPurgeEnabled {
+            return String(
+                format: String(localized: "共 %d 项，按当前策略 %d 项已到期"),
+                session.trashPreviewTotalCount,
+                session.trashPreviewExpiredCount
+            )
+        }
+        return String(
+            format: String(localized: "自动清理未开启，共 %d 项"),
+            session.trashPreviewTotalCount
+        )
     }
 
     @ViewBuilder private var deletedLoginRows: some View {

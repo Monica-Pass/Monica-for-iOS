@@ -75,6 +75,7 @@
 		B17000000000000000000012 /* IdentityDocumentPhotoSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = B17000000000000000000011 /* IdentityDocumentPhotoSection.swift */; };
 		A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000001 /* VaultItemExtrasViews.swift */; };
 		A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */; };
+		B28000000000000000000011 /* AppTrashMaintenance.swift in Sources */ = {isa = PBXBuildFile; fileRef = B28000000000000000000001 /* AppTrashMaintenance.swift */; };
 		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
 		AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1600000000000000000011 /* AppLoginDetailSupport.swift */; };
 		A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000012 /* SensitivePrivacySettingsView.swift */; };
@@ -252,6 +253,7 @@
 		B17000000000000000000011 /* IdentityDocumentPhotoSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IdentityDocumentPhotoSection.swift; sourceTree = "<group>"; };
 		A94000000000000000000001 /* VaultItemExtrasViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultItemExtrasViews.swift; sourceTree = "<group>"; };
 		A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+ItemExtras.swift"; sourceTree = "<group>"; };
+		B28000000000000000000001 /* AppTrashMaintenance.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTrashMaintenance.swift; sourceTree = "<group>"; };
 		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
 		AF1600000000000000000011 /* AppLoginDetailSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLoginDetailSupport.swift; sourceTree = "<group>"; };
 		A13000000000000000000012 /* SensitivePrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacySettingsView.swift; sourceTree = "<group>"; };
@@ -489,6 +491,7 @@
 				B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */,
 				B29000000000000000000021 /* VaultRegistryViews.swift */,
 				A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */,
+				B28000000000000000000001 /* AppTrashMaintenance.swift */,
 				AA000000000000000000001F /* AppSessionModel+LanSync.swift */,
 				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
 				A97000000000000000000001 /* AppSSOSupport.swift */,
@@ -932,6 +935,7 @@
 				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
 				B29000000000000000000022 /* VaultRegistryViews.swift in Sources */,
 				A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */,
+				B28000000000000000000011 /* AppTrashMaintenance.swift in Sources */,
 				A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */,
 				AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */,
 				AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */,
