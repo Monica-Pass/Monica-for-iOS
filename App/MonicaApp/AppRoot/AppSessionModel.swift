@@ -354,6 +354,12 @@ final class AppSessionModel {
     var pendingAndroidEncryptedBackupFileName: String?
     var presentedEditorMode: VaultItemEditorMode?
     var presentedDetailRoute: VaultItemRoute?
+    /// 全局搜索索引：只存在于解锁会话内存，锁库即清空（不落盘）。
+    let vaultSearch = VaultSearchSession()
+    /// 索引代次：索引重建或查看记录变化时自增，驱动搜索界面重新查询。
+    var vaultSearchRevision = 0
+    /// 全局搜索界面是否以导航 push 的方式展示（不新增底部 Tab）。
+    var isGlobalSearchPresented = false
     var isQuickSetupPresented = false
     var isExtensionsPresented = false
     var expandedToolbarAction: AndroidParityToolbarAction?
@@ -1804,6 +1810,7 @@ final class AppSessionModel {
                 }
             }
             publishWidgetSnapshots()
+            refreshVaultSearchIndex(entryRepository: entryRepository)
             entryOperationState = .succeeded(String(localized: "已删除分类"))
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -3760,6 +3767,7 @@ final class AppSessionModel {
             itemID: entryID,
             itemTitle: detailTitle(kind: kind, entryID: entryID)
         )
+        recordVaultSearchView(kind: kind, entryID: entryID)
     }
 
     func dismissDetail() {
@@ -10842,6 +10850,7 @@ final class AppSessionModel {
         clearKeePassImportState()
         entryOperationState = .idle
         clearOperationTimelineEvents()
+        clearVaultSearchIndex()
         publishWidgetSnapshots(reloadImmediately: true)
     }
 
@@ -10898,6 +10907,7 @@ final class AppSessionModel {
         bitwardenPendingMutationBatches = []
         clearPendingAndroidEncryptedBackup()
         clearKeePassImportState()
+        clearVaultSearchIndex()
         publishWidgetSnapshots(reloadImmediately: true)
     }
 
@@ -11315,6 +11325,89 @@ final class AppSessionModel {
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
         publishWidgetSnapshots()
+        refreshVaultSearchIndex(entryRepository: entryRepository)
+    }
+
+    // MARK: - 全局搜索（解锁会话内存索引）
+
+    /// 从仓库读取全部保险箱的非敏感元数据，重建跨类型搜索索引。
+    ///
+    /// 只投影标题 / 账号 / 网址 / 备注等元数据；密码、TOTP 密钥、私钥、
+    /// 卡号等 secret 字段在投影时即被丢弃。索引只存在于解锁会话内存中，
+    /// 锁库时由 `clearVaultSearchIndex()` 清空，不写入任何持久化存储。
+    private func refreshVaultSearchIndex(entryRepository: LocalVaultEntryRepository) {
+        guard vaultState == .unlocked else {
+            clearVaultSearchIndex()
+            return
+        }
+
+        var snapshot = VaultSearchEntrySnapshot()
+        for project in vaultProjects {
+            let projectID = project.id
+            snapshot.loginEntries += (try? entryRepository.listLoginEntries(projectID: projectID)) ?? []
+            snapshot.deletedLoginEntries += (try? entryRepository.listDeletedLoginEntries(projectID: projectID)) ?? []
+            snapshot.noteEntries += (try? entryRepository.listNoteEntries(projectID: projectID)) ?? []
+            snapshot.deletedNoteEntries += (try? entryRepository.listDeletedNoteEntries(projectID: projectID)) ?? []
+            snapshot.totpEntries += (try? entryRepository.listTotpEntries(projectID: projectID)) ?? []
+            snapshot.deletedTotpEntries += (try? entryRepository.listDeletedTotpEntries(projectID: projectID)) ?? []
+            snapshot.cardEntries += (try? entryRepository.listCardEntries(projectID: projectID)) ?? []
+            snapshot.deletedCardEntries += (try? entryRepository.listDeletedCardEntries(projectID: projectID)) ?? []
+            snapshot.identityEntries += (try? entryRepository.listIdentityEntries(projectID: projectID)) ?? []
+            snapshot.deletedIdentityEntries += (try? entryRepository.listDeletedIdentityEntries(projectID: projectID)) ?? []
+            snapshot.passkeyEntries += (try? entryRepository.listPasskeyEntries(projectID: projectID)) ?? []
+            snapshot.deletedPasskeyEntries += (try? entryRepository.listDeletedPasskeyEntries(projectID: projectID)) ?? []
+            snapshot.sshKeyEntries += (try? entryRepository.listSshKeyEntries(projectID: projectID)) ?? []
+            snapshot.deletedSshKeyEntries += (try? entryRepository.listDeletedSshKeyEntries(projectID: projectID)) ?? []
+            snapshot.apiTokenEntries += (try? entryRepository.listApiTokenEntries(projectID: projectID)) ?? []
+            snapshot.deletedApiTokenEntries += (try? entryRepository.listDeletedApiTokenEntries(projectID: projectID)) ?? []
+            snapshot.wifiEntries += (try? entryRepository.listWifiEntries(projectID: projectID)) ?? []
+            snapshot.deletedWifiEntries += (try? entryRepository.listDeletedWifiEntries(projectID: projectID)) ?? []
+            snapshot.sendEntries += (try? entryRepository.listSendEntries(projectID: projectID)) ?? []
+            snapshot.deletedSendEntries += (try? entryRepository.listDeletedSendEntries(projectID: projectID)) ?? []
+            snapshot.attachmentEntries += (try? entryRepository.listAttachmentMetadata(projectID: projectID)) ?? []
+            snapshot.deletedAttachmentEntries += (try? entryRepository.listDeletedAttachmentMetadata(projectID: projectID)) ?? []
+        }
+
+        vaultSearch.replaceDocuments(
+            VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
+        )
+        vaultSearchRevision += 1
+    }
+
+    /// 搜索界面出现时确保索引存在：解锁后尚未激活分类也能跨全部保险箱搜索。
+    func ensureVaultSearchIndex() {
+        guard let entryRepository = activeEntryRepository else {
+            clearVaultSearchIndex()
+            return
+        }
+        refreshVaultSearchIndex(entryRepository: entryRepository)
+    }
+
+    /// 最近查看 / 查看次数复用已有的操作时间线（`.viewed` 事件），不新增持久化结构。
+    private func vaultSearchUsage() -> [VaultSearchItemKey: VaultSearchUsage] {
+        var usage: [VaultSearchItemKey: VaultSearchUsage] = [:]
+        for event in operationTimelineEvents where event.action == .viewed {
+            let key = VaultSearchItemKey(kind: event.itemKind, id: event.itemID)
+            let previous = usage[key]
+            usage[key] = VaultSearchUsage(
+                viewCount: (previous?.viewCount ?? 0) + 1,
+                lastViewedAt: max(previous?.lastViewedAt ?? .distantPast, event.occurredAt)
+            )
+        }
+        return usage
+    }
+
+    /// 记录一次详情查看；锁库后索引为空，这里不会重建任何数据。
+    private func recordVaultSearchView(kind: UnifiedVaultItemKind, entryID: String) {
+        vaultSearch.recordView(VaultSearchItemKey(kind: kind, id: entryID))
+        vaultSearchRevision += 1
+    }
+
+    /// 锁库 / 访问失效时清空索引，确保内存中不残留明文元数据。
+    private func clearVaultSearchIndex() {
+        vaultSearch.lock()
+        vaultSearchRevision += 1
+        isGlobalSearchPresented = false
     }
 
     private func clearAllEntryLists() {
