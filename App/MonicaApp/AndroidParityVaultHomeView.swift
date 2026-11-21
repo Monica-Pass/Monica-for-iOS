@@ -70,9 +70,6 @@ struct AndroidParityVaultHomeView: View {
 
     @State private var isVaultImporterPresented = false
     @State private var isTotpScannerPresented = false
-    @State private var isCreateCategoryAlertPresented = false
-    @State private var isRenameCategoryAlertPresented = false
-    @State private var pendingCategoryTitle = ""
     @State private var now = Date()
     @State private var isGeneratorPresented = false
     @State private var totpActionFeedback: String?
@@ -200,24 +197,6 @@ struct AndroidParityVaultHomeView: View {
         .quickLookPreview(attachmentQuickLookPreviewBinding)
         .onReceive(timer) { value in
             now = value
-        }
-        .alert("新建分类", isPresented: $isCreateCategoryAlertPresented) {
-            TextField("分类名称", text: $pendingCategoryTitle)
-            Button("取消", role: .cancel) { pendingCategoryTitle = "" }
-            Button("创建") {
-                do { try session.createVaultCategory(title: pendingCategoryTitle) } catch {}
-                pendingCategoryTitle = ""
-            }
-        }
-        .alert("重命名分类", isPresented: $isRenameCategoryAlertPresented) {
-            TextField("分类名称", text: $pendingCategoryTitle)
-            Button("取消", role: .cancel) { pendingCategoryTitle = "" }
-            Button("保存") {
-                if let projectID = session.activeVaultProjectID {
-                    do { try session.renameVaultCategory(projectID: projectID, title: pendingCategoryTitle) } catch {}
-                }
-                pendingCategoryTitle = ""
-            }
         }
     }
 
@@ -900,59 +879,7 @@ struct AndroidParityVaultHomeView: View {
     }
 
     private var categoryBar: some View {
-        AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6), cornerRadius: 22) {
-            HStack(spacing: 10) {
-                Menu {
-                    ForEach(session.vaultProjects) { project in
-                        Button {
-                            do { try session.switchVaultCategory(projectID: project.id) } catch {}
-                        } label: {
-                            Label(project.title, systemImage: project.id == session.activeVaultProjectID ? "checkmark.circle.fill" : "folder")
-                        }
-                    }
-                } label: {
-                    Label(session.activeVaultCategoryTitle, systemImage: "folder.fill")
-                        .font(.subheadline.weight(.heavy))
-                        .lineLimit(1)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .disabled(session.vaultProjects.isEmpty)
-                .foregroundStyle(AndroidParityPalette.textPrimary)
-
-                Button {
-                    pendingCategoryTitle = ""
-                    isCreateCategoryAlertPresented = true
-                } label: {
-                    Image(systemName: "folder.badge.plus")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(AndroidParityPalette.primary)
-
-                Button {
-                    pendingCategoryTitle = session.activeVaultCategoryTitle
-                    isRenameCategoryAlertPresented = true
-                } label: {
-                    Image(systemName: "square.and.pencil")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(AndroidParityPalette.primary)
-                .disabled(session.activeVaultProjectID == nil)
-
-                Button {
-                    if let projectID = session.activeVaultProjectID {
-                        do { try session.deleteVaultCategory(projectID: projectID) } catch {}
-                    }
-                } label: {
-                    Image(systemName: "folder.badge.minus")
-                        .frame(minWidth: 44, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .foregroundStyle(.red)
-                .disabled(session.activeVaultProjectID == nil)
-            }
-        }
+        VaultFolderNavigator(session: session)
     }
 
     private var batchActionBar: some View {
