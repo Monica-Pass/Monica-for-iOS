@@ -5362,6 +5362,94 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.editingSshKeyPrivateKeyReference, "")
     }
 
+    func testSaveGeneratedSSHKeyKeepsPublicKeyFingerprintAndKeychainReferenceAfterReload() throws {
+        let engine = RecordingVaultEngine()
+        let store = MemorySSHPrivateKeyStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            sshPrivateKeyStore: store
+        )
+
+        try unlockNewVault(model)
+
+        let keyPair = try SSHKeyPairGenerator.generate(algorithm: .ed25519, comment: "monica@test")
+        let entry = try model.saveGeneratedSSHKey(
+            title: "GitHub deploy key",
+            keyPair: keyPair,
+            username: "git",
+            host: "github.com"
+        )
+
+        XCTAssertEqual(entry.publicKey, keyPair.publicKeyOpenSSH)
+        XCTAssertEqual(entry.fingerprint, keyPair.fingerprintSHA256)
+        XCTAssertEqual(entry.algorithm, "ED25519")
+        XCTAssertEqual(entry.keySize, 256)
+        XCTAssertTrue(entry.privateKeyReference.hasPrefix("monica-ssh://"))
+        XCTAssertFalse(entry.publicKey.contains("PRIVATE KEY"))
+        XCTAssertFalse(entry.notes.contains("PRIVATE KEY"))
+        XCTAssertEqual(try store.loadPrivateKey(reference: entry.privateKeyReference), keyPair.privateKeyOpenSSH)
+        XCTAssertEqual(engine.createdSshKeyEntries.last?.draft.algorithm, "ED25519")
+        XCTAssertEqual(engine.createdSshKeyEntries.last?.draft.keySize, 256)
+        XCTAssertEqual(engine.createdSshKeyEntries.last?.draft.fingerprint, keyPair.fingerprintSHA256)
+
+        // 模拟重启后重新从仓储加载：条目里仍能看到公钥与指纹，私钥只在内存/钥匙串里。
+        try model.refreshExtendedParityEntries()
+
+        let reloaded = try XCTUnwrap(model.sshKeyEntries.first(where: { $0.title == "GitHub deploy key" }))
+        XCTAssertEqual(reloaded.publicKey, keyPair.publicKeyOpenSSH)
+        XCTAssertEqual(reloaded.fingerprint, keyPair.fingerprintSHA256)
+        XCTAssertEqual(reloaded.algorithm, "ED25519")
+        XCTAssertEqual(reloaded.keySize, 256)
+        XCTAssertEqual(reloaded.privateKeyReference, entry.privateKeyReference)
+        XCTAssertEqual(reloaded.username, "git")
+        XCTAssertEqual(reloaded.host, "github.com")
+    }
+
+    func testSaveGeneratedSSHKeyFailureDoesNotCreateEntryOrLeaveKeychainResidue() throws {
+        let engine = RecordingVaultEngine()
+        let store = SpySSHPrivateKeyStore()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            sshPrivateKeyStore: store
+        )
+        let keyPair = try SSHKeyPairGenerator.generate(algorithm: .ed25519)
+
+        // 未解锁：既不写钥匙串，也不建条目。
+        XCTAssertThrowsError(try model.saveGeneratedSSHKey(title: "Locked", keyPair: keyPair)) { error in
+            XCTAssertEqual(error as? AppGeneratedSSHSaveError, .vaultLocked)
+        }
+        XCTAssertTrue(store.savedPrivateKeys.isEmpty)
+
+        try unlockNewVault(model)
+
+        XCTAssertThrowsError(try model.saveGeneratedSSHKey(title: "   ", keyPair: keyPair)) { error in
+            XCTAssertEqual(error as? AppGeneratedSSHSaveError, .missingTitle)
+        }
+        XCTAssertTrue(store.savedPrivateKeys.isEmpty)
+        XCTAssertTrue(model.sshKeyEntries.isEmpty)
+
+        // 私钥写入失败：不建条目。
+        store.saveError = SSHPrivateKeyStoreError.keychainUnexpectedStatus(-25291)
+        XCTAssertThrowsError(try model.saveGeneratedSSHKey(title: "Store fails", keyPair: keyPair)) { error in
+            guard case .storeWriteFailed? = error as? AppGeneratedSSHSaveError else {
+                XCTFail("expected storeWriteFailed, got \(error)")
+                return
+            }
+        }
+        XCTAssertTrue(engine.createdSshKeyEntries.isEmpty)
+        XCTAssertTrue(model.sshKeyEntries.isEmpty)
+        XCTAssertTrue(store.savedPrivateKeys.isEmpty)
+        store.saveError = nil
+
+        // 条目写入失败：回滚刚写进钥匙串的私钥，不留半成品。
+        engine.sshKeyCreationError = LocalVaultRepositoryError.vaultUnavailable
+        XCTAssertThrowsError(try model.saveGeneratedSSHKey(title: "Rollback", keyPair: keyPair))
+        XCTAssertTrue(engine.createdSshKeyEntries.isEmpty)
+        XCTAssertTrue(model.sshKeyEntries.isEmpty)
+        XCTAssertEqual(store.savedPrivateKeys.count, 0)
+        XCTAssertEqual(store.deletedReferences.count, 1)
+    }
+
     func testCreateUpdateFavoriteDeleteAndRestoreApiTokenEntryInActiveVault() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
@@ -13418,6 +13506,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedIdentities: [String: [LocalIdentityEntry]] = [:]
     private var passkeyEntries: [String: [LocalPasskeyEntry]] = [:]
     private var deletedPasskeys: [String: [LocalPasskeyEntry]] = [:]
+    /// #154：让 `createSshKeyEntry` 抛错，用来验证「私钥已写入但条目创建失败」时的回滚。
+    var sshKeyCreationError: Error?
     private var sshKeyEntries: [String: [LocalSshKeyEntry]] = [:]
     private var deletedSshKeys: [String: [LocalSshKeyEntry]] = [:]
     private var apiTokenEntries: [String: [LocalApiTokenEntry]] = [:]
@@ -14803,6 +14893,9 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         projectID: String,
         draft: LocalSshKeyEntryDraft
     ) throws -> LocalSshKeyEntry {
+        if let sshKeyCreationError {
+            throw sshKeyCreationError
+        }
         let entry = LocalSshKeyEntry(
             id: "ssh-\(createdSshKeyEntries.count + 1)",
             projectID: projectID,
@@ -14812,7 +14905,10 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             publicKey: draft.publicKey,
             privateKeyReference: draft.privateKeyReference,
             passphraseHint: draft.passphraseHint,
-            notes: draft.notes
+            notes: draft.notes,
+            algorithm: draft.algorithm,
+            keySize: draft.keySize,
+            fingerprint: draft.fingerprint
         )
         createdSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
         sshKeyEntries[projectID, default: []].append(entry)
@@ -14836,6 +14932,9 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             privateKeyReference: draft.privateKeyReference,
             passphraseHint: draft.passphraseHint,
             notes: draft.notes,
+            algorithm: draft.algorithm,
+            keySize: draft.keySize,
+            fingerprint: draft.fingerprint,
             favorite: currentFavorite
         )
         updatedSshKeyEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft))
@@ -16984,5 +17083,35 @@ private final class TotpRecordingPasteboard: SensitivePasteboardWriting {
     func clear() {
         content = nil
         changeCount += 1
+    }
+}
+
+/// #154：可注入失败的 SSH 私钥存储，用来验证保存失败时的回滚。
+private final class SpySSHPrivateKeyStore: SSHPrivateKeyStore, @unchecked Sendable {
+    private(set) var savedPrivateKeys: [String: String] = [:]
+    private(set) var deletedReferences: [String] = []
+    var saveError: Error?
+
+    func savePrivateKey(_ privateKey: String, identifier: String) throws -> String {
+        if let saveError {
+            throw saveError
+        }
+        savedPrivateKeys[identifier] = privateKey
+        return SSHPrivateKeyReference.reference(for: identifier)
+    }
+
+    func loadPrivateKey(reference: String) throws -> String? {
+        guard let identifier = SSHPrivateKeyReference.identifier(from: reference) else {
+            return nil
+        }
+        return savedPrivateKeys[identifier]
+    }
+
+    func deletePrivateKey(reference: String) throws {
+        deletedReferences.append(reference)
+        guard let identifier = SSHPrivateKeyReference.identifier(from: reference) else {
+            return
+        }
+        savedPrivateKeys[identifier] = nil
     }
 }

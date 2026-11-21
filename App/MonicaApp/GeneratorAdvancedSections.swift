@@ -271,24 +271,14 @@ struct GeneratorHistorySettingsSection: View {
     }
 }
 
-/// SSH / GPG 入口的诚实状态（#24）：真实生成能力就绪前不提供生成按钮。
+/// GPG / OpenPGP 入口的诚实状态（#24）：SSH 生成已由 #154 提供真实入口，
+/// 这里只保留尚未接入的 GPG 依赖提示。
 struct GeneratorDependencyStatusSection: View {
     var body: some View {
-        AndroidParitySection(title: String(localized: "SSH / GPG 密钥")) {
+        AndroidParitySection(title: String(localized: "GPG / OpenPGP 密钥")) {
             AndroidParityCard {
                 AndroidParityInfoRow(
-                    title: String(localized: "SSH 密钥生成"),
-                    value: String(localized: "依赖未就绪")
-                )
-                Text("SSH 私钥生成尚未实现（跟踪 #20），本版本不会生成伪密钥。")
-                    .font(.footnote)
-                    .foregroundStyle(AndroidParityPalette.textSecondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                AndroidParityDivider()
-
-                AndroidParityInfoRow(
-                    title: String(localized: "GPG / OpenPGP"),
+                    title: String(localized: "GPG / OpenPGP 生成"),
                     value: String(localized: "依赖未就绪")
                 )
                 Text("OpenPGP 生成依赖 #12；依赖合入前只显示状态，不提供入口。")
