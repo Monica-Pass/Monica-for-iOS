@@ -10,6 +10,9 @@ struct SettingsRootView: View {
     @Bindable var session: AppSessionModel
     let refreshAutoFillIndex: () -> Void
 
+    @State private var settingsSearchQuery = ""
+    @State private var highlightedSettingsSection: AppSettingsSection?
+    @State private var settingsScrollRequest: AndroidParityScrollRequest?
     @State private var isCSVImporterPresented = false
     @State private var isCSVExporterPresented = false
     @State private var csvExportDocument = CSVExportDocument()
@@ -154,7 +157,46 @@ struct SettingsRootView: View {
     }
 
     var body: some View {
-        AndroidParityScreen {
+        Group {
+            if settingsSearchQuery.isEmpty {
+                settingsScreen
+            } else {
+                AppSettingsSearchResultsView(
+                    query: settingsSearchQuery,
+                    isVaultUnlocked: session.vaultState == .unlocked,
+                    isDeveloperModeUnlocked: diagnosticsCenter.isDeveloperModeUnlocked
+                ) { section in
+                    jump(toSettingsSection: section)
+                }
+            }
+        }
+        .searchable(
+            text: $settingsSearchQuery,
+            placement: .navigationBarDrawer(displayMode: .always),
+            prompt: Text("搜索设置")
+        )
+        .navigationTitle("设置")
+        .navigationBarTitleDisplayMode(.inline)
+        .task(id: highlightedSettingsSection) {
+            guard highlightedSettingsSection != nil else { return }
+            try? await Task.sleep(for: .seconds(1.8))
+            withAnimation(.easeInOut(duration: 0.25)) {
+                highlightedSettingsSection = nil
+            }
+        }
+    }
+
+    private func jump(toSettingsSection section: AppSettingsSection) {
+        settingsSearchQuery = ""
+        highlightedSettingsSection = section
+        settingsScrollRequest = AndroidParityScrollRequest(
+            id: AnyHashable(section),
+            token: (settingsScrollRequest?.token ?? 0) + 1
+        )
+    }
+
+    private var settingsScreen: some View {
+        AndroidParityScreen(scrollRequest: settingsScrollRequest) {
             if diagnosticsCenter.isDeveloperModeUnlocked {
                 AndroidParitySection(title: String(localized: "开发者")) {
                     AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
@@ -183,10 +225,13 @@ struct SettingsRootView: View {
                         }
                     }
                 }
+                .settingsSearchAnchor(.developer, highlighted: highlightedSettingsSection == .developer)
             }
             AppThemeSettingsView(session: session)
+                .settingsSearchAnchor(.appearance, highlighted: highlightedSettingsSection == .appearance)
 
             AppLanguageSettingsView()
+                .settingsSearchAnchor(.language, highlighted: highlightedSettingsSection == .language)
 
             AndroidParitySection(title: String(localized: "本地保险库")) {
                 VaultRegistrySettingsCard(
@@ -194,6 +239,7 @@ struct SettingsRootView: View {
                     deviceID: environment.localDeviceIdentifier
                 )
             }
+            .settingsSearchAnchor(.localVault, highlighted: highlightedSettingsSection == .localVault)
 
             AndroidParitySection(title: String(localized: "应用")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -288,6 +334,7 @@ struct SettingsRootView: View {
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
             }
+            .settingsSearchAnchor(.application, highlighted: highlightedSettingsSection == .application)
 
             AndroidParitySection(title: String(localized: "界面密度")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -312,6 +359,7 @@ struct SettingsRootView: View {
                     .disabled(session.appearancePreferences.interfaceDensity == .default)
                 }
             }
+            .settingsSearchAnchor(.interfaceDensity, highlighted: highlightedSettingsSection == .interfaceDensity)
 
             AndroidParitySection(title: String(localized: "布局")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -373,8 +421,10 @@ struct SettingsRootView: View {
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
             }
+            .settingsSearchAnchor(.layout, highlighted: highlightedSettingsSection == .layout)
 
             AppPlusSettingsView(session: session)
+                .settingsSearchAnchor(.plus, highlighted: highlightedSettingsSection == .plus)
 
             AndroidParitySection(title: "主密码") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -430,6 +480,7 @@ struct SettingsRootView: View {
                     .disabled(!session.canSubmitMasterPasswordChange)
                 }
             }
+            .settingsSearchAnchor(.masterPassword, highlighted: highlightedSettingsSection == .masterPassword)
 
             AndroidParitySection(title: String(localized: "密保问题")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -477,6 +528,7 @@ struct SettingsRootView: View {
                     )
                 }
             }
+            .settingsSearchAnchor(.securityQuestions, highlighted: highlightedSettingsSection == .securityQuestions)
 
             AndroidParitySection(title: String(localized: "自动填充")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -535,16 +587,20 @@ struct SettingsRootView: View {
                 }
 
             }
+            .settingsSearchAnchor(.autoFill, highlighted: highlightedSettingsSection == .autoFill)
 
             AppAutoFillEnablementSection(session: session)
+                .settingsSearchAnchor(.autoFillExtension, highlighted: highlightedSettingsSection == .autoFillExtension)
 
             AndroidParitySection(title: String(localized: "自动填充域名规则")) {
                 AutoFillDomainRulesSettingsView(controller: session.autoFillDomainRules)
             }
+            .settingsSearchAnchor(.autoFillDomainRules, highlighted: highlightedSettingsSection == .autoFillDomainRules)
 
             AndroidParitySection(title: String(localized: "键盘与输入法")) {
                 AppKeyboardInputLimitationsView()
             }
+            .settingsSearchAnchor(.keyboardInput, highlighted: highlightedSettingsSection == .keyboardInput)
 
             AndroidParitySection(title: String(localized: "Steam 导入")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -559,6 +615,7 @@ struct SettingsRootView: View {
                     .disabled(session.vaultState != .unlocked)
                 }
             }
+            .settingsSearchAnchor(.steamImport, highlighted: highlightedSettingsSection == .steamImport)
 
             AndroidParitySection(title: String(localized: "安全中心")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -649,8 +706,10 @@ struct SettingsRootView: View {
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
             }
+            .settingsSearchAnchor(.securityCenter, highlighted: highlightedSettingsSection == .securityCenter)
 
             SensitivePrivacySettingsSection(session: session)
+                .settingsSearchAnchor(.sensitivePrivacy, highlighted: highlightedSettingsSection == .sensitivePrivacy)
 
             AndroidParitySection(title: "Timeline") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -687,6 +746,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .settingsSearchAnchor(.timeline, highlighted: highlightedSettingsSection == .timeline)
 
             AndroidParitySection(title: String(localized: "权限管理")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -698,6 +758,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .settingsSearchAnchor(.permissions, highlighted: highlightedSettingsSection == .permissions)
 
             AndroidParitySection(title: String(localized: "迁移")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -1067,10 +1128,12 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .settingsSearchAnchor(.migration, highlighted: highlightedSettingsSection == .migration)
 
             AndroidParitySection(title: String(localized: "格式导入导出")) {
                 VaultFormatImportExportCard(session: session)
             }
+            .settingsSearchAnchor(.formatImportExport, highlighted: highlightedSettingsSection == .formatImportExport)
 
             AndroidParitySection(title: "OneDrive") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -1280,6 +1343,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .settingsSearchAnchor(.oneDrive, highlighted: highlightedSettingsSection == .oneDrive)
 
             AndroidParitySection(title: "Bitwarden") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -1459,6 +1523,7 @@ struct SettingsRootView: View {
                     )
                 }
             }
+            .settingsSearchAnchor(.bitwarden, highlighted: highlightedSettingsSection == .bitwarden)
 
             AndroidParitySection(title: String(localized: "接收 Bitwarden Send")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -1520,6 +1585,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .settingsSearchAnchor(.bitwardenSend, highlighted: highlightedSettingsSection == .bitwardenSend)
 
             AndroidParitySection(title: "WebDAV") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
@@ -1654,6 +1720,7 @@ struct SettingsRootView: View {
                     }
                 }
             }
+            .settingsSearchAnchor(.webDAV, highlighted: highlightedSettingsSection == .webDAV)
 
             AndroidParitySection(title: "NFC 银行卡诊断") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
@@ -1682,6 +1749,7 @@ struct SettingsRootView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .settingsSearchAnchor(.nfcDiagnostics, highlighted: highlightedSettingsSection == .nfcDiagnostics)
 
             AndroidParitySection(title: "局域网同步") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
@@ -1710,8 +1778,10 @@ struct SettingsRootView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .settingsSearchAnchor(.lanSync, highlighted: highlightedSettingsSection == .lanSync)
 
             AppCloudKitSyncSection(session: session)
+                .settingsSearchAnchor(.iCloudSync, highlighted: highlightedSettingsSection == .iCloudSync)
 
             AndroidParitySection(title: "云端保险库") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
@@ -1740,10 +1810,12 @@ struct SettingsRootView: View {
                     .buttonStyle(.plain)
                 }
             }
+            .settingsSearchAnchor(.cloudVault, highlighted: highlightedSettingsSection == .cloudVault)
 
             AndroidParitySection(title: String(localized: "关于")) {
                 AppUpdateCheckSectionView()
             }
+            .settingsSearchAnchor(.about, highlighted: highlightedSettingsSection == .about)
         }
         .fileImporter(
             isPresented: $isCSVImporterPresented,
@@ -1920,8 +1992,6 @@ struct SettingsRootView: View {
         .sheet(isPresented: $isOneDriveDirectoryCreatePresented) {
             OneDriveDirectoryCreateSheet(session: session)
         }
-        .navigationTitle("设置")
-        .navigationBarTitleDisplayMode(.inline)
     }
 
     private func replacePendingKeePassAttachment(with fileURL: URL) {
