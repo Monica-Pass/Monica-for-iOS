@@ -35,6 +35,7 @@ struct GeneratorRootView: View {
                 }
             }
             autoFillGuidanceSection
+            GeneratorSSHKeySection(session: session)
             GeneratorDependencyStatusSection()
         }
         .navigationTitle("")

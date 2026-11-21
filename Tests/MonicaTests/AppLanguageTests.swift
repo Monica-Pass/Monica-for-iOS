@@ -120,3 +120,46 @@ final class AppLanguageTests: XCTestCase {
         XCTAssertEqual(controller.resolvedLocale, Locale.current)
     }
 }
+
+// MARK: - #133 进程级本地化入口
+
+extension AppLanguageTests {
+    /// `appLocalized` 必须跟随运行时语言，而不是系统语言。
+    func testAppLocalizedFollowsRuntimeLanguage() {
+        let runtime = AppLocalizationRuntime(language: .simplifiedChinese)
+        XCTAssertEqual(
+            runtime.current.localized("设置"),
+            AppLanguage.simplifiedChinese.localized("设置")
+        )
+
+        runtime.set(.english)
+        XCTAssertEqual(runtime.current, .english)
+        XCTAssertEqual(
+            runtime.current.localized("设置"),
+            AppLanguage.english.localized("设置"),
+            "切换运行时语言后应解析到 en 的 .lproj"
+        )
+    }
+
+    /// 运行时语言写入后，共享入口同步更新。
+    @MainActor
+    func testRuntimeSharedInstanceReflectsSelectFromController() throws {
+        let (defaults, suiteName) = try makeUserDefaults()
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let previous = AppLocalizationRuntime.shared.current
+        defer { AppLocalizationRuntime.shared.set(previous) }
+
+        let controller = AppLanguageController(store: UserDefaultsAppLanguageStore(userDefaults: defaults))
+        controller.select(.english)
+        XCTAssertEqual(AppLocalizationRuntime.shared.current, .english)
+        XCTAssertEqual(appLocalized("设置"), AppLanguage.english.localized("设置"))
+    }
+
+    /// en 缺少翻译时必须回退到 zh-Hans 原文，而不是显示 key 字面量以外的空白。
+    func testMissingEnglishTranslationFallsBackToSourceLanguage() {
+        let key: String.LocalizationValue = "这条文案在测试里没有 en 译文"
+        let resolved = AppLanguage.english.localized(key)
+        XCTAssertEqual(resolved, "这条文案在测试里没有 en 译文", "缺译文时应回退 key（即中文原文）")
+    }
+}
