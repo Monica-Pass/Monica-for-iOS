@@ -106,6 +106,7 @@
 		AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* AppAttachmentSupport.swift */; };
 		A9E000000000000000000002 /* AppMarkdownNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000001 /* AppMarkdownNotes.swift */; };
 		A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000003 /* AppMarkdownNotesView.swift */; };
+		B36000000000000000000001 /* MonicaSendShareView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B36000000000000000000002 /* MonicaSendShareView.swift */; };
 		A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F000000000000000000001 /* MarkdownNoteTests.swift */; };
 		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
 		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
@@ -265,6 +266,7 @@
 		AA0000000000000000000003 /* AppAttachmentSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAttachmentSupport.swift"; sourceTree = "<group>"; };
 		A9E000000000000000000001 /* AppMarkdownNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotes.swift; sourceTree = "<group>"; };
 		A9E000000000000000000003 /* AppMarkdownNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotesView.swift; sourceTree = "<group>"; };
+		B36000000000000000000002 /* MonicaSendShareView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaSendShareView.swift; sourceTree = "<group>"; };
 		A9F000000000000000000001 /* MarkdownNoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownNoteTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
@@ -365,6 +367,7 @@
 				A10000000000000000000012 /* AppRootView.swift */,
 				A9E000000000000000000001 /* AppMarkdownNotes.swift */,
 				A9E000000000000000000003 /* AppMarkdownNotesView.swift */,
+				B36000000000000000000002 /* MonicaSendShareView.swift */,
 				B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */,
 				AC0000000000000000000002 /* AppCredentialExchange.swift */,
 				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
@@ -837,6 +840,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */,
 				A9E000000000000000000002 /* AppMarkdownNotes.swift in Sources */,
 				A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */,
+				B36000000000000000000001 /* MonicaSendShareView.swift in Sources */,
 				AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */,
 				B56000000000000000000001 /* AppSecurityCenterDashboardView.swift in Sources */,
 				B56000000000000000000002 /* AppSecurityInsightsSupport.swift in Sources */,
