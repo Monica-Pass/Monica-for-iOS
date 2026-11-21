@@ -140,8 +140,34 @@ extension UnifiedVaultItemKind {
             return .note
         case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef:
             return .other
-        case .totp, .card, .identity:
+        case .totp, .card, .identity, .steam:
             return nil
+        }
+    }
+}
+
+/// 验证 Tab 下的二级模块：验证码与 Steam Guard。
+enum TotpModule: String, CaseIterable, Hashable, Identifiable, Sendable {
+    case totp
+    case steam
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .totp:
+            return String(localized: "验证码")
+        case .steam:
+            return String(localized: "Steam")
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .totp:
+            return "timer"
+        case .steam:
+            return "shield.lefthalf.filled"
         }
     }
 }

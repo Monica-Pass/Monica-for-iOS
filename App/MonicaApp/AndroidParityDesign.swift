@@ -72,6 +72,8 @@ extension UnifiedVaultItemKind {
             return String(localized: "SSO")
         case .send:
             return String(localized: "安全发送")
+        case .steam:
+            return String(localized: "Steam")
         case .attachmentRef:
             return String(localized: "附件")
         }

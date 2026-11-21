@@ -28,6 +28,8 @@ extension AppSessionModel {
             return wifiEntries.map(\.id)
         case .sso:
             return ssoEntries.map(\.id)
+        case .steam:
+            return steamEntries.map(\.id)
         case .send:
             return sendEntries.map(\.id)
         case .attachmentRef:

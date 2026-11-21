@@ -3423,7 +3423,8 @@ import MonicaStorage
         .wifi,
         .sso,
         .send,
-        .attachmentRef
+        .attachmentRef,
+        .steam
     ])
     #expect(UnifiedVaultItemKind.passkey.displayName == "通行密钥")
     #expect(UnifiedVaultItemKind.sshKey.displayName == "SSH 密钥")
@@ -3432,6 +3433,7 @@ import MonicaStorage
     #expect(UnifiedVaultItemKind.sso.displayName == "SSO")
     #expect(UnifiedVaultItemKind.send.displayName == "安全发送")
     #expect(UnifiedVaultItemKind.attachmentRef.displayName == "附件")
+    #expect(UnifiedVaultItemKind.steam.displayName == "Steam")
 }
 
 @Test func androidParityDraftTypesCarrySensitiveFieldsInsidePayloadModels() {
@@ -6260,6 +6262,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             }
         case .sso:
             throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
+        case .steam:
+            throw LocalVaultRepositoryError.unsupportedEntryType(.steam)
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(
