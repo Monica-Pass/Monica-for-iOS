@@ -253,6 +253,8 @@ struct SettingsRootView: View {
                 AppHapticsSettingsView(haptics: session.haptics)
             }
 
+            AppItemIconSettingsView(session: session)
+
             AppLanguageSettingsView()
                 .settingsSearchAnchor(.language, highlighted: highlightedSettingsSection == .language)
 
