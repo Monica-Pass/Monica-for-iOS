@@ -4481,8 +4481,8 @@ final class VaultSessionModelTests: XCTestCase {
         try model.deleteSelectedVaultBatchItems()
 
         XCTAssertEqual(model.loginEntries.map(\.title), ["Bank"])
-        XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["GitLab", "GitHub"])
-        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-2", "entry-1"])
+        XCTAssertEqual(model.deletedLoginEntries.map(\.title), ["GitHub", "GitLab"])
+        XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-1", "entry-2"])
         XCTAssertFalse(model.isVaultBatchSelectionActive)
         XCTAssertEqual(model.entryOperationState, .succeeded("已删除 2 项"))
         XCTAssertEqual(model.operationTimelineEvents.prefix(2).map(\.action), [.deleted, .deleted])
@@ -4498,9 +4498,9 @@ final class VaultSessionModelTests: XCTestCase {
 
         try model.restoreSelectedVaultBatchItems()
 
-        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank", "GitLab", "GitHub"])
+        XCTAssertEqual(model.loginEntries.map(\.title), ["Bank", "GitHub", "GitLab"])
         XCTAssertTrue(model.deletedLoginEntries.isEmpty)
-        XCTAssertEqual(engine.restoredLoginEntries.map(\.entryID), ["entry-2", "entry-1"])
+        XCTAssertEqual(engine.restoredLoginEntries.map(\.entryID), ["entry-1", "entry-2"])
         XCTAssertFalse(model.isVaultBatchSelectionActive)
         XCTAssertEqual(model.entryOperationState, .succeeded("已恢复 2 项"))
     }
@@ -4545,14 +4545,14 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertFalse(model.isVaultBatchSelectionActive)
         XCTAssertEqual(model.loginSearchQuery, "")
         XCTAssertEqual(model.entryOperationState, .succeeded("已移动 2 项"))
-        XCTAssertEqual(engine.movedVaultEntries.map(\.entryID), ["entry-2", "entry-1"])
+        XCTAssertEqual(engine.movedVaultEntries.map(\.entryID), ["entry-1", "entry-2"])
         XCTAssertEqual(engine.movedVaultEntries.map(\.toProjectID), [work.id, work.id])
         XCTAssertEqual(model.operationTimelineEvents.prefix(2).map(\.action), [.moved, .moved])
         XCTAssertFalse(model.operationTimelineEvents.map(\.detail).joined().contains("github-secret"))
 
         try model.switchVaultCategory(projectID: work.id)
 
-        XCTAssertEqual(model.loginEntries.map(\.id), ["entry-2", "entry-1"])
+        XCTAssertEqual(model.loginEntries.map(\.id), ["entry-1", "entry-2"])
         XCTAssertEqual(model.loginEntries.map(\.projectID), [work.id, work.id])
     }
 

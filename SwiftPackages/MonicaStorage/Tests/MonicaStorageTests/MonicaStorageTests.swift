@@ -8097,6 +8097,8 @@ private func littleEndianUInt64(_ value: UInt64) -> Data {
         )
     }
     #expect(try entryRepository.listGPGKeyEntries(projectID: personal.id).isEmpty)
+}
+
 // MARK: - 标签 / 归档 / 备份元数据
 
 private enum VaultTagTestStore {
