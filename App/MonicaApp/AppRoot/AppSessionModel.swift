@@ -66,6 +66,11 @@ final class AppSessionModel {
     var firstTimePasswordSetupStep: FirstTimePasswordSetupStep = .enterPassword
     var activeVaultName: String?
     var entryOperationState: EntryOperationState = .idle
+    // issue #28：回收站保留策略与清理预览（策略本身不含敏感信息，删除时间账本另存加密文件）。
+    var trashRetentionPolicy: TrashRetentionPolicy = .standard
+    var trashPreviewTotalCount = 0
+    var trashPreviewExpiredCount = 0
+    var trashMaintenanceMessage: String?
     var loginTitle = ""
     var loginUsername = ""
     var loginPassword = ""
@@ -555,6 +560,7 @@ final class AppSessionModel {
     private let oneDriveNow: () -> Date
 
     private let vaultRepository: LocalVaultRepository
+    @ObservationIgnored let trashMaintenance = AppTrashMaintenance()
     private let vaultKeychainService: (any AppVaultKeychainService)?
     private let vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)?
     private let rememberedVaultStore: any RememberedVaultStore
@@ -3873,17 +3879,61 @@ final class AppSessionModel {
         toProjectID: String,
         entryRepository: LocalVaultEntryRepository
     ) throws -> [(id: String, title: String)] {
-        var events: [(id: String, title: String)] = []
-        for id in ids {
-            let moved = try entryRepository.moveEntry(
+        // issue #28：批量迁移复用 moveEntries——先预检、逐条迁移后校验侧表与附件引用，
+        // 任何一条失败都会按逆序回滚，源分类不会丢数据。
+        let items = ids.map { id in
+            VaultBatchMigrationItem(
+                id: id,
                 kind: kind,
-                entryID: id,
-                fromProjectID: fromProjectID,
-                toProjectID: toProjectID
+                title: vaultBatchItemTitle(kind: kind, id: id)
             )
-            events.append((moved.id, moved.title))
         }
-        return events
+        let outcome = try entryRepository.moveEntries(
+            items,
+            fromProjectID: fromProjectID,
+            toProjectID: toProjectID
+        )
+        return outcome.movedEntries.map { (id: $0.id, title: $0.title) }
+    }
+
+    /// 批量迁移失败时用可读标题提示，取不到时退回条目 id。
+    private func vaultBatchItemTitle(kind: UnifiedVaultItemKind, id: String) -> String {
+        switch kind {
+        case .login:
+            return loginEntries.first { $0.id == id }?.title ?? id
+        case .note:
+            return noteEntries.first { $0.id == id }?.title ?? id
+        case .totp:
+            return totpEntries.first { $0.id == id }?.title ?? id
+        case .card:
+            return cardEntries.first { $0.id == id }?.title ?? id
+        case .identity:
+            return identityEntries.first { $0.id == id }?.title ?? id
+        case .passkey:
+            return passkeyEntries.first { $0.id == id }?.title ?? id
+        case .sshKey:
+            return sshKeyEntries.first { $0.id == id }?.title ?? id
+        case .apiToken:
+            return apiTokenEntries.first { $0.id == id }?.title ?? id
+        case .wifi:
+            return wifiEntries.first { $0.id == id }?.title ?? id
+        case .sso:
+            return ssoEntries.first { $0.id == id }?.title ?? id
+        case .send:
+            return sendEntries.first { $0.id == id }?.title ?? id
+        case .steam:
+            return steamEntries.first { $0.id == id }?.title ?? id
+        case .barcode:
+            return barcodeEntries.first { $0.id == id }?.title ?? id
+        case .billingAddress:
+            return billingAddressEntries.first { $0.id == id }?.title ?? id
+        case .paymentAccount:
+            return paymentAccountEntries.first { $0.id == id }?.title ?? id
+        case .gpgKey:
+            return gpgKeyEntries.first { $0.id == id }?.title ?? id
+        case .attachmentRef:
+            return attachmentEntries.first { $0.id == id }?.fileName ?? id
+        }
     }
 
     private func clearVaultSearchQueries() {
@@ -12275,6 +12325,10 @@ final class AppSessionModel {
         vaultFolderTree = .empty
         vaultFolderOverview = .builder(documents: [], tree: .empty)
         isVaultOverviewPresented = false
+        trashMaintenance.reset()
+        trashPreviewTotalCount = 0
+        trashPreviewExpiredCount = 0
+        trashMaintenanceMessage = nil
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -12336,6 +12390,10 @@ final class AppSessionModel {
         vaultFolderTree = .empty
         vaultFolderOverview = .builder(documents: [], tree: .empty)
         isVaultOverviewPresented = false
+        trashMaintenance.reset()
+        trashPreviewTotalCount = 0
+        trashPreviewExpiredCount = 0
+        trashMaintenanceMessage = nil
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -12620,6 +12678,7 @@ final class AppSessionModel {
     ) throws {
         activeProject = project
         try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+        runTrashAutoPurge(projectID: project.id, entryRepository: entryRepository)
         resetVaultQuickFilters()
         selectedVaultQuickFilterID = "category-\(project.id)"
     }
@@ -12822,44 +12881,85 @@ final class AppSessionModel {
         }
     }
 
+    /// 解锁 / 切换分类后同步删除时间账本，并按保留策略静默清理已到期条目。
+    /// 只处理仓库确认仍在删除态的条目，失败时保留条目并提示原因。
+    private func runTrashAutoPurge(
+        projectID: String,
+        entryRepository: LocalVaultEntryRepository
+    ) {
+        guard let session = activeVaultSession,
+              trashMaintenance.prepareIfNeeded(vaultID: session.handle.vaultID) else {
+            return
+        }
+        trashRetentionPolicy = trashMaintenance.policy
+        try? trashMaintenance.sync(projectID: projectID, repository: entryRepository)
+        refreshTrashPreviewFromLoadedLists()
+        let outcome = trashMaintenance.autoPurgeIfNeeded(
+            projectID: projectID,
+            repository: entryRepository
+        )
+        guard outcome.purgedCount > 0 || outcome.hasFailures else {
+            return
+        }
+        try? refreshAllEntryLists(projectID: projectID, entryRepository: entryRepository)
+        applyTrashPurgeOutcome(outcome, isAutomatic: true)
+    }
+
     func refreshAllEntryLists(
         projectID: String,
         entryRepository: LocalVaultEntryRepository
     ) throws {
         loginEntries = try entryRepository.listLoginEntries(projectID: projectID)
         deletedLoginEntries = try entryRepository.listDeletedLoginEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
         deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
         deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         cardEntries = try entryRepository.listCardEntries(projectID: projectID)
         deletedCardEntries = try entryRepository.listDeletedCardEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         identityEntries = try entryRepository.listIdentityEntries(projectID: projectID)
         deletedIdentityEntries = try entryRepository.listDeletedIdentityEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         passkeyEntries = try entryRepository.listPasskeyEntries(projectID: projectID)
         deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
         deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         gpgKeyEntries = try entryRepository.listGPGKeyEntries(projectID: projectID)
         deletedGPGKeyEntries = try entryRepository.listDeletedGPGKeyEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
         deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
         deletedWifiEntries = try entryRepository.listDeletedWifiEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         ssoEntries = try entryRepository.listSSOEntries(projectID: projectID)
         deletedSSOEntries = try entryRepository.listDeletedSSOEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         barcodeEntries = try entryRepository.listBarcodeEntries(projectID: projectID)
         deletedBarcodeEntries = try entryRepository.listDeletedBarcodeEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         sendEntries = try entryRepository.listSendEntries(projectID: projectID)
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         steamEntries = try entryRepository.listSteamEntries(projectID: projectID)
         deletedSteamEntries = try entryRepository.listDeletedSteamEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         billingAddressEntries = try entryRepository.listBillingAddressEntries(projectID: projectID)
         deletedBillingAddressEntries = try entryRepository.listDeletedBillingAddressEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         paymentAccountEntries = try entryRepository.listPaymentAccountEntries(projectID: projectID)
         deletedPaymentAccountEntries = try entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)
+            .filter { !trashMaintenance.isPurged($0.id) }
         publishWidgetSnapshots()
         refreshVaultSearchIndex(entryRepository: entryRepository)
         // 锁定清空过系统身份时，条目重新载入后就补一次发布，避免解锁后自动填充一直为空。
@@ -12916,6 +13016,19 @@ final class AppSessionModel {
             snapshot.paymentAccountEntries += (try? entryRepository.listPaymentAccountEntries(projectID: projectID)) ?? []
             snapshot.deletedPaymentAccountEntries += (try? entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)) ?? []
         }
+
+        snapshot.deletedLoginEntries = snapshot.deletedLoginEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedNoteEntries = snapshot.deletedNoteEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedTotpEntries = snapshot.deletedTotpEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedCardEntries = snapshot.deletedCardEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedIdentityEntries = snapshot.deletedIdentityEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedPasskeyEntries = snapshot.deletedPasskeyEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedSshKeyEntries = snapshot.deletedSshKeyEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedApiTokenEntries = snapshot.deletedApiTokenEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedWifiEntries = snapshot.deletedWifiEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedSendEntries = snapshot.deletedSendEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedSteamEntries = snapshot.deletedSteamEntries.filter { !trashMaintenance.isPurged($0.id) }
+        snapshot.deletedAttachmentEntries = snapshot.deletedAttachmentEntries.filter { !trashMaintenance.isPurged($0.id) }
 
         let documents = VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
         vaultSearch.replaceDocuments(documents)
