@@ -115,7 +115,8 @@ struct AppRootView: View {
                 session.consumePendingControlPageIfUnlocked()
                 session.consumePendingOtpAuthImportIfUnlocked()
                 // issue #153：解锁后结算一次启动自动聚焦；iPad 分屏与大屏不强制弹键盘。
-                session.settleLaunchSearchAutoFocus(allowsForcedKeyboard: allowsForcedSearchKeyboard)            }
+                session.settleLaunchSearchAutoFocus(allowsForcedKeyboard: allowsForcedSearchKeyboard)
+            }
         }
         .onChange(of: session.vaultState) { _, state in
             if state == .unlocked {

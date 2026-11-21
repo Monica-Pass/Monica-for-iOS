@@ -85,26 +85,6 @@ final class SearchAutoFocusTests: XCTestCase {
         XCTAssertNil(model.expandedToolbarAction)
     }
 
-    func testDiagnosticContextForColdLaunch() {
-        let tabModel = makeUnlockedModel()
-        let tabMatches = tabModel.selectedTab == .passwords
-        let shouldLiteral = tabModel.shouldFocusSearchOnLaunch(isPasswordRoot: true, allowsForcedKeyboard: true)
-        let shouldTab = tabModel.shouldFocusSearchOnLaunch(isPasswordRoot: tabMatches, allowsForcedKeyboard: true)
-
-        let literalModel = makeUnlockedModel()
-        let takenLiteral = literalModel.takeLaunchSearchAutoFocus(isPasswordRoot: true, allowsForcedKeyboard: true)
-
-        let tabModelTake = makeUnlockedModel()
-        let takenTab = tabModelTake.takeLaunchSearchAutoFocus(isPasswordRoot: tabMatches, allowsForcedKeyboard: true)
-
-        let settleModel = makeUnlockedModel()
-        let settled = settleModel.settleLaunchSearchAutoFocus(allowsForcedKeyboard: true)
-
-        print(
-            "DIAG3 tab=\(tabModel.selectedTab) tabMatches=\(tabMatches) shouldLiteral=\(shouldLiteral) shouldTab=\(shouldTab) unlocked=\(tabModel.vaultState == .unlocked) takenLiteral=\(takenLiteral) takenTab=\(takenTab) settled=\(settled) litAction=\(String(describing: literalModel.expandedToolbarAction)) tabAction=\(String(describing: tabModelTake.expandedToolbarAction))"
-        )
-    }
-
     private func makeModel(isEnabled: Bool) -> AppSessionModel {
         AppSessionModel(
             searchAutoFocusPreferenceStore: MemoryAppSearchAutoFocusPreferenceStore(persistedValue: isEnabled)
