@@ -571,6 +571,14 @@ final class AppSessionModel {
     /// issue #36：Monica Send 分享包接收入口（URL scheme 或 `.send` 文件导入时填充）。
     var monicaSendIncoming: MonicaSendIncoming?
     var expandedToolbarAction: AndroidParityToolbarAction?
+    /// issue #153：启动时是否自动展开并聚焦密码页搜索框（默认关闭）。
+    var isSearchAutoFocusOnLaunchEnabled = false
+    /// 本次启动是否已经结算过自动聚焦，保证同一个进程只聚焦一次。
+    var didHandleLaunchSearchAutoFocus = false
+    /// 是否还有一次待执行的搜索框聚焦（密码页消费后清零）。
+    var isSearchAutoFocusPendingForPasswordPage = false
+    /// 本次启动是否收到过深链 / 控制中心 / 快捷指令导航目标；被导航覆盖时不抢焦点。
+    var didReceiveLaunchNavigationTarget = false
     var securityQuestion1ID = AppSessionModel.securityQuestionOptions[0].id
     var securityQuestion2ID = AppSessionModel.securityQuestionOptions[1].id
     var securityAnswer1 = ""
@@ -611,6 +619,7 @@ final class AppSessionModel {
     private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
+    let searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore
     private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
     private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
     private let sensitivePasteboard: MonicaSensitivePasteboard
@@ -704,6 +713,7 @@ final class AppSessionModel {
         vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore = MemoryVaultDisplayPreferenceStore(),
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
+        searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore = MemoryAppSearchAutoFocusPreferenceStore(),
         biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
         deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
         passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
@@ -782,6 +792,7 @@ final class AppSessionModel {
         self.vaultDisplayPreferenceStore = vaultDisplayPreferenceStore
         self.appearancePreferenceStore = appearancePreferenceStore
         self.vaultLayoutPreferenceStore = vaultLayoutPreferenceStore
+        self.searchAutoFocusPreferenceStore = searchAutoFocusPreferenceStore
         self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
         self.passkeyExchangeService = passkeyExchangeService
@@ -851,6 +862,7 @@ final class AppSessionModel {
         self.vaultDisplayPreferences = vaultDisplayPreferenceStore.loadPreferences()
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
         self.vaultLayoutPreferences = vaultLayoutPreferenceStore.loadPreferences()
+        self.isSearchAutoFocusOnLaunchEnabled = searchAutoFocusPreferenceStore.loadIsSearchAutoFocusEnabled()
         self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
         self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
         self.sensitiveClipboardPreferenceStore = sensitiveClipboardPreferenceStore
@@ -1306,6 +1318,8 @@ final class AppSessionModel {
         guard shortcutEntryExists(summary) else {
             throw LocalVaultRepositoryError.vaultUnavailable
         }
+        // issue #153：快捷指令已经指定了条目，启动自动聚焦不要抢走焦点。
+        didReceiveLaunchNavigationTarget = true
 
         let destination = destination(forShortcutEntryKind: summary.kind)
         selectedTab = destination.tab
@@ -1419,6 +1433,8 @@ final class AppSessionModel {
 
     /// 控制按钮与深链都会走这里；锁定态只记录页面，绝不提前读取或展示条目。
     func handleControlPage(_ page: MonicaControlPage) {
+        // issue #153：控制中心导航可能落在密码页且不留详情路由，单独记一笔。
+        didReceiveLaunchNavigationTarget = true
         pendingControlPage = page
         consumePendingControlPageIfUnlocked()
     }

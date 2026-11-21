@@ -138,6 +138,15 @@ struct SettingsRootView: View {
         }
     }
 
+    /// issue #153：启动自动聚焦搜索框（默认关闭，非法持久化值回退为关闭）。
+    private var searchAutoFocusOnLaunchBinding: Binding<Bool> {
+        Binding {
+            session.isSearchAutoFocusOnLaunchEnabled
+        } set: { isEnabled in
+            session.setSearchAutoFocusOnLaunchEnabled(isEnabled)
+        }
+    }
+
     private func moveLayoutModule(_ module: PasswordLayoutModule, offset: Int) {
         var preferences = session.vaultLayoutPreferences
         var modules = preferences.orderedModules
@@ -331,6 +340,13 @@ struct SettingsRootView: View {
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                     .disabled(session.appearancePreferences.interfaceDensity == .default)
+                    AndroidParityDivider()
+                    Toggle("启动时自动聚焦搜索框", isOn: searchAutoFocusOnLaunchBinding)
+                        .font(.headline.weight(.heavy))
+                        .tint(AndroidParityPalette.primary)
+                    Text(String(localized: "解锁进入密码页后自动展开搜索并聚焦；通过深链、控制中心或快捷指令跳转时不抢焦点，iPad 大屏与分屏不会强制弹出键盘。"))
+                        .font(.footnote)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
                 }
             }
 

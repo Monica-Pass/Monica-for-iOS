@@ -10,7 +10,9 @@
 				A4C0000000000000000000F1 /* AppDataClearView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0000000000000000000F2 /* AppDataClearView.swift */; };
 		A4C0000000000000000000F3 /* AppDataClearSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0000000000000000000F4 /* AppDataClearSupport.swift */; };
 C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
-		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
+		A153000000000000000000A1 /* AppSearchAutoFocusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A153000000000000000000A2 /* AppSearchAutoFocusSupport.swift */; };
+		A153000000000000000000B1 /* SearchAutoFocusTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A153000000000000000000B2 /* SearchAutoFocusTests.swift */; };
+		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
 		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
 		AA2A00000000000000000002 /* AppLanguageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000002 /* AppLanguageController.swift */; };
 		A530000000000000000000F1 /* AppHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A530000000000000000000F2 /* AppHaptics.swift */; };
@@ -233,7 +235,9 @@ C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa =
 				A4C0000000000000000000F2 /* AppDataClearView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataClearView.swift; sourceTree = "<group>"; };
 		A4C0000000000000000000F4 /* AppDataClearSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDataClearSupport.swift; sourceTree = "<group>"; };
 C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
-		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
+		A153000000000000000000A2 /* AppSearchAutoFocusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSearchAutoFocusSupport.swift; sourceTree = "<group>"; };
+		A153000000000000000000B2 /* SearchAutoFocusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchAutoFocusTests.swift; sourceTree = "<group>"; };
+		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000002 /* AppLanguageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageController.swift; sourceTree = "<group>"; };
 		A530000000000000000000F2 /* AppHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHaptics.swift; sourceTree = "<group>"; };
@@ -601,6 +605,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				A4C0000000000000000000F4 /* AppDataClearSupport.swift */,
 			B1270000000000000000A003 /* AppSessionModel+AccountTemplates.swift */,
 			B1270000000000000000A005 /* AppAccountTemplateSupport.swift */,
+			A153000000000000000000A2 /* AppSearchAutoFocusSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -654,6 +659,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
+				A153000000000000000000B2 /* SearchAutoFocusTests.swift */,
 				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
 				B1270000000000000000A007 /* AccountTemplateTests.swift */,
@@ -1047,6 +1053,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				AA0000000000000000000026 /* AppPlusStoreView.swift in Sources */,
 				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
 				AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */,
+				A153000000000000000000A1 /* AppSearchAutoFocusSupport.swift in Sources */,
 				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
 				A530000000000000000000F1 /* AppHaptics.swift in Sources */,
 				AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */,
@@ -1102,6 +1109,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
+				A153000000000000000000B1 /* SearchAutoFocusTests.swift in Sources */,
 				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
 				A97000000000000000000004 /* SSOItemTests.swift in Sources */,
 				B1270000000000000000A008 /* AccountTemplateTests.swift in Sources */,
