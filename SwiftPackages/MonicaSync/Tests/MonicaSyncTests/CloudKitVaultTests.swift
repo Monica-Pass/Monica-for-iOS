@@ -611,6 +611,17 @@ struct CloudKitVaultStoreTests {
         #expect(changes.changeToken == Data("fresh".utf8))
     }
 
+    @Test("云端还没创建 zone 时，检查变更视为没有变更")
+    func changePollingBeforeFirstUploadIsEmpty() async throws {
+        let transport = FakeCloudKitTransport()
+        transport.setZoneExists(false)
+        let store = try makeStore(transport)
+        let changes = try await store.pollChanges(since: nil)
+        #expect(changes.isEmpty)
+        #expect(changes.changeToken == nil)
+        #expect(!changes.didReset)
+    }
+
     @Test("账号可用性透传 CloudKit 的状态")
     func accountAvailabilityIsForwarded() async throws {
         let transport = FakeCloudKitTransport()
