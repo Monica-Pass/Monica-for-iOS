@@ -118,6 +118,14 @@ public final class MonicaSensitivePasteboard {
         activeRecord != nil
     }
 
+    /// 系统剪贴板当前的变化计数。
+    ///
+    /// 读取它不需要、也不会读取剪贴板内容，因此不会触发系统粘贴提示；
+    /// #148 的自动续写用它判断“剪贴板里还是我上次写入的值”。
+    public var changeCount: Int {
+        pasteboard.changeCount
+    }
+
     /// 把敏感值写入剪贴板，并在开启自动清除时记录身份与到期时间。
     ///
     /// `changeCount` 在写入之后读取，避免把写入之前的旧计数当作自己的身份。
