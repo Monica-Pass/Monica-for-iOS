@@ -17,6 +17,7 @@ struct MonicaAppEnvironment: Sendable {
     let oneDriveGraphTransport: any OneDriveGraphTransport
     let oneDriveBackupPreferencesStore: any AppOneDriveBackupPreferencesStore
     let plusEntitlementStore: any AppPlusEntitlementStore
+    let appLanguageStore: any AppLanguageStore
 
     init(
         appGroupIdentifier: String = "group.com.monicapass.monica",
@@ -26,7 +27,8 @@ struct MonicaAppEnvironment: Sendable {
         oneDriveAuthenticationService: (any AppOneDriveAuthenticationService)? = nil,
         oneDriveGraphTransport: any OneDriveGraphTransport = URLSessionOneDriveGraphTransport(),
         oneDriveBackupPreferencesStore: (any AppOneDriveBackupPreferencesStore)? = nil,
-        plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore()
+        plusEntitlementStore: any AppPlusEntitlementStore = UserDefaultsAppPlusEntitlementStore(),
+        appLanguageStore: any AppLanguageStore = UserDefaultsAppLanguageStore()
     ) {
         self.appGroupIdentifier = appGroupIdentifier
         self.minimumIOSVersion = minimumIOSVersion
@@ -38,6 +40,7 @@ struct MonicaAppEnvironment: Sendable {
         self.oneDriveGraphTransport = oneDriveGraphTransport
         self.oneDriveBackupPreferencesStore = oneDriveBackupPreferencesStore ?? UserDefaultsAppOneDriveBackupPreferencesStore()
         self.plusEntitlementStore = plusEntitlementStore
+        self.appLanguageStore = appLanguageStore
     }
 
     var productionCloudFileProviders: [CloudFileProviderKind: any CloudFileProvider] {

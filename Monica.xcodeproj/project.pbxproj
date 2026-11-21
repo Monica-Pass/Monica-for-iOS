@@ -9,6 +9,10 @@
 /* Begin PBXBuildFile section */
 		C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */; };
 		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
+		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
+		AA2A00000000000000000002 /* AppLanguageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000002 /* AppLanguageController.swift */; };
+		AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000003 /* AppLanguageSettingsView.swift */; };
+		AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000004 /* AppLanguageTests.swift */; };
 		AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE1300000000000000000001 /* AppSteamGuardSupport.swift */; };
 		B90000000000000000000001 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000001 /* PrivacyInfo.xcprivacy */; };
 		B90000000000000000000002 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = BA0000000000000000000002 /* PrivacyInfo.xcprivacy */; };
@@ -201,6 +205,10 @@
 /* Begin PBXFileReference section */
 		C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultSnapshotSupport.swift; sourceTree = "<group>"; };
 		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
+		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
+		AA2B00000000000000000002 /* AppLanguageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageController.swift; sourceTree = "<group>"; };
+		AA2B00000000000000000003 /* AppLanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettingsView.swift; sourceTree = "<group>"; };
+		AA2B00000000000000000004 /* AppLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageTests.swift; sourceTree = "<group>"; };
 		AE1300000000000000000001 /* AppSteamGuardSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSteamGuardSupport.swift"; sourceTree = "<group>"; };
 		BA0000000000000000000001 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		BA0000000000000000000002 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -427,6 +435,7 @@
 				A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */,
 				A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */,
 				A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */,
+				AA2B00000000000000000003 /* AppLanguageSettingsView.swift */,
 				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
@@ -514,6 +523,8 @@
 			AE1300000000000000000001 /* AppSteamGuardSupport.swift */,
 			C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */,
 			C3A0000000000000000000A4 /* VaultSnapshotViews.swift */,
+			AA2B00000000000000000001 /* AppLanguagePreferences.swift */,
+			AA2B00000000000000000002 /* AppLanguageController.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -575,6 +586,7 @@
 				AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
 				AB2000000000000000000001 /* BillingItemsTests.swift */,
+				AA2B00000000000000000004 /* AppLanguageTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -937,6 +949,9 @@
 				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
 				AA000000000000000000000A /* AppPlusSupport.swift in Sources */,
 				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
+				AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */,
+				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
+				AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */,
 				AA000000000000000000000E /* AppUnlockSupport.swift in Sources */,
 				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
 				AA20000000000000000000F2 /* AppVaultTagsSupport.swift in Sources */,
@@ -981,6 +996,7 @@
 			files = (
 				F50000000000000000000002 /* AppStoreComplianceTests.swift in Sources */,
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
+				AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
