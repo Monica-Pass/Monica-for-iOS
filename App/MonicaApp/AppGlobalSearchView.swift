@@ -547,6 +547,7 @@ private extension UnifiedVaultItemKind {
         case .sshKey: return "terminal"
         case .apiToken: return "curlybraces"
         case .wifi: return "wifi"
+        case .sso: return "person.crop.circle.badge.checkmark"
         case .send: return "paperplane.fill"
         case .attachmentRef: return "paperclip"
         }
