@@ -512,6 +512,10 @@ final class AppSessionModel {
     private let sensitivePasteboard: MonicaSensitivePasteboard
     @ObservationIgnored private var sensitivePasteboardExpiryTask: Task<Void, Never>?
     private let biometricUnlockAuthorizer: any BiometricUnlockAuthorizer
+    /// 导出通行密钥前要求生物识别/设备密码确认；复用 MonicaSecurity 的设备所有者认证。
+    private let deviceOwnerAuthenticator: any BiometricUnlockAuthorizer
+    /// 通行密钥导入准备、钥匙串写入与导出读取；私钥只停留在钥匙串与内存。
+    private let passkeyExchangeService: PasskeyExchangeService
     private let biometricCapabilityProvider: () -> BiometricUnlockCapability
     private let securityQuestionStore: any SecurityQuestionRecoveryStore
     private let securityQuestionVerifier: SecurityQuestionAnswerVerifier
@@ -593,6 +597,10 @@ final class AppSessionModel {
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
         biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
+        deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
+        passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
+            privateKeyStore: KeychainPasskeyPrivateKeyStore()
+        ),
         biometricCapabilityProvider: @escaping () -> BiometricUnlockCapability = { .unavailable },
         securityQuestionStore: any SecurityQuestionRecoveryStore = MigratingSecurityQuestionRecoveryStore(),
         securityQuestionVerifier: SecurityQuestionAnswerVerifier = SecurityQuestionAnswerVerifier(),
@@ -665,6 +673,8 @@ final class AppSessionModel {
         self.appearancePreferenceStore = appearancePreferenceStore
         self.vaultLayoutPreferenceStore = vaultLayoutPreferenceStore
         self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
+        self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
+        self.passkeyExchangeService = passkeyExchangeService
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
         self.securityQuestionVerifier = securityQuestionVerifier
@@ -7464,6 +7474,9 @@ final class AppSessionModel {
         }
         credentialExchange.isFetchingImport = true
         credentialExchange.importError = nil
+        credentialExchange.importIssues = []
+        credentialExchange.importIsFinished = false
+        credentialExchange.importMessage = nil
         entryOperationState = .running
         defer { credentialExchange.isFetchingImport = false }
 
@@ -7474,18 +7487,44 @@ final class AppSessionModel {
                 entryOperationState = .failed("不支持的凭据交换版本")
                 return
             }
-            let plan = CredentialExchangeCodec.importPlan(
+            let sourcePlan = CredentialExchangeCodec.importPlan(
                 accounts: AppCredentialExchangeBridge.accounts(from: data),
                 existingLoginEntries: loginEntries,
-                existingTOTPEntries: totpEntries
+                existingTOTPEntries: totpEntries,
+                existingPasskeyEntries: passkeyEntries
             )
-            guard !plan.isEmpty else {
+            // 通行密钥在写入钥匙串之前先做一次加密层预检：只校验和派生公钥，不产生任何副作用。
+            var issues = sourcePlan.passkeyIssues.map(AppCredentialExchangeIssue.init(storageIssue:))
+            var preparedPasskeys: [PasskeyExchangeImport] = []
+            for item in sourcePlan.passkeys {
+                do {
+                    preparedPasskeys.append(try passkeyExchangeService.prepareImport(
+                        PasskeyExchangeCredential(item.credential),
+                        title: item.title,
+                        notes: ""
+                    ))
+                } catch {
+                    issues.append(AppCredentialExchangeIssue(
+                        error: error,
+                        title: item.title,
+                        relyingPartyIdentifier: item.credential.relyingPartyIdentifier
+                    ))
+                }
+            }
+            let plan = adjustedCredentialExchangeImportPlan(
+                sourcePlan,
+                preparedPasskeys: preparedPasskeys
+            )
+            // 全部条目都不可用时也打开预览，让用户看到逐条降级原因，而不是只弹一条错误。
+            guard !plan.isEmpty || !issues.isEmpty else {
                 credentialExchange.importError = emptyCredentialExchangeMessage(plan)
                 entryOperationState = .failed("没有可导入的凭据")
                 return
             }
+            credentialExchange.importIssues = issues
             credentialExchange.importPreview = AppCredentialExchangeImportPreview(
                 plan: plan,
+                passkeys: preparedPasskeys,
                 exporterDisplayName: data.exporterDisplayName,
                 formatVersion: data.formatVersion.rawValue
             )
@@ -7497,6 +7536,29 @@ final class AppSessionModel {
             )
             entryOperationState = .failed("系统凭据读取失败")
         }
+    }
+
+    /// 预检失败的通行密钥从可导入列表里剔除，并计入无效数据，避免确认时整批失败。
+    private func adjustedCredentialExchangeImportPlan(
+        _ plan: CredentialExchangeImportPlan,
+        preparedPasskeys: [PasskeyExchangeImport]
+    ) -> CredentialExchangeImportPlan {
+        let validCredentialIDs = Set(preparedPasskeys.map(\.credentialID))
+        let acceptedItems = plan.passkeys.filter { validCredentialIDs.contains($0.credential.credentialID) }
+        guard acceptedItems.count != plan.passkeys.count else { return plan }
+        return CredentialExchangeImportPlan(
+            drafts: plan.drafts,
+            passkeys: acceptedItems,
+            passkeyIssues: plan.passkeyIssues,
+            sourceAccountCount: plan.sourceAccountCount,
+            sourceItemCount: plan.sourceItemCount,
+            passwordCount: plan.passwordCount,
+            totpCount: plan.totpCount,
+            skippedDuplicateCount: plan.skippedDuplicateCount,
+            unsupportedCredentialCount: plan.unsupportedCredentialCount,
+            invalidCredentialCount: plan.invalidCredentialCount
+                + (plan.passkeys.count - acceptedItems.count)
+        )
     }
 
     func confirmCredentialExchangeImport() throws {
@@ -7515,6 +7577,9 @@ final class AppSessionModel {
 
         var projectID: String?
         var created: [(VaultCSVItemDraft, String)] = []
+        var committedPasskeys: [PasskeyExchangeImport] = []
+        var issues = credentialExchange.importIssues
+        var importedCount = 0
         do {
             let project = try ensureActiveProject(projectTitle: "凭据交换", entryRepository: entryRepository)
             projectID = project.id
@@ -7525,14 +7590,64 @@ final class AppSessionModel {
                     entryRepository: entryRepository
                 ) {
                     created.append((item, entryID))
+                    importedCount += 1
+                }
+            }
+            // 通行密钥逐条写入：单条钥匙串或落库失败只记录问题并继续，最后统一汇总。
+            for prepared in preview.passkeys {
+                do {
+                    try passkeyExchangeService.commitImport(prepared)
+                    committedPasskeys.append(prepared)
+                    let metadata = prepared.metadata
+                    let draft = LocalPasskeyEntryDraft(
+                        title: metadata.title,
+                        relyingPartyID: metadata.relyingPartyID,
+                        username: metadata.username,
+                        userHandle: metadata.userHandle,
+                        credentialID: metadata.credentialID,
+                        publicKeyCOSE: metadata.publicKeyCOSE,
+                        privateKeyReference: metadata.privateKeyReference,
+                        notes: metadata.notes
+                    )
+                    if let entryID = try createCSVImportedItem(
+                        .passkey(draft),
+                        projectID: project.id,
+                        entryRepository: entryRepository
+                    ) {
+                        created.append((.passkey(draft), entryID))
+                        importedCount += 1
+                    } else {
+                        try? passkeyExchangeService.rollbackImport(prepared)
+                        issues.append(AppCredentialExchangeIssue(
+                            title: metadata.title,
+                            relyingPartyIdentifier: metadata.relyingPartyID,
+                            reason: .duplicate
+                        ))
+                    }
+                } catch {
+                    try? passkeyExchangeService.rollbackImport(prepared)
+                    issues.append(AppCredentialExchangeIssue(
+                        error: error,
+                        title: prepared.metadata.title,
+                        relyingPartyIdentifier: prepared.metadata.relyingPartyID
+                    ))
                 }
             }
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
-            credentialExchange.importPreview = nil
+            credentialExchange.importIssues = issues
+            credentialExchange.importIsFinished = true
+            credentialExchange.importMessage = importedCredentialMessage(
+                importedCount: importedCount,
+                issueCount: issues.count
+            )
             credentialExchange.importError = nil
-            entryOperationState = .succeeded("凭据已导入 \(created.count) 项")
+            if issues.isEmpty {
+                credentialExchange.importPreview = nil
+            }
+            entryOperationState = .succeeded("凭据已导入 \(importedCount) 项")
         } catch {
+            rollbackCredentialExchangeImportPasskeys(committedPasskeys)
             let rollbackIncomplete = rollbackCredentialExchangeImport(
                 created,
                 projectID: projectID,
@@ -7546,9 +7661,25 @@ final class AppSessionModel {
         }
     }
 
+    private func rollbackCredentialExchangeImportPasskeys(_ prepared: [PasskeyExchangeImport]) {
+        for item in prepared.reversed() {
+            try? passkeyExchangeService.rollbackImport(item)
+        }
+    }
+
+    private func importedCredentialMessage(importedCount: Int, issueCount: Int) -> String {
+        if issueCount == 0 {
+            return String(localized: "已导入 \(importedCount) 项。")
+        }
+        return String(localized: "已导入 \(importedCount) 项，另有 \(issueCount) 项已跳过。")
+    }
+
     func cancelCredentialExchangeImport() {
         credentialExchange.importPreview = nil
         credentialExchange.importError = nil
+        credentialExchange.importIssues = []
+        credentialExchange.importIsFinished = false
+        credentialExchange.importMessage = nil
         credentialExchange.isImporting = false
         credentialExchange.pendingImportToken = nil
     }
@@ -7589,9 +7720,9 @@ final class AppSessionModel {
         if plan.unsupportedCredentialCount > 0,
            plan.skippedDuplicateCount == 0,
            plan.invalidCredentialCount == 0 {
-            return "系统提供的条目暂不支持迁移（例如通行密钥），本地保险库未做改动。"
+            return "系统提供的条目暂不支持迁移，本地保险库未做改动。"
         }
-        return "没有找到可导入的密码或 TOTP，本地保险库未做改动。"
+        return "没有找到可导入的密码、TOTP 或通行密钥，本地保险库未做改动。"
     }
 
     /// 系统错误只暴露 domain/code，避免把凭据内容带进日志或界面。
@@ -7612,24 +7743,32 @@ final class AppSessionModel {
         }
         credentialExchange.exportError = nil
         credentialExchange.exportMessage = nil
+        credentialExchange.exportIsFinished = false
+
+        // 导出前只检查通行密钥元数据（不读私钥），明显无效的条目先列成问题。
+        let candidates = AppCredentialExchangePasskeys.exportCandidates(from: passkeyEntries)
         let plan = CredentialExchangeCodec.exportPlan(
             loginEntries: loginEntries,
             totpEntries: totpEntries
         )
-        guard !plan.isEmpty else {
-            credentialExchange.exportError = plan.skippedCount > 0
-                ? "没有可导出的密码或 TOTP；另有 \(plan.skippedCount) 条 TOTP 密钥无效。"
-                : "没有可导出的密码或 TOTP。"
+        credentialExchange.exportIssues = candidates.issues
+        guard !plan.isEmpty || !candidates.entries.isEmpty else {
+            credentialExchange.exportPasskeyCount = 0
+            let invalidCount = plan.skippedCount + candidates.issues.count
+            credentialExchange.exportError = invalidCount > 0
+                ? String(localized: "没有可导出的密码、TOTP 或通行密钥；另有 \(invalidCount) 条条目无效。")
+                : "没有可导出的密码、TOTP 或通行密钥。"
             return false
         }
         credentialExchange.exportPlan = plan
+        credentialExchange.exportPasskeyCount = candidates.entries.count
         return true
     }
 
     @discardableResult
     func performCredentialExchangeExport() async -> Bool {
         guard #available(iOS 26.0, *) else { return false }
-        guard let plan = credentialExchange.exportPlan else { return false }
+        guard credentialExchange.exportPlan != nil else { return false }
         guard let anchor = AppCredentialExchangePresenter.keyWindow() else {
             credentialExchange.exportError = "找不到可用于系统导出面板的窗口。"
             return false
@@ -7639,6 +7778,67 @@ final class AppSessionModel {
         credentialExchange.exportError = nil
         defer { credentialExchange.isExporting = false }
 
+        // 先做纯元数据筛选，避免把密码/TOTP 导出也拖进设备确认（无密码设备会直接失败）。
+        let candidates = AppCredentialExchangePasskeys.exportCandidates(from: passkeyEntries)
+        if !candidates.entries.isEmpty {
+            // 读私钥之前先要求生物识别/设备密码确认；被拒绝时完全不接触钥匙串。
+            do {
+                try await deviceOwnerAuthenticator.authenticate(
+                    reason: String(localized: "导出通行密钥前需要确认你的身份")
+                )
+            } catch {
+                credentialExchange.exportError = "未通过设备确认，未导出任何数据。"
+                entryOperationState = .failed("设备确认未通过")
+                return false
+            }
+        }
+
+        var issues = candidates.issues
+        var passkeyExports: [CredentialExchangePasskeyExport] = []
+        for entry in candidates.entries {
+            guard let credentialID = Data(base64Encoded: entry.credentialID),
+                  let userHandle = Data(base64Encoded: entry.userHandle) else {
+                issues.append(AppCredentialExchangeIssue(
+                    title: entry.title,
+                    relyingPartyIdentifier: entry.relyingPartyID,
+                    reason: .invalidData
+                ))
+                continue
+            }
+            do {
+                let credential = try passkeyExchangeService.exportCredential(
+                    credentialID: credentialID,
+                    relyingPartyID: entry.relyingPartyID,
+                    userName: entry.username,
+                    userHandle: userHandle
+                )
+                passkeyExports.append(CredentialExchangePasskeyExport(
+                    title: entry.title,
+                    favorite: entry.favorite,
+                    credential: CredentialExchangePasskey(credential)
+                ))
+            } catch {
+                issues.append(AppCredentialExchangeIssue(
+                    error: error,
+                    title: entry.title,
+                    relyingPartyIdentifier: entry.relyingPartyID
+                ))
+            }
+        }
+        credentialExchange.exportIssues = issues
+
+        let plan = CredentialExchangeCodec.exportPlan(
+            loginEntries: loginEntries,
+            totpEntries: totpEntries,
+            passkeyExports: passkeyExports
+        )
+        guard !plan.isEmpty else {
+            credentialExchange.exportError = "没有可导出的条目。"
+            credentialExchange.exportIsFinished = true
+            entryOperationState = .failed("没有可导出的条目")
+            return false
+        }
+
         do {
             let manager = ASCredentialExportManager(presentationAnchor: anchor)
             let options = try await manager.requestExport(for: nil)
@@ -7647,10 +7847,13 @@ final class AppSessionModel {
                 return false
             }
             try await manager.exportCredentials(AppCredentialExchangeBridge.exportedData(from: plan))
-            credentialExchange.exportPlan = nil
-            credentialExchange.exportMessage = "已导出 \(plan.passwordCount) 条密码、\(plan.totpCount) 条 TOTP。"
+            credentialExchange.exportMessage = "已导出 \(plan.passwordCount) 条密码、\(plan.totpCount) 条 TOTP、\(plan.passkeyCount) 条通行密钥。"
+            credentialExchange.exportIsFinished = true
+            if issues.isEmpty {
+                credentialExchange.exportPlan = nil
+            }
             entryOperationState = .idle
-            return true
+            return issues.isEmpty
         } catch {
             credentialExchange.exportError = credentialExchangeFailureMessage(
                 prefix: "导出没有完成",
@@ -7663,6 +7866,10 @@ final class AppSessionModel {
     func cancelCredentialExchangeExport() {
         credentialExchange.exportPlan = nil
         credentialExchange.exportError = nil
+        credentialExchange.exportMessage = nil
+        credentialExchange.exportPasskeyCount = 0
+        credentialExchange.exportIssues = []
+        credentialExchange.exportIsFinished = false
         credentialExchange.isExporting = false
     }
 
