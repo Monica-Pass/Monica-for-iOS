@@ -1483,12 +1483,6 @@ final class AppSessionModel {
             guard isPlusActive else {
                 throw AppPlusResourceUnlockError.serviceUnavailable
             }
-            let vaultSession = try requireActiveVaultSession()
-            guard let entryRepository = activeEntryRepository,
-                  let projectID = activeProject?.id
-            else {
-                throw LocalVaultRepositoryError.vaultUnavailable
-            }
             let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
             defer {
                 if didStartAccessing {
@@ -1496,6 +1490,43 @@ final class AppSessionModel {
                 }
             }
             let plaintext = try Data(contentsOf: fileURL)
+            let mediaType = fileURL.pathExtension.isEmpty
+                ? "application/octet-stream"
+                : "application/\(fileURL.pathExtension.lowercased())"
+            return try addLocalAttachmentContent(
+                entryID: entryID,
+                fileName: sanitizedAttachmentPreviewFileName(fileURL.lastPathComponent),
+                mediaType: mediaType,
+                plaintext: plaintext,
+                source: "ios-file-importer"
+            )
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    /// 直接以内存数据写入加密附件存储；笔记 Markdown 图片与文件导入共用这条路径。
+    func addLocalAttachmentContent(
+        entryID: String?,
+        fileName: String,
+        mediaType: String,
+        plaintext: Data,
+        source: String
+    ) throws -> LocalAttachmentMetadata {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard isPlusActive else {
+                throw AppPlusResourceUnlockError.serviceUnavailable
+            }
+            let vaultSession = try requireActiveVaultSession()
+            guard let entryRepository = activeEntryRepository,
+                  let projectID = activeProject?.id
+            else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
             let contentEncryptionKey = Data((0..<LocalAttachmentContentDecryptor.androidContentEncryptionKeyByteCount).map { _ in UInt8.random(in: 0...255) })
             let sealedBox = try AES.GCM.seal(
                 plaintext,
@@ -1504,23 +1535,23 @@ final class AppSessionModel {
             guard let encryptedBlob = sealedBox.combined else {
                 throw AppAttachmentPreviewError.contentWriteFailed
             }
-            let fileName = sanitizedAttachmentPreviewFileName(fileURL.lastPathComponent)
+            let sanitizedFileName = sanitizedAttachmentPreviewFileName(fileName)
             let localPath = try androidBackupAttachmentBlobStore.saveEncryptedBlob(
                 encryptedBlob,
                 vaultID: vaultSession.handle.vaultID,
-                localPath: "ios-local-\(UUID().uuidString)-\(fileName).enc"
+                localPath: "ios-local-\(UUID().uuidString)-\(sanitizedFileName).enc"
             )
             let contentHash = Data(SHA256.hash(data: plaintext)).map { String(format: "%02x", $0) }.joined()
             let attachment = try entryRepository.createAttachmentMetadata(
                 projectID: projectID,
                 entryID: entryID,
-                fileName: fileName,
-                mediaType: fileURL.pathExtension.isEmpty ? "application/octet-stream" : "application/\(fileURL.pathExtension.lowercased())",
+                fileName: sanitizedFileName,
+                mediaType: mediaType,
                 originalSize: Int64(plaintext.count),
                 storedSize: Int64(encryptedBlob.count),
                 contentHash: "sha256:\(contentHash)",
                 storageMode: "ios-local-encrypted-blob",
-                source: "ios-file-importer",
+                source: source,
                 downloadState: "downloaded",
                 wrappedContentEncryptionKey: "IOS-RAWCEK:\(contentEncryptionKey.base64EncodedString())",
                 localPath: localPath
@@ -1538,6 +1569,23 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    /// 静默解密附件内容：供图片渲染使用，不写操作状态、不记录日志。
+    func attachmentPlaintext(_ entry: LocalAttachmentMetadata) throws -> Data {
+        let vaultSession = try requireActiveVaultSession()
+        guard let localPath = entry.localPath, !localPath.isEmpty else {
+            throw LocalAttachmentContentStoreError.missingLocalPath
+        }
+        let blob = try androidBackupAttachmentBlobStore.encryptedBlobData(
+            vaultID: vaultSession.handle.vaultID,
+            localPath: localPath
+        )
+        let contentEncryptionKey = try resolveAttachmentContentEncryptionKey(entry)
+        return try LocalAttachmentContentDecryptor.decryptAndroidLocalBlob(
+            blob,
+            contentEncryptionKey: contentEncryptionKey
+        )
     }
 
     func attachmentEntries(for entryID: String?) -> [LocalAttachmentMetadata] {
@@ -4638,6 +4686,7 @@ final class AppSessionModel {
                 itemID: entry.id,
                 itemTitle: entry.title
             )
+            completeNoteDraftCommit(noteID: entry.id, body: entry.body)
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -4679,6 +4728,7 @@ final class AppSessionModel {
                 itemID: entry.id,
                 itemTitle: entry.title
             )
+            completeNoteDraftCommit(noteID: entry.id, body: entry.body)
             entryOperationState = .succeeded(entry.title)
         } catch {
             entryOperationState = .failed(error.localizedDescription)
@@ -4729,6 +4779,9 @@ final class AppSessionModel {
             noteEntries = try entryRepository.listNoteEntries(projectID: projectID)
             deletedNoteEntries = try entryRepository.listDeletedNoteEntries(projectID: projectID)
             clearEditingNoteEntry()
+            if let store = noteDraftStore {
+                try? store.deleteDraft(draftID: AppNoteDraftPolicy.draftID(noteID: entryID))
+            }
             appendOperationTimelineEvent(
                 action: .deleted,
                 itemKind: .note,
@@ -11028,6 +11081,7 @@ final class AppSessionModel {
 
     private func clearUnlockedVaultSession() {
         autoFillDomainRules.detach()
+        clearNoteImageCache()
         vaultPassword = ""
         clearMasterPasswordChangeInput()
         vaultState = .locked
@@ -11078,6 +11132,7 @@ final class AppSessionModel {
     }
 
     private func clearVaultAccessAfterFailure() {
+        clearNoteImageCache()
         isPrivacyShieldVisible = false
         vaultPassword = ""
         clearMasterPasswordChangeInput()
