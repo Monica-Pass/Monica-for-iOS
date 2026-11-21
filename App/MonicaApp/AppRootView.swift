@@ -4,6 +4,7 @@ import MonicaStorage
 import Foundation
 import Observation
 import SwiftUI
+import UIKit
 
 // 旧 UserDefaults 密保记录由 MonicaSecurity 的 UserDefaultsLegacySecurityQuestionRecoveryStore
 // 读取，并在首次验证成功后迁移进钥匙串（#59）。
@@ -13,6 +14,7 @@ struct AppRootView: View {
     private let coreInfo = MonicaCoreInfo()
     private let mdbxInfo = MonicaMDBXBridgeInfo()
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var session: AppSessionModel
 
     /// A body-relative metric turns the user's Dynamic Type size into a spacing
@@ -22,6 +24,12 @@ struct AppRootView: View {
     /// is applied to the root view: SwiftUI layout sizes stay truthful, so tap
     /// targets never drift away from their visual positions.
     @ScaledMetric(relativeTo: .body) private var paritySpacingBase: CGFloat = 16
+
+    /// issue #153：只有 iPhone 等紧凑宽度才主动弹出键盘。
+    /// iPad（含分屏、Stage Manager 与大屏多任务）保持现有焦点行为，避免键盘挤压布局。
+    private var allowsForcedSearchKeyboard: Bool {
+        horizontalSizeClass == .compact && UIDevice.current.userInterfaceIdiom == .phone
+    }
 
     private var paritySpacingScale: CGFloat {
         let dynamicTypeRatio = paritySpacingBase / 16
@@ -105,6 +113,8 @@ struct AppRootView: View {
             if state == .unlocked {
                 session.consumePendingControlNavigationIfAvailable()
                 session.consumePendingControlPageIfUnlocked()
+                // issue #153：解锁后结算一次启动自动聚焦；iPad 分屏与大屏不强制弹键盘。
+                session.settleLaunchSearchAutoFocus(allowsForcedKeyboard: allowsForcedSearchKeyboard)
             }
         }
         .onChange(of: session.vaultState) { _, state in
@@ -128,6 +138,9 @@ struct AppRootView: View {
             restoreBitwardenAuthenticationSessionIfAvailable()
             importPendingExtensionInboxItems()
             session.consumePendingControlNavigationIfAvailable()
+            if session.vaultState == .unlocked {
+                session.settleLaunchSearchAutoFocus(allowsForcedKeyboard: allowsForcedSearchKeyboard)
+            }
             session.startObservingPlusPurchases()
             await session.refreshPlusEntitlement()
         }

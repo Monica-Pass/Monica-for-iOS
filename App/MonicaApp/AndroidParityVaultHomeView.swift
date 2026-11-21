@@ -93,6 +93,8 @@ struct AndroidParityVaultHomeView: View {
     @State private var isTrashPurgeConfirmationPresented = false
     @State private var isEmptyTrashConfirmationPresented = false
     @State private var loginActionFeedback: String?
+    /// issue #153：把「启动自动聚焦」从会话层一次性交给搜索面板。
+    @State private var isSearchFieldAutoFocusPending = false
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -128,6 +130,7 @@ struct AndroidParityVaultHomeView: View {
             title: largeTitle,
             selectedAction: $session.expandedToolbarAction,
             searchText: searchBinding,
+            isSearchFieldAutoFocusPending: $isSearchFieldAutoFocusPending,
             favoritesOnly: favoritesBinding,
             stackedGroupMode: $session.isLoginStackedGroupModeEnabled,
             showsStackedGroupModeToggle: itemKind == .login,
@@ -234,6 +237,15 @@ struct AndroidParityVaultHomeView: View {
         .quickLookPreview(attachmentQuickLookPreviewBinding)
         .onReceive(timer) { value in
             now = value
+        }
+        .task(id: session.isSearchAutoFocusPendingForPasswordPage) {
+            // 只有密码页根视图负责消费，避免验证器 / 银行卡页误抢焦点。
+            guard isPasswordRoot,
+                  session.isSearchAutoFocusPendingForPasswordPage else {
+                return
+            }
+            session.isSearchAutoFocusPendingForPasswordPage = false
+            isSearchFieldAutoFocusPending = true
         }
     }
 
@@ -1594,6 +1606,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, TagBar: Vi
     let title: String
     @Binding var selectedAction: AndroidParityToolbarAction?
     @Binding var searchText: String
+    @Binding var isSearchFieldAutoFocusPending: Bool
     @Binding var favoritesOnly: Bool
     @Binding var stackedGroupMode: Bool
     let showsStackedGroupModeToggle: Bool
@@ -1612,6 +1625,8 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, TagBar: Vi
     /// 为 nil 时（例如锁库状态）不展示全局搜索入口。
     var onOpenGlobalSearch: (() -> Void)? = nil
     @ViewBuilder var batchBar: BatchBar
+    /// issue #153：启动自动聚焦用的搜索框焦点。
+    @FocusState private var isSearchFieldFocused: Bool
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -1756,6 +1771,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, TagBar: Vi
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .textFieldStyle(AndroidParityTextFieldStyle())
+                .focused($isSearchFieldFocused)
             Toggle("仅显示收藏", isOn: $favoritesOnly)
                 .font(.headline.weight(.heavy))
                 .tint(AndroidParityPalette.primary)
@@ -1763,6 +1779,24 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, TagBar: Vi
                 Toggle("堆叠分组", isOn: $stackedGroupMode)
                     .font(.headline.weight(.heavy))
                     .tint(AndroidParityPalette.primary)
+            }
+        }
+        .task(id: isSearchFieldAutoFocusPending) {
+            // 搜索面板要等卡片真正插入层级后才能接收焦点，所以先让一帧再请求。
+            guard isSearchFieldAutoFocusPending else {
+                return
+            }
+            try? await Task.sleep(for: .milliseconds(150))
+            guard !Task.isCancelled, isSearchFieldAutoFocusPending else {
+                return
+            }
+            isSearchFieldFocused = true
+            isSearchFieldAutoFocusPending = false
+        }
+        .onDisappear {
+            isSearchFieldFocused = false
+            if isSearchFieldAutoFocusPending {
+                isSearchFieldAutoFocusPending = false
             }
         }
     }
