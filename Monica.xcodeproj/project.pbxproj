@@ -48,6 +48,7 @@
 		A160FB2E8832B7A04DE28D61 /* AppThemeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */; };
 		B78000000000000000000011 /* AppLiquidGlassSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78000000000000000000001 /* AppLiquidGlassSupport.swift */; };
 		A1000000000000000000001D /* GeneratorRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* GeneratorRootView.swift */; };
+		C39100000000000000000005 /* GeneratorSaveLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */; };
 		A1000000000000000000001F /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* SettingsRootView.swift */; };
 		A10000000000000000000103 /* AppDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000104 /* AppDiagnostics.swift */; };
 		A10000000000000000000105 /* AppDeveloperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000106 /* AppDeveloperSettingsView.swift */; };
@@ -62,6 +63,8 @@
 		B42020000000000000000000 /* AppAutoFillDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42120000000000000000000 /* AppAutoFillDiagnostics.swift */; };
 		B42030000000000000000000 /* AppAutoFillCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42130000000000000000000 /* AppAutoFillCenterView.swift */; };
 		B42040000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */; };
+		C39100000000000000000001 /* AppAutoFillCapabilitySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000002 /* AppAutoFillCapabilitySection.swift */; };
+		C39100000000000000000003 /* AppAutoFillEnablementSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000004 /* AppAutoFillEnablementSection.swift */; };
 		AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
 		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
@@ -145,6 +148,7 @@
 		AA000000000000000000001E /* AppSessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001D /* AppSessionModel.swift */; };
 		AB1000000000000000000002 /* AppBillingSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1000000000000000000001 /* AppBillingSupport.swift */; };
 		AB2000000000000000000002 /* BillingItemsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2000000000000000000001 /* BillingItemsTests.swift */; };
+		C39100000000000000000007 /* AppSessionModel+GeneratedLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000008 /* AppSessionModel+GeneratedLogin.swift */; };
 		B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000001 /* AppVaultRegistrySupport.swift */; };
 		B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */; };
 		B29000000000000000000022 /* VaultRegistryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000021 /* VaultRegistryViews.swift */; };
@@ -233,6 +237,7 @@
 		A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeSettingsView.swift; sourceTree = "<group>"; };
 		B78000000000000000000001 /* AppLiquidGlassSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLiquidGlassSupport.swift; sourceTree = "<group>"; };
 		A1000000000000000000001E /* GeneratorRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorRootView.swift; sourceTree = "<group>"; };
+		C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorSaveLoginSheet.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000104 /* AppDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiagnostics.swift; sourceTree = "<group>"; };
 		A10000000000000000000106 /* AppDeveloperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDeveloperSettingsView.swift; sourceTree = "<group>"; };
@@ -247,6 +252,8 @@
 		B42120000000000000000000 /* AppAutoFillDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDiagnostics.swift; sourceTree = "<group>"; };
 		B42130000000000000000000 /* AppAutoFillCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillCenterView.swift; sourceTree = "<group>"; };
 		B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDefaultManagerGuideView.swift; sourceTree = "<group>"; };
+		C39100000000000000000002 /* AppAutoFillCapabilitySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillCapabilitySection.swift; sourceTree = "<group>"; };
+		C39100000000000000000004 /* AppAutoFillEnablementSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillEnablementSection.swift; sourceTree = "<group>"; };
 		AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
 		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
@@ -334,6 +341,7 @@
 		AA000000000000000000001D /* AppSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel.swift"; sourceTree = "<group>"; };
 		AB1000000000000000000001 /* AppBillingSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBillingSupport.swift"; sourceTree = "<group>"; };
 		AB2000000000000000000001 /* BillingItemsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingItemsTests.swift; sourceTree = "<group>"; };
+		C39100000000000000000008 /* AppSessionModel+GeneratedLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+GeneratedLogin.swift"; sourceTree = "<group>"; };
 		B29000000000000000000001 /* AppVaultRegistrySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultRegistrySupport.swift; sourceTree = "<group>"; };
 		B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultRegistry.swift"; sourceTree = "<group>"; };
 		B29000000000000000000021 /* VaultRegistryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultRegistryViews.swift; sourceTree = "<group>"; };
@@ -438,6 +446,7 @@
 				AA2B00000000000000000003 /* AppLanguageSettingsView.swift */,
 				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
+				C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
 				A10000000000000000000104 /* AppDiagnostics.swift */,
 				A10000000000000000000106 /* AppDeveloperSettingsView.swift */,
@@ -452,6 +461,8 @@
 				B42120000000000000000000 /* AppAutoFillDiagnostics.swift */,
 				B42130000000000000000000 /* AppAutoFillCenterView.swift */,
 				B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */,
+				C39100000000000000000002 /* AppAutoFillCapabilitySection.swift */,
+				C39100000000000000000004 /* AppAutoFillEnablementSection.swift */,
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
@@ -509,6 +520,7 @@
 				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
+				C39100000000000000000008 /* AppSessionModel+GeneratedLogin.swift */,
 				B29000000000000000000001 /* AppVaultRegistrySupport.swift */,
 				B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */,
 				B29000000000000000000021 /* VaultRegistryViews.swift */,
@@ -897,6 +909,7 @@
 				A160FB2E8832B7A04DE28D61 /* AppThemeSettingsView.swift in Sources */,
 				B78000000000000000000011 /* AppLiquidGlassSupport.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
+				C39100000000000000000005 /* GeneratorSaveLoginSheet.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
 				A10000000000000000000103 /* AppDiagnostics.swift in Sources */,
 				A10000000000000000000105 /* AppDeveloperSettingsView.swift in Sources */,
@@ -911,6 +924,8 @@
 				B42020000000000000000000 /* AppAutoFillDiagnostics.swift in Sources */,
 				B42030000000000000000000 /* AppAutoFillCenterView.swift in Sources */,
 				B42040000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift in Sources */,
+				C39100000000000000000001 /* AppAutoFillCapabilitySection.swift in Sources */,
+				C39100000000000000000003 /* AppAutoFillEnablementSection.swift in Sources */,
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
@@ -964,6 +979,7 @@
 				AA000000000000000000001C /* AppImportExportSupport.swift in Sources */,
 				AE1200000000000000000002 /* AppGPGKeySupport.swift in Sources */,
 				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
+				C39100000000000000000007 /* AppSessionModel+GeneratedLogin.swift in Sources */,
 				B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */,
 				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
 				B29000000000000000000022 /* VaultRegistryViews.swift in Sources */,

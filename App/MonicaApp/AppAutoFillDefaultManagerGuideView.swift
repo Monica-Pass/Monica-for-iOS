@@ -2,23 +2,29 @@ import MonicaCore
 import SwiftUI
 import UIKit
 
-/// 「设为默认密码管理器」引导页。
+/// 「设为默认密码管理器」引导页，也可作为「系统自动填充说明」复用。
 ///
 /// iOS 的诚实版本：系统只允许用户在「设置」里选择自动填充来源，App 无法读取或设置
 /// 「系统默认密码管理器」是谁，也无法监听其它 App 里的密码输入框。本页只提供公开的设置入口、
-/// 可复制的引导文字和测试步骤，不会声称已经接管系统自动填充。
+/// 可复制的引导文字、能力矩阵和测试步骤，不会声称已经接管系统自动填充。
 struct AppAutoFillDefaultManagerGuideView: View {
     @Environment(\.openURL) private var openURL
     @State private var didCopyGuide = false
+    private let title: String
+
+    init(title: String = String(localized: "设为自动填充来源")) {
+        self.title = title
+    }
 
     var body: some View {
         AndroidParityScreen {
             stepsSection
             testSection
             quickTypeSection
+            AppAutoFillCapabilityMatrixSection()
             limitationsSection
         }
-        .navigationTitle("设为自动填充来源")
+        .navigationTitle(title)
         .navigationBarTitleDisplayMode(.inline)
     }
 
