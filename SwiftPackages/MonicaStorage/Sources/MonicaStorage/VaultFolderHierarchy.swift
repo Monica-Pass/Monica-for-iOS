@@ -671,7 +671,18 @@ public struct VaultFolderRepository {
 
     /// 读取整棵树；首次打开旧库时会自动把既有 category 导入成根文件夹。
     public func tree() throws -> VaultFolderTree {
-        let anchorProjectID = try ensureAnchor()
+        // 惰性锚点：读树不应写入。只有在存在旧库分类时，才创建锚点工程并导入，
+        // 否则新库一解锁就会多出一个空工程，占掉 project 序号、还会被误当成用户分类激活。
+        let anchorProjectID: String
+        if let existing = existingAnchorProjectID(), !existing.isEmpty {
+            anchorProjectID = existing
+        } else {
+            let legacy = try entryRepository.listProjects().filter {
+                $0.title != VaultFolderRepository.anchorProjectTitle
+            }
+            guard !legacy.isEmpty else { return .empty }
+            anchorProjectID = try ensureAnchor()
+        }
         let records = try entryRepository.listVaultFolderRecords(anchorProjectID: anchorProjectID)
         var tree = VaultFolderTree(records: records)
         let imported = try importLegacyProjectsIfNeeded(tree: &tree, anchorProjectID: anchorProjectID)
@@ -981,6 +992,11 @@ public struct VaultFolderRepository {
 
     /// 锚点工程用的隐藏标题；不会出现在文件夹树里。
     static let anchorProjectTitle = "内部：文件夹索引"
+
+    /// 锚点工程不是用户分类，界面上不应展示，也不应被激活。
+    public static func isSystemProjectTitle(_ title: String) -> Bool {
+        title == anchorProjectTitle
+    }
 }
 
 // MARK: - 条目枚举（按 kind 穷尽）

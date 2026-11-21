@@ -7332,7 +7332,7 @@ final class VaultSessionModelTests: XCTestCase {
 
         try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
 
-        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass / Work"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass · Work"])
         XCTAssertEqual(engine.createdLoginEntries.count, 1)
         XCTAssertEqual(engine.createdLoginEntries.first?.draft.title, "GitHub")
         XCTAssertEqual(engine.createdLoginEntries.first?.draft.username, "alice")
@@ -7413,11 +7413,11 @@ final class VaultSessionModelTests: XCTestCase {
 
         try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
 
-        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass / Work", "KeePass / Personal"])
-        XCTAssertEqual(model.vaultProjects.map(\.title), ["KeePass / Work", "KeePass / Personal"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass · Work", "KeePass · Personal"])
+        XCTAssertEqual(model.vaultProjects.map(\.title), ["KeePass · Work", "KeePass · Personal"])
         XCTAssertEqual(engine.createdLoginEntries.map(\.draft.title), ["GitHub", "Bank"])
         XCTAssertEqual(engine.createdLoginEntries.map(\.projectID), ["project-1", "project-2"])
-        XCTAssertEqual(model.activeVaultCategoryTitle, "KeePass / Work")
+        XCTAssertEqual(model.activeVaultCategoryTitle, "KeePass · Work")
         XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
         XCTAssertEqual(
             model.keePassLastMetadataImportReferences,
@@ -7968,11 +7968,11 @@ final class VaultSessionModelTests: XCTestCase {
 
         try model.confirmKeePassReadOnlyImport(projectTitle: "KeePass")
 
-        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass / Work", "KeePass / Recycle Bin"])
+        XCTAssertEqual(engine.createdProjects.map(\.title), ["KeePass · Work", "KeePass · Recycle Bin"])
         XCTAssertEqual(engine.createdLoginEntries.map(\.draft.title), ["GitHub", "Old Login"])
         XCTAssertEqual(engine.createdLoginEntries.map(\.draft.password), ["", ""])
         XCTAssertEqual(engine.deletedLoginEntries.map(\.entryID), ["entry-2"])
-        XCTAssertEqual(model.activeVaultCategoryTitle, "KeePass / Work")
+        XCTAssertEqual(model.activeVaultCategoryTitle, "KeePass · Work")
         XCTAssertEqual(model.loginEntries.map(\.title), ["GitHub"])
         XCTAssertTrue(model.deletedLoginEntries.isEmpty)
         XCTAssertFalse(model.entryOperationState.label.contains("entry-uuid-deleted"))
