@@ -36,6 +36,7 @@
 		A160B4B6709933A64862B828 /* AppAppearanceCompatibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */; };
 		A1602E56E6AD5DE24618A55C /* AppAlternateAppIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */; };
 		A160FB2E8832B7A04DE28D61 /* AppThemeSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */; };
+		B78000000000000000000011 /* AppLiquidGlassSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78000000000000000000001 /* AppLiquidGlassSupport.swift */; };
 		A1000000000000000000001D /* GeneratorRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* GeneratorRootView.swift */; };
 		A1000000000000000000001F /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* SettingsRootView.swift */; };
 		A10000000000000000000103 /* AppDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000104 /* AppDiagnostics.swift */; };
@@ -97,6 +98,7 @@
 		B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */; };
 		B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */; };
 		A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000013 /* SensitivePrivacyTests.swift */; };
+		B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */; };
 		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
 		AA1000000000000000000002 /* AppTotpAdvancedSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */; };
 		AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* AppAttachmentSupport.swift */; };
@@ -187,6 +189,7 @@
 		A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAppearanceCompatibility.swift; sourceTree = "<group>"; };
 		A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAlternateAppIcon.swift; sourceTree = "<group>"; };
 		A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppThemeSettingsView.swift; sourceTree = "<group>"; };
+		B78000000000000000000001 /* AppLiquidGlassSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLiquidGlassSupport.swift; sourceTree = "<group>"; };
 		A1000000000000000000001E /* GeneratorRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000104 /* AppDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiagnostics.swift; sourceTree = "<group>"; };
@@ -252,6 +255,7 @@
 		B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWidgetSnapshotSupport.swift; sourceTree = "<group>"; };
 		B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotReloadTests.swift; sourceTree = "<group>"; };
 		A13000000000000000000013 /* SensitivePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyTests.swift; sourceTree = "<group>"; };
+		B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLiquidGlassSupportTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
 		AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppTotpAdvancedSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000003 /* AppAttachmentSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAttachmentSupport.swift"; sourceTree = "<group>"; };
@@ -365,6 +369,7 @@
 				A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */,
 				A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */,
 				A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */,
+				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
 				A10000000000000000000104 /* AppDiagnostics.swift */,
@@ -482,6 +487,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
+				B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */,
 				AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
 			);
@@ -792,6 +798,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A160B4B6709933A64862B828 /* AppAppearanceCompatibility.swift in Sources */,
 				A1602E56E6AD5DE24618A55C /* AppAlternateAppIcon.swift in Sources */,
 				A160FB2E8832B7A04DE28D61 /* AppThemeSettingsView.swift in Sources */,
+				B78000000000000000000011 /* AppLiquidGlassSupport.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
 				A10000000000000000000103 /* AppDiagnostics.swift in Sources */,
@@ -867,6 +874,7 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				A97000000000000000000004 /* SSOItemTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
+				B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */,
 				AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
 				A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */,
 			);

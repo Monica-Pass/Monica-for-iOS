@@ -1224,12 +1224,14 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             }
             .background(AndroidParityPalette.background.ignoresSafeArea())
             .foregroundStyle(AndroidParityPalette.textPrimary)
+            .appScrollEdgeEffectBottom()
 
             if addMenuKinds.isEmpty {
                 Button(action: onAdd) {
                     fabLabel
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("添加")
                 .padding(.trailing, 18)
                 .padding(.bottom, 26)
             } else {
@@ -1243,6 +1245,7 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                     fabLabel
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("添加")
                 .padding(.trailing, 18)
                 .padding(.bottom, 26)
             }
@@ -1254,7 +1257,11 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             .font(AndroidParityTypography.controlIcon(weight: .medium))
             .foregroundStyle(AndroidParityPalette.textPrimary)
             .frame(minWidth: 54, minHeight: 54)
-            .background(AndroidParityPalette.primaryContainer, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .appFloatingControlSurface(
+                fill: AndroidParityPalette.primaryContainer,
+                outline: AndroidParityPalette.outline,
+                shape: RoundedRectangle(cornerRadius: 22, style: .continuous)
+            )
     }
 
     private var header: some View {
@@ -1267,7 +1274,9 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
                 .frame(maxWidth: .infinity, alignment: .leading)
             HStack(spacing: 22) {
                 toolbarButton(.folder, icon: "folder.fill", action: onOpenVault)
+                    .accessibilityLabel("打开保险库")
                 toolbarButton(.search, icon: "magnifyingglass")
+                    .accessibilityLabel("搜索")
                 if showsMoreMenu, !moreMenuModules.isEmpty {
                     Menu {
                         ForEach(moreMenuModules) { module in
@@ -1289,7 +1298,11 @@ struct AndroidParityModuleChrome<SectionBar: View, CategoryBar: View, BatchBar: 
             }
             .padding(.horizontal, 24)
             .frame(minHeight: 64)
-            .background(AndroidParityPalette.surfaceVariant, in: Capsule(style: .continuous))
+            .appFloatingControlSurface(
+                fill: AndroidParityPalette.surfaceVariant,
+                outline: AndroidParityPalette.outline,
+                shape: Capsule(style: .continuous)
+            )
         }
     }
 
