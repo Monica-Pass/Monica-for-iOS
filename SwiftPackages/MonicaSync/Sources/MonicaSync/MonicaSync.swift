@@ -104,6 +104,9 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
     public let folderID: String?
     public let folderName: String?
     public let collectionNames: [String]
+    public let organizationID: String?
+    public let collectionIDs: [String]
+    public let customFields: [BitwardenSyncCustomField]
     public let attachments: [BitwardenSyncAttachment]
     public let attachmentByteCount: Int
     public let updatedAt: Date?
@@ -145,6 +148,9 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         folderID: String? = nil,
         folderName: String? = nil,
         collectionNames: [String] = [],
+        organizationID: String? = nil,
+        collectionIDs: [String] = [],
+        customFields: [BitwardenSyncCustomField] = [],
         attachments: [BitwardenSyncAttachment] = [],
         attachmentByteCount: Int = 0,
         updatedAt: Date? = nil,
@@ -185,6 +191,9 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.folderID = folderID
         self.folderName = folderName
         self.collectionNames = collectionNames
+        self.organizationID = organizationID
+        self.collectionIDs = collectionIDs
+        self.customFields = customFields
         self.attachments = attachments
         self.attachmentByteCount = attachments.isEmpty ? attachmentByteCount : attachments.reduce(0) { $0 + $1.byteCount }
         self.updatedAt = updatedAt
@@ -213,6 +222,54 @@ public struct BitwardenSyncItem: Sendable, Equatable, Identifiable {
         self.sshPublicKey = sshPublicKey
         self.sshPrivateKey = sshPrivateKey
         self.sshKeyFingerprint = sshKeyFingerprint
+    }
+
+    /// 与 `BitwardenLocalItemSyncItem.syncFingerprint` 使用完全相同的字段顺序与分隔符，
+    /// 因此可以直接比较「远端内容」与「本地上次同步内容」。
+    public var syncFingerprint: String {
+        [
+            kind.rawValue,
+            title,
+            username,
+            url,
+            password ?? "",
+            totpSecret ?? "",
+            notes ?? "",
+            folderID ?? "",
+            folderName ?? "",
+            favorite ? "true" : "false",
+            cardholderName,
+            cardNumber,
+            cardExpiryMonth,
+            cardExpiryYear,
+            cardCode,
+            cardBrand,
+            identityFullName,
+            identityDocumentNumber,
+            identityIssuer,
+            identityCountry,
+            passkeyRelyingPartyID,
+            passkeyRelyingPartyName,
+            passkeyCredentialID,
+            passkeyUserHandle,
+            passkeyPublicKeyCOSE,
+            passkeyPrivateKeyReference,
+            passkeyPublicKeyAlgorithm,
+            passkeyCounter,
+            passkeyDiscoverable ? "true" : "false",
+            passkeyCreationDate,
+            sshPublicKey,
+            sshPrivateKey,
+            sshKeyFingerprint
+        ].joined(separator: "\u{1F}")
+    }
+
+    /// 组织 / 集合归属的只读摘要（不含字段值）。
+    public var collectionSummary: String {
+        var parts: [String] = []
+        if organizationID != nil { parts.append("组织条目") }
+        if !collectionNames.isEmpty { parts.append(collectionNames.joined(separator: "、")) }
+        return parts.joined(separator: " · ")
     }
 
     public var redactedSummary: String {
@@ -292,6 +349,7 @@ public struct BitwardenSyncSnapshot: Sendable, Equatable {
     public let revision: String
     public let premiumSource: PremiumSource
     public let folders: [BitwardenSyncFolder]
+    public let collections: [BitwardenSyncCollection]
     public let items: [BitwardenSyncItem]
     public let sends: [BitwardenSendSyncItem]
 
@@ -300,6 +358,7 @@ public struct BitwardenSyncSnapshot: Sendable, Equatable {
         revision: String,
         premiumSource: PremiumSource = .none,
         folders: [BitwardenSyncFolder] = [],
+        collections: [BitwardenSyncCollection] = [],
         items: [BitwardenSyncItem] = [],
         sends: [BitwardenSendSyncItem] = []
     ) {
@@ -307,6 +366,7 @@ public struct BitwardenSyncSnapshot: Sendable, Equatable {
         self.revision = revision
         self.premiumSource = premiumSource
         self.folders = folders
+        self.collections = collections
         self.items = items
         self.sends = sends
     }
@@ -439,6 +499,8 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
     public let folderID: String?
     public let folderName: String?
     public let favorite: Bool
+    public let organizationID: String?
+    public let collectionIDs: [String]
     public let cardholderName: String
     public let cardNumber: String
     public let cardExpiryMonth: String
@@ -475,6 +537,8 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         folderID: String? = nil,
         folderName: String? = nil,
         favorite: Bool = false,
+        organizationID: String? = nil,
+        collectionIDs: [String] = [],
         cardholderName: String = "",
         cardNumber: String = "",
         cardExpiryMonth: String = "",
@@ -510,6 +574,8 @@ public struct BitwardenLocalItemSyncItem: Sendable, Equatable, Identifiable {
         self.folderID = folderID
         self.folderName = folderName
         self.favorite = favorite
+        self.organizationID = organizationID
+        self.collectionIDs = collectionIDs
         self.cardholderName = cardholderName
         self.cardNumber = cardNumber
         self.cardExpiryMonth = cardExpiryMonth
@@ -652,6 +718,12 @@ public struct BitwardenItemSyncState: Sendable, Equatable, Codable, Identifiable
     public let lastSyncedFingerprint: String
     public let lastRemoteRevision: String?
     public let isDeleted: Bool
+    /// 上一次同步时远端条目的内容指纹。为 nil 表示旧版本写入的状态，
+    /// 此时回退到 `lastRemoteRevision`（远端 updatedAt）判断远端是否变化。
+    public let lastRemoteFingerprint: String?
+    /// 组织归属与集合 ID，用于推送时保留远端归属，避免把组织条目写成个人条目。
+    public let organizationID: String?
+    public let collectionIDs: [String]?
 
     public init(
         localID: String,
@@ -659,7 +731,10 @@ public struct BitwardenItemSyncState: Sendable, Equatable, Codable, Identifiable
         kind: BitwardenSyncItemKind,
         lastSyncedFingerprint: String,
         lastRemoteRevision: String?,
-        isDeleted: Bool = false
+        isDeleted: Bool = false,
+        lastRemoteFingerprint: String? = nil,
+        organizationID: String? = nil,
+        collectionIDs: [String]? = nil
     ) {
         self.localID = localID
         self.remoteID = remoteID
@@ -667,6 +742,9 @@ public struct BitwardenItemSyncState: Sendable, Equatable, Codable, Identifiable
         self.lastSyncedFingerprint = lastSyncedFingerprint
         self.lastRemoteRevision = lastRemoteRevision
         self.isDeleted = isDeleted
+        self.lastRemoteFingerprint = lastRemoteFingerprint
+        self.organizationID = organizationID
+        self.collectionIDs = collectionIDs
     }
 
     public var redactedSummary: String {
@@ -2453,6 +2531,42 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
         )
     }
 
+    /// 官方客户端同样用 `accounts/revision-date` 判断要不要重新拉取整个保险库。
+    public func latestRevision() async throws -> BitwardenSyncRevision? {
+        guard let session = try sessionStore.loadSession() else {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        let accessToken = try await accessTokenProvider.accessToken()
+        let response = try await vaultTransport.send(
+            BitwardenVaultSyncRequest(
+                method: "GET",
+                url: Self.revisionDateURL(apiURL: session.apiURL),
+                headers: [
+                    "Authorization": "Bearer \(accessToken)",
+                    "Accept": "application/json"
+                ]
+            )
+        )
+        if response.statusCode == 401 || response.statusCode == 403 {
+            throw BitwardenSyncProviderError.authenticationRequired
+        }
+        guard (200...299).contains(response.statusCode) else {
+            throw BitwardenSyncProviderError.serverRejected(statusCode: response.statusCode)
+        }
+        return Self.parseRevision(data: response.body)
+    }
+
+    public func pullSnapshot(ifChangedSince revision: BitwardenSyncRevision?) async throws -> BitwardenSyncPullOutcome {
+        guard let revision else {
+            return .changed(snapshot: try await pullSnapshot(), revision: nil)
+        }
+        let latest = try await latestRevision()
+        if let latest, latest.value == revision.value {
+            return .unchanged(revision: latest)
+        }
+        return .changed(snapshot: try await pullSnapshot(), revision: latest)
+    }
+
     public func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult {
         guard let session = try sessionStore.loadSession() else {
             throw BitwardenSyncProviderError.authenticationRequired
@@ -2633,6 +2747,33 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             revision: Self.revision(from: createResponse) ?? "",
             assignedRemoteIDs: [localID: sendRemoteID]
         )
+    }
+
+    static func revisionDateURL(apiURL: URL) -> URL {
+        var components = URLComponents(url: apiURL, resolvingAgainstBaseURL: false)
+        let basePath = components?.path.trimmingCharacters(in: CharacterSet(charactersIn: "/")) ?? ""
+        components?.path = "/" + [basePath, "accounts", "revision-date"]
+            .filter { !$0.isEmpty }
+            .joined(separator: "/")
+        components?.queryItems = nil
+        return components?.url ?? apiURL
+    }
+
+    /// 解析 `accounts/revision-date`：官方返回 `{"object":"template","data":<epoch 毫秒>}`，
+    /// 部分自托管版本返回 ISO 8601 字符串。解析不了时返回 nil（调用方会退化为全量拉取）。
+    static func parseRevision(data: Data) -> BitwardenSyncRevision? {
+        guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        if let milliseconds = (root["data"] as? Double) ?? (root["Data"] as? Double) {
+            return BitwardenSyncRevision(value: String(Int64(milliseconds)), capturedAt: Date(timeIntervalSince1970: milliseconds / 1000))
+        }
+        if let milliseconds = root["data"] as? Int {
+            return BitwardenSyncRevision(value: String(milliseconds), capturedAt: Date(timeIntervalSince1970: Double(milliseconds) / 1000))
+        }
+        if let raw = (root["data"] as? String) ?? (root["Data"] as? String), !raw.isEmpty {
+            let capturedAt = ISO8601DateFormatter().date(from: raw)
+            return BitwardenSyncRevision(value: raw, capturedAt: capturedAt ?? Date())
+        }
+        return nil
     }
 
     private static func syncURL(apiURL: URL) -> URL {
@@ -3198,8 +3339,8 @@ public struct BitwardenVaultSyncProvider: BitwardenSyncProvider {
             "notes": try encryptedOptional(item.notes, key: key),
             "folderId": item.folderID.map { $0 as Any } ?? NSNull(),
             "favorite": item.favorite,
-            "organizationId": NSNull(),
-            "collectionIds": []
+            "organizationId": item.organizationID.map { $0 as Any } ?? NSNull(),
+            "collectionIds": item.collectionIDs
         ]
 
         switch item.kind {
@@ -3432,6 +3573,10 @@ public final class URLSessionBitwardenVaultSyncTransport: BitwardenVaultSyncTran
 
 public protocol BitwardenSyncProvider: Sendable {
     func pullSnapshot() async throws -> BitwardenSyncSnapshot
+    /// 远端最新修订标记；不支持增量查询的实现返回 nil。
+    func latestRevision() async throws -> BitwardenSyncRevision?
+    /// 带增量判断的拉取：远端修订没有变化时返回 `.unchanged`，避免整库重复导入。
+    func pullSnapshot(ifChangedSince revision: BitwardenSyncRevision?) async throws -> BitwardenSyncPullOutcome
     func pushMutations(_ mutations: [BitwardenSyncMutation]) async throws -> BitwardenSyncPushResult
     func uploadAttachment(_ request: BitwardenAttachmentUploadRequest) async throws -> BitwardenAttachmentUploadResult
     func downloadAttachment(_ request: BitwardenAttachmentDownloadRequest) async throws -> BitwardenAttachmentDownloadResult
@@ -3442,6 +3587,14 @@ public protocol BitwardenSyncProvider: Sendable {
 }
 
 public extension BitwardenSyncProvider {
+    func latestRevision() async throws -> BitwardenSyncRevision? {
+        nil
+    }
+
+    func pullSnapshot(ifChangedSince revision: BitwardenSyncRevision?) async throws -> BitwardenSyncPullOutcome {
+        .changed(snapshot: try await pullSnapshot(), revision: nil)
+    }
+
     func uploadAttachment(_ request: BitwardenAttachmentUploadRequest) async throws -> BitwardenAttachmentUploadResult {
         throw BitwardenSyncProviderError.unsupportedOperation
     }
@@ -3523,10 +3676,16 @@ private enum BitwardenVaultSyncSnapshotParser {
             )
         }
         let folderNamesByID = Dictionary(uniqueKeysWithValues: folderItems.map { ($0.remoteID, $0.name) })
-        let collectionNamesByID = collections.reduce(into: [String: String]()) { result, collection in
-            guard let id = string(collection, "id", "Id"), !id.isEmpty else { return }
-            result[id] = decryptedString(collection, "name", "Name", key: vaultKey) ?? ""
+        let collectionItems = collections.compactMap { collection -> BitwardenSyncCollection? in
+            guard let id = string(collection, "id", "Id"), !id.isEmpty else { return nil }
+            return BitwardenSyncCollection(
+                remoteID: id,
+                name: decryptedString(collection, "name", "Name", key: vaultKey) ?? "",
+                organizationID: string(collection, "organizationId", "OrganizationId"),
+                isDefault: bool(collection, "default", "Default") ?? false
+            )
         }
+        let collectionNamesByID = Dictionary(uniqueKeysWithValues: collectionItems.map { ($0.remoteID, $0.name) })
         let items = ciphers.compactMap { cipher -> BitwardenSyncItem? in
             guard let id = string(cipher, "id", "Id"), !id.isEmpty else { return nil }
             let effectiveKey: BitwardenVaultKey?
@@ -3538,7 +3697,8 @@ private enum BitwardenVaultSyncSnapshotParser {
                 effectiveKey = vaultKey
             }
             let folderID = string(cipher, "folderId", "FolderId")
-            let collectionNames = stringArray(cipher, "collectionIds", "CollectionIds")
+            let collectionIDs = stringArray(cipher, "collectionIds", "CollectionIds")
+            let collectionNames = collectionIDs
                 .compactMap { collectionNamesByID[$0] }
                 .filter { !$0.isEmpty }
             let login = dictionary(cipher, "login", "Login")
@@ -3546,6 +3706,7 @@ private enum BitwardenVaultSyncSnapshotParser {
             let identity = dictionary(cipher, "identity", "Identity")
             let sshKey = dictionary(cipher, "sshKey", "SshKey", "SSHKey")
             let customFields = customFields(cipher, key: effectiveKey)
+            let customFieldItems = customFieldItems(cipher, key: effectiveKey)
             let fido2Credential = array(login, "fido2Credentials", "Fido2Credentials").first ?? [:]
             let type = int(cipher, "type", "Type") ?? 1
             let kind = itemKind(
@@ -3577,6 +3738,9 @@ private enum BitwardenVaultSyncSnapshotParser {
                 folderID: folderID,
                 folderName: folderID.flatMap { folderNamesByID[$0] },
                 collectionNames: collectionNames,
+                organizationID: string(cipher, "organizationId", "OrganizationId"),
+                collectionIDs: collectionIDs,
+                customFields: customFieldItems,
                 attachments: attachments,
                 attachmentByteCount: byteCount(array(cipher, "attachments", "Attachments")),
                 updatedAt: date(string(cipher, "revisionDate", "RevisionDate")),
@@ -3642,6 +3806,7 @@ private enum BitwardenVaultSyncSnapshotParser {
             revision: string(profile, "securityStamp", "SecurityStamp") ?? "",
             premiumSource: premiumSource(profile: profile),
             folders: folderItems,
+            collections: collectionItems,
             items: items,
             sends: sendItems
         )
@@ -3690,6 +3855,30 @@ private enum BitwardenVaultSyncSnapshotParser {
             let value = decryptedString(field, "value", "Value", key: key) ?? ""
             result[name] = value
             result[name.lowercased()] = value
+        }
+    }
+
+    /// 带类型的自定义字段列表（供只读展示与字段级合并使用）。
+    /// Monica 自己写入的 `monica_*` 兼容字段不重复展示。
+    private static func customFieldItems(_ cipher: [String: Any], key: BitwardenVaultKey?) -> [BitwardenSyncCustomField] {
+        array(cipher, "fields", "Fields").compactMap { field -> BitwardenSyncCustomField? in
+            guard let name = decryptedString(field, "name", "Name", key: key)?
+                .trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty,
+                  !name.lowercased().hasPrefix("monica_") else {
+                return nil
+            }
+            let rawType = int(field, "type", "Type") ?? 0
+            let type: BitwardenSyncCustomFieldType = switch rawType {
+            case 1: .hidden
+            case 2: .boolean
+            default: .text
+            }
+            return BitwardenSyncCustomField(
+                name: name,
+                value: decryptedString(field, "value", "Value", key: key) ?? "",
+                type: type
+            )
         }
     }
 

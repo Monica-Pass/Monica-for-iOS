@@ -120,6 +120,8 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
     let remoteAttachmentByteCount: Int
     let premiumSource: BitwardenSyncSnapshot.PremiumSource
     let remoteSendTitles: [String]
+    /// 字段级合并与集合过滤的计数；只有预览/同步路径才会填，旧调用方保持 nil。
+    var mergeSummary: BitwardenSyncPreviewSummary?
 
     init(snapshot: BitwardenSyncSnapshot) {
         self.accountLabel = snapshot.accountLabel
@@ -176,7 +178,8 @@ struct AppBitwardenSyncPreview: Sendable, Equatable {
             remoteFolderCount > 0 ? String(localized: "文件夹 \(remoteFolderCount)") : "",
             kindSummary,
             attachmentSummary,
-            sends
+            sends,
+            mergeSummary?.redactedSummary ?? ""
         ]
         .filter { !$0.isEmpty }
         .joined(separator: " ")
@@ -648,5 +651,89 @@ enum BitwardenSyncState: Sendable, Equatable {
             return true
         }
         return false
+    }
+}
+
+
+// MARK: - 增量同步检查点
+
+/// 上次成功同步时远端返回的修订标记。只保存修订号与时间戳，
+/// 不包含任何 token、主密码或条目内容，因此可以安全落盘。
+struct AppBitwardenSyncCheckpoint: Codable, Sendable, Equatable {
+    let revision: BitwardenSyncRevision
+    let vaultID: String
+    let syncedAt: Date
+
+    var redactedSummary: String {
+        String(localized: "上次同步 \(syncedAt.formatted(date: .numeric, time: .shortened))")
+    }
+}
+
+protocol AppBitwardenSyncCheckpointStore: Sendable {
+    func loadCheckpoint(vaultID: String) throws -> AppBitwardenSyncCheckpoint?
+    func saveCheckpoint(_ checkpoint: AppBitwardenSyncCheckpoint?, vaultID: String) throws
+}
+
+final class MemoryAppBitwardenSyncCheckpointStore: AppBitwardenSyncCheckpointStore, @unchecked Sendable {
+    private var checkpointsByVaultID: [String: AppBitwardenSyncCheckpoint] = [:]
+
+    func loadCheckpoint(vaultID: String) throws -> AppBitwardenSyncCheckpoint? {
+        checkpointsByVaultID[vaultID]
+    }
+
+    func saveCheckpoint(_ checkpoint: AppBitwardenSyncCheckpoint?, vaultID: String) throws {
+        checkpointsByVaultID[vaultID] = checkpoint
+    }
+}
+
+struct FileAppBitwardenSyncCheckpointStore: AppBitwardenSyncCheckpointStore, @unchecked Sendable {
+    private let directoryURL: URL
+    private let fileManager: FileManager
+    private let encoder: JSONEncoder
+    private let decoder: JSONDecoder
+
+    init(containerURL: URL, fileManager: FileManager = .default) {
+        directoryURL = containerURL.appendingPathComponent("bitwarden-sync-checkpoint-v1", isDirectory: true)
+        self.fileManager = fileManager
+        encoder = JSONEncoder()
+        decoder = JSONDecoder()
+    }
+
+    func loadCheckpoint(vaultID: String) throws -> AppBitwardenSyncCheckpoint? {
+        let url = fileURL(vaultID: vaultID)
+        guard fileManager.fileExists(atPath: url.path) else {
+            return nil
+        }
+        return try decoder.decode(AppBitwardenSyncCheckpoint.self, from: Data(contentsOf: url))
+    }
+
+    func saveCheckpoint(_ checkpoint: AppBitwardenSyncCheckpoint?, vaultID: String) throws {
+        let url = fileURL(vaultID: vaultID)
+        guard let checkpoint else {
+            if fileManager.fileExists(atPath: url.path) {
+                try fileManager.removeItem(at: url)
+            }
+            return
+        }
+        try fileManager.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        try encoder.encode(checkpoint).write(to: url, options: [.atomic])
+    }
+
+    private func fileURL(vaultID: String) -> URL {
+        let sanitized = vaultID
+            .unicodeScalars
+            .map { scalar -> String in
+                switch scalar.value {
+                case 48...57, 65...90, 97...122:
+                    String(scalar)
+                case 45, 95:
+                    String(scalar)
+                default:
+                    "_"
+                }
+            }
+            .joined()
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return directoryURL.appendingPathComponent((sanitized.isEmpty ? "vault" : sanitized) + ".json")
     }
 }

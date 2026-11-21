@@ -28,6 +28,7 @@
 		A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000016 /* MDBXRoundTripTests.swift */; };
 		A10000000000000000000010 /* MonicaMDBX in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DA /* MonicaMDBX */; };
 		A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000018 /* VaultSessionModelTests.swift */; };
+		B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000031 /* VaultRegistrySessionTests.swift */; };
 		A97000000000000000000004 /* SSOItemTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97000000000000000000003 /* SSOItemTests.swift */; };
 		A10000000000000000000019 /* MonicaStorage in Frameworks */ = {isa = PBXBuildFile; productRef = A100000000000000000000DB /* MonicaStorage */; };
 		A1000000000000000000001A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000024 /* Assets.xcassets */; };
@@ -48,6 +49,7 @@
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
 		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
+		B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B760000000000000000000A2 /* AppCloudKitSync.swift */; };
 		AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000011 /* AppAutoFillDomainRules.swift */; };
 		AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
@@ -62,6 +64,7 @@
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A9B000000000000000000001 /* AppGlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B000000000000000000002 /* AppGlobalSearchView.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
+		B27000000000000000000001 /* VaultFolderBrowserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B27000000000000000000011 /* VaultFolderBrowserView.swift */; };
 		A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000001 /* VaultItemExtrasViews.swift */; };
 		A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */; };
 		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
@@ -123,10 +126,15 @@
 		AA000000000000000000001E /* AppSessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001D /* AppSessionModel.swift */; };
 		AB1000000000000000000002 /* AppBillingSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1000000000000000000001 /* AppBillingSupport.swift */; };
 		AB2000000000000000000002 /* BillingItemsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2000000000000000000001 /* BillingItemsTests.swift */; };
+		B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000001 /* AppVaultRegistrySupport.swift */; };
+		B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */; };
+		B29000000000000000000022 /* VaultRegistryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000021 /* VaultRegistryViews.swift */; };
 		AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001F /* AppSessionModel+LanSync.swift */; };
 		AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */; };
 		A97000000000000000000002 /* AppSSOSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97000000000000000000001 /* AppSSOSupport.swift */; };
-/* End PBXBuildFile section */
+		B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000011 /* AppImportExportFormatsView.swift */; };
+		B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000001 /* AppImportExportFormatsSupport.swift */; };
+		B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */; };
 
 /* Begin PBXContainerItemProxy section */
 		A10000000000000000000041 /* PBXContainerItemProxy */ = {
@@ -188,6 +196,7 @@
 		A10000000000000000000015 /* MonicaApp.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = MonicaApp.entitlements; sourceTree = "<group>"; };
 		A10000000000000000000016 /* MDBXRoundTripTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MDBXRoundTripTests.swift; sourceTree = "<group>"; };
 		A10000000000000000000018 /* VaultSessionModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSessionModelTests.swift; sourceTree = "<group>"; };
+		B29000000000000000000031 /* VaultRegistrySessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultRegistrySessionTests.swift; sourceTree = "<group>"; };
 		A97000000000000000000003 /* SSOItemTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSOItemTests.swift; sourceTree = "<group>"; };
 		A1000000000000000000001C /* AndroidParityDesign.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityDesign.swift; sourceTree = "<group>"; };
 		B56000000000000000000011 /* AppSecurityCenterDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSecurityCenterDashboardView.swift; sourceTree = "<group>"; };
@@ -206,6 +215,7 @@
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
 		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
+		B760000000000000000000A2 /* AppCloudKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudKitSync.swift; sourceTree = "<group>"; };
 		AD0000000000000000000011 /* AppAutoFillDomainRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDomainRules.swift; sourceTree = "<group>"; };
 		AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
@@ -223,6 +233,7 @@
 		A100000000000000000000C8 /* AppPrivacyShield.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPrivacyShield.swift; sourceTree = "<group>"; };
 		A10000000000000000000028 /* ScannerAndStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerAndStatusViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* AndroidParityVaultHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityVaultHomeView.swift; sourceTree = "<group>"; };
+		B27000000000000000000011 /* VaultFolderBrowserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultFolderBrowserView.swift; sourceTree = "<group>"; };
 		A94000000000000000000001 /* VaultItemExtrasViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultItemExtrasViews.swift; sourceTree = "<group>"; };
 		A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+ItemExtras.swift"; sourceTree = "<group>"; };
 		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
@@ -285,10 +296,15 @@
 		AA000000000000000000001D /* AppSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel.swift"; sourceTree = "<group>"; };
 		AB1000000000000000000001 /* AppBillingSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBillingSupport.swift"; sourceTree = "<group>"; };
 		AB2000000000000000000001 /* BillingItemsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingItemsTests.swift; sourceTree = "<group>"; };
+		B29000000000000000000001 /* AppVaultRegistrySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultRegistrySupport.swift; sourceTree = "<group>"; };
+		B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultRegistry.swift"; sourceTree = "<group>"; };
+		B29000000000000000000021 /* VaultRegistryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultRegistryViews.swift; sourceTree = "<group>"; };
 		AA000000000000000000001F /* AppSessionModel+LanSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+LanSync.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CloudVaultSync.swift"; sourceTree = "<group>"; };
 		A97000000000000000000001 /* AppSSOSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSSOSupport.swift; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+		B37000000000000000000011 /* AppImportExportFormatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppImportExportFormatsView.swift; sourceTree = "<group>"; };
+		B37000000000000000000001 /* AppImportExportFormatsSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportFormatsSupport.swift"; sourceTree = "<group>"; };
+		B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitwardenSyncMergeSummaryView.swift; sourceTree = "<group>"; };
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000000000000000000052 /* Frameworks */ = {
@@ -391,17 +407,21 @@
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
 				A100000000000000000000F8 /* AppLanSyncView.swift */,
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
+				B760000000000000000000A2 /* AppCloudKitSync.swift */,
 				AD0000000000000000000011 /* AppAutoFillDomainRules.swift */,
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
+				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
+				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
 				A100000000000000000000FC /* AppCloudVaultSyncView.swift */,
 				A10000000000000000000026 /* LockScreenViews.swift */,
 				A100000000000000000000C8 /* AppPrivacyShield.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
+				B27000000000000000000011 /* VaultFolderBrowserView.swift */,
 				A94000000000000000000001 /* VaultItemExtrasViews.swift */,
 				A13000000000000000000011 /* SensitivePrivacyService.swift */,
 				AF1600000000000000000011 /* AppLoginDetailSupport.swift */,
@@ -439,12 +459,16 @@
 				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
+				B29000000000000000000001 /* AppVaultRegistrySupport.swift */,
+				B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */,
+				B29000000000000000000021 /* VaultRegistryViews.swift */,
 				A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */,
 				AA000000000000000000001F /* AppSessionModel+LanSync.swift */,
 				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
 				A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */,
 				AB1000000000000000000001 /* AppBillingSupport.swift */,
+			B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
 			);
 			path = AppRoot;
 			sourceTree = "<group>";
@@ -498,6 +522,7 @@
 				F40000000000000000000001 /* LocalizationTests.swift */,
 				A10000000000000000000016 /* MDBXRoundTripTests.swift */,
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
+				B29000000000000000000031 /* VaultRegistrySessionTests.swift */,
 				A97000000000000000000003 /* SSOItemTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
@@ -823,17 +848,22 @@
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
 				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
+				B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */,
 				AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */,
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */,
+				B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */,
+				B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */,
 				A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */,
 				A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */,
 				A10000000000000000000025 /* LockScreenViews.swift in Sources */,
 				A100000000000000000000C7 /* AppPrivacyShield.swift in Sources */,
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
+				B27000000000000000000001 /* VaultFolderBrowserView.swift in Sources */,
 				A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */,
 				AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */,
 				A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */,
@@ -862,6 +892,9 @@
 				AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */,
 				AA000000000000000000001C /* AppImportExportSupport.swift in Sources */,
 				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
+				B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */,
+				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
+				B29000000000000000000022 /* VaultRegistryViews.swift in Sources */,
 				A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */,
 				A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */,
 				AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */,
@@ -890,6 +923,7 @@
 				F50000000000000000000001 /* LocalizationTests.swift in Sources */,
 				A1000000000000000000000F /* MDBXRoundTripTests.swift in Sources */,
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
+				B29000000000000000000032 /* VaultRegistrySessionTests.swift in Sources */,
 				A97000000000000000000004 /* SSOItemTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,

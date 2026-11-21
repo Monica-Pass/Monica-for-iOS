@@ -136,6 +136,8 @@ final class AppCloudVaultSyncCoordinator {
             return "使用设置中已配置的 WebDAV 服务器，上传完整的加密保险库文件与清单。"
         case .oneDrive:
             return "使用已登录的 OneDrive 应用文件夹，上传完整的加密保险库文件与清单。"
+        case .iCloud:
+            return "使用当前 Apple ID 的 iCloud 私人数据库，上传完整的加密保险库文件；云端记录里只有密文与不透明的版本标记。"
         }
     }
 
@@ -514,7 +516,11 @@ final class AppCloudVaultSyncCoordinator {
         case .vaultIDMismatch:
             return "云端文件属于另一个保险库。本机不会被覆盖；如需采用云端库，请先导出备份后从锁屏「打开已有保险库」操作。"
         case .notConfigured, .unsupportedProvider:
-            return "请先在「云端备份」中配置 WebDAV 服务器，或登录 OneDrive。"
+            return "请先在「云端备份」中配置 WebDAV 服务器，或登录 OneDrive；使用 iCloud 时请确认已在设置中开启 iCloud 同步，且 App 已配置 iCloud 容器。"
+        case .cloudAccountUnavailable:
+            return "请先在系统设置中登录 iCloud，再回到此处重试。"
+        case .cloudQuotaExceeded:
+            return "iCloud 存储空间不足。请清理空间或升级方案后重试；本机保险库没有被修改。"
         case .stateCorrupted:
             return "可点「重置同步记录」清除本机记录后重新检查云端版本（云端文件不会被删除）。"
         default:

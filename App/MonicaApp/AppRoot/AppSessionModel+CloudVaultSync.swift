@@ -48,6 +48,13 @@ extension AppSessionModel {
         if oneDriveProvider != nil {
             availableProviders.append(.oneDrive)
         }
+        // iCloud is a user-level switch: enabling it only adds the provider to
+        // this list. CloudKit itself is contacted later, inside an explicit
+        // sync action (an unentitled build traps inside CloudKit, so nothing
+        // may construct a CKContainer speculatively).
+        if AppCloudKitSyncPreferences.shared.isEnabled {
+            availableProviders.append(.iCloud)
+        }
 
         return AppCloudVaultSyncBridge(
             vaultID: vaultID,
@@ -74,6 +81,17 @@ extension AppSessionModel {
                     return CloudFileCloudVaultRemoteStore(
                         provider: oneDriveProvider,
                         vaultFileName: vaultFileName
+                    )
+                case .iCloud:
+                    guard AppCloudKitSyncPreferences.shared.isEnabled else {
+                        throw CloudVaultError.notConfigured(reason: "iCloud 同步已在设置中关闭")
+                    }
+                    let configuration = try CloudKitVaultConfiguration.vault(vaultID: vaultID)
+                    return CloudKitCloudVaultRemoteStore(
+                        configuration: configuration,
+                        transport: CloudKitContainerVaultTransport(
+                            containerIdentifier: configuration.containerIdentifier
+                        )
                     )
                 }
             },
