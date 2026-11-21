@@ -233,19 +233,22 @@ public struct LocalBarcodeEntryDraft: Sendable, Equatable {
     public let payload: String
     public let label: String
     public let notes: String
+    public let metadata: VaultEntryMetadata
 
     public init(
         title: String,
         symbology: BarcodeSymbology,
         payload: String,
         label: String = "",
-        notes: String = ""
+        notes: String = "",
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.title = title
         self.symbology = symbology
         self.payload = payload
         self.label = label
         self.notes = notes
+        self.metadata = metadata
     }
 
     /// 返回规范化后的草稿；EAN-13 会补全/校验校验位。

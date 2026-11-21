@@ -5982,17 +5982,46 @@ public enum VaultCSVItemDraft: Sendable, Equatable {
         case .paymentAccount: return .paymentAccount
         }
     }
+
+    /// 备份导出时随条目一起写入的标签与归档状态。
+    public var metadata: VaultEntryMetadata {
+        switch self {
+        case .login(let draft): return draft.metadata
+        case .note(let draft): return draft.metadata
+        case .totp(let draft): return draft.metadata
+        case .card(let draft): return draft.metadata
+        case .identity(let draft): return draft.metadata
+        case .passkey(let draft): return draft.metadata
+        case .sshKey(let draft): return draft.metadata
+        case .apiToken(let draft): return draft.metadata
+        case .wifi(let draft): return draft.metadata
+        case .sso(let draft): return draft.metadata
+        case .send(let draft): return draft.metadata
+        case .steam(let draft): return draft.metadata
+        case .barcode(let draft): return draft.metadata
+        case .billingAddress(let draft): return draft.metadata
+        case .paymentAccount(let draft): return draft.metadata
+        }
+    }
 }
 
 public struct AndroidBackupImportedItem: Sendable, Equatable {
     public let sourceID: Int64?
     public let deletedAt: Int64?
     public let draft: VaultCSVItemDraft
+    /// 备份中携带的标签与归档状态；旧备份没有这些字段时为 `.empty`。
+    public let metadata: VaultEntryMetadata
 
-    public init(sourceID: Int64?, deletedAt: Int64? = nil, draft: VaultCSVItemDraft) {
+    public init(
+        sourceID: Int64?,
+        deletedAt: Int64? = nil,
+        draft: VaultCSVItemDraft,
+        metadata: VaultEntryMetadata = .empty
+    ) {
         self.sourceID = sourceID
         self.deletedAt = deletedAt
         self.draft = draft
+        self.metadata = metadata
     }
 }
 
@@ -7051,11 +7080,34 @@ public enum AndroidBackupCodec {
                     notes: object.string("notes")
                 ))
             }
-            return AndroidBackupImportedItem(sourceID: sourceID, draft: draft)
+            return AndroidBackupImportedItem(
+                sourceID: sourceID,
+                draft: draft,
+                metadata: metadata(from: object)
+            )
         } catch {
             issues.append(issue(entryPath: path, code: .malformedJSON, detail: "移动端备份数据无法解析"))
             return nil
         }
+    }
+
+    /// 兼容读取备份里的标签与归档状态；旧备份没有这些字段时返回空元数据。
+    private static func metadata(from object: JSONObject) -> VaultEntryMetadata {
+        var tags: [VaultEntryTag] = []
+        for rawTag in object.dictionaryArray("tags") {
+            guard let name = rawTag["name"] as? String else { continue }
+            let trimmed = try? VaultTagName.normalize(name)
+            guard let normalizedName = trimmed else { continue }
+            let id = (rawTag["id"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? UUID().uuidString
+            tags.append(VaultEntryTag(id: id, name: normalizedName))
+        }
+        if let deduplicated = try? LocalVaultEntryRepository.normalizedTagList(tags) {
+            tags = deduplicated
+        }
+        return VaultEntryMetadata(
+            isArchived: object.bool("isArchived", defaultValue: false),
+            tags: tags
+        )
     }
 
     private static func entryPath(for item: VaultCSVItemDraft, folderName: String, id: Int, timestamp: Int) -> String {
@@ -7283,7 +7335,14 @@ public enum AndroidBackupCodec {
                 notes: draft.notes
             )
         }
-        return jsonStringObject(object)
+        var enriched = object
+        if item.metadata.isArchived {
+            enriched["isArchived"] = true
+        }
+        if !item.metadata.tags.isEmpty {
+            enriched["tags"] = item.metadata.tags.map { ["id": $0.id, "name": $0.name] }
+        }
+        return jsonStringObject(enriched)
     }
 
     private static func billingAddressDraft(
@@ -7592,6 +7651,23 @@ private struct JSONObject {
 
     func contains(_ key: String) -> Bool {
         values[key] != nil
+    }
+
+    func bool(_ key: String, defaultValue: Bool = false) -> Bool {
+        switch values[key] {
+        case let value as Bool:
+            return value
+        case let value as NSNumber:
+            return value.boolValue
+        case let value as String:
+            return ["true", "1", "yes"].contains(value.lowercased())
+        default:
+            return defaultValue
+        }
+    }
+
+    func dictionaryArray(_ key: String) -> [[String: Any]] {
+        values[key] as? [[String: Any]] ?? []
     }
 
     func nestedObject(_ key: String) throws -> JSONObject {
@@ -9370,6 +9446,8 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
     /// 显式传入数组表示「用这份列表替换历史」（UI 删除单条/清空时使用）。
     public let passwordHistory: [LocalLoginPasswordHistoryEntry]?
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         username: String,
@@ -9379,7 +9457,8 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
         urls: [String] = [],
         appBundleID: String = "",
         appName: String = "",
-        passwordHistory: [LocalLoginPasswordHistoryEntry]? = nil
+        passwordHistory: [LocalLoginPasswordHistoryEntry]? = nil,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.title = title
         self.username = username
@@ -9390,6 +9469,7 @@ public struct LocalLoginEntryDraft: Sendable, Equatable {
         self.appBundleID = appBundleID
         self.appName = appName
         self.passwordHistory = passwordHistory
+        self.metadata = metadata
     }
 }
 
@@ -9412,6 +9492,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
     public let appName: String
     /// 上一份密码历史，最新的一条在最前面。
     public let passwordHistory: [LocalLoginPasswordHistoryEntry]
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -9426,7 +9507,8 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         urls: [String] = [],
         appBundleID: String = "",
         appName: String = "",
-        passwordHistory: [LocalLoginPasswordHistoryEntry] = []
+        passwordHistory: [LocalLoginPasswordHistoryEntry] = [],
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -9441,6 +9523,7 @@ public struct LocalLoginEntry: Sendable, Equatable, Identifiable {
         self.appBundleID = appBundleID
         self.appName = appName
         self.passwordHistory = passwordHistory
+        self.metadata = metadata
     }
 
     /// 完整 URL 列表：旧数据只有单个 `url` 时等价于 `[url]`。
@@ -9453,9 +9536,12 @@ public struct LocalNoteEntryDraft: Sendable, Equatable {
     public let title: String
     public let body: String
 
-    public init(title: String, body: String) {
+    public let metadata: VaultEntryMetadata
+
+    public init(title: String, body: String, metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.body = body
+        self.metadata = metadata
     }
 }
 
@@ -9465,19 +9551,22 @@ public struct LocalNoteEntry: Sendable, Equatable, Identifiable {
     public let title: String
     public let body: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
         projectID: String,
         title: String,
         body: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
         self.title = title
         self.body = body
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -9493,6 +9582,8 @@ public struct LocalTotpEntryDraft: Sendable, Equatable {
     public let counter: UInt64
     public let iconName: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         secret: String,
@@ -9503,7 +9594,8 @@ public struct LocalTotpEntryDraft: Sendable, Equatable {
         algorithm: String,
         otpType: String,
         counter: UInt64,
-        iconName: String = ""
+        iconName: String = "",
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.title = title
         self.secret = secret
@@ -9515,6 +9607,7 @@ public struct LocalTotpEntryDraft: Sendable, Equatable {
         self.otpType = otpType
         self.counter = counter
         self.iconName = iconName
+        self.metadata = metadata
     }
 }
 
@@ -9532,6 +9625,7 @@ public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
     public let counter: UInt64
     public let favorite: Bool
     public let iconName: String
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -9546,7 +9640,8 @@ public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
         otpType: String,
         counter: UInt64,
         favorite: Bool = false,
-        iconName: String = ""
+        iconName: String = "",
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -9561,6 +9656,7 @@ public struct LocalTotpEntry: Sendable, Equatable, Identifiable {
         self.counter = counter
         self.favorite = favorite
         self.iconName = iconName
+        self.metadata = metadata
     }
 }
 
@@ -9580,6 +9676,8 @@ public struct LocalCardEntryDraft: Sendable, Equatable {
     public let cardArtwork: String
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         cardholderName: String,
@@ -9594,7 +9692,8 @@ public struct LocalCardEntryDraft: Sendable, Equatable {
         billingAddress: String = "",
         cardArtwork: String = "",
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.cardholderName = cardholderName
         self.number = number
@@ -9608,6 +9707,7 @@ public struct LocalCardEntryDraft: Sendable, Equatable {
         self.billingAddress = billingAddress
         self.cardArtwork = cardArtwork
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -9629,6 +9729,7 @@ public struct LocalCardEntry: Sendable, Equatable, Identifiable {
     public let cardArtwork: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -9646,7 +9747,8 @@ public struct LocalCardEntry: Sendable, Equatable, Identifiable {
         billingAddress: String = "",
         cardArtwork: String = "",
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -9664,6 +9766,7 @@ public struct LocalCardEntry: Sendable, Equatable, Identifiable {
         self.cardArtwork = cardArtwork
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -9678,6 +9781,8 @@ public struct LocalIdentityEntryDraft: Sendable, Equatable {
     public let expiryDate: String
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         documentType: String,
@@ -9688,7 +9793,8 @@ public struct LocalIdentityEntryDraft: Sendable, Equatable {
         issueDate: String,
         expiryDate: String,
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.documentType = documentType
         self.fullName = fullName
@@ -9698,6 +9804,7 @@ public struct LocalIdentityEntryDraft: Sendable, Equatable {
         self.issueDate = issueDate
         self.expiryDate = expiryDate
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -9714,6 +9821,7 @@ public struct LocalIdentityEntry: Sendable, Equatable, Identifiable {
     public let expiryDate: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -9727,7 +9835,8 @@ public struct LocalIdentityEntry: Sendable, Equatable, Identifiable {
         issueDate: String,
         expiryDate: String,
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -9741,6 +9850,7 @@ public struct LocalIdentityEntry: Sendable, Equatable, Identifiable {
         self.expiryDate = expiryDate
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -9754,6 +9864,8 @@ public struct LocalPasskeyEntryDraft: Sendable, Equatable {
     public let privateKeyReference: String
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         relyingPartyID: String,
@@ -9763,7 +9875,8 @@ public struct LocalPasskeyEntryDraft: Sendable, Equatable {
         publicKeyCOSE: String,
         privateKeyReference: String,
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.relyingPartyID = relyingPartyID
         self.username = username
@@ -9772,6 +9885,7 @@ public struct LocalPasskeyEntryDraft: Sendable, Equatable {
         self.publicKeyCOSE = publicKeyCOSE
         self.privateKeyReference = privateKeyReference
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -9787,6 +9901,7 @@ public struct LocalPasskeyEntry: Sendable, Equatable, Identifiable {
     public let privateKeyReference: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -9799,7 +9914,8 @@ public struct LocalPasskeyEntry: Sendable, Equatable, Identifiable {
         publicKeyCOSE: String,
         privateKeyReference: String,
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -9812,6 +9928,7 @@ public struct LocalPasskeyEntry: Sendable, Equatable, Identifiable {
         self.privateKeyReference = privateKeyReference
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -9824,6 +9941,8 @@ public struct LocalSshKeyEntryDraft: Sendable, Equatable {
     public let passphraseHint: String
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         username: String,
@@ -9832,7 +9951,8 @@ public struct LocalSshKeyEntryDraft: Sendable, Equatable {
         privateKeyReference: String,
         passphraseHint: String,
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.username = username
         self.host = host
@@ -9840,6 +9960,7 @@ public struct LocalSshKeyEntryDraft: Sendable, Equatable {
         self.privateKeyReference = privateKeyReference
         self.passphraseHint = passphraseHint
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -9854,6 +9975,7 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
     public let passphraseHint: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -9865,7 +9987,8 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
         privateKeyReference: String,
         passphraseHint: String,
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -9877,6 +10000,7 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
         self.passphraseHint = passphraseHint
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -9946,6 +10070,7 @@ public struct LocalBillingAddressEntryDraft: Sendable, Equatable {
     public let country: String
     public let phone: String
     public let notes: String
+    public let metadata: VaultEntryMetadata
     /// 引用该地址的银行卡条目 ID（稳定 ID，不使用卡片展示名）。
     public let linkedCardIDs: [String]
 
@@ -9960,6 +10085,7 @@ public struct LocalBillingAddressEntryDraft: Sendable, Equatable {
         country: String = "",
         phone: String = "",
         notes: String = "",
+        metadata: VaultEntryMetadata = .empty,
         linkedCardIDs: [String] = []
     ) {
         self.title = title
@@ -9972,6 +10098,7 @@ public struct LocalBillingAddressEntryDraft: Sendable, Equatable {
         self.country = country
         self.phone = phone
         self.notes = notes
+        self.metadata = metadata
         self.linkedCardIDs = linkedCardIDs
     }
 }
@@ -10155,6 +10282,7 @@ public struct LocalPaymentAccountEntryDraft: Sendable, Equatable {
     public let accountNumber: String
     public let currency: String
     public let notes: String
+    public let metadata: VaultEntryMetadata
     /// 关联的银行卡条目 ID（稳定 ID）。
     public let linkedCardID: String
     /// 关联的账单地址条目 ID（稳定 ID）。
@@ -10172,6 +10300,7 @@ public struct LocalPaymentAccountEntryDraft: Sendable, Equatable {
         accountNumber: String = "",
         currency: String = "",
         notes: String = "",
+        metadata: VaultEntryMetadata = .empty,
         linkedCardID: String = "",
         billingAddressID: String = ""
     ) {
@@ -10186,6 +10315,7 @@ public struct LocalPaymentAccountEntryDraft: Sendable, Equatable {
         self.accountNumber = accountNumber
         self.currency = currency
         self.notes = notes
+        self.metadata = metadata
         self.linkedCardID = linkedCardID
         self.billingAddressID = billingAddressID
     }
@@ -10452,6 +10582,8 @@ public struct LocalApiTokenEntryDraft: Sendable, Equatable {
     public let expiresAt: String
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         issuer: String,
@@ -10460,7 +10592,8 @@ public struct LocalApiTokenEntryDraft: Sendable, Equatable {
         scopes: String,
         expiresAt: String,
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.issuer = issuer
         self.accountName = accountName
@@ -10468,6 +10601,7 @@ public struct LocalApiTokenEntryDraft: Sendable, Equatable {
         self.scopes = scopes
         self.expiresAt = expiresAt
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -10482,6 +10616,7 @@ public struct LocalApiTokenEntry: Sendable, Equatable, Identifiable {
     public let expiresAt: String
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -10493,7 +10628,8 @@ public struct LocalApiTokenEntry: Sendable, Equatable, Identifiable {
         scopes: String,
         expiresAt: String,
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -10505,6 +10641,7 @@ public struct LocalApiTokenEntry: Sendable, Equatable, Identifiable {
         self.expiresAt = expiresAt
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -10516,6 +10653,8 @@ public struct LocalWifiEntryDraft: Sendable, Equatable {
     public let hidden: Bool
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         ssid: String,
@@ -10523,13 +10662,15 @@ public struct LocalWifiEntryDraft: Sendable, Equatable {
         password: String,
         hidden: Bool,
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.ssid = ssid
         self.securityType = securityType
         self.password = password
         self.hidden = hidden
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -10543,6 +10684,7 @@ public struct LocalWifiEntry: Sendable, Equatable, Identifiable {
     public let hidden: Bool
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -10553,7 +10695,8 @@ public struct LocalWifiEntry: Sendable, Equatable, Identifiable {
         password: String,
         hidden: Bool,
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -10564,6 +10707,7 @@ public struct LocalWifiEntry: Sendable, Equatable, Identifiable {
         self.hidden = hidden
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -10602,18 +10746,22 @@ public struct LocalSendEntryDraft: Sendable, Equatable {
     public let maxViews: Int
     public let notes: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         body: String,
         expiresAt: String,
         maxViews: Int,
         notes: String
-    ) {
+    ,
+        metadata: VaultEntryMetadata = .empty) {
         self.title = title
         self.body = body
         self.expiresAt = expiresAt
         self.maxViews = maxViews
         self.notes = notes
+        self.metadata = metadata
     }
 }
 
@@ -10626,6 +10774,7 @@ public struct LocalSendEntry: Sendable, Equatable, Identifiable {
     public let maxViews: Int
     public let notes: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -10635,7 +10784,8 @@ public struct LocalSendEntry: Sendable, Equatable, Identifiable {
         expiresAt: String,
         maxViews: Int,
         notes: String,
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -10645,6 +10795,7 @@ public struct LocalSendEntry: Sendable, Equatable, Identifiable {
         self.maxViews = maxViews
         self.notes = notes
         self.favorite = favorite
+        self.metadata = metadata
     }
 }
 
@@ -10894,6 +11045,8 @@ public struct LocalSSOEntryDraft: Sendable, Equatable {
     /// 可选的附加凭据（client secret / 备注型凭据）。加密后随条目一起落库。
     public let secret: String
 
+    public let metadata: VaultEntryMetadata
+
     public init(
         title: String,
         provider: SSOProvider = .custom,
@@ -10903,7 +11056,8 @@ public struct LocalSSOEntryDraft: Sendable, Equatable {
         loginURL: String = "",
         linkedLoginEntryID: String? = nil,
         notes: String = "",
-        secret: String = ""
+        secret: String = "",
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.title = title
         self.provider = provider
@@ -10914,6 +11068,7 @@ public struct LocalSSOEntryDraft: Sendable, Equatable {
         self.linkedLoginEntryID = linkedLoginEntryID
         self.notes = notes
         self.secret = secret
+        self.metadata = metadata
     }
 }
 
@@ -10930,6 +11085,7 @@ public struct LocalSSOEntry: Sendable, Equatable, Identifiable {
     public let notes: String
     public let secret: String
     public let favorite: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -10943,7 +11099,8 @@ public struct LocalSSOEntry: Sendable, Equatable, Identifiable {
         linkedLoginEntryID: String? = nil,
         notes: String = "",
         secret: String = "",
-        favorite: Bool = false
+        favorite: Bool = false,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -10957,6 +11114,7 @@ public struct LocalSSOEntry: Sendable, Equatable, Identifiable {
         self.notes = notes
         self.secret = secret
         self.favorite = favorite
+        self.metadata = metadata
     }
 
     public var displayProviderName: String {
@@ -11002,6 +11160,7 @@ public struct LocalAttachmentMetadata: Sendable, Equatable, Identifiable {
     public let wrappedContentEncryptionKey: String?
     public let localPath: String?
     public let deleted: Bool
+    public let metadata: VaultEntryMetadata
 
     public init(
         id: String,
@@ -11017,7 +11176,8 @@ public struct LocalAttachmentMetadata: Sendable, Equatable, Identifiable {
         downloadState: String = "",
         wrappedContentEncryptionKey: String? = nil,
         localPath: String? = nil,
-        deleted: Bool
+        deleted: Bool,
+        metadata: VaultEntryMetadata = .empty
     ) {
         self.id = id
         self.projectID = projectID
@@ -11033,6 +11193,7 @@ public struct LocalAttachmentMetadata: Sendable, Equatable, Identifiable {
         self.wrappedContentEncryptionKey = wrappedContentEncryptionKey
         self.localPath = localPath
         self.deleted = deleted
+        self.metadata = metadata
     }
 }
 
@@ -14421,7 +14582,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         projects[vaultID, default: []] = projects[vaultID, default: []]
     }
 
-    private func vault(for handle: LocalVaultHandle) throws -> MonicaMDBXVault {
+    func vault(for handle: LocalVaultHandle) throws -> MonicaMDBXVault {
         lock.lock()
         defer { lock.unlock() }
         guard let vault = vaults[handle.vaultID] else {
@@ -14891,7 +15052,8 @@ private extension LocalLoginEntry {
             urls: entry.urls,
             appBundleID: entry.appBundleID,
             appName: entry.appName,
-            passwordHistory: entry.passwordHistory.map(LocalLoginPasswordHistoryEntry.init)
+            passwordHistory: entry.passwordHistory.map(LocalLoginPasswordHistoryEntry.init),
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -14915,7 +15077,8 @@ private extension LocalNoteEntry {
             projectID: entry.projectID,
             title: entry.title,
             body: entry.body,
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -14935,7 +15098,8 @@ private extension LocalTotpEntry {
             otpType: entry.otpType,
             counter: entry.counter,
             favorite: entry.favorite,
-            iconName: entry.iconName
+            iconName: entry.iconName,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -14958,7 +15122,8 @@ private extension LocalCardEntry {
             billingAddress: entry.billingAddress,
             cardArtwork: entry.cardArtwork,
             notes: entry.notes,
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -14977,7 +15142,8 @@ private extension LocalIdentityEntry {
             issueDate: entry.issueDate,
             expiryDate: entry.expiryDate,
             notes: entry.notes,
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -14996,7 +15162,8 @@ private extension LocalPasskeyEntry {
             publicKeyCOSE: payload.string("publicKeyCOSE"),
             privateKeyReference: payload.string("privateKeyReference"),
             notes: payload.string("notes"),
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15062,7 +15229,8 @@ private extension LocalSshKeyEntry {
             privateKeyReference: payload.string("privateKeyReference"),
             passphraseHint: payload.string("passphraseHint"),
             notes: payload.string("notes"),
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15125,7 +15293,8 @@ private extension LocalApiTokenEntry {
             scopes: payload.string("scopes"),
             expiresAt: payload.string("expiresAt"),
             notes: payload.string("notes"),
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15142,7 +15311,8 @@ private extension LocalWifiEntry {
             password: payload.string("password"),
             hidden: payload.bool("hidden"),
             notes: payload.string("notes"),
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15171,7 +15341,8 @@ private extension LocalSendEntry {
             expiresAt: payload.string("expiresAt"),
             maxViews: payload.int("maxViews"),
             notes: payload.string("notes"),
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15192,7 +15363,8 @@ private extension LocalSSOEntry {
             linkedLoginEntryID: linkedID.isEmpty ? nil : linkedID,
             notes: payload.string("notes"),
             secret: payload.string("secret"),
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15214,7 +15386,8 @@ private extension LocalAttachmentMetadata {
             downloadState: payload.string("downloadState"),
             wrappedContentEncryptionKey: payload.optionalString("wrappedContentEncryptionKey"),
             localPath: payload.optionalString("localPath"),
-            deleted: deleted
+            deleted: deleted,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
     }
 }
@@ -15299,7 +15472,8 @@ private extension LocalSteamEntry {
             entryID: entry.id,
             projectID: entry.projectID,
             title: entry.title,
-            favorite: entry.favorite
+            favorite: entry.favorite,
+            metadata: VaultEntryMetadata(entry.metadata)
         )
         self = decoded
     }
