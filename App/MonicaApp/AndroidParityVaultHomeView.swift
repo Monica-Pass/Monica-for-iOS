@@ -82,6 +82,9 @@ struct AndroidParityVaultHomeView: View {
 
     private var itemKind: UnifiedVaultItemKind {
         guard isPasswordRoot else {
+            if baseItemKind == .totp, session.totpModule == .steam {
+                return .steam
+            }
             return baseItemKind ?? .login
         }
         switch session.passwordModule {
@@ -109,7 +112,7 @@ struct AndroidParityVaultHomeView: View {
             stackedGroupMode: $session.isLoginStackedGroupModeEnabled,
             showsStackedGroupModeToggle: itemKind == .login,
             quickFilterRows: session.vaultQuickFilterRows,
-            sectionBar: { passwordSectionBar },
+            sectionBar: { sectionBarContent },
             categoryBar: { categoryBar },
             onQuickFilter: session.applyVaultQuickFilter,
             onOpenVault: { isVaultImporterPresented = true },
@@ -228,6 +231,8 @@ struct AndroidParityVaultHomeView: View {
             passwordList
         case .totp:
             totpList
+        case .steam:
+            steamList
         case .note:
             noteList
         case .card:
@@ -367,6 +372,69 @@ struct AndroidParityVaultHomeView: View {
                 emptyList(String(localized: "没有匹配的验证码"), icon: "shield.lefthalf.filled")
             }
             deletedTotpRows
+        }
+    }
+
+    private var steamList: some View {
+        VStack(spacing: 14) {
+            AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.52), cornerRadius: 22) {
+                HStack(spacing: 12) {
+                    SecureField("粘贴 maFile / steamguard 链接", text: $session.steamImportInput)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .textFieldStyle(AndroidParityTextFieldStyle())
+                    Button {
+                        do {
+                            try session.importSteamGuard(text: session.steamImportInput)
+                        } catch {
+                            session.entryOperationState = .failed(error.localizedDescription)
+                        }
+                    } label: {
+                        Image(systemName: "square.and.arrow.down")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(width: 46, height: 46)
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(AndroidParityPalette.primary)
+                    .accessibilityLabel(String(localized: "导入 Steam 数据"))
+                }
+                Button {
+                    session.presentAddEditor(forItemKind: .steam)
+                } label: {
+                    Label("添加 Steam 账号", systemImage: "plus.circle")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+            }
+            ForEach(session.filteredSteamEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .steam) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidSteamListCard(
+                            entry: entry,
+                            code: session.steamGuardCode(for: entry, at: now),
+                            remaining: session.steamGuardRemainingSeconds(for: entry, at: now)
+                        )
+                    }
+                }
+            }
+            if session.filteredSteamEntries.isEmpty {
+                emptyList(String(localized: "还没有 Steam Guard 条目"), icon: "shield.lefthalf.filled")
+            }
+            deletedSteamRows
+        }
+    }
+
+    @ViewBuilder private var deletedSteamRows: some View {
+        if !session.deletedSteamEntries.isEmpty {
+            restoreSection("已删除 Steam") {
+                ForEach(session.deletedSteamEntries) { entry in
+                    restoreButton(id: entry.id, kind: .steam, title: entry.title, subtitle: entry.accountName) {
+                        do {
+                            try session.restoreSteamEntry(entry)
+                        } catch {}
+                    }
+                }
+            }
         }
     }
 
@@ -704,6 +772,39 @@ struct AndroidParityVaultHomeView: View {
     }
 
     @ViewBuilder
+    private var sectionBarContent: some View {
+        if isPasswordRoot {
+            passwordSectionBar
+        } else if baseItemKind == .totp {
+            totpSectionBar
+        }
+    }
+
+    /// 验证 Tab 的二级模块入口：验证码与 Steam Guard。
+    @ViewBuilder
+    private var totpSectionBar: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Picker("验证模块", selection: $session.totpModule) {
+                ForEach(TotpModule.allCases) { module in
+                    Text(module.title).tag(module)
+                }
+            }
+            .pickerStyle(.segmented)
+            .accessibilityLabel("验证模块")
+
+            Button(action: refreshExtendedParityEntries) {
+                Label("刷新", systemImage: "arrow.clockwise")
+                    .font(.subheadline.weight(.heavy))
+                    .padding(.horizontal, 14)
+                    .frame(minHeight: 40)
+                    .background(AndroidParityPalette.primaryContainer, in: Capsule(style: .continuous))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    @ViewBuilder
     private var passwordSectionBar: some View {
         if isPasswordRoot {
             VStack(alignment: .leading, spacing: 10) {
@@ -832,6 +933,7 @@ struct AndroidParityVaultHomeView: View {
                 case .wifi: return session.wifiSearchQuery
                 case .sso: return session.ssoSearchQuery
                 case .send: return session.sendSearchQuery
+                case .steam: return session.steamSearchQuery
                 case .attachmentRef: return session.attachmentSearchQuery
                 }
             },
@@ -850,6 +952,7 @@ struct AndroidParityVaultHomeView: View {
                 case .wifi: session.wifiSearchQuery = value
                 case .sso: session.ssoSearchQuery = value
                 case .send: session.sendSearchQuery = value
+                case .steam: session.steamSearchQuery = value
                 case .attachmentRef: session.attachmentSearchQuery = value
                 }
             }
@@ -871,6 +974,7 @@ struct AndroidParityVaultHomeView: View {
                 case .wifi: return session.showFavoriteWifiEntriesOnly
                 case .sso: return session.showFavoriteSSOEntriesOnly
                 case .send: return session.showFavoriteSendEntriesOnly
+                case .steam: return session.showFavoriteSteamEntriesOnly
                 case .attachmentRef: return false
                 }
             },
@@ -889,6 +993,7 @@ struct AndroidParityVaultHomeView: View {
                 case .wifi: session.showFavoriteWifiEntriesOnly = value
                 case .sso: session.showFavoriteSSOEntriesOnly = value
                 case .send: session.showFavoriteSendEntriesOnly = value
+                case .steam: session.showFavoriteSteamEntriesOnly = value
                 case .attachmentRef: break
                 }
             }
@@ -1087,6 +1192,7 @@ struct AndroidParityVaultHomeView: View {
         case .wifi: setSelectedWifiFavorite(favorite)
         case .sso: try? session.setSelectedSSOFavorite(favorite)
         case .send: setSelectedSendFavorite(favorite)
+        case .steam: try? session.setSelectedSteamFavorite(favorite)
         case .attachmentRef: break
         }
     }
@@ -1105,6 +1211,7 @@ struct AndroidParityVaultHomeView: View {
         case .wifi: deleteWifiEntry()
         case .sso: try? session.deleteSelectedSSOEntry()
         case .send: deleteSendEntry()
+        case .steam: try? session.deleteSelectedSteamEntry()
         case .attachmentRef: break
         }
         session.dismissPresentedEditor()
@@ -2023,6 +2130,7 @@ struct AddEditVaultItemView: View {
             case .wifi: wifiFields
             case .sso: SSOEntryEditorFields(session: session, isAdding: mode.isAdding)
             case .send: sendFields
+            case .steam: SteamEntryEditorFields(session: session, isAdding: mode.isAdding)
             case .attachmentRef:
                 Text("该类型当前只支持列表展示。")
                     .foregroundStyle(AndroidParityPalette.textSecondary)
@@ -2436,7 +2544,7 @@ struct AddEditVaultItemView: View {
         case .card: return String(localized: "银行卡")
         case .identity: return String(localized: "证件")
         case .passkey: return String(localized: "通行密钥")
-        case .sshKey, .apiToken, .wifi, .sso, .send, .attachmentRef: return mode.kind.localizedDisplayName
+        case .sshKey, .apiToken, .wifi, .sso, .send, .steam, .attachmentRef: return mode.kind.localizedDisplayName
         }
     }
 
@@ -2453,6 +2561,7 @@ struct AddEditVaultItemView: View {
         case .wifi: return session.editingWifiFavorite
         case .sso: return session.editingSSOFavorite
         case .send: return session.editingSendFavorite
+        case .steam: return session.editingSteamFavorite
         case .attachmentRef: return false
         }
     }
@@ -2472,6 +2581,7 @@ private extension UnifiedVaultItemKind {
         case .wifi: return "wifi"
         case .sso: return "person.badge.key.fill"
         case .send: return "paperplane.fill"
+        case .steam: return "shield.lefthalf.filled"
         case .attachmentRef: return "paperclip"
         }
     }
@@ -2531,6 +2641,11 @@ struct VaultItemDetailView: View {
                         .font(.caption2.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
                 }
+            }
+
+            if route.kind == .steam,
+               let steamEntry = session.steamEntries.first(where: { $0.id == route.entryID }) {
+                SteamGuardCodePanel(session: session, entry: steamEntry)
             }
 
             AndroidParitySection(title: String(localized: "详情")) {
@@ -2754,6 +2869,9 @@ struct VaultItemDetailView: View {
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "内容"), sensitive(entry.body, .noteBody)), row("expires", String(localized: "过期"), entry.expiresAt), row("views", String(localized: "最多查看"), "\(entry.maxViews)")]
+        case .steam:
+            guard let entry = session.steamEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
+            return session.steamDetailRows(for: entry)
         case .attachmentRef:
             guard let entry = session.attachmentEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "文件名"), entry.fileName), row("state", String(localized: "状态"), entry.downloadState), row("mode", String(localized: "存储"), entry.storageMode), row("size", String(localized: "大小"), String(localized: "\(entry.storedSize)/\(entry.originalSize) 字节"))]
@@ -2824,6 +2942,9 @@ struct VaultItemDetailView: View {
         case .send:
             guard let entry = session.sendEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["body": entry.body]
+        case .steam:
+            guard let entry = session.steamEntries.first(where: { $0.id == route.entryID }) else { return [:] }
+            return session.steamDetailSecrets(for: entry)
         case .attachmentRef:
             return [:]
         }

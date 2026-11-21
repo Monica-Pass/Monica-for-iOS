@@ -12879,6 +12879,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedWifi: [String: [LocalWifiEntry]] = [:]
     private var sendEntries: [String: [LocalSendEntry]] = [:]
     private var deletedSends: [String: [LocalSendEntry]] = [:]
+    private var steamEntries: [String: [LocalSteamEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
 
@@ -13265,6 +13266,20 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             }
         case .sso:
             throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
+        case .steam:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &steamEntries, title: \.title) { entry, projectID in
+                LocalSteamEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    accountName: entry.accountName,
+                    steamID: entry.steamID,
+                    sharedSecret: entry.sharedSecret,
+                    issuer: entry.issuer,
+                    notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
         case .attachmentRef:
             return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &attachmentMetadata, title: \.fileName) { entry, projectID in
                 LocalAttachmentMetadata(
