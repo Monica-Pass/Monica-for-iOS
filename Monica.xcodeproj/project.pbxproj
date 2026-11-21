@@ -70,6 +70,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 		B78000000000000000000011 /* AppLiquidGlassSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78000000000000000000001 /* AppLiquidGlassSupport.swift */; };
 		A1000000000000000000001D /* GeneratorRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000001E /* GeneratorRootView.swift */; };
 		C39100000000000000000005 /* GeneratorSaveLoginSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */; };
+		A15400000000000000000001 /* GeneratorSSHKeySection.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15400000000000000000002 /* GeneratorSSHKeySection.swift */; };
 		A1000000000000000000001F /* SettingsRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000020 /* SettingsRootView.swift */; };
 		A10000000000000000000103 /* AppDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000104 /* AppDiagnostics.swift */; };
 		A10000000000000000000105 /* AppDeveloperSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000106 /* AppDeveloperSettingsView.swift */; };
@@ -180,6 +181,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 		AB1000000000000000000002 /* AppBillingSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB1000000000000000000001 /* AppBillingSupport.swift */; };
 		AB2000000000000000000002 /* BillingItemsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB2000000000000000000001 /* BillingItemsTests.swift */; };
 		C39100000000000000000007 /* AppSessionModel+GeneratedLogin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C39100000000000000000008 /* AppSessionModel+GeneratedLogin.swift */; };
+		A15400000000000000000003 /* AppSessionModel+GeneratedSSHKey.swift in Sources */ = {isa = PBXBuildFile; fileRef = A15400000000000000000004 /* AppSessionModel+GeneratedSSHKey.swift */; };
 		B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000001 /* AppVaultRegistrySupport.swift */; };
 		B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */; };
 		B29000000000000000000022 /* VaultRegistryViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = B29000000000000000000021 /* VaultRegistryViews.swift */; };
@@ -294,6 +296,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 		B78000000000000000000001 /* AppLiquidGlassSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLiquidGlassSupport.swift; sourceTree = "<group>"; };
 		A1000000000000000000001E /* GeneratorRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorRootView.swift; sourceTree = "<group>"; };
 		C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorSaveLoginSheet.swift; sourceTree = "<group>"; };
+		A15400000000000000000002 /* GeneratorSSHKeySection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorSSHKeySection.swift; sourceTree = "<group>"; };
 		A10000000000000000000020 /* SettingsRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsRootView.swift; sourceTree = "<group>"; };
 		A10000000000000000000104 /* AppDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiagnostics.swift; sourceTree = "<group>"; };
 		A10000000000000000000106 /* AppDeveloperSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDeveloperSettingsView.swift; sourceTree = "<group>"; };
@@ -408,6 +411,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 		AB1000000000000000000001 /* AppBillingSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBillingSupport.swift"; sourceTree = "<group>"; };
 		AB2000000000000000000001 /* BillingItemsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BillingItemsTests.swift; sourceTree = "<group>"; };
 		C39100000000000000000008 /* AppSessionModel+GeneratedLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+GeneratedLogin.swift"; sourceTree = "<group>"; };
+		A15400000000000000000004 /* AppSessionModel+GeneratedSSHKey.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+GeneratedSSHKey.swift"; sourceTree = "<group>"; };
 		B29000000000000000000001 /* AppVaultRegistrySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultRegistrySupport.swift; sourceTree = "<group>"; };
 		B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+VaultRegistry.swift"; sourceTree = "<group>"; };
 		B29000000000000000000021 /* VaultRegistryViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultRegistryViews.swift; sourceTree = "<group>"; };
@@ -523,6 +527,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
 				C39100000000000000000006 /* GeneratorSaveLoginSheet.swift */,
+				A15400000000000000000002 /* GeneratorSSHKeySection.swift */,
 				A10000000000000000000020 /* SettingsRootView.swift */,
 				A10000000000000000000104 /* AppDiagnostics.swift */,
 				A10000000000000000000106 /* AppDeveloperSettingsView.swift */,
@@ -611,6 +616,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
 				C39100000000000000000008 /* AppSessionModel+GeneratedLogin.swift */,
+				A15400000000000000000004 /* AppSessionModel+GeneratedSSHKey.swift */,
 				B29000000000000000000001 /* AppVaultRegistrySupport.swift */,
 				B29000000000000000000011 /* AppSessionModel+VaultRegistry.swift */,
 				B29000000000000000000021 /* VaultRegistryViews.swift */,
@@ -1015,6 +1021,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				B78000000000000000000011 /* AppLiquidGlassSupport.swift in Sources */,
 				A1000000000000000000001D /* GeneratorRootView.swift in Sources */,
 				C39100000000000000000005 /* GeneratorSaveLoginSheet.swift in Sources */,
+				A15400000000000000000001 /* GeneratorSSHKeySection.swift in Sources */,
 				A1000000000000000000001F /* SettingsRootView.swift in Sources */,
 				A4C0000000000000000000F1 /* AppDataClearView.swift in Sources */,
 				A4C0000000000000000000F3 /* AppDataClearSupport.swift in Sources */,
@@ -1105,6 +1112,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				AE1200000000000000000002 /* AppGPGKeySupport.swift in Sources */,
 				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
 				C39100000000000000000007 /* AppSessionModel+GeneratedLogin.swift in Sources */,
+				A15400000000000000000003 /* AppSessionModel+GeneratedSSHKey.swift in Sources */,
 				B29000000000000000000002 /* AppVaultRegistrySupport.swift in Sources */,
 				B29000000000000000000012 /* AppSessionModel+VaultRegistry.swift in Sources */,
 				B29000000000000000000022 /* VaultRegistryViews.swift in Sources */,
