@@ -143,6 +143,11 @@ struct AppRootView: View {
             session.consumePendingControlNavigationIfAvailable()
         }
         .task {
+            // 模拟器端到端验收自检：只有带 `--monica-simulator-acceptance` 启动时才接管，
+            // 正常启动路径不受影响；自检结束时进程直接退出。
+            if AppSimulatorAcceptanceHarness.shouldRun() {
+                await AppSimulatorAcceptanceHarness.runIfRequested(session: session, environment: environment)
+            }
             restoreOneDriveAuthenticationSessionIfAvailable()
             restoreBitwardenAuthenticationSessionIfAvailable()
             importPendingExtensionInboxItems()
