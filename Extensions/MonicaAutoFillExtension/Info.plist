@@ -17,7 +17,7 @@
 	<key>CFBundlePackageType</key>
 	<string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>验证设备所有者后才能创建或使用 Monica 通行密钥。</string>
+	<string>验证设备所有者后才能使用 Monica 通行密钥或自动填充密码。</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
