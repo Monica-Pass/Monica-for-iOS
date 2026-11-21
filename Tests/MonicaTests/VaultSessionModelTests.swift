@@ -13079,6 +13079,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedSends: [String: [LocalSendEntry]] = [:]
     private var steamEntries: [String: [LocalSteamEntry]] = [:]
     private var deletedSteamEntries: [String: [LocalSteamEntry]] = [:]
+    private var vaultFolderRecords: [String: [String: VaultFolderRecord]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
 
@@ -14754,6 +14755,32 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         deletedSteamEntries[projectID, default: []].removeAll { $0.id == entryID }
         steamEntries[projectID, default: []].append(entry)
         return entry
+    }
+
+    func listVaultFolderRecords(
+        in handle: LocalVaultHandle,
+        anchorProjectID: String
+    ) throws -> [VaultFolderRecord] {
+        (vaultFolderRecords[anchorProjectID] ?? [:]).values.sorted {
+            if $0.sortOrder == $1.sortOrder { return $0.folderID < $1.folderID }
+            return $0.sortOrder < $1.sortOrder
+        }
+    }
+
+    func saveVaultFolderRecord(
+        in handle: LocalVaultHandle,
+        anchorProjectID: String,
+        record: VaultFolderRecord
+    ) throws {
+        vaultFolderRecords[anchorProjectID, default: [:]][record.folderID] = record
+    }
+
+    func deleteVaultFolderRecord(
+        in handle: LocalVaultHandle,
+        anchorProjectID: String,
+        folderID: String
+    ) throws {
+        vaultFolderRecords[anchorProjectID, default: [:]][folderID] = nil
     }
 
     func createWifiEntry(
