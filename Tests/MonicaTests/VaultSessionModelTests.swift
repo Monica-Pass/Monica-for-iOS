@@ -1,6 +1,7 @@
 @testable import Monica
 import AuthenticationServices
 import CryptoKit
+import MonicaCore
 import MonicaSecurity
 import MonicaStorage
 import MonicaSync
@@ -8855,6 +8856,75 @@ final class VaultSessionModelTests: XCTestCase {
 
         XCTAssertFalse(model.isPrivacyShieldVisible)
         XCTAssertEqual(model.vaultState, .unlocked)
+    }
+
+    func testLockedSceneShowsPrivacyShieldDuringInactiveAndBackground() {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine)
+        )
+
+        // 尚未解锁时锁屏本身可能显示主密码，App Switcher 快照同样必须被遮住。
+        XCTAssertEqual(model.vaultState, .locked)
+
+        model.handleScenePhaseChange(.inactive)
+        XCTAssertTrue(model.isPrivacyShieldVisible)
+        XCTAssertEqual(model.vaultState, .locked)
+
+        model.handleScenePhaseChange(.active)
+        XCTAssertFalse(model.isPrivacyShieldVisible)
+
+        model.handleScenePhaseChange(.background)
+        XCTAssertTrue(model.isPrivacyShieldVisible)
+        XCTAssertEqual(model.vaultState, .locked)
+    }
+
+    func testScreenPrivacyMonitorMasksDuringCaptureAndRestoresAfterwards() {
+        let monitor = ScreenPrivacyMonitor()
+
+        XCTAssertFalse(monitor.isSceneCaptured)
+        XCTAssertTrue(
+            SensitiveFieldMaskingPolicy.isMasked(
+                isSceneCaptured: monitor.isSceneCaptured,
+                userRequestedReveal: false
+            )
+        )
+
+        monitor.updateSceneCaptured(true)
+        monitor.updateShieldVisibility(true)
+
+        XCTAssertTrue(monitor.isSceneCaptured)
+        XCTAssertTrue(monitor.showsShield)
+        XCTAssertTrue(
+            SensitiveFieldMaskingPolicy.isMasked(
+                isSceneCaptured: monitor.isSceneCaptured,
+                userRequestedReveal: true
+            ),
+            "录制/共享期间必须压过用户的临时显示"
+        )
+
+        monitor.noteScreenshotTaken()
+        XCTAssertNotNil(monitor.screenshotNoticeID)
+        monitor.dismissScreenshotNotice()
+        XCTAssertNil(monitor.screenshotNoticeID)
+
+        monitor.updateSceneCaptured(false)
+        monitor.updateShieldVisibility(false)
+        XCTAssertFalse(monitor.isSceneCaptured)
+        XCTAssertFalse(monitor.showsShield)
+        XCTAssertFalse(
+            SensitiveFieldMaskingPolicy.isMasked(
+                isSceneCaptured: monitor.isSceneCaptured,
+                userRequestedReveal: true
+            ),
+            "停止捕获后应恢复到用户设置"
+        )
+    }
+
+    func testScenePhaseMapsToScreenPrivacyPhase() {
+        XCTAssertEqual(ScreenPrivacyPhase(.active), .active)
+        XCTAssertEqual(ScreenPrivacyPhase(.inactive), .inactive)
+        XCTAssertEqual(ScreenPrivacyPhase(.background), .background)
     }
 
     func testAutoLockWindowKeepsRecentSessionUnlocked() throws {

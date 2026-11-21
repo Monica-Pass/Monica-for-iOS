@@ -28,6 +28,7 @@ struct MonicaLockScreen: View {
     let forgotPassword: () -> Void
     @State private var isVaultImporterPresented = false
     @State private var isPasswordVisible = false
+    @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
 
@@ -55,6 +56,11 @@ struct MonicaLockScreen: View {
         }
     }
 
+    /// 录制/共享期间即使之前手动打开了「显示密码」，也强制回到 SecureField。
+    private var showsPlaintextPassword: Bool {
+        isPasswordVisible && screenPrivacyMonitor?.isSceneCaptured != true
+    }
+
     private var lockScreenHeader: some View {
         VStack(spacing: 18) {
             Text("Monica")
@@ -71,7 +77,7 @@ struct MonicaLockScreen: View {
         VStack(spacing: 18) {
             HStack(spacing: 10) {
                 Group {
-                    if isPasswordVisible {
+                    if showsPlaintextPassword {
                         TextField("主密码", text: $session.vaultPassword)
                     } else {
                         SecureField("主密码", text: $session.vaultPassword)
@@ -94,11 +100,12 @@ struct MonicaLockScreen: View {
                 Button {
                     isPasswordVisible.toggle()
                 } label: {
-                    Image(systemName: isPasswordVisible ? "eye" : "eye.slash")
+                    Image(systemName: showsPlaintextPassword ? "eye" : "eye.slash")
                         .font(AndroidParityTypography.controlIcon(weight: .semibold))
                         .frame(minWidth: AppInterfaceDensity.minimumTouchTarget, minHeight: AppInterfaceDensity.minimumTouchTarget)
                 }
                 .buttonStyle(.plain)
+                .disabled(screenPrivacyMonitor?.isSceneCaptured == true)
                 .foregroundStyle(AndroidParityPalette.textSecondary)
             }
             .padding(.horizontal, 26)
