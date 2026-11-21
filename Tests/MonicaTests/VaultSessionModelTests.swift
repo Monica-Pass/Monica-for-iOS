@@ -12534,6 +12534,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private(set) var createdLoginEntries: [RecordedLoginEntryCall] = []
     private(set) var updatedLoginEntries: [RecordedUpdatedLoginEntryCall] = []
     private(set) var favoritedLoginEntries: [RecordedFavoriteEntryCall] = []
+    private(set) var iconUpdatedLoginEntries: [RecordedLoginIconCall] = []
     private(set) var deletedLoginEntries: [RecordedEntryMutationCall] = []
     private(set) var restoredLoginEntries: [RecordedEntryMutationCall] = []
     private(set) var createdNoteEntries: [RecordedNoteEntryCall] = []
@@ -13083,6 +13084,33 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         loginEntries[projectID, default: []] = loginEntries[projectID, default: []].map {
             $0.id == entryID ? updated : $0
         }
+        return updated
+    }
+
+    func setLoginEntryIcon(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        icon: String?
+    ) throws -> LocalLoginEntry {
+        iconUpdatedLoginEntries.append(
+            .init(projectID: projectID, entryID: entryID, icon: icon)
+        )
+        guard let current = loginEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalLoginEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            username: current.username,
+            password: current.password,
+            url: current.url,
+            notes: current.notes,
+            favorite: current.favorite,
+            icon: icon
+        )
+        loginEntries[projectID, default: []] = loginEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
         return updated
     }
 
@@ -14498,6 +14526,12 @@ private struct RecordedUpdatedLoginEntryCall {
     let projectID: String
     let entryID: String
     let draft: LocalLoginEntryDraft
+}
+
+private struct RecordedLoginIconCall: Equatable {
+    let projectID: String
+    let entryID: String
+    let icon: String?
 }
 
 private struct RecordedFavoriteEntryCall {

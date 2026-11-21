@@ -77,3 +77,55 @@ import MonicaMDBX
         )
     }
 }
+
+@Test func loginEntryIconSurvivesUpdatesAndReopen() throws {
+    // 图标存在登录条目的 payload `icon` 键里：更新其它字段不能丢，
+    // 未知标识原样保存（渲染层负责回退），nil 则清除并回到按类型默认。
+    let vaultURL = FileManager.default.temporaryDirectory
+        .appendingPathComponent("monica-mdbx-icon-\(UUID().uuidString).mdbx", isDirectory: false)
+    defer { try? FileManager.default.removeItem(at: vaultURL) }
+
+    let vault = try MonicaMDBXRuntime.createVault(
+        at: vaultURL,
+        password: "icon password 123!",
+        deviceID: "swiftpm-icon-test"
+    )
+    let project = try vault.createProject(title: "Icons")
+    let entry = try vault.createLoginEntry(
+        projectID: project.id,
+        title: "银行",
+        username: "alice",
+        password: "secret",
+        url: "https://bank.example"
+    )
+    #expect(entry.icon == nil)
+
+    let withIcon = try vault.setLoginEntryIcon(projectID: project.id, entryID: entry.id, icon: "catalog:bank")
+    #expect(withIcon.icon == "catalog:bank")
+
+    let updated = try vault.updateLoginEntry(
+        projectID: project.id,
+        entryID: entry.id,
+        title: "银行（改）",
+        username: "alice",
+        password: "secret2",
+        url: "https://bank.example",
+        notes: "备注"
+    )
+    #expect(updated.icon == "catalog:bank")
+    #expect(updated.title == "银行（改）")
+
+    let unknown = try vault.setLoginEntryIcon(projectID: project.id, entryID: entry.id, icon: "sf:not.a.real.symbol")
+    #expect(unknown.icon == "sf:not.a.real.symbol")
+
+    let reopened = try MonicaMDBXRuntime.openVault(
+        at: vaultURL,
+        password: "icon password 123!",
+        deviceID: "swiftpm-icon-test"
+    )
+    let reopenedEntries = try reopened.listLoginEntries(projectID: project.id)
+    #expect(reopenedEntries.first(where: { $0.id == entry.id })?.icon == "sf:not.a.real.symbol")
+
+    _ = try reopened.setLoginEntryIcon(projectID: project.id, entryID: entry.id, icon: nil)
+    #expect(try reopened.listLoginEntries(projectID: project.id).first?.icon == nil)
+}

@@ -56,6 +56,8 @@ public struct MonicaMDBXLoginEntry: Sendable, Equatable, Identifiable {
     public let url: String
     public let notes: String
     public let favorite: Bool
+    /// 条目图标的稳定资源 ID（`sf:…` / `catalog:…`），空值表示使用默认图标。
+    public let icon: String?
 }
 
 public struct MonicaMDBXNoteEntry: Sendable, Equatable, Identifiable {
@@ -206,6 +208,20 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             projectId: projectID,
             entryId: entryID,
             favorite: favorite
+        )
+        return MonicaMDBXLoginEntry(raw: entry)
+    }
+
+    /// 写入条目图标。`nil` 表示恢复按条目类型推导的默认图标。
+    public func setLoginEntryIcon(
+        projectID: String,
+        entryID: String,
+        icon: String?
+    ) throws -> MonicaMDBXLoginEntry {
+        let entry = try rawVault.setLoginIcon(
+            projectId: projectID,
+            entryId: entryID,
+            icon: icon
         )
         return MonicaMDBXLoginEntry(raw: entry)
     }
@@ -752,6 +768,7 @@ fileprivate struct LoginEntryRecord {
     let url: String
     let notes: String
     let favorite: Bool
+    let icon: String?
 }
 
 fileprivate struct NoteEntryRecord {
@@ -837,6 +854,12 @@ fileprivate enum MDBXBusinessPayload {
         object[key] as? String ?? ""
     }
 
+    /// 空字符串与缺失都视为「没有值」，避免把空图标写回存储。
+    static func optionalString(_ object: [String: Any], _ key: String) -> String? {
+        guard let value = object[key] as? String, !value.isEmpty else { return nil }
+        return value
+    }
+
     static func bool(_ object: [String: Any], _ key: String) -> Bool {
         object[key] as? Bool ?? false
     }
@@ -887,7 +910,8 @@ fileprivate extension LoginEntryRecord {
             password: MDBXBusinessPayload.string(payload, "password"),
             url: MDBXBusinessPayload.string(payload, "website"),
             notes: MDBXBusinessPayload.string(payload, "notes"),
-            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+            favorite: MDBXBusinessPayload.bool(payload, "favorite"),
+            icon: MDBXBusinessPayload.optionalString(payload, "icon")
         )
     }
 }
@@ -1022,14 +1046,20 @@ fileprivate extension MdbxVault {
         notes: String
     ) throws -> LoginEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "login")
-        let payload = try MDBXBusinessPayload.jsonString([
+        // 图标不属于编辑表单字段，更新时必须原样保留，否则会被 payload 重写丢弃。
+        let icon = try currentPayloadIcon(projectId: projectId, entryId: entryId, entryType: "login")
+        var fields: [String: Any] = [
             "kind": "password",
             "username": username,
             "password": password,
             "website": url,
             "notes": notes,
             "favorite": favorite
-        ])
+        ]
+        if let icon {
+            fields["icon"] = icon
+        }
+        let payload = try MDBXBusinessPayload.jsonString(fields)
         return try LoginEntryRecord(raw: updateEntry(
             projectId: projectId,
             entryId: entryId,
@@ -1041,6 +1071,29 @@ fileprivate extension MdbxVault {
 
     func setLoginFavorite(projectId: String, entryId: String, favorite: Bool) throws -> LoginEntryRecord {
         try LoginEntryRecord(raw: setFavorite(projectId: projectId, entryId: entryId, entryType: "login", favorite: favorite))
+    }
+
+    func setLoginIcon(projectId: String, entryId: String, icon: String?) throws -> LoginEntryRecord {
+        let current = try activeEntry(projectId: projectId, entryId: entryId, entryType: "login")
+        let payload = try current.payloadObject
+        var fields: [String: Any] = [
+            "kind": "password",
+            "username": MDBXBusinessPayload.string(payload, "username"),
+            "password": MDBXBusinessPayload.string(payload, "password"),
+            "website": MDBXBusinessPayload.string(payload, "website"),
+            "notes": MDBXBusinessPayload.string(payload, "notes"),
+            "favorite": MDBXBusinessPayload.bool(payload, "favorite")
+        ]
+        if let icon, !icon.isEmpty {
+            fields["icon"] = icon
+        }
+        return try LoginEntryRecord(raw: updateEntry(
+            projectId: projectId,
+            entryId: entryId,
+            entryType: "login",
+            title: current.title,
+            payloadJson: try MDBXBusinessPayload.jsonString(fields)
+        ))
     }
 
     func deleteLoginEntry(projectId: String, entryId: String) throws {
@@ -1272,6 +1325,11 @@ fileprivate extension MdbxVault {
         try MDBXBusinessPayload.favorite(from: activeEntry(projectId: projectId, entryId: entryId, entryType: entryType).payloadJson)
     }
 
+    private func currentPayloadIcon(projectId: String, entryId: String, entryType: String) throws -> String? {
+        let entry = try activeEntry(projectId: projectId, entryId: entryId, entryType: entryType)
+        return MDBXBusinessPayload.optionalString(try entry.payloadObject, "icon")
+    }
+
     private func setFavorite(projectId: String, entryId: String, entryType: String, favorite: Bool) throws -> EntryRecord {
         let current = try activeEntry(projectId: projectId, entryId: entryId, entryType: entryType)
         let payload = try MDBXBusinessPayload.withFavorite(current.payloadJson, favorite: favorite)
@@ -1349,7 +1407,8 @@ extension MonicaMDBXLoginEntry {
             password: raw.password,
             url: raw.url,
             notes: raw.notes,
-            favorite: raw.favorite
+            favorite: raw.favorite,
+            icon: raw.icon
         )
     }
 }
@@ -1483,6 +1542,14 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         projectID: String,
         entryID: String,
         favorite: Bool
+    ) throws -> MonicaMDBXLoginEntry {
+        throw MonicaMDBXError.unavailableOnCurrentPlatform
+    }
+
+    public func setLoginEntryIcon(
+        projectID: String,
+        entryID: String,
+        icon: String?
     ) throws -> MonicaMDBXLoginEntry {
         throw MonicaMDBXError.unavailableOnCurrentPlatform
     }
