@@ -1303,6 +1303,9 @@ struct SettingsRootView: View {
                         AndroidParityInfoRow(title: "Premium", value: preview.premiumSummary)
                         AndroidParityInfoRow(title: String(localized: "类型"), value: preview.kindSummary)
                         AndroidParityInfoRow(title: String(localized: "附件"), value: preview.attachmentSummary)
+                        if let summary = preview.mergeSummary {
+                            BitwardenSyncMergeSummaryView(summary: summary)
+                        }
                     }
                     if !session.bitwardenPendingMutationBatches.isEmpty {
                         AndroidParityDivider()

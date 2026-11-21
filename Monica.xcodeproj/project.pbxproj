@@ -1496,3 +1496,7 @@ A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 	};
 	rootObject = A10000000000000000000080 /* Project object */;
 }
+		B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */; };
+		B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitwardenSyncMergeSummaryView.swift; sourceTree = "<group>"; };
+				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
+				B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */,
