@@ -5162,6 +5162,9 @@ public enum CloudFileProviderError: Error, Sendable, Equatable, LocalizedError {
     case unsupportedOperation(provider: CloudFileProviderKind)
     case conflict(provider: CloudFileProviderKind)
     case invalidDirectoryName(provider: CloudFileProviderKind)
+    /// The provider needs developer-portal configuration (client ID, URL
+    /// scheme). The UI disables the provider instead of failing the whole list.
+    case notConfigured(provider: CloudFileProviderKind)
 
     public var errorDescription: String? {
         switch self {
@@ -5175,6 +5178,8 @@ public enum CloudFileProviderError: Error, Sendable, Equatable, LocalizedError {
             "\(provider.displayName) 远端文件已变化，请重新下载后再写回。"
         case .invalidDirectoryName(let provider):
             "\(provider.displayName) 目录名称无效，请使用字母、数字或空格。"
+        case .notConfigured(let provider):
+            "\(provider.displayName) 未配置，请先填写客户端 ID 与回调 scheme。"
         }
     }
 }

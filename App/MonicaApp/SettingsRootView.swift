@@ -30,6 +30,7 @@ struct SettingsRootView: View {
     @State private var autoFillBlockedSaveTargetInput = ""
     @State private var isOneDriveDirectoryBrowserPresented = false
     @State private var isOneDriveDirectoryCreatePresented = false
+    @State private var isKeePassCloudBrowserPresented = false
 
     private var diagnosticsCenter: AppDiagnosticsCenter {
         AppDiagnosticsCenter.shared
@@ -764,6 +765,13 @@ struct SettingsRootView: View {
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .filled))
                     .disabled(session.vaultState != .unlocked)
+                    Button {
+                        isKeePassCloudBrowserPresented = true
+                    } label: {
+                        Label("云端 KeePass 文件", systemImage: "icloud.and.arrow.down")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
 
                     if let preview = session.keePassImportPreview {
                         AndroidParityDivider()
@@ -1905,6 +1913,9 @@ struct SettingsRootView: View {
         }
         .sheet(isPresented: $isOneDriveDirectoryBrowserPresented) {
             OneDriveDirectoryBrowserSheet(session: session)
+        }
+        .sheet(isPresented: $isKeePassCloudBrowserPresented) {
+            AppKeePassCloudBrowserSheet(session: session, environment: environment)
         }
         .sheet(isPresented: $isOneDriveDirectoryCreatePresented) {
             OneDriveDirectoryCreateSheet(session: session)

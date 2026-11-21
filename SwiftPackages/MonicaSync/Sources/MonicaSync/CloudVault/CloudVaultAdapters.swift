@@ -794,6 +794,10 @@ public struct CloudFileCloudVaultRemoteStore: CloudVaultRemoteStore {
         case .unsupportedOperation, .invalidDirectoryName:
             // 目录名由设置界面校验；走到这里说明持久化数据异常，按供应商不支持处理。
             return CloudVaultError.unsupportedProvider(kind)
+        case .notConfigured:
+            // 缺少开发者门户配置（客户端 ID / URL scheme）时按未授权处理，
+            // 设置界面会先把它显示为“未配置”并禁用入口。
+            return CloudVaultError.unauthorized(kind)
         }
     }
 }
