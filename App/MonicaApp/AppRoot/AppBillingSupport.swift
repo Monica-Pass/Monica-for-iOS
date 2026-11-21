@@ -53,15 +53,16 @@ struct BillingAddressFormState: Equatable {
         )
     }
 
+    /// 多行预览，与 `LocalBillingAddressEntry.formattedAddress` 保持一致。
     var previewAddress: String {
-        BillingAddressLines.singleLine(
+        BillingAddressLines.lines(
             streetAddress: streetAddress,
             apartment: apartment,
             city: city,
             stateProvince: stateProvince,
             postalCode: postalCode,
             country: country
-        )
+        ).joined(separator: "\n")
     }
 }
 
