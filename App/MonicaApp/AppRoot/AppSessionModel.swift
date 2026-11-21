@@ -483,6 +483,7 @@ final class AppSessionModel {
     private let bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore
     private let bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore
     private let bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore
+    private let bitwardenSyncCheckpointStore: any AppBitwardenSyncCheckpointStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -559,6 +560,7 @@ final class AppSessionModel {
         bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore = MemoryAppBitwardenFolderSyncStateStore(),
         bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore = MemoryAppBitwardenItemSyncStateStore(),
         bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore = MemoryAppBitwardenPendingMutationQueueStore(),
+        bitwardenSyncCheckpointStore: any AppBitwardenSyncCheckpointStore = MemoryAppBitwardenSyncCheckpointStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -626,6 +628,7 @@ final class AppSessionModel {
         self.bitwardenFolderSyncStateStore = bitwardenFolderSyncStateStore
         self.bitwardenItemSyncStateStore = bitwardenItemSyncStateStore
         self.bitwardenPendingMutationQueueStore = bitwardenPendingMutationQueueStore
+        self.bitwardenSyncCheckpointStore = bitwardenSyncCheckpointStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -9583,10 +9586,14 @@ final class AppSessionModel {
         bitwardenSyncState = .running
 
         do {
-            _ = try requireActiveVaultSession()
+            let session = try requireActiveVaultSession()
             let provider = try requireBitwardenSyncProvider()
             let snapshot = try await provider.pullSnapshot()
-            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            var preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            preview.mergeSummary = bitwardenSyncMergeSummary(
+                snapshot: snapshot,
+                vaultID: session.handle.vaultID
+            )
             bitwardenSyncPreview = preview
             bitwardenSyncState = .previewReady(
                 itemCount: preview.remoteItemCount,
@@ -9609,10 +9616,34 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
             let provider = try requireBitwardenSyncProvider()
-            let snapshot = try await provider.pullSnapshot()
-            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            let priorCheckpoint = try? bitwardenSyncCheckpointStore.loadCheckpoint(vaultID: session.handle.vaultID)
+            let pullOutcome = try await provider.pullSnapshot(ifChangedSince: priorCheckpoint?.revision)
+            let snapshot: BitwardenSyncSnapshot
+            var pulledRevision: BitwardenSyncRevision?
+            switch pullOutcome {
+            case let .unchanged(revision):
+                pulledRevision = revision
+                if let cachedPreview = bitwardenSyncPreview {
+                    // 远端修订号未变：直接复用上次预览，避免整库重复导入产生重复条目。
+                    saveBitwardenSyncCheckpoint(revision: revision, vaultID: session.handle.vaultID)
+                    bitwardenSyncState = .synced(
+                        itemCount: cachedPreview.remoteItemCount,
+                        sendCount: cachedPreview.remoteSendCount
+                    )
+                    return cachedPreview
+                }
+                snapshot = try await provider.pullSnapshot()
+            case let .changed(pulledSnapshot, revision):
+                snapshot = pulledSnapshot
+                pulledRevision = revision
+            }
+            var preview = AppBitwardenSyncPreview(snapshot: snapshot)
             let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
             let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            preview.mergeSummary = bitwardenSyncMergeSummary(
+                snapshot: snapshot,
+                vaultID: session.handle.vaultID
+            )
             try validateBitwardenRemoteSnapshotIsSafe(
                 snapshot,
                 previousItemStates: previousItemStates,
@@ -9630,6 +9661,10 @@ final class AppSessionModel {
             )
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
+            if pulledRevision == nil {
+                pulledRevision = try? await provider.latestRevision()
+            }
+            saveBitwardenSyncCheckpoint(revision: pulledRevision, vaultID: session.handle.vaultID)
             bitwardenSyncPreview = preview
             bitwardenSyncState = .synced(
                 itemCount: preview.remoteItemCount,
@@ -10880,6 +10915,20 @@ final class AppSessionModel {
         previousStates: [BitwardenItemSyncState],
         folderStates: [BitwardenFolderSyncState] = []
     ) -> BitwardenItemSyncPlan {
+        let localSync = makeBitwardenLocalSyncItems(folderStates: folderStates)
+        return BitwardenItemSyncPlanner().plan(
+            localItems: localSync.localItems,
+            deletedLocalItems: localSync.deletedLocalItems,
+            remoteItems: remoteItems,
+            previousStates: previousStates
+        )
+    }
+
+    /// 把当前保险库里的各类条目转换成 Bitwarden 侧的合并输入。
+    /// 预览计数与推送计划共用这一份映射，避免两处字段顺序漂移。
+    private func makeBitwardenLocalSyncItems(
+        folderStates: [BitwardenFolderSyncState] = []
+    ) -> (localItems: [BitwardenLocalItemSyncItem], deletedLocalItems: [BitwardenLocalItemSyncItem]) {
         let folderStateByProjectID = Dictionary(uniqueKeysWithValues: folderStates.map { ($0.localID, $0) })
         let localLoginItems: [BitwardenLocalItemSyncItem] = loginEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
@@ -10925,12 +10974,31 @@ final class AppSessionModel {
         }
         let localItems = localLoginItems + localTotpItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems + localSshKeyItems
         let deletedLocalItems = deletedLoginItems + deletedTotpItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems + deletedSshKeyItems
+        return (localItems, deletedLocalItems)
+    }
 
-        return BitwardenItemSyncPlanner().plan(
-            localItems: localItems,
-            deletedLocalItems: deletedLocalItems,
-            remoteItems: remoteItems,
-            previousStates: previousStates
+    /// 预览用的字段级合并计数：新增/更新/冲突/删除数量与集合清单。
+    private func bitwardenSyncMergeSummary(
+        snapshot: BitwardenSyncSnapshot,
+        vaultID: String
+    ) -> BitwardenSyncPreviewSummary {
+        let previousItemStates = (try? bitwardenItemSyncStateStore.loadStates(vaultID: vaultID)) ?? []
+        let folderStates = (try? bitwardenFolderSyncStateStore.loadStates(vaultID: vaultID)) ?? []
+        let localSync = makeBitwardenLocalSyncItems(folderStates: folderStates)
+        return BitwardenSyncPreviewBuilder().summary(
+            remote: snapshot,
+            localItems: localSync.localItems,
+            deletedLocalItems: localSync.deletedLocalItems,
+            previousStates: previousItemStates
+        )
+    }
+
+    /// 只存修订号与时间，不含任何 token 或条目内容。
+    private func saveBitwardenSyncCheckpoint(revision: BitwardenSyncRevision?, vaultID: String) {
+        guard let revision else { return }
+        try? bitwardenSyncCheckpointStore.saveCheckpoint(
+            AppBitwardenSyncCheckpoint(revision: revision, vaultID: vaultID, syncedAt: Date()),
+            vaultID: vaultID
         )
     }
 
