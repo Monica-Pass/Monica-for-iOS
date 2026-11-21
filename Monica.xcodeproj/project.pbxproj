@@ -48,6 +48,7 @@
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
 		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
+		B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B760000000000000000000A2 /* AppCloudKitSync.swift */; };
 		AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000011 /* AppAutoFillDomainRules.swift */; };
 		AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
@@ -205,6 +206,7 @@
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
 		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
+		B760000000000000000000A2 /* AppCloudKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudKitSync.swift; sourceTree = "<group>"; };
 		AD0000000000000000000011 /* AppAutoFillDomainRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDomainRules.swift; sourceTree = "<group>"; };
 		AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
@@ -389,6 +391,7 @@
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
 				A100000000000000000000F8 /* AppLanSyncView.swift */,
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
+				B760000000000000000000A2 /* AppCloudKitSync.swift */,
 				AD0000000000000000000011 /* AppAutoFillDomainRules.swift */,
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
@@ -820,6 +823,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
 				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
+				B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */,
 				AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */,
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,

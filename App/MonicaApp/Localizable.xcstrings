@@ -21069,6 +21069,454 @@
           }
         }
       }
+    },
+    "尚未检查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not checked yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查"
+          }
+        }
+      }
+    },
+    "iCloud 可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud is available"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 可用"
+          }
+        }
+      }
+    },
+    "未登录 iCloud": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not signed in to iCloud"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未登录 iCloud"
+          }
+        }
+      }
+    },
+    "iCloud 受限": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud is restricted"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 受限"
+          }
+        }
+      }
+    },
+    "iCloud 暂时不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud is temporarily unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 暂时不可用"
+          }
+        }
+      }
+    },
+    "尚未检查云端变更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud changes not checked yet"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未检查云端变更"
+          }
+        }
+      }
+    },
+    "正在检查云端变更…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Checking iCloud for changes…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在检查云端变更…"
+          }
+        }
+      }
+    },
+    "云端没有新的变更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No new changes in iCloud"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端没有新的变更"
+          }
+        }
+      }
+    },
+    "云端有新的变更，请在「云端保险库」中拉取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud has new changes. Pull them from “Cloud Vault”."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端有新的变更，请在「云端保险库」中拉取"
+          }
+        }
+      }
+    },
+    "云端变更记录已重置，请重新检查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The iCloud change log was reset. Check again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端变更记录已重置，请重新检查"
+          }
+        }
+      }
+    },
+    "无法连接 iCloud，请稍后重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unable to reach iCloud. Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法连接 iCloud，请稍后重试。"
+          }
+        }
+      }
+    },
+    "iCloud 操作失败，请稍后重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The iCloud operation failed. Please try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 操作失败，请稍后重试。"
+          }
+        }
+      }
+    },
+    "iCloud 同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud sync"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 同步"
+          }
+        }
+      }
+    },
+    "通过 iCloud 私人数据库同步": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sync through the iCloud private database"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过 iCloud 私人数据库同步"
+          }
+        }
+      }
+    },
+    "仅上传已加密的保险库文件 · 手动 Push/Pull": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Encrypted vault file only · manual push/pull"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅上传已加密的保险库文件 · 手动 Push/Pull"
+          }
+        }
+      }
+    },
+    "iCloud 账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 账号"
+          }
+        }
+      }
+    },
+    "云端变更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud changes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "云端变更"
+          }
+        }
+      }
+    },
+    "最近检查": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last checked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近检查"
+          }
+        }
+      }
+    },
+    "检查 iCloud 账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check iCloud account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查 iCloud 账号"
+          }
+        }
+      }
+    },
+    "检查云端变更": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check iCloud changes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查云端变更"
+          }
+        }
+      }
+    },
+    "解锁保险库后才能检查 iCloud 上的变更。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault to check iCloud for changes."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁保险库后才能检查 iCloud 上的变更。"
+          }
+        }
+      }
+    },
+    "开启后「云端保险库」会多出 iCloud 选项；云端只保存加密后的保险库文件。未登录 iCloud、无网络或容器未配置时，本机保险库仍可正常使用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Once enabled, “Cloud Vault” also lists iCloud. Only the encrypted vault file is stored; the local vault keeps working when iCloud is signed out, offline, or its container is not configured."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后「云端保险库」会多出 iCloud 选项；云端只保存加密后的保险库文件。未登录 iCloud、无网络或容器未配置时，本机保险库仍可正常使用。"
+          }
+        }
+      }
+    },
+    "iCloud 同步已在设置中关闭": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud sync is turned off in Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 同步已在设置中关闭"
+          }
+        }
+      }
+    },
+    "使用当前 Apple ID 的 iCloud 私人数据库，上传完整的加密保险库文件；云端记录里只有密文与不透明的版本标记。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Upload the complete encrypted vault file to the private database of the current Apple ID; iCloud records hold only ciphertext and opaque revision markers."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用当前 Apple ID 的 iCloud 私人数据库，上传完整的加密保险库文件；云端记录里只有密文与不透明的版本标记。"
+          }
+        }
+      }
+    },
+    "请先在「云端备份」中配置 WebDAV 服务器，或登录 OneDrive；使用 iCloud 时请确认已在设置中开启 iCloud 同步，且 App 已配置 iCloud 容器。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Configure a WebDAV server or sign in to OneDrive under “Cloud backup” first; for iCloud, make sure iCloud sync is enabled in Settings and the app has an iCloud container."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先在「云端备份」中配置 WebDAV 服务器，或登录 OneDrive；使用 iCloud 时请确认已在设置中开启 iCloud 同步，且 App 已配置 iCloud 容器。"
+          }
+        }
+      }
+    },
+    "请先在系统设置中登录 iCloud，再回到此处重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sign in to iCloud in the system settings, then try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先在系统设置中登录 iCloud，再回到此处重试。"
+          }
+        }
+      }
+    },
+    "iCloud 存储空间不足。请清理空间或升级方案后重试；本机保险库没有被修改。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud storage is full. Free up space or upgrade the plan, then retry; the local vault was not modified."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iCloud 存储空间不足。请清理空间或升级方案后重试；本机保险库没有被修改。"
+          }
+        }
+      }
+    },
+    "WebDAV / OneDrive / iCloud · 手动 Push/Pull · 版本冲突三选一": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV / OneDrive / iCloud · manual push/pull · three conflict choices"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "WebDAV / OneDrive / iCloud · 手动 Push/Pull · 版本冲突三选一"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
