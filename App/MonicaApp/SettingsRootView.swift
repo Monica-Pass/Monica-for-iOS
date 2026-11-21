@@ -98,6 +98,16 @@ struct SettingsRootView: View {
         }
     }
 
+    private var separatesLoginAccountBinding: Binding<Bool> {
+        Binding {
+            session.vaultDisplayPreferences.separatesLoginAccount
+        } set: { isSeparated in
+            var preferences = session.vaultDisplayPreferences
+            preferences.separatesLoginAccount = isSeparated
+            session.updateVaultDisplayPreferences(preferences)
+        }
+    }
+
     private var showsLoginURLBinding: Binding<Bool> {
         Binding {
             session.vaultDisplayPreferences.showsLoginURL
@@ -226,6 +236,13 @@ struct SettingsRootView: View {
                     Toggle("账号字段", isOn: showsLoginUsernameBinding)
                         .font(.headline.weight(.heavy))
                         .tint(AndroidParityPalette.primary)
+                    Toggle("用户名与账号分开", isOn: separatesLoginAccountBinding)
+                        .font(.headline.weight(.heavy))
+                        .tint(AndroidParityPalette.primary)
+                    Text("开启后，登录编辑页可分别填写并复制「用户名」与「账号（邮箱 / 手机号）」；关闭时保持旧版表单。")
+                        .font(.footnote)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                     Toggle("网址字段", isOn: showsLoginURLBinding)
                         .font(.headline.weight(.heavy))
                         .tint(AndroidParityPalette.primary)

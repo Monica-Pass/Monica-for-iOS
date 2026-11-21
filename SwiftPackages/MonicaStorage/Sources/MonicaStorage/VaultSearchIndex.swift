@@ -43,6 +43,8 @@ public struct VaultSearchUsage: Sendable, Equatable {
 public enum VaultSearchMatchField: String, Sendable, Hashable, CaseIterable {
     case title
     case username
+    /// 登录条目的「账号」（邮箱 / 手机号 / 账号 ID），与 `username` 分开匹配。
+    case account
     case url
     case tags
     case details
@@ -52,6 +54,7 @@ public enum VaultSearchMatchField: String, Sendable, Hashable, CaseIterable {
     public static let displayOrder: [VaultSearchMatchField] = [
         .title,
         .username,
+        .account,
         .url,
         .tags,
         .details,
@@ -63,6 +66,8 @@ public enum VaultSearchMatchField: String, Sendable, Hashable, CaseIterable {
         case .title:
             return "标题"
         case .username:
+            return "账号"
+        case .account:
             return "账号"
         case .url:
             return "网址"
@@ -98,6 +103,8 @@ public struct VaultSearchDocument: Sendable, Equatable, Identifiable {
     public let projectID: String
     public let title: String
     public let username: String
+    /// 登录条目的账号；其他类型为空。
+    public let account: String
     public let url: String
     public let details: String
     public let notes: String
@@ -114,6 +121,7 @@ public struct VaultSearchDocument: Sendable, Equatable, Identifiable {
         projectID: String,
         title: String,
         username: String = "",
+        account: String = "",
         url: String = "",
         details: String = "",
         notes: String = "",
@@ -129,6 +137,7 @@ public struct VaultSearchDocument: Sendable, Equatable, Identifiable {
         self.projectID = projectID
         self.title = title
         self.username = username
+        self.account = account
         self.url = url
         self.details = details
         self.notes = notes
@@ -455,6 +464,12 @@ public struct VaultSearchIndex: Sendable, Equatable {
                 matchedFields.insert(.username)
                 tokenMatched = true
             }
+            // 账号与用户名是两个独立字段：分开打分，命中时报告「账号」。
+            if let score = fieldScore(document.account, token: token, exact: 75, prefix: 58, contains: 40) {
+                tokenBest = max(tokenBest, score)
+                matchedFields.insert(.account)
+                tokenMatched = true
+            }
             if let score = urlScore(document.url, token: token) {
                 tokenBest = max(tokenBest, score)
                 matchedFields.insert(.url)
@@ -572,6 +587,8 @@ public struct VaultSearchIndex: Sendable, Equatable {
             value = document.title
         case .username:
             value = document.username
+        case .account:
+            value = document.account
         case .url:
             value = document.url
         case .tags:
@@ -626,6 +643,9 @@ public struct VaultSearchIndex: Sendable, Equatable {
     private static func subtitle(for document: VaultSearchDocument) -> String {
         if !document.username.isEmpty {
             return document.username
+        }
+        if !document.account.isEmpty {
+            return document.account
         }
         if !document.url.isEmpty {
             let host = normalizedHost(document.url)
@@ -899,6 +919,7 @@ public enum VaultSearchDocumentBuilder {
             projectID: entry.projectID,
             title: entry.title,
             username: entry.username,
+            account: entry.account,
             url: entry.url,
             notes: entry.notes,
             isFavorite: entry.favorite,
