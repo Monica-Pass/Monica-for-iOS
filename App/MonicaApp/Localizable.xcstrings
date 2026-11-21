@@ -24342,6 +24342,246 @@
           }
         }
       }
+    },
+    "键盘与输入法": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Keyboard & Input Methods"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘与输入法"
+          }
+        }
+      }
+    },
+    "系统限制": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System limitation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统限制"
+          }
+        }
+      }
+    },
+    "安全文本输入强制使用系统键盘": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Secure text input forces the system keyboard"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "安全文本输入强制使用系统键盘"
+          }
+        }
+      }
+    },
+    "iOS 在密码框等安全文本输入区域会强制使用系统键盘，第三方键盘（包括自定义输入法）无法读取或填入内容。Monica 不提供、也无法提供绕过该系统限制的输入法。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS forces the system keyboard in secure text input such as password fields; third-party keyboards (including custom input methods) cannot read or fill them. Monica does not — and cannot — provide an input method that bypasses this system restriction."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 在密码框等安全文本输入区域会强制使用系统键盘，第三方键盘（包括自定义输入法）无法读取或填入内容。Monica 不提供、也无法提供绕过该系统限制的输入法。"
+          }
+        }
+      }
+    },
+    "推荐方式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recommended approach"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "推荐方式"
+          }
+        }
+      }
+    },
+    "系统密码自动填充": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System Password AutoFill"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统密码自动填充"
+          }
+        }
+      }
+    },
+    "设置 → 通用 → 自动填充与密码 → 选择 Monica，然后在 App 或 Safari 的用户名/密码输入框上方使用系统 QuickType 建议。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings → General → AutoFill & Passwords → choose Monica, then use the system QuickType suggestion above username/password fields in apps or Safari."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置 → 通用 → 自动填充与密码 → 选择 Monica，然后在 App 或 Safari 的用户名/密码输入框上方使用系统 QuickType 建议。"
+          }
+        }
+      }
+    },
+    "手动复制": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Manual copy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "手动复制"
+          }
+        }
+      }
+    },
+    "用户主动触发": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Explicitly triggered by you"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户主动触发"
+          }
+        }
+      }
+    },
+    "在条目列表长按登录条目，或在条目详情点击复制按钮，可复制用户名、密码或验证码；复制内容会按「敏感剪贴板」设置自动清除。锁库状态下不会展示任何秘密。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Long-press a login in the entry list or tap the copy button in entry details to copy the username, password, or one-time code. Copied values are cleared automatically according to the Sensitive Clipboard setting. No secrets are shown while the vault is locked."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在条目列表长按登录条目，或在条目详情点击复制按钮，可复制用户名、密码或验证码；复制内容会按「敏感剪贴板」设置自动清除。锁库状态下不会展示任何秘密。"
+          }
+        }
+      }
+    },
+    "在「快捷指令」App 中添加 Monica 的「Open Entry」动作，可从桌面或自动化直接打开指定条目；打开后仍需解锁保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add Monica's \"Open Entry\" action in the Shortcuts app to open a specific entry from the Home Screen or an automation. Unlocking the vault is still required."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在「快捷指令」App 中添加 Monica 的「Open Entry」动作，可从桌面或自动化直接打开指定条目；打开后仍需解锁保险库。"
+          }
+        }
+      }
+    },
+    "打开系统设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open System Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统设置"
+          }
+        }
+      }
+    },
+    "打开快捷指令": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Shortcuts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开快捷指令"
+          }
+        }
+      }
+    },
+    "复制用户名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Username"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制用户名"
+          }
+        }
+      }
+    },
+    "复制密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy Password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制密码"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

@@ -73,6 +73,7 @@ struct AndroidParityVaultHomeView: View {
     @State private var now = Date()
     @State private var isGeneratorPresented = false
     @State private var totpActionFeedback: String?
+    @State private var loginActionFeedback: String?
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -276,6 +277,25 @@ struct AndroidParityVaultHomeView: View {
                             )
                         }
                     }
+                    .contextMenu {
+                        Button {
+                            copyLoginValue(entry.username)
+                        } label: {
+                            Label("复制用户名", systemImage: "person.text.rectangle")
+                        }
+                        Button {
+                            copyLoginValue(entry.password)
+                        } label: {
+                            Label("复制密码", systemImage: "key")
+                        }
+                    }
+                }
+                if let loginActionFeedback {
+                    Text(loginActionFeedback)
+                        .font(.caption2)
+                        .foregroundStyle(AndroidParityPalette.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 4)
                 }
                 if session.filteredLoginEntries.isEmpty {
                     emptyList(String(localized: "没有匹配的密码"), icon: "lock.fill")
@@ -283,6 +303,14 @@ struct AndroidParityVaultHomeView: View {
             }
             deletedLoginRows
         }
+    }
+
+    private func copyLoginValue(_ value: String) {
+        guard session.vaultState == .unlocked else {
+            loginActionFeedback = String(localized: "请先解锁保险库。")
+            return
+        }
+        loginActionFeedback = session.copySensitiveValueToPasteboard(value).message
     }
 
     private var totpList: some View {
