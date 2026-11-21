@@ -4161,12 +4161,6 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            refreshVaultFolders(entryRepository: entryRepository)
-            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
-            rememberVault(session)
-            bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
-                vaultID: session.handle.vaultID
-            )) ?? []
             loginEntries = []
             deletedLoginEntries = []
             noteEntries = []
@@ -4182,6 +4176,12 @@ final class AppSessionModel {
             deletedPasskeyEntries = []
             clearExtendedParityEntries()
             clearOperationTimelineEvents()
+            refreshVaultFolders(entryRepository: entryRepository)
+            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
+            rememberVault(session)
+            bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
+                vaultID: session.handle.vaultID
+            )) ?? []
             recordUserActivity(at: now)
             publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
@@ -13065,7 +13065,11 @@ final class AppSessionModel {
         guard activeProject == nil else { return }
         let projects: [LocalVaultProject]
         if vaultProjects.isEmpty {
-            projects = (try? entryRepository.listProjects()) ?? []
+            // 文件夹索引自身的锚点工程不是用户分类，必须排除，否则新库会把条目写进锚点工程，
+            // 重开保险库后 listProjects() 为空、分类无从激活，条目列表整片空白。
+            projects = ((try? entryRepository.listProjects()) ?? []).filter {
+                !VaultFolderRepository.isSystemProjectTitle($0.title)
+            }
             if !projects.isEmpty {
                 vaultProjects = projects
             }
@@ -13107,35 +13111,32 @@ final class AppSessionModel {
         groupPath: String,
         entryRepository: LocalVaultEntryRepository
     ) throws -> LocalVaultProject {
-        // 组路径逐级建文件夹：既保留 KeePass 的树形结构，也避免生成含 "/" 的非法文件夹名。
-        var project: LocalVaultProject?
-        var parentID: String?
-        for title in keePassImportProjectComponentTitles(baseTitle: baseTitle, groupPath: groupPath) {
-            let component = try createOrReuseVaultProject(
-                title: title,
-                parentID: parentID,
-                entryRepository: entryRepository
-            )
-            project = component
-            parentID = component.id
+        // 每个 KeePass 组路径对应一个扁平分类；层级只保留在标题里，用 " · " 连接，
+        // 避免 "/" 触发文件夹名校验，也让同一个组的所有条目落在同一个分类中。
+        let title = keePassImportProjectTitle(baseTitle: baseTitle, groupPath: groupPath)
+        // 用项目（而不是文件夹记录）承载导入分类：KeePass 的组路径只是扁平标签，
+        // 不参与层级校验；下次读取森林时 #27 的旧库导入会把它补成根文件夹。
+        if let existing = try? entryRepository.listProjects().first(where: { $0.title == title }) {
+            if !vaultProjects.contains(where: { $0.id == existing.id }) {
+                vaultProjects.append(existing)
+            }
+            return existing
         }
-        guard let project else {
-            throw LocalVaultRepositoryError.projectNotFound
-        }
+        let project = try entryRepository.createProject(title: title)
         if !vaultProjects.contains(where: { $0.id == project.id }) {
             vaultProjects.append(project)
         }
         return project
     }
 
-    private func keePassImportProjectComponentTitles(baseTitle: String, groupPath: String) -> [String] {
+    private func keePassImportProjectTitle(baseTitle: String, groupPath: String) -> String {
         let trimmedBase = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmedBase.isEmpty ? "KeePass" : trimmedBase
         let components = groupPath
             .split(separator: "/")
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        return [base] + components
+        return ([base] + components).joined(separator: " · ")
     }
 
     private func keePassTotpDraft(
