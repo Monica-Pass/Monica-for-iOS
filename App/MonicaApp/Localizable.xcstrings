@@ -25910,6 +25910,454 @@
           }
         }
       }
+    },
+    "还没有解析出可保存的密钥，请先粘贴 armored 密钥并点「解析」。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No key has been parsed yet. Paste an armored key and tap Parse first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有解析出可保存的密钥，请先粘贴 armored 密钥并点「解析」。"
+          }
+        }
+      }
+    },
+    "同一指纹的密钥已存在（%@），请勿重复导入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A key with the same fingerprint already exists (%@). Duplicate imports are not allowed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一指纹的密钥已存在（%@），请勿重复导入。"
+          }
+        }
+      }
+    },
+    "私钥块需要先勾选「同时保存私钥」并确认风险，才会写入保险箱。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Turn on “Also save the private key block” and acknowledge the risk before the private key is written to the vault."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "私钥块需要先勾选「同时保存私钥」并确认风险，才会写入保险箱。"
+          }
+        }
+      }
+    },
+    "GPG 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG Key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "GPG 密钥"
+          }
+        }
+      }
+    },
+    "已不存在": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No longer exists"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已不存在"
+          }
+        }
+      }
+    },
+    "属主": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Owner"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "属主"
+          }
+        }
+      }
+    },
+    "指纹（v%lld）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fingerprint (v%lld)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指纹（v%lld）"
+          }
+        }
+      }
+    },
+    "Key ID": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key ID"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key ID"
+          }
+        }
+      }
+    },
+    "密钥材料": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Key material"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密钥材料"
+          }
+        }
+      }
+    },
+    "仅私钥块（公钥未单独导出）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private key block only (no separate public key)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅私钥块（公钥未单独导出）"
+          }
+        }
+      }
+    },
+    "公钥 + 私钥块": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public + private key blocks"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公钥 + 私钥块"
+          }
+        }
+      }
+    },
+    "仅公钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Public key only"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅公钥"
+          }
+        }
+      }
+    },
+    "签名验证": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Signature verification"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "签名验证"
+          }
+        }
+      }
+    },
+    "未接入（依赖尚未提供）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not integrated (dependency not available yet)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未接入（依赖尚未提供）"
+          }
+        }
+      }
+    },
+    "永不过期": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Never expires"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "永不过期"
+          }
+        }
+      }
+    },
+    "导入 ASCII armored GPG 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Import ASCII armored GPG key"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "导入 ASCII armored GPG 密钥"
+          }
+        }
+      }
+    },
+    "armored 密钥输入": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "armored key input"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "armored 密钥输入"
+          }
+        }
+      }
+    },
+    "解析并预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parse and preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解析并预览"
+          }
+        }
+      }
+    },
+    "同时保存私钥块": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also save the private key block"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同时保存私钥块"
+          }
+        }
+      }
+    },
+    "默认关闭。勾选后 armored 私钥会随条目写入保险箱；本实现不校验口令、不解密，也不导出私钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off by default. When on, the armored private key is stored in the vault with the entry; this implementation does not verify passphrases, decrypt, or export private keys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认关闭。勾选后 armored 私钥会随条目写入保险箱；本实现不校验口令、不解密，也不导出私钥。"
+          }
+        }
+      }
+    },
+    "解析结果（未做签名验证）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Parse result (signature not verified)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解析结果（未做签名验证）"
+          }
+        }
+      }
+    },
+    "该密钥带有吊销签名（仅按 packet 类型识别，未验证签名本身）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This key carries a revocation signature (detected by packet type only; the signature itself is not verified)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该密钥带有吊销签名（仅按 packet 类型识别，未验证签名本身）。"
+          }
+        }
+      }
+    },
+    "检测到私钥块：只有勾选「同时保存私钥块」后才会写入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Private key block detected: it is stored only when “Also save the private key block” is on."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检测到私钥块：只有勾选「同时保存私钥块」后才会写入。"
+          }
+        }
+      }
+    },
+    "同一指纹的密钥已存在（条目 %@），重复导入会被拒绝。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A key with the same fingerprint already exists (entry %@). Duplicate imports will be rejected."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同一指纹的密钥已存在（条目 %@），重复导入会被拒绝。"
+          }
+        }
+      }
+    },
+    "指纹与密钥材料在导入时确定，不支持原地修改；需要换钥请删除后重新导入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fingerprint and key material are fixed at import time; delete the entry and import again to replace the key."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指纹与密钥材料在导入时确定，不支持原地修改；需要换钥请删除后重新导入。"
+          }
+        }
+      }
+    },
+    "本条目只做结构与指纹展示：签名验证 / 加密依赖尚未接入，也不会生成新密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This entry only parses structure and shows the fingerprint: signature verification and encryption are not integrated yet, and no new keys are generated."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本条目只做结构与指纹展示：签名验证 / 加密依赖尚未接入，也不会生成新密钥。"
+          }
+        }
+      }
+    },
+    "没有匹配的 GPG 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No matching GPG keys"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有匹配的 GPG 密钥"
+          }
+        }
+      }
+    },
+    "已删除 GPG 密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deleted GPG keys"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除 GPG 密钥"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

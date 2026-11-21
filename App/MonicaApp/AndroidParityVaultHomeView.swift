@@ -65,6 +65,9 @@ struct AndroidParityVaultHomeView: View {
     let setSelectedSshKeyFavorite: (Bool) -> Void
     let deleteSshKeyEntry: () -> Void
     let restoreSshKeyEntry: (LocalSshKeyEntry) -> Void
+    let setSelectedGPGKeyFavorite: (Bool) -> Void
+    let deleteGPGKeyEntry: () -> Void
+    let restoreGPGKeyEntry: (LocalGPGKeyEntry) -> Void
     let setSelectedApiTokenFavorite: (Bool) -> Void
     let deleteApiTokenEntry: () -> Void
     let restoreApiTokenEntry: (LocalApiTokenEntry) -> Void
@@ -238,6 +241,8 @@ struct AndroidParityVaultHomeView: View {
             identityList
         case .sshKey:
             sshKeyList
+        case .gpgKey:
+            gpgKeyList
         case .apiToken:
             apiTokenList
         case .wifi:
@@ -562,6 +567,22 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    private var gpgKeyList: some View {
+        VStack(spacing: 14) {
+            ForEach(session.filteredGPGKeyEntries) { entry in
+                batchAwareButton(id: entry.id, kind: .gpgKey) {
+                    batchSelectableCard(id: entry.id) {
+                        AndroidGPGKeyListCard(entry: entry)
+                    }
+                }
+            }
+            if session.filteredGPGKeyEntries.isEmpty {
+                emptyList(String(localized: "没有匹配的 GPG 密钥"), icon: "key.horizontal.fill")
+            }
+            deletedGPGKeyRows
+        }
+    }
+
     private var apiTokenList: some View {
         VStack(spacing: 14) {
             ForEach(session.filteredApiTokenEntries) { entry in
@@ -803,6 +824,23 @@ struct AndroidParityVaultHomeView: View {
         }
     }
 
+    @ViewBuilder private var deletedGPGKeyRows: some View {
+        if !session.deletedGPGKeyEntries.isEmpty {
+            restoreSection(String(localized: "已删除 GPG 密钥")) {
+                ForEach(session.deletedGPGKeyEntries) { entry in
+                    restoreButton(
+                        id: entry.id,
+                        kind: .gpgKey,
+                        title: entry.title,
+                        subtitle: entry.keyID
+                    ) {
+                        restoreGPGKeyEntry(entry)
+                    }
+                }
+            }
+        }
+    }
+
     @ViewBuilder private var deletedApiTokenRows: some View {
         if !session.deletedApiTokenEntries.isEmpty {
             restoreSection("已删除 API Token") {
@@ -1033,6 +1071,7 @@ struct AndroidParityVaultHomeView: View {
                 case .identity: return session.identitySearchQuery
                 case .passkey: return session.passkeySearchQuery
                 case .sshKey: return session.sshKeySearchQuery
+                case .gpgKey: return session.gpgKeySearchQuery
                 case .apiToken: return session.apiTokenSearchQuery
                 case .wifi: return session.wifiSearchQuery
                 case .sso: return session.ssoSearchQuery
@@ -1055,6 +1094,7 @@ struct AndroidParityVaultHomeView: View {
                 case .identity: session.identitySearchQuery = value
                 case .passkey: session.passkeySearchQuery = value
                 case .sshKey: session.sshKeySearchQuery = value
+                case .gpgKey: session.gpgKeySearchQuery = value
                 case .apiToken: session.apiTokenSearchQuery = value
                 case .wifi: session.wifiSearchQuery = value
                 case .sso: session.ssoSearchQuery = value
@@ -1080,6 +1120,7 @@ struct AndroidParityVaultHomeView: View {
                 case .identity: return session.showFavoriteIdentityEntriesOnly
                 case .passkey: return session.showFavoritePasskeyEntriesOnly
                 case .sshKey: return session.showFavoriteSshKeyEntriesOnly
+                case .gpgKey: return session.showFavoriteGPGKeyEntriesOnly
                 case .apiToken: return session.showFavoriteApiTokenEntriesOnly
                 case .wifi: return session.showFavoriteWifiEntriesOnly
                 case .sso: return session.showFavoriteSSOEntriesOnly
@@ -1102,6 +1143,7 @@ struct AndroidParityVaultHomeView: View {
                 case .identity: session.showFavoriteIdentityEntriesOnly = value
                 case .passkey: session.showFavoritePasskeyEntriesOnly = value
                 case .sshKey: session.showFavoriteSshKeyEntriesOnly = value
+                case .gpgKey: session.showFavoriteGPGKeyEntriesOnly = value
                 case .apiToken: session.showFavoriteApiTokenEntriesOnly = value
                 case .wifi: session.showFavoriteWifiEntriesOnly = value
                 case .sso: session.showFavoriteSSOEntriesOnly = value
@@ -1252,6 +1294,7 @@ struct AndroidParityVaultHomeView: View {
         case .identity: setSelectedIdentityFavorite(favorite)
         case .passkey: setSelectedPasskeyFavorite(favorite)
         case .sshKey: setSelectedSshKeyFavorite(favorite)
+        case .gpgKey: setSelectedGPGKeyFavorite(favorite)
         case .apiToken: setSelectedApiTokenFavorite(favorite)
         case .wifi: setSelectedWifiFavorite(favorite)
         case .sso: try? session.setSelectedSSOFavorite(favorite)
@@ -1274,6 +1317,7 @@ struct AndroidParityVaultHomeView: View {
         case .identity: deleteIdentityEntry()
         case .passkey: deletePasskeyEntry()
         case .sshKey: deleteSshKeyEntry()
+        case .gpgKey: deleteGPGKeyEntry()
         case .apiToken: deleteApiTokenEntry()
         case .wifi: deleteWifiEntry()
         case .sso: try? session.deleteSelectedSSOEntry()
@@ -2226,6 +2270,7 @@ struct AddEditVaultItemView: View {
             case .identity: identityFields
             case .passkey: passkeyFields
             case .sshKey: sshKeyFields
+            case .gpgKey: GPGKeyEntryEditorFields(session: session, isAdding: mode.isAdding)
             case .apiToken: apiTokenFields
             case .wifi: wifiFields
             case .sso: SSOEntryEditorFields(session: session, isAdding: mode.isAdding)
@@ -2726,7 +2771,7 @@ struct AddEditVaultItemView: View {
         case .passkey: return String(localized: "通行密钥")
         case .billingAddress: return String(localized: "账单地址")
         case .paymentAccount: return String(localized: "支付账户")
-        case .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .steam, .attachmentRef: return mode.kind.localizedDisplayName
+        case .sshKey, .apiToken, .wifi, .gpgKey, .sso, .barcode, .send, .steam, .attachmentRef: return mode.kind.localizedDisplayName
         }
     }
 
@@ -2739,6 +2784,7 @@ struct AddEditVaultItemView: View {
         case .identity: return session.editingIdentityFavorite
         case .passkey: return session.editingPasskeyFavorite
         case .sshKey: return session.editingSshKeyFavorite
+        case .gpgKey: return session.editingGPGKeyFavorite
         case .apiToken: return session.editingApiTokenFavorite
         case .wifi: return session.editingWifiFavorite
         case .sso: return session.editingSSOFavorite
@@ -2762,6 +2808,7 @@ private extension UnifiedVaultItemKind {
         case .identity: return "person.text.rectangle.fill"
         case .passkey: return "key.horizontal.fill"
         case .sshKey: return "key.fill"
+        case .gpgKey: return "key.horizontal.fill"
         case .apiToken: return "text.badge.key"
         case .wifi: return "wifi"
         case .sso: return "person.badge.key.fill"
@@ -3094,6 +3141,8 @@ struct VaultItemDetailView: View {
         case .sshKey:
             guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("user", String(localized: "用户名"), entry.username), row("host", String(localized: "主机"), entry.host), row("public", String(localized: "公钥"), sensitive(entry.publicKey, .otherSecret)), row("private", String(localized: "私钥引用"), sensitive(entry.privateKeyReference, .otherSecret)), row("hint", String(localized: "口令提示"), entry.passphraseHint)]
+        case .gpgKey:
+            return session.gpgKeyDetailRows(for: route.entryID)
         case .apiToken:
             guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("token", "Token", sensitive(entry.token, .otherSecret)), row("scopes", String(localized: "范围"), entry.scopes), row("expires", String(localized: "过期"), entry.expiresAt)]
@@ -3183,6 +3232,8 @@ struct VaultItemDetailView: View {
         case .sshKey:
             guard let entry = session.sshKeyEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["public": entry.publicKey, "private": entry.privateKeyReference]
+        case .gpgKey:
+            return session.gpgKeyDetailSecrets(for: route.entryID)
         case .apiToken:
             guard let entry = session.apiTokenEntries.first(where: { $0.id == route.entryID }) else { return [:] }
             return ["token": entry.token]

@@ -3427,7 +3427,8 @@ import MonicaStorage
         .steam,
         .barcode,
         .billingAddress,
-        .paymentAccount
+        .paymentAccount,
+        .gpgKey
     ])
     #expect(UnifiedVaultItemKind.passkey.displayName == "通行密钥")
     #expect(UnifiedVaultItemKind.sshKey.displayName == "SSH 密钥")
@@ -3437,6 +3438,7 @@ import MonicaStorage
     #expect(UnifiedVaultItemKind.send.displayName == "安全发送")
     #expect(UnifiedVaultItemKind.attachmentRef.displayName == "附件")
     #expect(UnifiedVaultItemKind.steam.displayName == "Steam")
+    #expect(UnifiedVaultItemKind.gpgKey.displayName == "GPG 密钥")
 }
 
 @Test func androidParityDraftTypesCarrySensitiveFieldsInsidePayloadModels() {
@@ -5996,6 +5998,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var deletedSend: [String: [LocalSendEntry]] = [:]
     private var attachmentMetadata: [String: [LocalAttachmentMetadata]] = [:]
     private var deletedAttachments: [String: [LocalAttachmentMetadata]] = [:]
+    private var gpgKeyEntries: [String: [LocalGPGKeyEntry]] = [:]
+    private var deletedGPGKeys: [String: [LocalGPGKeyEntry]] = [:]
 
     func createVault(
         at fileURL: URL,
@@ -6203,6 +6207,32 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                     publicKeyCOSE: entry.publicKeyCOSE,
                     privateKeyReference: entry.privateKeyReference,
                     notes: entry.notes,
+                    favorite: entry.favorite
+                )
+            }
+        case .gpgKey:
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &gpgKeyEntries, title: \.title) { entry, projectID in
+                LocalGPGKeyEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    ownerName: entry.ownerName,
+                    ownerEmail: entry.ownerEmail,
+                    userID: entry.userID,
+                    fingerprint: entry.fingerprint,
+                    keyID: entry.keyID,
+                    algorithm: entry.algorithm,
+                    keyVersion: entry.keyVersion,
+                    algorithmID: entry.algorithmID,
+                    keyCreatedAt: entry.keyCreatedAt,
+                    keyExpiresAt: entry.keyExpiresAt,
+                    isRevoked: entry.isRevoked,
+                    isSecretKey: entry.isSecretKey,
+                    secretKeyIsEncrypted: entry.secretKeyIsEncrypted,
+                    notes: entry.notes,
+                    armoredPublicKey: entry.armoredPublicKey,
+                    armoredPrivateKey: entry.armoredPrivateKey,
+                    importedAt: entry.importedAt,
                     favorite: entry.favorite
                 )
             }
@@ -7065,6 +7095,115 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         return entry
     }
 
+    func createGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry {
+        let metadata = draft.metadata
+        let entry = LocalGPGKeyEntry(
+            id: "gpg-key-\(gpgKeyEntries[projectID, default: []].count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            ownerName: metadata.ownerName,
+            ownerEmail: metadata.ownerEmail,
+            userID: metadata.userID,
+            fingerprint: metadata.fingerprint,
+            keyID: metadata.keyID,
+            algorithm: metadata.algorithm,
+            keyVersion: metadata.keyVersion,
+            algorithmID: metadata.algorithmID,
+            keyCreatedAt: metadata.keyCreatedAt,
+            keyExpiresAt: metadata.keyExpiresAt,
+            isRevoked: metadata.isRevoked,
+            isSecretKey: metadata.isSecretKey,
+            secretKeyIsEncrypted: metadata.secretKeyIsEncrypted,
+            notes: draft.notes,
+            armoredPublicKey: draft.armoredPublicKey,
+            armoredPrivateKey: draft.armoredPrivateKey,
+            importedAt: draft.importedAt,
+            favorite: false
+        )
+        gpgKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listGPGKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalGPGKeyEntry] {
+        gpgKeyEntries[projectID, default: []]
+    }
+
+    func updateGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry {
+        let favorite = gpgKeyEntries[projectID, default: []].first { $0.id == entryID }?.favorite ?? false
+        let metadata = draft.metadata
+        let entry = LocalGPGKeyEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            ownerName: metadata.ownerName,
+            ownerEmail: metadata.ownerEmail,
+            userID: metadata.userID,
+            fingerprint: metadata.fingerprint,
+            keyID: metadata.keyID,
+            algorithm: metadata.algorithm,
+            keyVersion: metadata.keyVersion,
+            algorithmID: metadata.algorithmID,
+            keyCreatedAt: metadata.keyCreatedAt,
+            keyExpiresAt: metadata.keyExpiresAt,
+            isRevoked: metadata.isRevoked,
+            isSecretKey: metadata.isSecretKey,
+            secretKeyIsEncrypted: metadata.secretKeyIsEncrypted,
+            notes: draft.notes,
+            armoredPublicKey: draft.armoredPublicKey,
+            armoredPrivateKey: draft.armoredPrivateKey,
+            importedAt: draft.importedAt,
+            favorite: favorite
+        )
+        gpgKeyEntries[projectID, default: []] = gpgKeyEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func setGPGKeyEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalGPGKeyEntry {
+        guard let current = gpgKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        let entry = LocalGPGKeyEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            ownerName: current.ownerName,
+            ownerEmail: current.ownerEmail,
+            userID: current.userID,
+            fingerprint: current.fingerprint,
+            keyID: current.keyID,
+            algorithm: current.algorithm,
+            keyVersion: current.keyVersion,
+            algorithmID: current.algorithmID,
+            keyCreatedAt: current.keyCreatedAt,
+            keyExpiresAt: current.keyExpiresAt,
+            isRevoked: current.isRevoked,
+            isSecretKey: current.isSecretKey,
+            secretKeyIsEncrypted: current.secretKeyIsEncrypted,
+            notes: current.notes,
+            armoredPublicKey: current.armoredPublicKey,
+            armoredPrivateKey: current.armoredPrivateKey,
+            importedAt: current.importedAt,
+            favorite: favorite
+        )
+        gpgKeyEntries[projectID, default: []] = gpgKeyEntries[projectID, default: []].map { $0.id == entryID ? entry : $0 }
+        return entry
+    }
+
+    func deleteGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        guard let entry = gpgKeyEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        gpgKeyEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedGPGKeys[projectID, default: []].append(entry)
+    }
+
+    func listDeletedGPGKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalGPGKeyEntry] {
+        deletedGPGKeys[projectID, default: []]
+    }
+
+    func restoreGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalGPGKeyEntry {
+        guard let entry = deletedGPGKeys[projectID, default: []].first(where: { $0.id == entryID }) else { throw LocalVaultRepositoryError.vaultUnavailable }
+        deletedGPGKeys[projectID, default: []].removeAll { $0.id == entryID }
+        gpgKeyEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
     func createApiTokenEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
         let entry = LocalApiTokenEntry(id: "api-token-\(createdApiTokenEntries.count + 1)", projectID: projectID, title: draft.title, issuer: draft.issuer, accountName: draft.accountName, token: draft.token, scopes: draft.scopes, expiresAt: draft.expiresAt, notes: draft.notes)
         createdApiTokenEntries.append(.init(vaultID: handle.vaultID, projectID: projectID, draft: draft))
@@ -7286,6 +7425,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             || !deletedSend[projectID, default: []].isEmpty
             || !attachmentMetadata[projectID, default: []].isEmpty
             || !deletedAttachments[projectID, default: []].isEmpty
+            || !gpgKeyEntries[projectID, default: []].isEmpty
+            || !deletedGPGKeys[projectID, default: []].isEmpty
     }
 }
 
@@ -7792,4 +7933,128 @@ private func littleEndianUInt64(_ value: UInt64) -> Data {
     #expect(legacy.billingAddress.isEmpty)
     #expect(legacy.cardArtwork.isEmpty)
     #expect(legacy.number == "4111111111111111")
+}
+
+@Test func entryRepositoryRoundTripsGPGKeyEntries() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Personal",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let personal = try entryRepository.createProject(title: "Personal")
+    let work = try entryRepository.createProject(title: "Work")
+
+    let metadata = GPGKeyMetadata(
+        keyVersion: 4,
+        algorithmID: 1,
+        algorithm: "RSA 2048",
+        fingerprint: "B4EE5CC5FAF44DA36140A804A1715DFFCBC907E0",
+        keyID: "A1715DFFCBC907E0",
+        keyCreatedAt: Date(timeIntervalSince1970: 1_767_225_600),
+        keyExpiresAt: Date(timeIntervalSince1970: 1_799_409_600),
+        userID: "Monica GPG Test (issue 12) <gpg@example.com>",
+        ownerName: "Monica GPG Test (issue 12)",
+        ownerEmail: "gpg@example.com",
+        isSecretKey: true,
+        secretKeyIsEncrypted: true,
+        isRevoked: false
+    )
+    let publicKeyArmor = "-----BEGIN PGP PUBLIC KEY BLOCK-----\n\nAAAA\n-----END PGP PUBLIC KEY BLOCK-----"
+    let privateKeyArmor = "-----BEGIN PGP PRIVATE KEY BLOCK-----\n\nBBBB\n-----END PGP PRIVATE KEY BLOCK-----"
+    let importedAt = Date(timeIntervalSince1970: 1_767_300_000)
+
+    let gpgKey = try entryRepository.createGPGKeyEntry(
+        projectID: personal.id,
+        draft: LocalGPGKeyEntryDraft(
+            title: "Production Signing Key",
+            notes: "imported from keyserver",
+            armoredPublicKey: publicKeyArmor,
+            armoredPrivateKey: privateKeyArmor,
+            metadata: metadata,
+            importedAt: importedAt
+        )
+    )
+    #expect(gpgKey.fingerprint == "B4EE5CC5FAF44DA36140A804A1715DFFCBC907E0")
+    #expect(gpgKey.keyID == "A1715DFFCBC907E0")
+    #expect(gpgKey.importedAt == importedAt)
+    #expect(gpgKey.hasPrivateKey)
+    #expect(gpgKey.secretKeyIsEncrypted)
+    #expect(gpgKey.favorite == false)
+    #expect(try entryRepository.listGPGKeyEntries(projectID: personal.id).map(\.id) == [gpgKey.id])
+
+    let revokedMetadata = GPGKeyMetadata(
+        keyVersion: 4,
+        algorithmID: 1,
+        algorithm: "RSA 2048",
+        fingerprint: "B4EE5CC5FAF44DA36140A804A1715DFFCBC907E0",
+        keyID: "A1715DFFCBC907E0",
+        keyCreatedAt: Date(timeIntervalSince1970: 1_767_225_600),
+        keyExpiresAt: nil,
+        userID: "Monica GPG Test (issue 12) <gpg@example.com>",
+        ownerName: "Monica GPG Test (issue 12)",
+        ownerEmail: "gpg@example.com",
+        isSecretKey: false,
+        secretKeyIsEncrypted: false,
+        isRevoked: true
+    )
+    let updated = try entryRepository.updateGPGKeyEntry(
+        projectID: personal.id,
+        entryID: gpgKey.id,
+        draft: LocalGPGKeyEntryDraft(
+            title: "Revoked Signing Key",
+            notes: "revocation imported",
+            armoredPublicKey: publicKeyArmor,
+            armoredPrivateKey: "",
+            metadata: revokedMetadata,
+            importedAt: importedAt
+        )
+    )
+    #expect(updated.title == "Revoked Signing Key")
+    #expect(updated.isRevoked)
+    #expect(updated.keyExpiresAt == nil)
+    #expect(updated.hasPrivateKey == false)
+    #expect(updated.statusSummary == "已吊销（未验证签名）")
+
+    let favorited = try entryRepository.setGPGKeyEntryFavorite(
+        projectID: personal.id,
+        entryID: gpgKey.id,
+        favorite: true
+    )
+    #expect(favorited.favorite)
+
+    // 跨项目移动后指纹等结构化字段必须原样保留。
+    let moved = try entryRepository.moveEntry(
+        kind: .gpgKey,
+        entryID: gpgKey.id,
+        fromProjectID: personal.id,
+        toProjectID: work.id
+    )
+    #expect(moved.kind == .gpgKey)
+    #expect(try entryRepository.listGPGKeyEntries(projectID: personal.id).isEmpty)
+    #expect(try entryRepository.listGPGKeyEntries(projectID: work.id).map(\.fingerprint) == [metadata.fingerprint])
+
+    try entryRepository.deleteGPGKeyEntry(projectID: work.id, entryID: gpgKey.id)
+    #expect(try entryRepository.listGPGKeyEntries(projectID: work.id).isEmpty)
+    #expect(try entryRepository.listDeletedGPGKeyEntries(projectID: work.id).map(\.id) == [gpgKey.id])
+    #expect(try entryRepository.restoreGPGKeyEntry(projectID: work.id, entryID: gpgKey.id).fingerprint == metadata.fingerprint)
+
+    // 公钥为空时仓库层拒绝写入，避免留下只有标题的半成品条目。
+    #expect(throws: LocalVaultRepositoryError.invalidEntryPayload) {
+        try entryRepository.createGPGKeyEntry(
+            projectID: personal.id,
+            draft: LocalGPGKeyEntryDraft(
+                title: "Empty",
+                notes: "",
+                armoredPublicKey: "  \n ",
+                armoredPrivateKey: "",
+                metadata: metadata,
+                importedAt: importedAt
+            )
+        )
+    }
+    #expect(try entryRepository.listGPGKeyEntries(projectID: personal.id).isEmpty)
 }

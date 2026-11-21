@@ -265,6 +265,22 @@ final class AppSessionModel {
     var editingSshKeyPassphraseHint = ""
     var editingSshKeyNotes = ""
     var editingSshKeyFavorite = false
+    var gpgKeyEntries: [LocalGPGKeyEntry] = []
+    var deletedGPGKeyEntries: [LocalGPGKeyEntry] = []
+    var gpgKeyTitle = ""
+    var gpgKeyNotes = ""
+    var gpgKeyImportInput = ""
+    /// 是否显式允许把 armored 私钥块随条目一起保存（默认 false，只导入公钥）。
+    var gpgKeyImportIncludesPrivateKey = false
+    var gpgKeyImportPreview: GPGKeyMetadata?
+    var gpgKeyImportError: String?
+    var gpgKeyImportDuplicateEntryID: String?
+    var gpgKeySearchQuery = ""
+    var showFavoriteGPGKeyEntriesOnly = false
+    var editingGPGKeyEntryID: String?
+    var editingGPGKeyTitle = ""
+    var editingGPGKeyNotes = ""
+    var editingGPGKeyFavorite = false
     var apiTokenEntries: [LocalApiTokenEntry] = []
     var deletedApiTokenEntries: [LocalApiTokenEntry] = []
     var apiTokenTitle = ""
@@ -948,6 +964,27 @@ final class AppSessionModel {
         }
     }
 
+    var filteredGPGKeyEntries: [LocalGPGKeyEntry] {
+        guard !isTrashQuickFilterSelected else {
+            return []
+        }
+        let query = gpgKeySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        return filteredFavoriteEntries(
+            gpgKeyEntries,
+            query: query,
+            favoritesOnly: showFavoriteGPGKeyEntriesOnly,
+            isFavorite: { $0.favorite }
+        ) { entry, query in
+            entry.title.localizedCaseInsensitiveContains(query)
+                || entry.ownerName.localizedCaseInsensitiveContains(query)
+                || entry.ownerEmail.localizedCaseInsensitiveContains(query)
+                || entry.fingerprint.localizedCaseInsensitiveContains(query.replacingOccurrences(of: " ", with: ""))
+                || entry.keyID.localizedCaseInsensitiveContains(query)
+                || entry.algorithm.localizedCaseInsensitiveContains(query)
+                || entry.notes.localizedCaseInsensitiveContains(query)
+        }
+    }
+
     var filteredApiTokenEntries: [LocalApiTokenEntry] {
         guard !isTrashQuickFilterSelected else {
             return []
@@ -1231,6 +1268,8 @@ final class AppSessionModel {
             return passkeyEntries.contains { $0.id == summary.id }
         case .sshKey:
             return sshKeyEntries.contains { $0.id == summary.id }
+        case .gpgKey:
+            return gpgKeyEntries.contains { $0.id == summary.id }
         case .apiToken:
             return apiTokenEntries.contains { $0.id == summary.id }
         case .wifi:
@@ -1347,6 +1386,7 @@ final class AppSessionModel {
         summaries += identityEntries.map(shortcutSummary(for:))
         summaries += passkeyEntries.map(shortcutSummary(for:))
         summaries += sshKeyEntries.map(shortcutSummary(for:))
+        summaries += gpgKeyEntries.map(shortcutSummary(for:))
         summaries += apiTokenEntries.map(shortcutSummary(for:))
         summaries += wifiEntries.map(shortcutSummary(for:))
         summaries += ssoEntries.map(shortcutSummary(for:))
@@ -1428,6 +1468,16 @@ final class AppSessionModel {
             title: shortcutTitle(entry.title),
             subtitle: shortcutSubtitle([entry.username, entry.host]),
             searchableText: shortcutSearchableText([UnifiedVaultItemKind.sshKey.localizedDisplayName, entry.title, entry.username, entry.host])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalGPGKeyEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .gpgKey,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.ownerEmail, entry.keyID]),
+            searchableText: shortcutSearchableText([UnifiedVaultItemKind.gpgKey.localizedDisplayName, entry.title, entry.ownerName, entry.ownerEmail, entry.keyID, entry.fingerprint])
         )
     }
 
@@ -1557,7 +1607,7 @@ final class AppSessionModel {
             return VaultShortcutDestination(tab: .passwords, passwordModule: .note, otherKind: nil)
         case .passkey:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .passkey, otherKind: nil)
-        case .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef:
+        case .sshKey, .apiToken, .wifi, .gpgKey, .sso, .barcode, .send, .attachmentRef:
             return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
         case .totp, .steam:
             return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
@@ -3280,6 +3330,7 @@ final class AppSessionModel {
             + identityEntries.count
             + passkeyEntries.count
             + sshKeyEntries.count
+            + gpgKeyEntries.count
             + apiTokenEntries.count
             + wifiEntries.count
             + barcodeEntries.count
@@ -3298,6 +3349,7 @@ final class AppSessionModel {
             + identityEntries.filter(\.favorite).count
             + passkeyEntries.filter(\.favorite).count
             + sshKeyEntries.filter(\.favorite).count
+            + gpgKeyEntries.filter(\.favorite).count
             + apiTokenEntries.filter(\.favorite).count
             + wifiEntries.filter(\.favorite).count
             + barcodeEntries.filter(\.favorite).count
@@ -3315,6 +3367,7 @@ final class AppSessionModel {
             + deletedIdentityEntries.count
             + deletedPasskeyEntries.count
             + deletedSshKeyEntries.count
+            + deletedGPGKeyEntries.count
             + deletedApiTokenEntries.count
             + deletedWifiEntries.count
             + deletedBarcodeEntries.count
@@ -3546,6 +3599,8 @@ final class AppSessionModel {
                 return deletedPasskeyEntries.map(\.id)
             case .sshKey:
                 return deletedSshKeyEntries.map(\.id)
+            case .gpgKey:
+                return deletedGPGKeyEntries.map(\.id)
             case .apiToken:
                 return deletedApiTokenEntries.map(\.id)
             case .wifi:
@@ -3582,6 +3637,8 @@ final class AppSessionModel {
             return filteredPasskeyEntries.map(\.id)
         case .sshKey:
             return filteredSshKeyEntries.map(\.id)
+        case .gpgKey:
+            return filteredGPGKeyEntries.map(\.id)
         case .apiToken:
             return filteredApiTokenEntries.map(\.id)
         case .wifi:
@@ -3703,6 +3760,10 @@ final class AppSessionModel {
                 guard let entry = sshKeyEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteSshKeyEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .gpgKey:
+                guard let entry = gpgKeyEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteGPGKeyEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .apiToken:
                 guard let entry = apiTokenEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteApiTokenEntry(projectID: projectID, entryID: id)
@@ -3772,6 +3833,9 @@ final class AppSessionModel {
             case .sshKey:
                 let entry = try entryRepository.restoreSshKeyEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .gpgKey:
+                let entry = try entryRepository.restoreGPGKeyEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .apiToken:
                 let entry = try entryRepository.restoreApiTokenEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
@@ -3830,6 +3894,7 @@ final class AppSessionModel {
         identitySearchQuery = ""
         passkeySearchQuery = ""
         sshKeySearchQuery = ""
+        gpgKeySearchQuery = ""
         apiTokenSearchQuery = ""
         wifiSearchQuery = ""
         ssoSearchQuery = ""
@@ -3849,6 +3914,7 @@ final class AppSessionModel {
         showFavoriteIdentityEntriesOnly = favoritesOnly
         showFavoritePasskeyEntriesOnly = favoritesOnly
         showFavoriteSshKeyEntriesOnly = favoritesOnly
+        showFavoriteGPGKeyEntriesOnly = favoritesOnly
         showFavoriteApiTokenEntriesOnly = favoritesOnly
         showFavoriteWifiEntriesOnly = favoritesOnly
         showFavoriteSSOEntriesOnly = favoritesOnly
@@ -4410,6 +4476,11 @@ final class AppSessionModel {
         presentedEditorMode = .edit(VaultItemRoute(kind: .sshKey, entryID: entry.id))
     }
 
+    func presentEditEditor(for entry: LocalGPGKeyEntry) {
+        selectGPGKeyEntryForEditing(entry)
+        presentedEditorMode = .edit(VaultItemRoute(kind: .gpgKey, entryID: entry.id))
+    }
+
     func presentEditEditor(for entry: LocalApiTokenEntry) {
         selectApiTokenEntryForEditing(entry)
         presentedEditorMode = .edit(VaultItemRoute(kind: .apiToken, entryID: entry.id))
@@ -4465,6 +4536,8 @@ final class AppSessionModel {
             if let entry = passkeyEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .sshKey:
             if let entry = sshKeyEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .gpgKey:
+            if let entry = gpgKeyEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .apiToken:
             if let entry = apiTokenEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .wifi:
@@ -4503,6 +4576,8 @@ final class AppSessionModel {
             return passkeyEntries.first { $0.id == entryID }?.title ?? String(localized: "通行密钥")
         case .sshKey:
             return sshKeyEntries.first { $0.id == entryID }?.title ?? String(localized: "SSH 密钥")
+        case .gpgKey:
+            return gpgKeyEntries.first { $0.id == entryID }?.title ?? String(localized: "GPG 密钥")
         case .apiToken:
             return apiTokenEntries.first { $0.id == entryID }?.title ?? "API Token"
         case .wifi:
@@ -4594,6 +4669,8 @@ final class AppSessionModel {
             try createPasskeyEntry(projectTitle: projectTitle)
         case .sshKey:
             try createSshKeyEntry(projectTitle: projectTitle)
+        case .gpgKey:
+            try createGPGKeyEntry(projectTitle: projectTitle)
         case .apiToken:
             try createApiTokenEntry(projectTitle: projectTitle)
         case .wifi:
@@ -4631,6 +4708,8 @@ final class AppSessionModel {
             try updateSelectedPasskeyEntry()
         case .sshKey:
             try updateSelectedSshKeyEntry()
+        case .gpgKey:
+            try updateSelectedGPGKeyEntry()
         case .apiToken:
             try updateSelectedApiTokenEntry()
         case .wifi:
@@ -12333,6 +12412,12 @@ final class AppSessionModel {
         showFavoriteSshKeyEntriesOnly = false
         sshKeyPrivateKeyReference = ""
         clearEditingSshKeyEntry()
+        gpgKeyEntries = []
+        deletedGPGKeyEntries = []
+        gpgKeySearchQuery = ""
+        showFavoriteGPGKeyEntriesOnly = false
+        resetGPGKeyImportState()
+        clearEditingGPGKeyEntry()
         apiTokenEntries = []
         deletedApiTokenEntries = []
         apiTokenSearchQuery = ""
@@ -12755,6 +12840,8 @@ final class AppSessionModel {
         deletedPasskeyEntries = try entryRepository.listDeletedPasskeyEntries(projectID: projectID)
         sshKeyEntries = try entryRepository.listSshKeyEntries(projectID: projectID)
         deletedSshKeyEntries = try entryRepository.listDeletedSshKeyEntries(projectID: projectID)
+        gpgKeyEntries = try entryRepository.listGPGKeyEntries(projectID: projectID)
+        deletedGPGKeyEntries = try entryRepository.listDeletedGPGKeyEntries(projectID: projectID)
         apiTokenEntries = try entryRepository.listApiTokenEntries(projectID: projectID)
         deletedApiTokenEntries = try entryRepository.listDeletedApiTokenEntries(projectID: projectID)
         wifiEntries = try entryRepository.listWifiEntries(projectID: projectID)
@@ -12812,6 +12899,8 @@ final class AppSessionModel {
             snapshot.deletedPasskeyEntries += (try? entryRepository.listDeletedPasskeyEntries(projectID: projectID)) ?? []
             snapshot.sshKeyEntries += (try? entryRepository.listSshKeyEntries(projectID: projectID)) ?? []
             snapshot.deletedSshKeyEntries += (try? entryRepository.listDeletedSshKeyEntries(projectID: projectID)) ?? []
+            snapshot.gpgKeyEntries += (try? entryRepository.listGPGKeyEntries(projectID: projectID)) ?? []
+            snapshot.deletedGPGKeyEntries += (try? entryRepository.listDeletedGPGKeyEntries(projectID: projectID)) ?? []
             snapshot.apiTokenEntries += (try? entryRepository.listApiTokenEntries(projectID: projectID)) ?? []
             snapshot.deletedApiTokenEntries += (try? entryRepository.listDeletedApiTokenEntries(projectID: projectID)) ?? []
             snapshot.wifiEntries += (try? entryRepository.listWifiEntries(projectID: projectID)) ?? []

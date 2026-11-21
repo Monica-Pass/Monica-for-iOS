@@ -5834,6 +5834,7 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
     case barcode
     case billingAddress
     case paymentAccount
+    case gpgKey
 
     public var displayName: String {
         switch self {
@@ -5869,6 +5870,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
             return "账单地址"
         case .paymentAccount:
             return "支付账户"
+        case .gpgKey:
+            return "GPG 密钥"
         }
     }
 
@@ -5896,7 +5899,8 @@ public enum UnifiedVaultItemKind: String, Sendable, Equatable, Hashable, CaseIte
         .steam,
         .barcode,
         .billingAddress,
-        .paymentAccount
+        .paymentAccount,
+        .gpgKey
     ]
 }
 
@@ -7948,6 +7952,10 @@ public enum VaultCSVCodec {
         case .attachmentRef:
             issues.append(issue(row: rowNumber, code: .unsupportedKind, field: "kind", detail: "CSV 未包含可导入的附件内容"))
             return nil
+        case .gpgKey:
+            // armored 公钥体量大、且私钥不应经过 CSV 明文通道，因此 GPG 条目暂不支持 CSV 导入导出。
+            issues.append(issue(row: rowNumber, code: .unsupportedKind, field: "kind", detail: "GPG 密钥条目暂不支持 CSV 导入导出"))
+            return nil
         }
     }
 
@@ -8735,6 +8743,48 @@ public protocol LocalVaultEngine {
         entryID: String
     ) throws -> LocalSshKeyEntry
 
+    func createGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalGPGKeyEntryDraft
+    ) throws -> LocalGPGKeyEntry
+
+    func listGPGKeyEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalGPGKeyEntry]
+
+    func updateGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalGPGKeyEntryDraft
+    ) throws -> LocalGPGKeyEntry
+
+    func setGPGKeyEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalGPGKeyEntry
+
+    func deleteGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws
+
+    func listDeletedGPGKeyEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalGPGKeyEntry]
+
+    func restoreGPGKeyEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalGPGKeyEntry
+
     func createApiTokenEntry(
         in handle: LocalVaultHandle,
         projectID: String,
@@ -9202,7 +9252,6 @@ public extension LocalVaultEngine {
     func listDeletedPaymentAccountEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPaymentAccountEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
     func restorePaymentAccountEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalPaymentAccountEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.paymentAccount) }
 
-
     func createPasskeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
     func listPasskeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalPasskeyEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
     func updatePasskeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalPasskeyEntryDraft) throws -> LocalPasskeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.passkey) }
@@ -9218,6 +9267,13 @@ public extension LocalVaultEngine {
     func deleteSshKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.sshKey) }
     func listDeletedSshKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalSshKeyEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.sshKey) }
     func restoreSshKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalSshKeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.sshKey) }
+    func createGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
+    func listGPGKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalGPGKeyEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
+    func updateGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
+    func setGPGKeyEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalGPGKeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
+    func deleteGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
+    func listDeletedGPGKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalGPGKeyEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
+    func restoreGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalGPGKeyEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.gpgKey) }
 
     func createApiTokenEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry { throw LocalVaultRepositoryError.unsupportedEntryType(.apiToken) }
     func listApiTokenEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalApiTokenEntry] { throw LocalVaultRepositoryError.unsupportedEntryType(.apiToken) }
@@ -9823,7 +9879,6 @@ public struct LocalSshKeyEntry: Sendable, Equatable, Identifiable {
         self.favorite = favorite
     }
 }
-
 
 // MARK: - Billing addresses & payment accounts
 
@@ -12355,6 +12410,34 @@ public struct LocalVaultEntryRepository {
         try engine.restorePaymentAccountEntry(in: session.handle, projectID: projectID, entryID: entryID)
     }
 
+    public func createGPGKeyEntry(projectID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry {
+        try engine.createGPGKeyEntry(in: session.handle, projectID: projectID, draft: normalizedGPGKeyEntryDraft(draft))
+    }
+
+    public func listGPGKeyEntries(projectID: String) throws -> [LocalGPGKeyEntry] {
+        try engine.listGPGKeyEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func updateGPGKeyEntry(projectID: String, entryID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry {
+        try engine.updateGPGKeyEntry(in: session.handle, projectID: projectID, entryID: entryID, draft: normalizedGPGKeyEntryDraft(draft))
+    }
+
+    public func setGPGKeyEntryFavorite(projectID: String, entryID: String, favorite: Bool) throws -> LocalGPGKeyEntry {
+        try engine.setGPGKeyEntryFavorite(in: session.handle, projectID: projectID, entryID: entryID, favorite: favorite)
+    }
+
+    public func deleteGPGKeyEntry(projectID: String, entryID: String) throws {
+        try engine.deleteGPGKeyEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
+    public func listDeletedGPGKeyEntries(projectID: String) throws -> [LocalGPGKeyEntry] {
+        try engine.listDeletedGPGKeyEntries(in: session.handle, projectID: projectID)
+    }
+
+    public func restoreGPGKeyEntry(projectID: String, entryID: String) throws -> LocalGPGKeyEntry {
+        try engine.restoreGPGKeyEntry(in: session.handle, projectID: projectID, entryID: entryID)
+    }
+
     public func createApiTokenEntry(projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
         try engine.createApiTokenEntry(in: session.handle, projectID: projectID, draft: normalizedApiTokenEntryDraft(draft))
     }
@@ -12782,6 +12865,25 @@ public struct LocalVaultEntryRepository {
         return result
     }
 
+    private func normalizedGPGKeyEntryDraft(_ draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntryDraft {
+        let normalizedTitle = try normalizedEntryTitle(draft.title)
+        let publicKey = draft.armoredPublicKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let privateKey = draft.armoredPrivateKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        // 没有密钥材料就没有可展示/可复制的指纹，拒绝写入半成品条目。
+        // 只导入私钥块时公钥可以为空：私钥块本身已包含公钥 packet，指纹也来自它。
+        guard !publicKey.isEmpty || !privateKey.isEmpty, !draft.metadata.fingerprint.isEmpty else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        return LocalGPGKeyEntryDraft(
+            title: normalizedTitle,
+            notes: draft.notes,
+            armoredPublicKey: publicKey,
+            armoredPrivateKey: privateKey,
+            metadata: draft.metadata,
+            importedAt: draft.importedAt
+        )
+    }
+
     private func normalizedApiTokenEntryDraft(_ draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntryDraft {
         let normalizedTitle = try normalizedEntryTitle(draft.title)
         return LocalApiTokenEntryDraft(
@@ -13079,7 +13181,7 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
                 targetProjectID: toProjectID
             )
             return LocalVaultMovedEntry(id: entry.id, title: entry.title, kind: kind)
-        case .passkey, .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef, .steam, .billingAddress, .paymentAccount:
+        case .passkey, .sshKey, .apiToken, .wifi, .sso, .barcode, .send, .attachmentRef, .steam, .billingAddress, .paymentAccount, .gpgKey:
             let mapping = parityMoveMapping(for: kind)
             let entry = try moveParityEntry(
                 in: handle,
@@ -13822,6 +13924,51 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
         ]
     }
 
+    public func createGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry {
+        let entry = try createParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryType: "document-ref",
+            kind: "gpg-key",
+            title: draft.title,
+            payload: draft.parityPayload
+        )
+        return try LocalGPGKeyEntry(entry)
+    }
+
+    public func listGPGKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalGPGKeyEntry] {
+        try listParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "gpg-key").map(LocalGPGKeyEntry.init)
+    }
+
+    public func updateGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String, draft: LocalGPGKeyEntryDraft) throws -> LocalGPGKeyEntry {
+        let entry = try updateParityEntry(
+            in: handle,
+            projectID: projectID,
+            entryID: entryID,
+            entryType: "document-ref",
+            kind: "gpg-key",
+            title: draft.title,
+            payload: draft.parityPayload
+        )
+        return try LocalGPGKeyEntry(entry)
+    }
+
+    public func setGPGKeyEntryFavorite(in handle: LocalVaultHandle, projectID: String, entryID: String, favorite: Bool) throws -> LocalGPGKeyEntry {
+        try LocalGPGKeyEntry(setParityEntryFavorite(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "gpg-key", favorite: favorite))
+    }
+
+    public func deleteGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws {
+        try deleteParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "gpg-key")
+    }
+
+    public func listDeletedGPGKeyEntries(in handle: LocalVaultHandle, projectID: String) throws -> [LocalGPGKeyEntry] {
+        try listDeletedParityEntries(in: handle, projectID: projectID, entryType: "document-ref", kind: "gpg-key").map(LocalGPGKeyEntry.init)
+    }
+
+    public func restoreGPGKeyEntry(in handle: LocalVaultHandle, projectID: String, entryID: String) throws -> LocalGPGKeyEntry {
+        try LocalGPGKeyEntry(restoreParityEntry(in: handle, projectID: projectID, entryID: entryID, entryType: "document-ref", kind: "gpg-key"))
+    }
+
     public func createApiTokenEntry(in handle: LocalVaultHandle, projectID: String, draft: LocalApiTokenEntryDraft) throws -> LocalApiTokenEntry {
         let entry = try createParityEntry(
             in: handle,
@@ -14310,6 +14457,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             || !listDeletedSendEntries(in: handle, projectID: projectID).isEmpty
             || !listAttachmentMetadata(in: handle, projectID: projectID).isEmpty
             || !listDeletedAttachmentMetadata(in: handle, projectID: projectID).isEmpty
+            || !listGPGKeyEntries(in: handle, projectID: projectID).isEmpty
+            || !listDeletedGPGKeyEntries(in: handle, projectID: projectID).isEmpty
     }
 
     private func createParityEntry(
@@ -14454,6 +14603,8 @@ public final class MDBXLocalVaultEngine: LocalVaultEngine, @unchecked Sendable {
             return ("document-ref", "billing-address")
         case .paymentAccount:
             return ("document-ref", "payment-account")
+        case .gpgKey:
+            return ("document-ref", "gpg-key")
         case .login, .totp, .note, .card, .identity:
             preconditionFailure("Core entry kinds do not use parity move mapping.")
         }
@@ -14912,6 +15063,51 @@ private extension LocalSshKeyEntry {
             passphraseHint: payload.string("passphraseHint"),
             notes: payload.string("notes"),
             favorite: entry.favorite
+        )
+    }
+}
+
+private extension LocalGPGKeyEntry {
+    init(_ entry: MonicaMDBXParityEntry) throws {
+        self.init(
+            id: entry.id,
+            projectID: entry.projectID,
+            title: entry.title,
+            favorite: entry.favorite,
+            payload: try entry.payloadDictionary()
+        )
+    }
+}
+
+extension LocalGPGKeyEntry {
+    /// 从 parity payload 还原条目（storage 内部与编解码测试共用）。
+    ///
+    /// 键名统一走 `GPGKeyPayload`，避免写入侧与读取侧字段漂移；
+    /// `keyExpiresAt` 用 0 表示「无过期时间」，因为 JSON 不能存 nil。
+    init(id: String, projectID: String, title: String, favorite: Bool, payload: [String: Any]) {
+        let expiresAt = payload.int64(GPGKeyPayload.keyExpiresAt)
+        self.init(
+            id: id,
+            projectID: projectID,
+            title: title,
+            ownerName: payload.string(GPGKeyPayload.ownerName),
+            ownerEmail: payload.string(GPGKeyPayload.ownerEmail),
+            userID: payload.string(GPGKeyPayload.userID),
+            fingerprint: payload.string(GPGKeyPayload.fingerprint),
+            keyID: payload.string(GPGKeyPayload.keyID),
+            algorithm: payload.string(GPGKeyPayload.algorithm),
+            keyVersion: payload.int(GPGKeyPayload.keyVersion),
+            algorithmID: UInt8(truncatingIfNeeded: payload.int64(GPGKeyPayload.algorithmID)),
+            keyCreatedAt: Date(timeIntervalSince1970: TimeInterval(payload.int64(GPGKeyPayload.keyCreatedAt))),
+            keyExpiresAt: expiresAt > 0 ? Date(timeIntervalSince1970: TimeInterval(expiresAt)) : nil,
+            isRevoked: payload.bool(GPGKeyPayload.isRevoked),
+            isSecretKey: payload.bool(GPGKeyPayload.isSecretKey),
+            secretKeyIsEncrypted: payload.bool(GPGKeyPayload.secretKeyIsEncrypted),
+            notes: payload.string(GPGKeyPayload.notes),
+            armoredPublicKey: payload.string(GPGKeyPayload.armoredPublicKey),
+            armoredPrivateKey: payload.string(GPGKeyPayload.armoredPrivateKey),
+            importedAt: Date(timeIntervalSince1970: TimeInterval(payload.int64(GPGKeyPayload.importedAt))),
+            favorite: favorite
         )
     }
 }
