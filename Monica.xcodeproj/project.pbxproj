@@ -59,7 +59,7 @@
 		A9B000000000000000000001 /* AppGlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B000000000000000000002 /* AppGlobalSearchView.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
 		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
-		A92000000000000000000001 /* AppLoginDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000011 /* AppLoginDetailSupport.swift */; };
+		AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1600000000000000000011 /* AppLoginDetailSupport.swift */; };
 		A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000012 /* SensitivePrivacySettingsView.swift */; };
 		A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */; };
 		A20000000000000000000001 /* MonicaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* MonicaWidget.swift */; };
@@ -205,7 +205,7 @@
 		A10000000000000000000028 /* ScannerAndStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerAndStatusViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* AndroidParityVaultHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityVaultHomeView.swift; sourceTree = "<group>"; };
 		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
-		A92000000000000000000011 /* AppLoginDetailSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLoginDetailSupport.swift; sourceTree = "<group>"; };
+		AF1600000000000000000011 /* AppLoginDetailSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLoginDetailSupport.swift; sourceTree = "<group>"; };
 		A13000000000000000000012 /* SensitivePrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacySettingsView.swift; sourceTree = "<group>"; };
 		A9B000000000000000000002 /* AppGlobalSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGlobalSearchView.swift; sourceTree = "<group>"; };
 		A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaShortcutsAppIntents.swift; sourceTree = "<group>"; };
@@ -368,7 +368,7 @@
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
 				A13000000000000000000011 /* SensitivePrivacyService.swift */,
-				A92000000000000000000011 /* AppLoginDetailSupport.swift */,
+				AF1600000000000000000011 /* AppLoginDetailSupport.swift */,
 				A13000000000000000000012 /* SensitivePrivacySettingsView.swift */,
 				A9B000000000000000000002 /* AppGlobalSearchView.swift */,
 				A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */,
@@ -789,7 +789,7 @@
 				A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */,
 				A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */,
 				A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */,
-				A92000000000000000000001 /* AppLoginDetailSupport.swift in Sources */,
+				AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */,
 				A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */,
 				A9B000000000000000000001 /* AppGlobalSearchView.swift in Sources */,
 				A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */,
