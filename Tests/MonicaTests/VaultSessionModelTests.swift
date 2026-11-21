@@ -13969,6 +13969,10 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             cvv: draft.cvv,
             issuer: draft.issuer,
             network: draft.network,
+            iban: draft.iban,
+            swiftCode: draft.swiftCode,
+            billingAddress: draft.billingAddress,
+            cardArtwork: draft.cardArtwork,
             notes: draft.notes
         )
         createdCardEntries.append(
@@ -14005,6 +14009,10 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             cvv: draft.cvv,
             issuer: draft.issuer,
             network: draft.network,
+            iban: draft.iban,
+            swiftCode: draft.swiftCode,
+            billingAddress: draft.billingAddress,
+            cardArtwork: draft.cardArtwork,
             notes: draft.notes,
             favorite: currentFavorite
         )
