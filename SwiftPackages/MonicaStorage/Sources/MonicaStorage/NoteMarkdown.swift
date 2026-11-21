@@ -749,6 +749,39 @@ enum NoteMarkdownParser {
 // MARK: - 图片上限与校验
 
 /// 笔记图片的硬性上限。界面在插入前用它做提示，存储层用它兜底。
+/// 用文件头签名判断数据是否可能是受支持的图片。
+///
+/// ImageIO 对无法识别的数据会让 `CGImageSourceCreateWithData` 返回 nil，这既可能是「不是图片」，
+/// 也可能是「是图片但内容损坏」。为了把这两种情况区分成 `unsupportedFormat` 与 `unreadableImage`，
+/// 先做一层纯字节签名检查；签名对得上、后续解析失败才算不可读。
+public enum NoteMarkdownImageSniffer {
+    public static func looksLikeSupportedImage(_ data: Data) -> Bool {
+        let bytes = [UInt8](data.prefix(32))
+        let signatures: [[UInt8]] = [
+            [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A],
+            [0xFF, 0xD8, 0xFF],
+            Array("GIF87a".utf8),
+            Array("GIF89a".utf8)
+        ]
+        // 数据短到还不足以容纳签名时，只要它仍是某个签名的前缀，就按「像是图片」处理，
+        // 让后续 ImageIO 解析失败给出 unreadableImage（例如仅 4 字节的 PNG 头）。
+        if bytes.count < 12 {
+            return signatures.contains { $0.starts(with: bytes) }
+        }
+        if bytes.starts(with: [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]) { return true } // PNG
+        if bytes.starts(with: [0xFF, 0xD8, 0xFF]) { return true }                            // JPEG
+        if bytes.starts(with: Array("GIF87a".utf8)) || bytes.starts(with: Array("GIF89a".utf8)) { return true }
+        if bytes.starts(with: Array("RIFF".utf8)) && Array(bytes[8..<12]) == Array("WEBP".utf8) { return true }
+        // HEIF / HEIC：偏移 4 处为 "ftyp"，其后 4 字节是品牌。
+        if Array(bytes[4..<8]) == Array("ftyp".utf8) {
+            let brand = String(decoding: bytes[8..<12], as: UTF8.self)
+            let supportedBrands: Set<String> = ["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif"]
+            if supportedBrands.contains(brand) { return true }
+        }
+        return false
+    }
+}
+
 public enum NoteMarkdownImageLimits {
     /// 单条笔记最多引用的图片数量。
     public static let maximumImagesPerNote = 20
@@ -842,21 +875,29 @@ public enum NoteMarkdownImageInspector {
                 limit: NoteMarkdownImageLimits.maximumBytesPerImage
             )
         }
+        // 完全不像图片的字节（例如纯文本）必须在创建 CGImageSource 之前就判成「格式不受支持」，
+        // 否则 ImageIO 创建失败会被误报成 unreadableImage，和「像图片但读不出尺寸」混在一起。
+        guard NoteMarkdownImageSniffer.looksLikeSupportedImage(data) else {
+            throw NoteMarkdownImageError.unsupportedFormat
+        }
         guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary),
-              CGImageSourceGetCount(source) > 0,
-              let rawProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) else {
+              CGImageSourceGetCount(source) > 0 else {
+            throw NoteMarkdownImageError.unreadableImage
+        }
+        // 先判格式：完全不是图片的数据应报 unsupportedFormat，而“像图片但读不出尺寸”才算 unreadableImage。
+        guard let typeIdentifier = CGImageSourceGetType(source),
+              let unifiedType = UTType(typeIdentifier as String),
+              let mediaType = unifiedType.preferredMIMEType,
+              NoteMarkdownImageLimits.supportedMediaTypes.contains(mediaType) else {
+            throw NoteMarkdownImageError.unsupportedFormat
+        }
+        guard let rawProperties = CGImageSourceCopyPropertiesAtIndex(source, 0, nil) else {
             throw NoteMarkdownImageError.unreadableImage
         }
         let properties = rawProperties as NSDictionary
         guard let width = (properties[kCGImagePropertyPixelWidth] as? NSNumber)?.intValue,
               let height = (properties[kCGImagePropertyPixelHeight] as? NSNumber)?.intValue else {
             throw NoteMarkdownImageError.unreadableImage
-        }
-        guard let typeIdentifier = CGImageSourceGetType(source),
-              let unifiedType = UTType(typeIdentifier as String),
-              let mediaType = unifiedType.preferredMIMEType,
-              NoteMarkdownImageLimits.supportedMediaTypes.contains(mediaType) else {
-            throw NoteMarkdownImageError.unsupportedFormat
         }
         try NoteMarkdownImageLimits.validate(pixelWidth: width, pixelHeight: height)
         return NoteMarkdownImageProperties(

@@ -12874,6 +12874,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     private var sshKeyEntries: [String: [LocalSshKeyEntry]] = [:]
     private var deletedSshKeys: [String: [LocalSshKeyEntry]] = [:]
     private var apiTokenEntries: [String: [LocalApiTokenEntry]] = [:]
+    private var ssoEntries: [String: [LocalSSOEntry]] = [:]
+    private var deletedSSOEntries: [String: [LocalSSOEntry]] = [:]
     private var deletedApiTokens: [String: [LocalApiTokenEntry]] = [:]
     private var wifiEntries: [String: [LocalWifiEntry]] = [:]
     private var deletedWifi: [String: [LocalWifiEntry]] = [:]
@@ -13264,7 +13266,22 @@ private final class RecordingVaultEngine: LocalVaultEngine {
                 )
             }
         case .sso:
-            throw LocalVaultRepositoryError.unsupportedEntryType(.sso)
+            return try moveRecordedEntry(entryID: entryID, fromProjectID: fromProjectID, toProjectID: toProjectID, kind: kind, entries: &ssoEntries, title: \.title) { entry, projectID in
+                LocalSSOEntry(
+                    id: entry.id,
+                    projectID: projectID,
+                    title: entry.title,
+                    provider: entry.provider,
+                    providerName: entry.providerName,
+                    issuer: entry.issuer,
+                    accountName: entry.accountName,
+                    loginURL: entry.loginURL,
+                    linkedLoginEntryID: entry.linkedLoginEntryID,
+                    notes: entry.notes,
+                    secret: entry.secret,
+                    favorite: entry.favorite
+                )
+            }
         case .billingAddress, .paymentAccount:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         case .attachmentRef:
@@ -14313,6 +14330,117 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         }
         deletedApiTokens[projectID, default: []].removeAll { $0.id == entryID }
         apiTokenEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func createSSOEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        draft: LocalSSOEntryDraft
+    ) throws -> LocalSSOEntry {
+        let entry = LocalSSOEntry(
+            id: "sso-\(ssoEntries[projectID, default: []].count + 1)",
+            projectID: projectID,
+            title: draft.title,
+            provider: draft.provider,
+            providerName: draft.providerName,
+            issuer: draft.issuer,
+            accountName: draft.accountName,
+            loginURL: draft.loginURL,
+            linkedLoginEntryID: draft.linkedLoginEntryID,
+            notes: draft.notes,
+            secret: draft.secret
+        )
+        ssoEntries[projectID, default: []].append(entry)
+        return entry
+    }
+
+    func listSSOEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalSSOEntry] {
+        ssoEntries[projectID, default: []]
+    }
+
+    func updateSSOEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        draft: LocalSSOEntryDraft
+    ) throws -> LocalSSOEntry {
+        let currentFavorite = ssoEntries[projectID, default: []].first(where: { $0.id == entryID })?.favorite ?? false
+        let updated = LocalSSOEntry(
+            id: entryID,
+            projectID: projectID,
+            title: draft.title,
+            provider: draft.provider,
+            providerName: draft.providerName,
+            issuer: draft.issuer,
+            accountName: draft.accountName,
+            loginURL: draft.loginURL,
+            linkedLoginEntryID: draft.linkedLoginEntryID,
+            notes: draft.notes,
+            secret: draft.secret,
+            favorite: currentFavorite
+        )
+        ssoEntries[projectID, default: []] = ssoEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func setSSOEntryFavorite(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String,
+        favorite: Bool
+    ) throws -> LocalSSOEntry {
+        guard let current = ssoEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let updated = LocalSSOEntry(
+            id: current.id,
+            projectID: current.projectID,
+            title: current.title,
+            provider: current.provider,
+            providerName: current.providerName,
+            issuer: current.issuer,
+            accountName: current.accountName,
+            loginURL: current.loginURL,
+            linkedLoginEntryID: current.linkedLoginEntryID,
+            notes: current.notes,
+            secret: current.secret,
+            favorite: favorite
+        )
+        ssoEntries[projectID, default: []] = ssoEntries[projectID, default: []].map { $0.id == entryID ? updated : $0 }
+        return updated
+    }
+
+    func deleteSSOEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws {
+        guard let entry = ssoEntries[projectID, default: []].first(where: { $0.id == entryID }) else { return }
+        ssoEntries[projectID, default: []].removeAll { $0.id == entryID }
+        deletedSSOEntries[projectID, default: []].append(entry)
+    }
+
+    func listDeletedSSOEntries(
+        in handle: LocalVaultHandle,
+        projectID: String
+    ) throws -> [LocalSSOEntry] {
+        deletedSSOEntries[projectID, default: []]
+    }
+
+    func restoreSSOEntry(
+        in handle: LocalVaultHandle,
+        projectID: String,
+        entryID: String
+    ) throws -> LocalSSOEntry {
+        guard let entry = deletedSSOEntries[projectID, default: []].first(where: { $0.id == entryID }) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        deletedSSOEntries[projectID, default: []].removeAll { $0.id == entryID }
+        ssoEntries[projectID, default: []].append(entry)
         return entry
     }
 
