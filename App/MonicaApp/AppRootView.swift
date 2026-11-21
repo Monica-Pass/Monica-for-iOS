@@ -105,6 +105,7 @@ struct AppRootView: View {
             if state == .unlocked {
                 session.consumePendingControlNavigationIfAvailable()
                 session.consumePendingControlPageIfUnlocked()
+                session.consumePendingOtpAuthImportIfUnlocked()
             }
         }
         .onChange(of: session.vaultState) { _, state in
@@ -150,6 +151,14 @@ struct AppRootView: View {
         }
         .sheet(isPresented: $session.isAccountTemplatesPresented) {
             AccountTemplatesView(session: session)
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(
+            isPresented: $session.isOtpAuthImportSheetPresented,
+            onDismiss: { session.dismissOtpAuthImportSheet() }
+        ) {
+            AppOtpAuthImportSheet(session: session)
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }

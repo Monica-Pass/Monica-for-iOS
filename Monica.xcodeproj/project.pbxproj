@@ -139,6 +139,7 @@ C3A0000000000000000000A1 /* AppVaultSnapshotSupport.swift in Sources */ = {isa =
 		B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */; };
 		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
 		AA1000000000000000000002 /* AppTotpAdvancedSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */; };
+		A520000000000000000000F2 /* AppOtpAuthImport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A520000000000000000000F1 /* AppOtpAuthImport.swift */; };
 		AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* AppAttachmentSupport.swift */; };
 		A9E000000000000000000002 /* AppMarkdownNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000001 /* AppMarkdownNotes.swift */; };
 		A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000003 /* AppMarkdownNotesView.swift */; };
@@ -354,6 +355,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 		B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLiquidGlassSupportTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
 		AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppTotpAdvancedSupport.swift"; sourceTree = "<group>"; };
+		A520000000000000000000F1 /* AppOtpAuthImport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppOtpAuthImport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000003 /* AppAttachmentSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAttachmentSupport.swift"; sourceTree = "<group>"; };
 		A9E000000000000000000001 /* AppMarkdownNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotes.swift; sourceTree = "<group>"; };
 		A9E000000000000000000003 /* AppMarkdownNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotesView.swift; sourceTree = "<group>"; };
@@ -588,6 +590,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
 				A97000000000000000000001 /* AppSSOSupport.swift */,
 				AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */,
+				A520000000000000000000F1 /* AppOtpAuthImport.swift */,
 				AB1000000000000000000001 /* AppBillingSupport.swift */,
 			B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
 			AE1300000000000000000001 /* AppSteamGuardSupport.swift */,
@@ -1072,6 +1075,7 @@ C3A0000000000000000000A2 /* AppVaultSnapshotSupport.swift */ = {isa = PBXFileRef
 				AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */,
 				A97000000000000000000002 /* AppSSOSupport.swift in Sources */,
 				AA1000000000000000000002 /* AppTotpAdvancedSupport.swift in Sources */,
+				A520000000000000000000F2 /* AppOtpAuthImport.swift in Sources */,
 				AB1000000000000000000002 /* AppBillingSupport.swift in Sources */,
 				B9C100000000000000000001 /* AppGoogleDriveAuthenticationService.swift in Sources */,
 				B9C100000000000000000002 /* AppKeePassCloudSupport.swift in Sources */,

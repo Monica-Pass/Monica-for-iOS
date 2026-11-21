@@ -321,6 +321,9 @@ public enum TotpError: Error, Sendable, Equatable {
     case invalidDigits
     case invalidPeriod
     case invalidAlgorithm
+    case invalidCounter
+    case missingCounter
+    case uriTooLong
     case invalidURI
 }
 
@@ -364,10 +367,37 @@ public struct TotpImportDraft: Sendable, Equatable {
             .filter { !$0.isEmpty }
             .joined(separator: " ")
     }
+
+    /// 判断两个验证器是否为同一条目的规范化键（issuer + account + secret）。
+    public var duplicateKey: OtpAuthDuplicateKey {
+        OtpAuthDuplicateKey(issuer: issuer, accountName: accountName, secret: secret)
+    }
+}
+
+/// 验证器重复判定键。issuer/account 忽略大小写与首尾空白，secret 按 Base32 规则规范化。
+public struct OtpAuthDuplicateKey: Hashable, Sendable {
+    public let issuer: String
+    public let accountName: String
+    public let secret: String
+
+    public init(issuer: String, accountName: String, secret: String) {
+        self.issuer = issuer.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.accountName = accountName.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        self.secret = secret
+            .uppercased()
+            .filter { !$0.isWhitespace && $0 != "=" }
+    }
 }
 
 public enum TotpURIParser {
+    /// 单条 otpauth URI 的最大字节数，防止异常输入拖垮导入流程。
+    public static let maximumURILength = 4096
+    private static let supportedDigitCounts = [6, 8]
+
     public static func parse(_ value: String) throws -> TotpImportDraft {
+        guard value.utf8.count <= maximumURILength else {
+            throw TotpError.uriTooLong
+        }
         guard let components = URLComponents(string: value),
               components.scheme?.lowercased() == "otpauth",
               let host = components.host?.lowercased(),
@@ -382,9 +412,19 @@ public enum TotpURIParser {
 
         let issuerFromQuery = query["issuer"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let label = normalizedLabel(from: components.path)
-        let labelParts = label.split(separator: ":", maxSplits: 1).map(String.init)
-        let issuerFromLabel = labelParts.count == 2 ? labelParts[0] : ""
-        let accountName = labelParts.count == 2 ? labelParts[1] : label
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !label.isEmpty else {
+            throw TotpError.invalidURI
+        }
+        let labelParts = label.split(separator: ":", maxSplits: 1, omittingEmptySubsequences: false).map(String.init)
+        let issuerFromLabel = labelParts.count == 2
+            ? labelParts[0].trimmingCharacters(in: .whitespacesAndNewlines)
+            : ""
+        let accountName = (labelParts.count == 2 ? labelParts[1] : label)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !accountName.isEmpty else {
+            throw TotpError.invalidURI
+        }
         let issuer = issuerFromQuery.isEmpty ? issuerFromLabel : issuerFromQuery
         let title = issuer.isEmpty ? accountName : issuer
 
@@ -402,12 +442,12 @@ public enum TotpURIParser {
             defaultValue: 6,
             error: .invalidDigits
         )
-        guard (6...8).contains(digits) else {
+        guard supportedDigitCounts.contains(digits) else {
             throw TotpError.invalidDigits
         }
 
         let algorithm = try normalizedAlgorithm(query["algorithm"])
-        let counter = try normalizedCounter(query["counter"])
+        let counter = try normalizedCounter(query["counter"], required: otpType == .hotp)
 
         return TotpImportDraft(
             title: title,
@@ -423,21 +463,30 @@ public enum TotpURIParser {
     }
 
     private static func queryItems(from components: URLComponents) -> [String: String] {
-        Dictionary(
-            uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
-                item.value.map { (item.name.lowercased(), $0) }
+        var result: [String: String] = [:]
+        for item in components.queryItems ?? [] {
+            guard let value = item.value else { continue }
+            let key = item.name.lowercased()
+            // 重复参数以第一次出现为准，避免 Dictionary(uniqueKeysWithValues:) 崩溃。
+            if result[key] == nil {
+                result[key] = value
             }
-        )
+        }
+        return result
     }
 
     private static func normalizedSecret(_ value: String?) throws -> String {
         let normalized = (value ?? "")
             .uppercased()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else {
+            .filter { !$0.isWhitespace }
+        var secret = normalized
+        while secret.hasSuffix("=") {
+            secret.removeLast()
+        }
+        guard !secret.isEmpty, !secret.contains("=") else {
             throw TotpError.invalidSecret
         }
-        return normalized
+        return secret
     }
 
     private static func normalizedLabel(from path: String) -> String {
@@ -460,19 +509,24 @@ public enum TotpURIParser {
     }
 
     private static func normalizedAlgorithm(_ value: String?) throws -> TotpAlgorithm {
-        let normalized = (value ?? TotpAlgorithm.sha1.rawValue).uppercased()
+        let normalized = (value ?? TotpAlgorithm.sha1.rawValue)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
         guard let algorithm = TotpAlgorithm(rawValue: normalized) else {
             throw TotpError.invalidAlgorithm
         }
         return algorithm
     }
 
-    private static func normalizedCounter(_ value: String?) throws -> UInt64 {
+    private static func normalizedCounter(_ value: String?, required: Bool) throws -> UInt64 {
         guard let value, !value.isEmpty else {
+            if required {
+                throw TotpError.missingCounter
+            }
             return 0
         }
         guard let counter = UInt64(value) else {
-            throw TotpError.invalidURI
+            throw TotpError.invalidCounter
         }
         return counter
     }

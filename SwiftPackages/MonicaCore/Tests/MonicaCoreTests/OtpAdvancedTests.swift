@@ -122,11 +122,11 @@ private let rfc6238SHA512Secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQ
     #expect(draft.digits == 8)
     #expect(draft.algorithm == .sha256)
 
-    let defaultedCounter = try TotpURIParser.parse(
-        "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP"
-    )
-    #expect(defaultedCounter.otpType == .hotp)
-    #expect(defaultedCounter.counter == 0)
+    #expect(throws: TotpError.missingCounter) {
+        try TotpURIParser.parse(
+            "otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP"
+        )
+    }
 
     let totpIgnoresCounter = try TotpURIParser.parse(
         "otpauth://totp/alice?secret=JBSWY3DPEHPK3PXP&counter=7"
@@ -134,7 +134,7 @@ private let rfc6238SHA512Secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQ
     #expect(totpIgnoresCounter.otpType == .totp)
     #expect(totpIgnoresCounter.counter == 0)
 
-    #expect(throws: TotpError.invalidURI) {
+    #expect(throws: TotpError.invalidCounter) {
         try TotpURIParser.parse("otpauth://hotp/alice?secret=JBSWY3DPEHPK3PXP&counter=abc")
     }
 }
