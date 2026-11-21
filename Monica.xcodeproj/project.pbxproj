@@ -44,6 +44,8 @@
 		A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F7 /* AppLanSyncNetwork.swift */; };
 		A100000000000000000000F5 /* AppLanSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000F8 /* AppLanSyncView.swift */; };
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
+		A92000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000011 /* AppAutoFillDomainRules.swift */; };
+		A93000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
 		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
 		A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000011 /* AppVaultLayoutPreferences.swift */; };
@@ -184,6 +186,8 @@
 		A100000000000000000000F7 /* AppLanSyncNetwork.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncNetwork.swift; sourceTree = "<group>"; };
 		A100000000000000000000F8 /* AppLanSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanSyncView.swift; sourceTree = "<group>"; };
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
+		A92000000000000000000011 /* AppAutoFillDomainRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDomainRules.swift; sourceTree = "<group>"; };
+		A93000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
 		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
 		A90000000000000000000011 /* AppVaultLayoutPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultLayoutPreferences.swift; sourceTree = "<group>"; };
@@ -350,6 +354,7 @@
 				A100000000000000000000F7 /* AppLanSyncNetwork.swift */,
 				A100000000000000000000F8 /* AppLanSyncView.swift */,
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
+				A92000000000000000000011 /* AppAutoFillDomainRules.swift */,
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
@@ -451,6 +456,7 @@
 				A10000000000000000000018 /* VaultSessionModelTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
+				A93000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -768,6 +774,7 @@
 				A100000000000000000000F4 /* AppLanSyncNetwork.swift in Sources */,
 				A100000000000000000000F5 /* AppLanSyncView.swift in Sources */,
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
+				A92000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */,
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
@@ -825,6 +832,7 @@
 				A10000000000000000000017 /* VaultSessionModelTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
+				A93000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

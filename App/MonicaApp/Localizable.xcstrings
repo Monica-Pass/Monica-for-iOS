@@ -15981,6 +15981,422 @@
           }
         }
       }
+    },
+    "读取自动填充规则失败，请重新解锁后重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't read autofill rules. Unlock the vault and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取自动填充规则失败，请重新解锁后重试。"
+          }
+        }
+      }
+    },
+    "请先解锁保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先解锁保险库。"
+          }
+        }
+      }
+    },
+    "请输入域名，例如 example.com。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a domain, for example example.com."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请输入域名，例如 example.com。"
+          }
+        }
+      }
+    },
+    "无法识别的域名。请只填写域名本身，不要带空格、协议或路径。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unrecognized domain. Enter just the domain, without spaces, scheme, or path."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法识别的域名。请只填写域名本身，不要带空格、协议或路径。"
+          }
+        }
+      }
+    },
+    "该域名已有相同类型的规则。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A rule of the same type already exists for this domain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该域名已有相同类型的规则。"
+          }
+        }
+      }
+    },
+    "已屏蔽该域名的自动填充。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autofill is now blocked for this domain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已屏蔽该域名的自动填充。"
+          }
+        }
+      }
+    },
+    "已为该域名添加例外规则。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An exception rule was added for this domain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已为该域名添加例外规则。"
+          }
+        }
+      }
+    },
+    "已删除规则。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Rule deleted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已删除规则。"
+          }
+        }
+      }
+    },
+    "保存自动填充规则失败，请稍后重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Couldn't save autofill rules. Try again later."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存自动填充规则失败，请稍后重试。"
+          }
+        }
+      }
+    },
+    "解锁保险库后可管理": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Available after unlocking the vault"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁保险库后可管理"
+          }
+        }
+      }
+    },
+    "屏蔽的域名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Blocked domains"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽的域名"
+          }
+        }
+      }
+    },
+    "还没有屏蔽任何域名。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No blocked domains yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有屏蔽任何域名。"
+          }
+        }
+      }
+    },
+    "例外域名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exception domains"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例外域名"
+          }
+        }
+      }
+    },
+    "还没有例外域名。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No exception domains yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有例外域名。"
+          }
+        }
+      }
+    },
+    "添加规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Add rule"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "添加规则"
+          }
+        }
+      }
+    },
+    "域名，例如 example.com": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Domain, e.g. example.com"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "域名，例如 example.com"
+          }
+        }
+      }
+    },
+    "屏蔽自动填充": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Block autofill"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "屏蔽自动填充"
+          }
+        }
+      }
+    },
+    "例外放行": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Allow exception"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例外放行"
+          }
+        }
+      }
+    },
+    "同时匹配子域名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Also match subdomains"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "同时匹配子域名"
+          }
+        }
+      }
+    },
+    "备注（可选）": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Note (optional)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "备注（可选）"
+          }
+        }
+      }
+    },
+    "删除规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delete rule"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除规则"
+          }
+        }
+      }
+    },
+    "含子域名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Includes subdomains"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "含子域名"
+          }
+        }
+      }
+    },
+    "仅此域名": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This domain only"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅此域名"
+          }
+        }
+      }
+    },
+    "该网站已被「自动填充域名规则」屏蔽。可在 Monica 设置 → 自动填充中调整。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This site is blocked by your autofill domain rules. Adjust them in Monica Settings → Autofill."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "该网站已被「自动填充域名规则」屏蔽。可在 Monica 设置 → 自动填充中调整。"
+          }
+        }
+      }
+    },
+    "这些规则只影响 Monica 自己提供的自动填充候选和凭据标识。系统设置里其它密码管理器、以及你在系统面板中手动选择的其它来源都不受影响。规则保存在本机 Keychain，不写入日志，也不进入备份。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "These rules only affect the autofill candidates and credential identities that Monica itself provides. Other password managers in system settings, and other sources you pick manually in the system panel, are unaffected. Rules are stored in the local Keychain, never in logs, and are not included in backups."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这些规则只影响 Monica 自己提供的自动填充候选和凭据标识。系统设置里其它密码管理器、以及你在系统面板中手动选择的其它来源都不受影响。规则保存在本机 Keychain，不写入日志，也不进入备份。"
+          }
+        }
+      }
+    },
+    "自动填充域名规则": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Autofill domain rules"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充域名规则"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
