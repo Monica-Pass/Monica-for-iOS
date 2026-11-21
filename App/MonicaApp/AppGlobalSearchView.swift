@@ -550,6 +550,8 @@ private extension UnifiedVaultItemKind {
         case .sso: return "person.crop.circle.badge.checkmark"
         case .send: return "paperplane.fill"
         case .attachmentRef: return "paperclip"
+        case .billingAddress: return "house.fill"
+        case .paymentAccount: return "wallet.pass.fill"
         }
     }
 }
