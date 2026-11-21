@@ -58,6 +58,8 @@
 		A10000000000000000000027 /* ScannerAndStatusViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A10000000000000000000028 /* ScannerAndStatusViews.swift */; };
 		A9B000000000000000000001 /* AppGlobalSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9B000000000000000000002 /* AppGlobalSearchView.swift */; };
 		A10000000000000000000029 /* AndroidParityVaultHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1000000000000000000002A /* AndroidParityVaultHomeView.swift */; };
+		A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000001 /* VaultItemExtrasViews.swift */; };
+		A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */ = {isa = PBXBuildFile; fileRef = A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */; };
 		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
 		A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000012 /* SensitivePrivacySettingsView.swift */; };
 		A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */; };
@@ -203,6 +205,8 @@
 		A100000000000000000000C8 /* AppPrivacyShield.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPrivacyShield.swift; sourceTree = "<group>"; };
 		A10000000000000000000028 /* ScannerAndStatusViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScannerAndStatusViews.swift; sourceTree = "<group>"; };
 		A1000000000000000000002A /* AndroidParityVaultHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AndroidParityVaultHomeView.swift; sourceTree = "<group>"; };
+		A94000000000000000000001 /* VaultItemExtrasViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultItemExtrasViews.swift; sourceTree = "<group>"; };
+		A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+ItemExtras.swift"; sourceTree = "<group>"; };
 		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
 		A13000000000000000000012 /* SensitivePrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacySettingsView.swift; sourceTree = "<group>"; };
 		A9B000000000000000000002 /* AppGlobalSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGlobalSearchView.swift; sourceTree = "<group>"; };
@@ -365,6 +369,7 @@
 				A100000000000000000000C8 /* AppPrivacyShield.swift */,
 				A10000000000000000000028 /* ScannerAndStatusViews.swift */,
 				A1000000000000000000002A /* AndroidParityVaultHomeView.swift */,
+				A94000000000000000000001 /* VaultItemExtrasViews.swift */,
 				A13000000000000000000011 /* SensitivePrivacyService.swift */,
 				A13000000000000000000012 /* SensitivePrivacySettingsView.swift */,
 				A9B000000000000000000002 /* AppGlobalSearchView.swift */,
@@ -399,6 +404,7 @@
 				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
+				A94000000000000000000003 /* AppSessionModel+ItemExtras.swift */,
 				AA000000000000000000001F /* AppSessionModel+LanSync.swift */,
 				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
 			);
@@ -807,6 +813,8 @@
 				AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */,
 				AA000000000000000000001C /* AppImportExportSupport.swift in Sources */,
 				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
+				A94000000000000000000004 /* AppSessionModel+ItemExtras.swift in Sources */,
+				A94000000000000000000002 /* VaultItemExtrasViews.swift in Sources */,
 				AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */,
 				AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */,
 			);

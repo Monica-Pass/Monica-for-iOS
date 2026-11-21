@@ -365,6 +365,11 @@ final class AppSessionModel {
     var vaultSearchRevision = 0
     /// 全局搜索界面是否以导航 push 的方式展示（不新增底部 Tab）。
     var isGlobalSearchPresented = false
+    // issue #15：自定义字段 / 条目关联的侧表状态（编辑器与详情各自一份，互不共享）。
+    var presentedItemExtrasItemID: String?
+    var presentedCustomFields: [VaultCustomField] = []
+    var presentedRelations: [VaultItemRelation] = []
+    var presentedDetailExtras: VaultItemExtras?
     var isQuickSetupPresented = false
     var isExtensionsPresented = false
     var expandedToolbarAction: AndroidParityToolbarAction?
@@ -3781,6 +3786,7 @@ final class AppSessionModel {
 
     func dismissDetail() {
         presentedDetailRoute = nil
+        presentedDetailExtras = nil
     }
 
     func editPresentedDetail() {
@@ -3843,6 +3849,7 @@ final class AppSessionModel {
 
     func dismissPresentedEditor() {
         presentedEditorMode = nil
+        clearPresentedItemExtras()
     }
 
     func savePresentedEditor(projectTitle: String) throws {
@@ -3852,9 +3859,15 @@ final class AppSessionModel {
 
         switch presentedEditorMode {
         case .add(let kind):
+            // 新增条目没有 ID 之前无法挂侧表：保存前记录现有 ID，保存后取差集定位新条目。
+            let existingIDs = Set(entryIDs(for: kind))
             try saveNewEntry(kind: kind, projectTitle: projectTitle)
+            if let createdID = entryIDs(for: kind).first(where: { !existingIDs.contains($0) }) {
+                try persistPresentedItemExtras(itemID: createdID, itemKind: kind)
+            }
         case .edit(let route):
             try saveEditedEntry(kind: route.kind)
+            try persistPresentedItemExtras(itemID: route.entryID, itemKind: route.kind)
         }
         self.presentedEditorMode = nil
     }
