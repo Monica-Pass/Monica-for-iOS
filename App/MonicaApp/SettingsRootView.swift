@@ -252,6 +252,7 @@ struct SettingsRootView: View {
             AndroidParitySection(title: String(localized: "触感反馈")) {
                 AppHapticsSettingsView(haptics: session.haptics)
             }
+            .settingsSearchAnchor(.haptics, highlighted: highlightedSettingsSection == .haptics)
 
             AppItemIconSettingsView(session: session)
 
@@ -827,6 +828,7 @@ struct SettingsRootView: View {
                     .disabled(session.vaultState != .unlocked)
                 }
             }
+            .settingsSearchAnchor(.dataManagement, highlighted: highlightedSettingsSection == .dataManagement)
 
             AndroidParitySection(title: String(localized: "迁移")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {

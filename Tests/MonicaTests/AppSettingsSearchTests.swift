@@ -10,7 +10,7 @@ final class AppSettingsSearchTests: XCTestCase {
         let region = try settingsScreenSource()
 
         var discoveredTitles = Self.sectionTitles(in: region)
-        XCTAssertEqual(discoveredTitles.count, 24, "设置页内联 section 数量与预期不一致，请同步更新索引或本测试")
+        XCTAssertEqual(discoveredTitles.count, 26, "设置页内联 section 数量与预期不一致，请同步更新索引或本测试")
 
         // 设置页里直接引用的子视图（例如 AppThemeSettingsView）自身也带 section，需要一起收集。
         for composed in Self.composedSections {

@@ -38,6 +38,8 @@ enum AppSettingsSection: String, CaseIterable, Hashable, Identifiable, Sendable 
     case lanSync
     case iCloudSync
     case cloudVault
+    case haptics
+    case dataManagement
     case about
 
     var id: String { rawValue }
@@ -74,6 +76,8 @@ enum AppSettingsSection: String, CaseIterable, Hashable, Identifiable, Sendable 
         case .lanSync: "局域网同步"
         case .iCloudSync: "iCloud 同步"
         case .cloudVault: "云端保险库"
+        case .haptics: "触感反馈"
+        case .dataManagement: "数据管理"
         case .about: "关于"
         }
     }
@@ -461,7 +465,19 @@ enum AppSettingsSearchIndex {
             id: "auto-fill.enablement",
             titleKey: "启用 Monica 作为密码管理器",
             section: .autoFillExtension,
-            keywords: ["自动填充", "autofill", "启用", "enable", "密码管理器", "password manager", "系统设置", "settings"]
+            keywords: ["自动填充", "autofill", "zidongtianchong", "启用", "enable", "密码管理器", "mimaguanliqi", "password manager", "系统设置", "settings"]
+        ),
+        AppSettingsSearchItem(
+            id: "ui.haptics",
+            titleKey: "触感反馈",
+            section: .haptics,
+            keywords: ["触感", "震动", "振动", "haptic", "haptics", "feedback", "zhendong"]
+        ),
+        AppSettingsSearchItem(
+            id: "data.management",
+            titleKey: "数据管理",
+            section: .dataManagement,
+            keywords: ["数据", "清理", "data", "management", "按类型", "shuju", "qingli"]
         ),
         AppSettingsSearchItem(
             id: "auto-fill.domain-rules",

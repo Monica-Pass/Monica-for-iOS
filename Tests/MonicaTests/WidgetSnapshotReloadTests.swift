@@ -95,8 +95,9 @@ final class WidgetSnapshotReloadTests: XCTestCase {
         )
         XCTAssertEqual(
             Set(object.keys),
-            ["schemaVersion", "vaultState", "totalEntryCount", "totpItems", "shortcutItems"]
+            ["schemaVersion", "vaultState", "totalEntryCount", "totpItems", "shortcutItems", "totpProgressStyle"]
         )
+        XCTAssertEqual(object["totpProgressStyle"] as? String, "linear")
         XCTAssertEqual(object["schemaVersion"] as? Int, MonicaWidgetConstants.currentSchemaVersion)
         XCTAssertEqual(object["vaultState"] as? String, "unlocked")
 
