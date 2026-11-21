@@ -335,6 +335,16 @@ struct AppRootView: View {
             setSelectedIdentityFavorite: setSelectedIdentityFavorite,
             deleteIdentityEntry: deleteIdentityEntry,
             restoreIdentityEntry: restoreIdentityEntry,
+            createBillingAddressEntry: createBillingAddressEntry,
+            updateBillingAddressEntry: updateBillingAddressEntry,
+            setSelectedBillingAddressFavorite: setSelectedBillingAddressFavorite,
+            deleteBillingAddressEntry: deleteBillingAddressEntry,
+            restoreBillingAddressEntry: restoreBillingAddressEntry,
+            createPaymentAccountEntry: createPaymentAccountEntry,
+            updatePaymentAccountEntry: updatePaymentAccountEntry,
+            setSelectedPaymentAccountFavorite: setSelectedPaymentAccountFavorite,
+            deletePaymentAccountEntry: deletePaymentAccountEntry,
+            restorePaymentAccountEntry: restorePaymentAccountEntry,
             createPasskeyEntry: createPasskeyEntry,
             updatePasskeyEntry: updatePasskeyEntry,
             setSelectedPasskeyFavorite: setSelectedPasskeyFavorite,
@@ -665,6 +675,90 @@ struct AppRootView: View {
     private func restoreIdentityEntry(_ entry: LocalIdentityEntry) {
         do {
             try session.restoreIdentityEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func createBillingAddressEntry() {
+        do {
+            try session.createBillingAddressEntry(
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
+            )
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func updateBillingAddressEntry() {
+        do {
+            try session.updateSelectedBillingAddressEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedBillingAddressFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedBillingAddressFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deleteBillingAddressEntry() {
+        do {
+            try session.deleteSelectedBillingAddressEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restoreBillingAddressEntry(_ entry: LocalBillingAddressEntry) {
+        do {
+            try session.restoreBillingAddressEntry(entry)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func createPaymentAccountEntry() {
+        do {
+            try session.createPaymentAccountEntry(
+                projectTitle: session.activeVaultName ?? String(localized: "个人")
+            )
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func updatePaymentAccountEntry() {
+        do {
+            try session.updateSelectedPaymentAccountEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func setSelectedPaymentAccountFavorite(_ favorite: Bool) {
+        do {
+            try session.setSelectedPaymentAccountFavorite(favorite)
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func deletePaymentAccountEntry() {
+        do {
+            try session.deleteSelectedPaymentAccountEntry()
+        } catch {
+            // AppSessionModel owns user-visible failure state.
+        }
+    }
+
+    private func restorePaymentAccountEntry(_ entry: LocalPaymentAccountEntry) {
+        do {
+            try session.restorePaymentAccountEntry(entry)
         } catch {
             // AppSessionModel owns user-visible failure state.
         }

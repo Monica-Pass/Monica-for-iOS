@@ -163,6 +163,22 @@ final class AppSessionModel {
     var editingCardNetwork = ""
     var editingCardNotes = ""
     var editingCardFavorite = false
+    var billingAddressEntries: [LocalBillingAddressEntry] = []
+    var deletedBillingAddressEntries: [LocalBillingAddressEntry] = []
+    var billingAddressSearchQuery = ""
+    var showFavoriteBillingAddressEntriesOnly = false
+    var billingAddressForm = BillingAddressFormState()
+    var editingBillingAddressEntryID: String?
+    var editingBillingAddressForm = BillingAddressFormState()
+    var editingBillingAddressFavorite = false
+    var paymentAccountEntries: [LocalPaymentAccountEntry] = []
+    var deletedPaymentAccountEntries: [LocalPaymentAccountEntry] = []
+    var paymentAccountSearchQuery = ""
+    var showFavoritePaymentAccountEntriesOnly = false
+    var paymentAccountForm = PaymentAccountFormState()
+    var editingPaymentAccountEntryID: String?
+    var editingPaymentAccountForm = PaymentAccountFormState()
+    var editingPaymentAccountFavorite = false
     var identityTitle = ""
     var identityDocumentType = ""
     var identityFullName = ""
@@ -1068,6 +1084,10 @@ final class AppSessionModel {
             return ssoEntries.contains { $0.id == summary.id }
         case .send:
             return sendEntries.contains { $0.id == summary.id }
+        case .billingAddress:
+            return billingAddressEntries.contains { $0.id == summary.id }
+        case .paymentAccount:
+            return paymentAccountEntries.contains { $0.id == summary.id }
         case .attachmentRef:
             return false
         }
@@ -1168,6 +1188,8 @@ final class AppSessionModel {
         summaries += wifiEntries.map(shortcutSummary(for:))
         summaries += ssoEntries.map(shortcutSummary(for:))
         summaries += sendEntries.map(shortcutSummary(for:))
+        summaries += billingAddressEntries.map(shortcutSummary(for:))
+        summaries += paymentAccountEntries.map(shortcutSummary(for:))
         return summaries
     }
 
@@ -1290,6 +1312,37 @@ final class AppSessionModel {
         )
     }
 
+    private func shortcutSummary(for entry: LocalBillingAddressEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .billingAddress,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.fullName, entry.addressSummary]),
+            searchableText: shortcutSearchableText([
+                UnifiedVaultItemKind.billingAddress.localizedDisplayName,
+                entry.title,
+                entry.fullName,
+                entry.addressSummary
+            ])
+        )
+    }
+
+    private func shortcutSummary(for entry: LocalPaymentAccountEntry) -> AppShortcutEntrySummary {
+        AppShortcutEntrySummary(
+            id: entry.id,
+            kind: .paymentAccount,
+            title: shortcutTitle(entry.title),
+            subtitle: shortcutSubtitle([entry.provider, entry.kind.displayName]),
+            searchableText: shortcutSearchableText([
+                UnifiedVaultItemKind.paymentAccount.localizedDisplayName,
+                entry.title,
+                entry.provider,
+                entry.accountName,
+                entry.currency
+            ])
+        )
+    }
+
     private func shortcutTitle(_ value: String) -> String {
         let title = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return title.isEmpty ? String(localized: "未命名") : title
@@ -1323,7 +1376,7 @@ final class AppSessionModel {
             return VaultShortcutDestination(tab: .passwords, passwordModule: .other, otherKind: kind)
         case .totp:
             return VaultShortcutDestination(tab: .totp, passwordModule: nil, otherKind: nil)
-        case .card, .identity:
+        case .card, .identity, .billingAddress, .paymentAccount:
             return VaultShortcutDestination(tab: .wallet, passwordModule: nil, otherKind: nil)
         }
     }
@@ -2814,6 +2867,8 @@ final class AppSessionModel {
             + wifiEntries.count
             + sendEntries.count
             + attachmentEntries.count
+            + billingAddressEntries.count
+            + paymentAccountEntries.count
     }
 
     private var favoriteVaultEntryCount: Int {
@@ -2827,6 +2882,8 @@ final class AppSessionModel {
             + apiTokenEntries.filter(\.favorite).count
             + wifiEntries.filter(\.favorite).count
             + sendEntries.filter(\.favorite).count
+            + billingAddressEntries.filter(\.favorite).count
+            + paymentAccountEntries.filter(\.favorite).count
     }
 
     private var deletedVaultEntryCount: Int {
@@ -2841,6 +2898,8 @@ final class AppSessionModel {
             + deletedWifiEntries.count
             + deletedSendEntries.count
             + deletedAttachmentEntries.count
+            + deletedBillingAddressEntries.count
+            + deletedPaymentAccountEntries.count
     }
 
     private func itemCountLabel(_ count: Int) -> String {
@@ -3072,6 +3131,10 @@ final class AppSessionModel {
                 return deletedSSOEntries.map(\.id)
             case .send:
                 return deletedSendEntries.map(\.id)
+            case .billingAddress:
+                return deletedBillingAddressEntries.map(\.id)
+            case .paymentAccount:
+                return deletedPaymentAccountEntries.map(\.id)
             case .attachmentRef:
                 return deletedAttachmentEntries.map(\.id)
             }
@@ -3100,6 +3163,10 @@ final class AppSessionModel {
             return filteredSSOEntries.map(\.id)
         case .send:
             return filteredSendEntries.map(\.id)
+        case .billingAddress:
+            return filteredBillingAddressEntries.map(\.id)
+        case .paymentAccount:
+            return filteredPaymentAccountEntries.map(\.id)
         case .attachmentRef:
             return filteredAttachmentEntries.map(\.id)
         }
@@ -3221,6 +3288,14 @@ final class AppSessionModel {
                 guard let entry = sendEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteSendEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .billingAddress:
+                guard let entry = billingAddressEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deleteBillingAddressEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .paymentAccount:
+                guard let entry = paymentAccountEntries.first(where: { $0.id == id }) else { continue }
+                try entryRepository.deletePaymentAccountEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .attachmentRef:
                 guard let entry = attachmentEntries.first(where: { $0.id == id }) else { continue }
                 try entryRepository.deleteAttachmentMetadata(projectID: projectID, attachmentID: id)
@@ -3272,6 +3347,12 @@ final class AppSessionModel {
             case .send:
                 let entry = try entryRepository.restoreSendEntry(projectID: projectID, entryID: id)
                 events.append((id, entry.title))
+            case .billingAddress:
+                let entry = try entryRepository.restoreBillingAddressEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
+            case .paymentAccount:
+                let entry = try entryRepository.restorePaymentAccountEntry(projectID: projectID, entryID: id)
+                events.append((id, entry.title))
             case .attachmentRef:
                 let entry = try entryRepository.restoreAttachmentMetadata(projectID: projectID, attachmentID: id)
                 events.append((id, entry.fileName))
@@ -3313,6 +3394,8 @@ final class AppSessionModel {
         ssoSearchQuery = ""
         sendSearchQuery = ""
         attachmentSearchQuery = ""
+        billingAddressSearchQuery = ""
+        paymentAccountSearchQuery = ""
     }
 
     private func setAllFavoriteFilters(_ favoritesOnly: Bool) {
@@ -3327,6 +3410,8 @@ final class AppSessionModel {
         showFavoriteWifiEntriesOnly = favoritesOnly
         showFavoriteSSOEntriesOnly = favoritesOnly
         showFavoriteSendEntriesOnly = favoritesOnly
+        showFavoriteBillingAddressEntriesOnly = favoritesOnly
+        showFavoritePaymentAccountEntriesOnly = favoritesOnly
     }
 
     private func resetVaultQuickFilters() {
@@ -3936,6 +4021,10 @@ final class AppSessionModel {
             if let entry = ssoEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .send:
             if let entry = sendEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .billingAddress:
+            if let entry = billingAddressEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
+        case .paymentAccount:
+            if let entry = paymentAccountEntries.first(where: { $0.id == route.entryID }) { presentEditEditor(for: entry) }
         case .attachmentRef:
             break
         }
@@ -3966,6 +4055,10 @@ final class AppSessionModel {
             return ssoEntries.first { $0.id == entryID }?.title ?? "SSO"
         case .send:
             return sendEntries.first { $0.id == entryID }?.title ?? "Send"
+        case .billingAddress:
+            return billingAddressEntries.first { $0.id == entryID }?.title ?? String(localized: "账单地址")
+        case .paymentAccount:
+            return paymentAccountEntries.first { $0.id == entryID }?.title ?? String(localized: "支付账户")
         case .attachmentRef:
             return attachmentEntries.first { $0.id == entryID }?.fileName ?? String(localized: "附件")
         }
@@ -4049,6 +4142,10 @@ final class AppSessionModel {
             try createSSOEntry(projectTitle: projectTitle)
         case .send:
             try createSendEntry(projectTitle: projectTitle)
+        case .billingAddress:
+            try createBillingAddressEntry(projectTitle: projectTitle)
+        case .paymentAccount:
+            try createPaymentAccountEntry(projectTitle: projectTitle)
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
@@ -4078,6 +4175,10 @@ final class AppSessionModel {
             try updateSelectedSSOEntry()
         case .send:
             try updateSelectedSendEntry()
+        case .billingAddress:
+            try updateSelectedBillingAddressEntry()
+        case .paymentAccount:
+            try updateSelectedPaymentAccountEntry()
         case .attachmentRef:
             throw LocalVaultRepositoryError.unsupportedEntryType(kind)
         }
@@ -11249,6 +11350,16 @@ final class AppSessionModel {
         deletedAttachmentEntries = []
         attachmentSearchQuery = ""
         dismissAttachmentQuickLookPreview()
+        billingAddressEntries = []
+        deletedBillingAddressEntries = []
+        billingAddressSearchQuery = ""
+        showFavoriteBillingAddressEntriesOnly = false
+        clearEditingBillingAddressEntry()
+        paymentAccountEntries = []
+        deletedPaymentAccountEntries = []
+        paymentAccountSearchQuery = ""
+        showFavoritePaymentAccountEntriesOnly = false
+        clearEditingPaymentAccountEntry()
     }
 
     private func requireActiveVaultSession() throws -> LocalVaultSession {
@@ -11551,6 +11662,10 @@ final class AppSessionModel {
             return try entryRepository.createSSOEntry(projectID: projectID, draft: draft).id
         case .send(let draft):
             return try entryRepository.createSendEntry(projectID: projectID, draft: draft).id
+        case .billingAddress(let draft):
+            return try entryRepository.createBillingAddressEntry(projectID: projectID, draft: draft).id
+        case .paymentAccount(let draft):
+            return try entryRepository.createPaymentAccountEntry(projectID: projectID, draft: draft).id
         }
     }
 
@@ -11583,6 +11698,10 @@ final class AppSessionModel {
             try entryRepository.deleteSSOEntry(projectID: projectID, entryID: entryID)
         case .send:
             try entryRepository.deleteSendEntry(projectID: projectID, entryID: entryID)
+        case .billingAddress:
+            try entryRepository.deleteBillingAddressEntry(projectID: projectID, entryID: entryID)
+        case .paymentAccount:
+            try entryRepository.deletePaymentAccountEntry(projectID: projectID, entryID: entryID)
         }
     }
 
@@ -11614,6 +11733,10 @@ final class AppSessionModel {
         deletedSendEntries = try entryRepository.listDeletedSendEntries(projectID: projectID)
         attachmentEntries = try entryRepository.listAttachmentMetadata(projectID: projectID)
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
+        billingAddressEntries = try entryRepository.listBillingAddressEntries(projectID: projectID)
+        deletedBillingAddressEntries = try entryRepository.listDeletedBillingAddressEntries(projectID: projectID)
+        paymentAccountEntries = try entryRepository.listPaymentAccountEntries(projectID: projectID)
+        deletedPaymentAccountEntries = try entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)
         publishWidgetSnapshots()
         refreshVaultSearchIndex(entryRepository: entryRepository)
     }
@@ -11713,6 +11836,10 @@ final class AppSessionModel {
         deletedIdentityEntries = []
         passkeyEntries = []
         deletedPasskeyEntries = []
+        billingAddressEntries = []
+        deletedBillingAddressEntries = []
+        paymentAccountEntries = []
+        deletedPaymentAccountEntries = []
         clearExtendedParityEntries()
     }
 
@@ -11832,6 +11959,38 @@ final class AppSessionModel {
                 expiresAt: $0.expiresAt,
                 maxViews: $0.maxViews,
                 notes: $0.notes
+            ))
+        }
+        drafts += billingAddressEntries.map {
+            .billingAddress(LocalBillingAddressEntryDraft(
+                title: $0.title,
+                fullName: $0.fullName,
+                streetAddress: $0.streetAddress,
+                apartment: $0.apartment,
+                city: $0.city,
+                stateProvince: $0.stateProvince,
+                postalCode: $0.postalCode,
+                country: $0.country,
+                phone: $0.phone,
+                notes: $0.notes,
+                linkedCardIDs: $0.linkedCardIDs
+            ))
+        }
+        drafts += paymentAccountEntries.map {
+            .paymentAccount(LocalPaymentAccountEntryDraft(
+                title: $0.title,
+                kind: $0.kind,
+                provider: $0.provider,
+                accountName: $0.accountName,
+                accountHolderName: $0.accountHolderName,
+                iban: $0.iban,
+                swiftBIC: $0.swiftBIC,
+                routingNumber: $0.routingNumber,
+                accountNumber: $0.accountNumber,
+                currency: $0.currency,
+                notes: $0.notes,
+                linkedCardID: $0.linkedCardID,
+                billingAddressID: $0.billingAddressID
             ))
         }
         return drafts
