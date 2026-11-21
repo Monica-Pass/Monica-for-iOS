@@ -32649,6 +32649,70 @@
           }
         }
       }
+    },
+    "触感反馈": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Haptic Feedback"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "触感反馈"
+          }
+        }
+      }
+    },
+    "保存、删除与切换时提供轻量震动": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Light vibration for saving, deleting, and switching"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存、删除与切换时提供轻量震动"
+          }
+        }
+      }
+    },
+    "验证器轻震": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Authenticator Vibration"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证器轻震"
+          }
+        }
+      }
+    },
+    "验证码刷新时轻震；关闭总开关后此项目不起作用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vibrates when a code refreshes. Has no effect when the master switch is off."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码刷新时轻震；关闭总开关后此项目不起作用"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

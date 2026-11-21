@@ -11,6 +11,7 @@
 		C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3A0000000000000000000A4 /* VaultSnapshotViews.swift */; };
 		AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000001 /* AppLanguagePreferences.swift */; };
 		AA2A00000000000000000002 /* AppLanguageController.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000002 /* AppLanguageController.swift */; };
+		A530000000000000000000F1 /* AppHaptics.swift in Sources */ = {isa = PBXBuildFile; fileRef = A530000000000000000000F2 /* AppHaptics.swift */; };
 		AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000003 /* AppLanguageSettingsView.swift */; };
 		AA2A00000000000000000004 /* AppLanguageTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2B00000000000000000004 /* AppLanguageTests.swift */; };
 		AF32000000000000000000B1 /* AppKeePassLibraryModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF32000000000000000000F1 /* AppKeePassLibraryModel.swift */; };
@@ -130,6 +131,7 @@
 		B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */; };
 		B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */; };
 		A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000013 /* SensitivePrivacyTests.swift */; };
+		A540000000000000000000F1 /* AppHapticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A540000000000000000000F2 /* AppHapticsTests.swift */; };
 		B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */; };
 		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
 		AA1000000000000000000002 /* AppTotpAdvancedSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */; };
@@ -225,6 +227,7 @@
 		C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSnapshotViews.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguagePreferences.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000002 /* AppLanguageController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageController.swift; sourceTree = "<group>"; };
+		A530000000000000000000F2 /* AppHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHaptics.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000003 /* AppLanguageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageSettingsView.swift; sourceTree = "<group>"; };
 		AA2B00000000000000000004 /* AppLanguageTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLanguageTests.swift; sourceTree = "<group>"; };
 		AF32000000000000000000F1 /* AppKeePassLibraryModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppKeePassLibraryModel.swift"; sourceTree = "<group>"; };
@@ -337,6 +340,7 @@
 		B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWidgetSnapshotSupport.swift; sourceTree = "<group>"; };
 		B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotReloadTests.swift; sourceTree = "<group>"; };
 		A13000000000000000000013 /* SensitivePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyTests.swift; sourceTree = "<group>"; };
+		A540000000000000000000F2 /* AppHapticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppHapticsTests.swift; sourceTree = "<group>"; };
 		B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLiquidGlassSupportTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
 		AA1000000000000000000001 /* AppTotpAdvancedSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppTotpAdvancedSupport.swift"; sourceTree = "<group>"; };
@@ -472,6 +476,7 @@
 				A1604C8346B7FE3E4B58AAA7 /* AppAppearanceCompatibility.swift */,
 				A160701EB093D488427BB739 /* AppAlternateAppIcon.swift */,
 				A160036E8D3E93A844DE85AE /* AppThemeSettingsView.swift */,
+				A530000000000000000000F2 /* AppHaptics.swift */,
 				AA2B00000000000000000003 /* AppLanguageSettingsView.swift */,
 				B78000000000000000000001 /* AppLiquidGlassSupport.swift */,
 				A1000000000000000000001E /* GeneratorRootView.swift */,
@@ -634,6 +639,7 @@
 				B1270000000000000000A007 /* AccountTemplateTests.swift */,
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
+				A540000000000000000000F2 /* AppHapticsTests.swift */,
 				B78000000000000000000002 /* AppLiquidGlassSupportTests.swift */,
 				AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
 				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
@@ -1016,6 +1022,7 @@
 				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
 				AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */,
 				AA2A00000000000000000002 /* AppLanguageController.swift in Sources */,
+				A530000000000000000000F1 /* AppHaptics.swift in Sources */,
 				AA2A00000000000000000003 /* AppLanguageSettingsView.swift in Sources */,
 				AA000000000000000000000E /* AppUnlockSupport.swift in Sources */,
 				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
@@ -1073,6 +1080,7 @@
 				B1270000000000000000A008 /* AccountTemplateTests.swift in Sources */,
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
+				A540000000000000000000F1 /* AppHapticsTests.swift in Sources */,
 				B78000000000000000000012 /* AppLiquidGlassSupportTests.swift in Sources */,
 				AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
 				A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */,
