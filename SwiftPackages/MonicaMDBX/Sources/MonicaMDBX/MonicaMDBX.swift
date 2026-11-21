@@ -81,6 +81,7 @@ public struct MonicaMDBXTotpEntry: Sendable, Equatable, Identifiable {
     public let otpType: String
     public let counter: UInt64
     public let favorite: Bool
+    public let iconName: String
 }
 
 public struct MonicaMDBXCardEntry: Sendable, Equatable, Identifiable {
@@ -335,7 +336,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         digits: UInt32,
         algorithm: String,
         otpType: String,
-        counter: UInt64
+        counter: UInt64,
+        iconName: String = ""
     ) throws -> MonicaMDBXTotpEntry {
         let entry = try rawVault.createTotpEntry(
             projectId: projectID,
@@ -347,7 +349,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             digits: digits,
             algorithm: algorithm,
             otpType: otpType,
-            counter: counter
+            counter: counter,
+            iconName: iconName
         )
         return MonicaMDBXTotpEntry(raw: entry)
     }
@@ -371,7 +374,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
         digits: UInt32,
         algorithm: String,
         otpType: String,
-        counter: UInt64
+        counter: UInt64,
+        iconName: String = ""
     ) throws -> MonicaMDBXTotpEntry {
         let entry = try rawVault.updateTotpEntry(
             projectId: projectID,
@@ -384,7 +388,8 @@ public final class MonicaMDBXVault: @unchecked Sendable {
             digits: digits,
             algorithm: algorithm,
             otpType: otpType,
-            counter: counter
+            counter: counter,
+            iconName: iconName
         )
         return MonicaMDBXTotpEntry(raw: entry)
     }
@@ -792,6 +797,7 @@ fileprivate struct TotpEntryRecord {
     let otpType: String
     let counter: UInt64
     let favorite: Bool
+    let iconName: String
 }
 
 fileprivate struct CardEntryRecord {
@@ -944,7 +950,8 @@ fileprivate extension TotpEntryRecord {
             algorithm: MDBXBusinessPayload.string(payload, "algorithm").isEmpty ? "SHA1" : MDBXBusinessPayload.string(payload, "algorithm"),
             otpType: MDBXBusinessPayload.string(payload, "otpType").isEmpty ? "TOTP" : MDBXBusinessPayload.string(payload, "otpType"),
             counter: MDBXBusinessPayload.uint64(payload, "counter"),
-            favorite: MDBXBusinessPayload.bool(payload, "favorite")
+            favorite: MDBXBusinessPayload.bool(payload, "favorite"),
+            iconName: MDBXBusinessPayload.string(payload, "iconName")
         )
     }
 }
@@ -1147,8 +1154,8 @@ fileprivate extension MdbxVault {
         return try NoteEntryRecord(raw: moveEntry(projectId: projectId, entryId: entryId, targetProjectId: targetProjectId))
     }
 
-    func createTotpEntry(projectId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64) throws -> TotpEntryRecord {
-        let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, favorite: false)
+    func createTotpEntry(projectId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, iconName: String) throws -> TotpEntryRecord {
+        let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, iconName: iconName, favorite: false)
         return try TotpEntryRecord(raw: createEntry(projectId: projectId, entryType: "totp", title: title, payloadJson: payload))
     }
 
@@ -1160,9 +1167,9 @@ fileprivate extension MdbxVault {
         try listDeletedEntries(projectId: projectId, entryType: "totp").map(TotpEntryRecord.init(raw:))
     }
 
-    func updateTotpEntry(projectId: String, entryId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64) throws -> TotpEntryRecord {
+    func updateTotpEntry(projectId: String, entryId: String, title: String, secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, iconName: String) throws -> TotpEntryRecord {
         let favorite = try currentPayloadFavorite(projectId: projectId, entryId: entryId, entryType: "totp")
-        let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, favorite: favorite)
+        let payload = try totpPayload(secret: secret, issuer: issuer, accountName: accountName, period: period, digits: digits, algorithm: algorithm, otpType: otpType, counter: counter, iconName: iconName, favorite: favorite)
         return try TotpEntryRecord(raw: updateEntry(projectId: projectId, entryId: entryId, entryType: "totp", title: title, payloadJson: payload))
     }
 
@@ -1336,7 +1343,7 @@ fileprivate extension MdbxVault {
         return try updateEntry(projectId: projectId, entryId: entryId, entryType: entryType, title: current.title, payloadJson: payload)
     }
 
-    private func totpPayload(secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, favorite: Bool) throws -> String {
+    private func totpPayload(secret: String, issuer: String, accountName: String, period: UInt32, digits: UInt32, algorithm: String, otpType: String, counter: UInt64, iconName: String, favorite: Bool) throws -> String {
         try MDBXBusinessPayload.jsonString([
             "kind": "totp",
             "secret": secret,
@@ -1347,6 +1354,7 @@ fileprivate extension MdbxVault {
             "algorithm": algorithm,
             "otpType": otpType,
             "counter": counter,
+            "iconName": iconName,
             "favorite": favorite,
             "steamFingerprint": "",
             "steamDeviceId": "",
@@ -1439,7 +1447,8 @@ extension MonicaMDBXTotpEntry {
             algorithm: raw.algorithm,
             otpType: raw.otpType,
             counter: raw.counter,
-            favorite: raw.favorite
+            favorite: raw.favorite,
+            iconName: raw.iconName
         )
     }
 }

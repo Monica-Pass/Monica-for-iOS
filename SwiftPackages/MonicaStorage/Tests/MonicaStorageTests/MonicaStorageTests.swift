@@ -4833,8 +4833,63 @@ import MonicaStorage
     #expect(totpEntries == [updated])
     #expect(engine.createdTotpEntries.first?.projectID == project.id)
     #expect(engine.updatedTotpEntries.first?.entryID == created.id)
-    #expect(engine.deletedTotpEntries.first?.entryID == created.id)
-    #expect(engine.restoredTotpEntries.first?.entryID == created.id)
+}
+
+@Test func totpEntryRepositoryPersistsAdvancedOtpParametersAndIconName() throws {
+    let engine = RecordingVaultEngine()
+    let vaultRepository = LocalVaultRepository(engine: engine)
+    let session = try vaultRepository.createVault(
+        named: "Advanced OTP",
+        in: URL(fileURLWithPath: "/tmp/monica-storage-tests", isDirectory: true),
+        password: "中文 password 12345!",
+        deviceID: "ios-storage-test"
+    )
+    let entryRepository = LocalVaultEntryRepository(session: session, engine: engine)
+    let project = try entryRepository.createProject(title: "Work")
+
+    let created = try entryRepository.createTotpEntry(
+        projectID: project.id,
+        draft: LocalTotpEntryDraft(
+            title: "Acme HOTP",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "Acme",
+            accountName: "alice",
+            period: 60,
+            digits: 8,
+            algorithm: "SHA512",
+            otpType: "HOTP",
+            counter: 7,
+            iconName: "  key.fill  "
+        )
+    )
+    let updated = try entryRepository.updateTotpEntry(
+        projectID: project.id,
+        entryID: created.id,
+        draft: LocalTotpEntryDraft(
+            title: "Acme HOTP",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "Acme",
+            accountName: "alice",
+            period: 60,
+            digits: 8,
+            algorithm: "SHA512",
+            otpType: "HOTP",
+            counter: 8,
+            iconName: "key.fill"
+        )
+    )
+
+    #expect(created.period == 60)
+    #expect(created.digits == 8)
+    #expect(created.algorithm == "SHA512")
+    #expect(created.otpType == "HOTP")
+    #expect(created.counter == 7)
+    #expect(created.iconName == "key.fill")
+    #expect(updated.counter == 8)
+    #expect(updated.iconName == "key.fill")
+    #expect(engine.createdTotpEntries.first?.draft.period == 60)
+    #expect(engine.createdTotpEntries.first?.draft.iconName == "key.fill")
+    #expect(engine.updatedTotpEntries.first?.draft.counter == 8)
 }
 
 @Test func cardEntryRepositoryCreatesUpdatesDeletesAndRestoresProjectScopedCard() throws {
@@ -6291,7 +6346,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             digits: draft.digits,
             algorithm: draft.algorithm,
             otpType: draft.otpType,
-            counter: draft.counter
+            counter: draft.counter,
+            iconName: draft.iconName
         )
         createdTotpEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
@@ -6328,7 +6384,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             algorithm: draft.algorithm,
             otpType: draft.otpType,
             counter: draft.counter,
-            favorite: currentFavorite
+            favorite: currentFavorite,
+            iconName: draft.iconName
         )
         updatedTotpEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)

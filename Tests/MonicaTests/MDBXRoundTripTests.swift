@@ -561,6 +561,63 @@ final class MDBXRoundTripTests: XCTestCase {
         XCTAssertEqual(entries, [updated])
     }
 
+    func testAdvancedHotpParametersAndIconSurviveVaultReopen() throws {
+        let vaultURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("monica-hotp-\(UUID().uuidString).mdbx")
+        defer {
+            try? FileManager.default.removeItem(at: vaultURL)
+        }
+
+        let vault = try MonicaMDBXRuntime.createVault(
+            at: vaultURL,
+            password: "中文 password 12345!",
+            deviceID: "ios-hotp-xctest-device"
+        )
+        let project = try vault.createProject(title: "Acme")
+        let created = try vault.createTotpEntry(
+            projectID: project.id,
+            title: "Acme HOTP",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "Acme",
+            accountName: "alice",
+            period: 60,
+            digits: 8,
+            algorithm: "SHA512",
+            otpType: "HOTP",
+            counter: 41,
+            iconName: "key.fill"
+        )
+        let incremented = try vault.updateTotpEntry(
+            projectID: project.id,
+            entryID: created.id,
+            title: "Acme HOTP",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "Acme",
+            accountName: "alice",
+            period: 60,
+            digits: 8,
+            algorithm: "SHA512",
+            otpType: "HOTP",
+            counter: 42,
+            iconName: "key.fill"
+        )
+        let reopened = try MonicaMDBXRuntime.openVault(
+            at: vaultURL,
+            password: "中文 password 12345!",
+            deviceID: "ios-hotp-xctest-device"
+        )
+        let entries = try reopened.listTotpEntries(projectID: project.id)
+
+        XCTAssertEqual(incremented.counter, 42)
+        XCTAssertEqual(entries, [incremented])
+        XCTAssertEqual(entries.first?.otpType, "HOTP")
+        XCTAssertEqual(entries.first?.algorithm, "SHA512")
+        XCTAssertEqual(entries.first?.period, 60)
+        XCTAssertEqual(entries.first?.digits, 8)
+        XCTAssertEqual(entries.first?.counter, 42)
+        XCTAssertEqual(entries.first?.iconName, "key.fill")
+    }
+
     func testProjectScopedCardRoundTripThroughUniFFI() throws {
         let vaultURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("monica-card-\(UUID().uuidString).mdbx")
