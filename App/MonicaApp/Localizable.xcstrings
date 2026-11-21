@@ -4949,6 +4949,38 @@
         }
       }
     },
+    "平滑动画": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Smooth Animation"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平滑动画"
+          }
+        }
+      }
+    },
+    "开启后每秒在新旧进度之间线性过渡；关闭后直接跳到新进度，与旧版本一致。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "On: the bar eases between the previous and new value every second. Off: it jumps straight to the new value, as before."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后每秒在新旧进度之间线性过渡；关闭后直接跳到新进度，与旧版本一致。"
+          }
+        }
+      }
+    },
     "弱": {
       "localizations": {
         "en": {
@@ -5009,6 +5041,38 @@
           "stringUnit": {
             "state": "translated",
             "value": "很强"
+          }
+        }
+      }
+    },
+    "恢复默认": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore Defaults"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复默认"
+          }
+        }
+      }
+    },
+    "所有 30 秒周期的验证码共用一条进度条，卡片不再重复显示；60 秒与自定义周期仍显示各自的进度。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Codes with a 30-second period share one progress bar, so cards no longer draw their own; 60-second and custom periods keep their individual progress."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有 30 秒周期的验证码共用一条进度条，卡片不再重复显示；60 秒与自定义周期仍显示各自的进度。"
           }
         }
       }
@@ -5077,6 +5141,22 @@
         }
       }
     },
+    "样式预览": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Style Preview"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "样式预览"
+          }
+        }
+      }
+    },
     "清空全部生成历史？": {
       "localizations": {
         "en": {
@@ -5137,6 +5217,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "点"
+          }
+        }
+      }
+    },
+    "环形": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ring"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "环形"
           }
         }
       }
@@ -5253,6 +5349,38 @@
         }
       }
     },
+    "示例账号": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sample Account"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "示例账号"
+          }
+        }
+      }
+    },
+    "系统「减弱动态效果」已开启，进度条不做平滑动画。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Reduce Motion is on, so the progress bar does not animate smoothly."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统「减弱动态效果」已开启，进度条不做平滑动画。"
+          }
+        }
+      }
+    },
     "约 %lld bit（估算）· %lld 类字符": {
       "localizations": {
         "en": {
@@ -5265,6 +5393,54 @@
           "stringUnit": {
             "state": "translated",
             "value": "约 %1$lld bit（估算）· %2$lld 类字符"
+          }
+        }
+      }
+    },
+    "线性": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linear"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "线性"
+          }
+        }
+      }
+    },
+    "线性与之前的胶囊进度条一致；环形沿 12 点方向顺时针收缩。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Linear matches the previous capsule bar; Ring recedes clockwise from 12 o'clock."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "线性与之前的胶囊进度条一致；环形沿 12 点方向顺时针收缩。"
+          }
+        }
+      }
+    },
+    "统一进度条": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unified Progress Bar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "统一进度条"
           }
         }
       }
@@ -11753,6 +11929,22 @@
         }
       }
     },
+    "进度条样式": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Progress Bar Style"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进度条样式"
+          }
+        }
+      }
+    },
     "部分由系统缓存的文案（权限弹窗、App 名称、桌面小组件）需重启 App 或更改系统语言后才会更新。": {
       "localizations": {
         "en": {
@@ -13210,6 +13402,22 @@
           "stringUnit": {
             "state": "translated",
             "value": "验证码即将刷新时的本机提醒能力。"
+          }
+        }
+      }
+    },
+    "验证码进度条": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verification Code Progress Bar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "验证码进度条"
           }
         }
       }

@@ -450,6 +450,8 @@ final class AppSessionModel {
     var vaultDisplayPreferences: VaultDisplayPreferences
     var appearancePreferences: AppAppearancePreferences
     var vaultLayoutPreferences: VaultLayoutPreferences
+    /// #155：验证码卡片进度条（统一进度条 / 线性环形 / 平滑动画）偏好。
+    var totpCardPreferences: TotpProgressPreferences
     /// #58：剪贴板自动清除时长与敏感预览掩码偏好。
     var sensitiveClipboardTTL: SensitiveClipboardTTL
     var sensitivePreviewPreferences: SensitivePreviewPreferences
@@ -620,7 +622,7 @@ final class AppSessionModel {
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
     let searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore
-    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
+    private let totpCardPreferenceStore: any TotpProgressPreferenceStore    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
     private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
     private let sensitivePasteboard: MonicaSensitivePasteboard
     @ObservationIgnored private var sensitivePasteboardExpiryTask: Task<Void, Never>?
@@ -714,7 +716,7 @@ final class AppSessionModel {
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
         searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore = MemoryAppSearchAutoFocusPreferenceStore(),
-        biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
+        totpCardPreferenceStore: any TotpProgressPreferenceStore = MemoryTotpProgressPreferenceStore(),        biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
         deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
         passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
             privateKeyStore: KeychainPasskeyPrivateKeyStore()
@@ -793,7 +795,7 @@ final class AppSessionModel {
         self.appearancePreferenceStore = appearancePreferenceStore
         self.vaultLayoutPreferenceStore = vaultLayoutPreferenceStore
         self.searchAutoFocusPreferenceStore = searchAutoFocusPreferenceStore
-        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
+        self.totpCardPreferenceStore = totpCardPreferenceStore        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
         self.passkeyExchangeService = passkeyExchangeService
         self.biometricCapabilityProvider = biometricCapabilityProvider
@@ -863,7 +865,7 @@ final class AppSessionModel {
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
         self.vaultLayoutPreferences = vaultLayoutPreferenceStore.loadPreferences()
         self.isSearchAutoFocusOnLaunchEnabled = searchAutoFocusPreferenceStore.loadIsSearchAutoFocusEnabled()
-        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
+        self.totpCardPreferences = totpCardPreferenceStore.loadPreferences()        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
         self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
         self.sensitiveClipboardPreferenceStore = sensitiveClipboardPreferenceStore
         self.sensitiveClipboardTTL = sensitiveClipboardPreferenceStore.loadTTL()
@@ -1237,12 +1239,15 @@ final class AppSessionModel {
     }
 
     func widgetSnapshot(now: Date = Date()) -> AppWidgetSnapshot {
+        // #155：进度条样式跟随设置写进快照，Widget 才会和 App 画成同一种样式。
+        let progressStyle = MonicaWidgetTotpProgressStyle(snapshotValue: totpCardPreferences.style.snapshotValue)
         guard vaultState == .unlocked else {
             return AppWidgetSnapshot(
                 vaultState: .locked,
                 totalEntryCount: 0,
                 totpItems: [],
-                shortcutItems: []
+                shortcutItems: [],
+                totpProgressStyle: progressStyle
             )
         }
 
@@ -1252,14 +1257,17 @@ final class AppSessionModel {
                 title: shortcutTitle(entry.title),
                 issuer: entry.issuer,
                 accountName: entry.accountName,
-                secondsRemaining: totpTimeRemaining(for: entry, at: now)
+                secondsRemaining: totpTimeRemaining(for: entry, at: now),
+                // Widget 用它把剩余秒数换算成比例；缺失字段读回时按 30 秒兜底。
+                period: Int(entry.period)
             )
         }
         return AppWidgetSnapshot(
             vaultState: .unlocked,
             totalEntryCount: activeVaultEntryCount,
             totpItems: Array(totpItems),
-            shortcutItems: allShortcutEntrySummaries().prefix(4).map(MonicaWidgetShortcutItem.init(summary:))
+            shortcutItems: allShortcutEntrySummaries().prefix(4).map(MonicaWidgetShortcutItem.init(summary:)),
+            totpProgressStyle: progressStyle
         )
     }
 
@@ -2870,6 +2878,23 @@ final class AppSessionModel {
         appearancePreferences = preferences
         appearancePreferenceStore.savePreferences(preferences)
         recordUserActivity()
+    }
+
+    // MARK: - 验证码卡片进度条（#155）
+
+    /// 把「偏好 + 系统减弱动态效果」解析成卡片实际渲染规则。
+    func totpCardStylePolicy(reduceMotion: Bool) -> TotpCardStylePolicy {
+        TotpCardStylePolicy(preferences: totpCardPreferences, reduceMotion: reduceMotion)
+    }
+
+    func updateTotpCardPreferences(_ preferences: TotpProgressPreferences) {
+        totpCardPreferences = preferences
+        totpCardPreferenceStore.savePreferences(preferences)
+        recordUserActivity()
+    }
+
+    func restoreDefaultTotpCardPreferences() {
+        updateTotpCardPreferences(.default)
     }
 
     func restoreDefaultInterfaceDensity() {

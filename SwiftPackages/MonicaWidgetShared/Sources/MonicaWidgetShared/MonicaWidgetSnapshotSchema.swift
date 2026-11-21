@@ -42,25 +42,51 @@ public enum MonicaWidgetVaultState: String, Sendable, Equatable, CaseIterable, C
     }
 }
 
+/// 验证码卡片进度条样式在快照里的投影。
+///
+/// 之所以在这里重复一份枚举，是因为 Widget Extension 只链接本包、不依赖 MonicaCore；
+/// rawValue 必须与 `MonicaCore.TotpProgressStyle` 完全一致（linear / circular）。
+public enum MonicaWidgetTotpProgressStyle: String, Sendable, Equatable, CaseIterable, Codable {
+    case linear
+    case circular
+
+    /// 缺失 / 未知取值一律回落到线性：旧快照与旧版本 App 写出的外观保持一致。
+    public init(snapshotValue: String?) {
+        self = snapshotValue.flatMap(Self.init(rawValue:)) ?? .linear
+    }
+}
+
 public struct MonicaWidgetTotpItem: Sendable, Equatable, Identifiable, Codable {
     public let id: String
     public let title: String
     public let issuer: String
     public let accountName: String
     public let secondsRemaining: Int
+    /// 该验证码的刷新周期（秒）。Widget 用它把 `secondsRemaining` 换算成进度比例；
+    /// 旧快照没有这个字段，按 TOTP 最常见的 30 秒兜底。
+    public let period: Int
+
+    public static let defaultPeriod = 30
 
     public init(
         id: String,
         title: String,
         issuer: String,
         accountName: String,
-        secondsRemaining: Int
+        secondsRemaining: Int,
+        period: Int = MonicaWidgetTotpItem.defaultPeriod
     ) {
         self.id = id
         self.title = title
         self.issuer = issuer
         self.accountName = accountName
         self.secondsRemaining = max(0, secondsRemaining)
+        self.period = max(1, period)
+    }
+
+    /// 剩余比例（0…1），钳制在合法区间内，除以 0 也安全。
+    public var progressFraction: Double {
+        Double(min(max(secondsRemaining, 0), period)) / Double(period)
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -69,6 +95,7 @@ public struct MonicaWidgetTotpItem: Sendable, Equatable, Identifiable, Codable {
         case issuer
         case accountName
         case secondsRemaining
+        case period
     }
 
     public init(from decoder: any Decoder) throws {
@@ -78,7 +105,8 @@ public struct MonicaWidgetTotpItem: Sendable, Equatable, Identifiable, Codable {
             title: try container.decodeIfPresent(String.self, forKey: .title) ?? "",
             issuer: try container.decodeIfPresent(String.self, forKey: .issuer) ?? "",
             accountName: try container.decodeIfPresent(String.self, forKey: .accountName) ?? "",
-            secondsRemaining: try container.decodeIfPresent(Int.self, forKey: .secondsRemaining) ?? 0
+            secondsRemaining: try container.decodeIfPresent(Int.self, forKey: .secondsRemaining) ?? 0,
+            period: try container.decodeIfPresent(Int.self, forKey: .period) ?? Self.defaultPeriod
         )
     }
 }
@@ -132,16 +160,22 @@ public struct MonicaWidgetSnapshot: Sendable, Equatable, Codable {
     public let totalEntryCount: Int
     public let totpItems: [MonicaWidgetTotpItem]
     public let shortcutItems: [MonicaWidgetShortcutItem]
+    /// 验证码进度条样式，跟随 App 里的「验证码进度条」设置。旧快照缺字段即线性。
+    public let totpProgressStyle: MonicaWidgetTotpProgressStyle
 
     public init(
         schemaVersion: Int = MonicaWidgetConstants.currentSchemaVersion,
         vaultState: MonicaWidgetVaultState,
         totalEntryCount: Int = 0,
         totpItems: [MonicaWidgetTotpItem] = [],
-        shortcutItems: [MonicaWidgetShortcutItem] = []
+        shortcutItems: [MonicaWidgetShortcutItem] = [],
+        totpProgressStyle: MonicaWidgetTotpProgressStyle = .linear
     ) {
         self.schemaVersion = schemaVersion
         self.vaultState = vaultState
+        // 进度条样式是纯展示偏好、不含任何项目数据，锁屏状态也保留，
+        // 这样解锁瞬间不会因为样式回退而闪一下线性样式。
+        self.totpProgressStyle = totpProgressStyle
         // Defence in depth: a locked snapshot must never carry project data, even if a
         // caller (or a hand-edited JSON file) tries to attach some. Sensitive values are
         // dropped here and again when decoding.
@@ -159,18 +193,21 @@ public struct MonicaWidgetSnapshot: Sendable, Equatable, Codable {
         case totalEntryCount
         case totpItems
         case shortcutItems
+        case totpProgressStyle
     }
 
     public init(from decoder: any Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let rawVaultState = try container.decodeIfPresent(String.self, forKey: .vaultState)
+        let rawStyle = try container.decodeIfPresent(String.self, forKey: .totpProgressStyle)
         self.init(
             schemaVersion: try container.decodeIfPresent(Int.self, forKey: .schemaVersion)
                 ?? MonicaWidgetConstants.legacySchemaVersion,
             vaultState: rawVaultState.flatMap(MonicaWidgetVaultState.init(rawValue:)) ?? .locked,
             totalEntryCount: try container.decodeIfPresent(Int.self, forKey: .totalEntryCount) ?? 0,
             totpItems: try container.decodeIfPresent([MonicaWidgetTotpItem].self, forKey: .totpItems) ?? [],
-            shortcutItems: try container.decodeIfPresent([MonicaWidgetShortcutItem].self, forKey: .shortcutItems) ?? []
+            shortcutItems: try container.decodeIfPresent([MonicaWidgetShortcutItem].self, forKey: .shortcutItems) ?? [],
+            totpProgressStyle: MonicaWidgetTotpProgressStyle(snapshotValue: rawStyle)
         )
     }
 }
