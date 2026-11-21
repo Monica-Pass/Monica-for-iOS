@@ -612,6 +612,10 @@ struct SettingsRootView: View {
                 AutoFillDomainRulesSettingsView(controller: session.autoFillDomainRules)
             }
 
+            AndroidParitySection(title: String(localized: "键盘与输入法")) {
+                AppKeyboardInputLimitationsView()
+            }
+
             AndroidParitySection(title: String(localized: "Steam 导入")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "格式"), value: "Steam maFile / JSON")

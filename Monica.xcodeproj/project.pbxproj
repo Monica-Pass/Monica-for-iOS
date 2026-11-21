@@ -61,6 +61,7 @@
 		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
 		A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = A90000000000000000000011 /* AppVaultLayoutPreferences.swift */; };
 		A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A91000000000000000000011 /* AppUpdateCheckView.swift */; };
+		A4B000000000000000000001 /* AppKeyboardInputSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4B000000000000000000011 /* AppKeyboardInputSupport.swift */; };
 		A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */ = {isa = PBXBuildFile; fileRef = A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */; };
 		A93000000000000000000001 /* MonicaAuthenticatorLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A93000000000000000000011 /* MonicaAuthenticatorLiveActivityWidget.swift */; };
 		A100000000000000000000FA /* AppCloudVaultSyncView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FC /* AppCloudVaultSyncView.swift */; };
@@ -230,6 +231,7 @@
 		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
 		A90000000000000000000011 /* AppVaultLayoutPreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppVaultLayoutPreferences.swift; sourceTree = "<group>"; };
 		A91000000000000000000011 /* AppUpdateCheckView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppUpdateCheckView.swift; sourceTree = "<group>"; };
+		A4B000000000000000000011 /* AppKeyboardInputSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppKeyboardInputSupport.swift; sourceTree = "<group>"; };
 		A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAuthenticatorLiveActivity.swift; sourceTree = "<group>"; };
 		A93000000000000000000011 /* MonicaAuthenticatorLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaAuthenticatorLiveActivityWidget.swift; sourceTree = "<group>"; };
 		A100000000000000000000FC /* AppCloudVaultSyncView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSyncView.swift; sourceTree = "<group>"; };
@@ -423,6 +425,7 @@
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
+				A4B000000000000000000011 /* AppKeyboardInputSupport.swift */,
 				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
 				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
@@ -867,6 +870,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				A4B000000000000000000001 /* AppKeyboardInputSupport.swift in Sources */,
 				AE1300000000000000000011 /* AppSteamGuardSupport.swift in Sources */,
 				B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */,
 				B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */,
