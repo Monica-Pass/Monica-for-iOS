@@ -81,6 +81,23 @@
 		B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */; };
 		B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */; };
 		A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000013 /* SensitivePrivacyTests.swift */; };
+		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
+		AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* AppAttachmentSupport.swift */; };
+		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
+		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
+		AA000000000000000000000A /* AppPlusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* AppPlusSupport.swift */; };
+		AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000B /* AppAppearancePreferences.swift */; };
+		AA000000000000000000000E /* AppUnlockSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000D /* AppUnlockSupport.swift */; };
+		AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000000F /* AppNavigationTypes.swift */; };
+		AA0000000000000000000012 /* AppOperationTimeline.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000011 /* AppOperationTimeline.swift */; };
+		AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000013 /* AppQuickSetupSupport.swift */; };
+		AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000015 /* AppShortcutEntrySummary.swift */; };
+		AA0000000000000000000018 /* AppCloudBackupSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000017 /* AppCloudBackupSupport.swift */; };
+		AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */; };
+		AA000000000000000000001C /* AppImportExportSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001B /* AppImportExportSupport.swift */; };
+		AA000000000000000000001E /* AppSessionModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001D /* AppSessionModel.swift */; };
+		AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA000000000000000000001F /* AppSessionModel+LanSync.swift */; };
+		AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -198,6 +215,23 @@
 		B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppWidgetSnapshotSupport.swift; sourceTree = "<group>"; };
 		B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSnapshotReloadTests.swift; sourceTree = "<group>"; };
 		A13000000000000000000013 /* SensitivePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyTests.swift; sourceTree = "<group>"; };
+		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000003 /* AppAttachmentSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAttachmentSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000009 /* AppPlusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusSupport.swift"; sourceTree = "<group>"; };
+		AA000000000000000000000B /* AppAppearancePreferences.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAppearancePreferences.swift"; sourceTree = "<group>"; };
+		AA000000000000000000000D /* AppUnlockSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppUnlockSupport.swift"; sourceTree = "<group>"; };
+		AA000000000000000000000F /* AppNavigationTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppNavigationTypes.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000011 /* AppOperationTimeline.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppOperationTimeline.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000013 /* AppQuickSetupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppQuickSetupSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000015 /* AppShortcutEntrySummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppShortcutEntrySummary.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000017 /* AppCloudBackupSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppCloudBackupSupport.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppBitwardenSyncSupport.swift"; sourceTree = "<group>"; };
+		AA000000000000000000001B /* AppImportExportSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportSupport.swift"; sourceTree = "<group>"; };
+		AA000000000000000000001D /* AppSessionModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel.swift"; sourceTree = "<group>"; };
+		AA000000000000000000001F /* AppSessionModel+LanSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+LanSync.swift"; sourceTree = "<group>"; };
+		AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CloudVaultSync.swift"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -308,8 +342,33 @@
 				A10000000000000000000014 /* Info.plist */,
 				A10000000000000000000015 /* MonicaApp.entitlements */,
 				A10000000000000000000024 /* Assets.xcassets */,
+				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
+			sourceTree = "<group>";
+		};
+		AB0000000000000000000001 /* AppRoot */ = {
+			isa = PBXGroup;
+			children = (
+				AA0000000000000000000001 /* WifiQRCodeRenderer.swift */,
+				AA0000000000000000000003 /* AppAttachmentSupport.swift */,
+				AA0000000000000000000005 /* AppSecurityCenterSupport.swift */,
+				AA0000000000000000000007 /* AppAutoFillSupport.swift */,
+				AA0000000000000000000009 /* AppPlusSupport.swift */,
+				AA000000000000000000000B /* AppAppearancePreferences.swift */,
+				AA000000000000000000000D /* AppUnlockSupport.swift */,
+				AA000000000000000000000F /* AppNavigationTypes.swift */,
+				AA0000000000000000000011 /* AppOperationTimeline.swift */,
+				AA0000000000000000000013 /* AppQuickSetupSupport.swift */,
+				AA0000000000000000000015 /* AppShortcutEntrySummary.swift */,
+				AA0000000000000000000017 /* AppCloudBackupSupport.swift */,
+				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
+				AA000000000000000000001B /* AppImportExportSupport.swift */,
+				AA000000000000000000001D /* AppSessionModel.swift */,
+				AA000000000000000000001F /* AppSessionModel+LanSync.swift */,
+				AA0000000000000000000021 /* AppSessionModel+CloudVaultSync.swift */,
+			);
+			path = AppRoot;
 			sourceTree = "<group>";
 		};
 		A10000000000000000000074 /* Extensions */ = {
@@ -687,6 +746,23 @@
 				A80000000000000000000001 /* MonicaControlCenterIntents.swift in Sources */,
 				A10000000000000000000003 /* MonicaAppEnvironment.swift in Sources */,
 				B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */,
+				AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */,
+				AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */,
+				AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */,
+				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
+				AA000000000000000000000A /* AppPlusSupport.swift in Sources */,
+				AA000000000000000000000C /* AppAppearancePreferences.swift in Sources */,
+				AA000000000000000000000E /* AppUnlockSupport.swift in Sources */,
+				AA0000000000000000000010 /* AppNavigationTypes.swift in Sources */,
+				AA0000000000000000000012 /* AppOperationTimeline.swift in Sources */,
+				AA0000000000000000000014 /* AppQuickSetupSupport.swift in Sources */,
+				AA0000000000000000000016 /* AppShortcutEntrySummary.swift in Sources */,
+				AA0000000000000000000018 /* AppCloudBackupSupport.swift in Sources */,
+				AA000000000000000000001A /* AppBitwardenSyncSupport.swift in Sources */,
+				AA000000000000000000001C /* AppImportExportSupport.swift in Sources */,
+				AA000000000000000000001E /* AppSessionModel.swift in Sources */,
+				AA0000000000000000000020 /* AppSessionModel+LanSync.swift in Sources */,
+				AA0000000000000000000022 /* AppSessionModel+CloudVaultSync.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
