@@ -32649,6 +32649,38 @@
           }
         }
       }
+    },
+    "启动时自动聚焦搜索框": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Auto-focus Search on Launch"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启动时自动聚焦搜索框"
+          }
+        }
+      }
+    },
+    "解锁进入密码页后自动展开搜索并聚焦；通过深链、控制中心或快捷指令跳转时不抢焦点，iPad 大屏与分屏不会强制弹出键盘。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After unlocking, Search opens and takes focus on the Passwords page. Deep links, Control Center and shortcuts keep focus; iPad and Split View never force the keyboard."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁进入密码页后自动展开搜索并聚焦；通过深链、控制中心或快捷指令跳转时不抢焦点，iPad 大屏与分屏不会强制弹出键盘。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
