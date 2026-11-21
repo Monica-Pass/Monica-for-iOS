@@ -4,6 +4,18 @@
 <dict>
 	<key>com.apple.developer.authentication-services.autofill-credential-provider</key>
 	<true/>
+	<!-- issue #76：iCloud（CloudKit 私人数据库）同步。 -->
+	<!-- 占位容器 ID：真实的 Team 必须在 Apple Developer 后台创建同名 iCloud 容器 -->
+	<!-- （或改用自己 Team 的前缀）并重新生成 provisioning profile，否则构建可以 -->
+	<!-- 通过、运行时 CloudKit 会直接 trap（缺少 entitlement 时 Apple 的行为）。 -->
+	<key>com.apple.developer.icloud-container-identifiers</key>
+	<array>
+		<string>iCloud.ru.takagi.monica</string>
+	</array>
+	<key>com.apple.developer.icloud-services</key>
+	<array>
+		<string>CloudKit</string>
+	</array>
 	<key>com.apple.developer.nfc.readersession.formats</key>
 	<array>
 		<string>TAG</string>
