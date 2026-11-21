@@ -278,6 +278,13 @@ struct SettingsRootView: View {
                             .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
+                    Button {
+                        session.presentAccountTemplates()
+                    } label: {
+                        Label("常用账号模板", systemImage: "square.stack.3d.up")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(AndroidParityButtonStyle(tone: .outlined))
                 }
             }
 

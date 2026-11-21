@@ -538,6 +538,20 @@ final class AppSessionModel {
     var presentedDetailExtras: VaultItemExtras?
     var isQuickSetupPresented = false
     var isExtensionsPresented = false
+    // issue #127：常用账号模板。模板正文只存在加密侧表，这里是解锁会话内的内存副本。
+    var accountTemplates: [AccountTemplate] = []
+    /// 套用模板后账号输入框要显示的占位提示（模板只存占位，不存账号值）。
+    var accountTemplateUsernamePrompt = ""
+    /// 套用模板后给用户的一句结果说明（例如「已填写 3 个空字段」）。
+    var accountTemplatePrefillMessage: String?
+    var accountTemplateStatusMessage: String?
+    var isAccountTemplatesPresented = false
+    var isAccountTemplateImportPickerPresented = false
+    var accountTemplateImportPreview: AccountTemplateImportPreview?
+    var accountTemplateImportData: Data?
+    var accountTemplateImportOverwrite = false
+    var isAccountTemplateExportPresented = false
+    var accountTemplateExportDocument: AccountTemplateExportDocument?
     /// issue #36：Monica Send 分享包接收入口（URL scheme 或 `.send` 文件导入时填充）。
     var monicaSendIncoming: MonicaSendIncoming?
     var expandedToolbarAction: AndroidParityToolbarAction?
@@ -4588,6 +4602,9 @@ final class AppSessionModel {
         // 图标属于「上一次选择」的残留状态，新建不同条目时必须清掉。
         if itemKind == .login {
             loginIcon = nil
+            // issue #127：新建登录条目前先清掉上一次的模板提示，再载入模板列表。
+            resetAccountTemplatePrefill()
+            prepareAccountTemplatesForEditor()
         }
         presentedEditorMode = .add(itemKind)
     }
@@ -12502,6 +12519,7 @@ final class AppSessionModel {
         bitwardenPendingMutationBatches = []
         clearKeePassImportState()
         entryOperationState = .idle
+        clearAccountTemplateSession()
         clearOperationTimelineEvents()
         clearVaultSearchIndex()
         publishWidgetSnapshots(reloadImmediately: true)
