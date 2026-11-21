@@ -119,6 +119,9 @@ final class AppSessionModel {
     var totpPeriod: UInt32 = 30
     var totpDigits: UInt32 = 6
     var totpAlgorithm = "SHA1"
+    var totpOtpType = OtpType.totp.rawValue
+    var totpCounter: UInt64 = 0
+    var totpIconName = ""
     var totpImportURI = ""
     var totpSearchQuery = ""
     var showFavoriteTotpEntriesOnly = false
@@ -132,6 +135,9 @@ final class AppSessionModel {
     var editingTotpPeriod: UInt32 = 30
     var editingTotpDigits: UInt32 = 6
     var editingTotpAlgorithm = "SHA1"
+    var editingTotpOtpType = OtpType.totp.rawValue
+    var editingTotpCounter: UInt64 = 0
+    var editingTotpIconName = ""
     var editingTotpFavorite = false
     var cardTitle = ""
     var cardholderName = ""
@@ -4783,7 +4789,7 @@ final class AppSessionModel {
             }
             let entry = try entryRepository.createTotpEntry(
                 projectID: project.id,
-                draft: LocalTotpEntryDraft(
+                draft: try advancedTotpDraft(
                     title: totpTitle,
                     secret: totpSecret,
                     issuer: totpIssuer,
@@ -4791,11 +4797,13 @@ final class AppSessionModel {
                     period: totpPeriod,
                     digits: totpDigits,
                     algorithm: totpAlgorithm,
-                    otpType: "TOTP",
-                    counter: 0
+                    otpType: OtpType(storageValue: totpOtpType),
+                    counter: totpCounter,
+                    iconName: totpIconName
                 )
             )
             totpSecret = ""
+            totpCounter = 0
             totpEntries = try entryRepository.listTotpEntries(projectID: project.id)
             deletedTotpEntries = try entryRepository.listDeletedTotpEntries(projectID: project.id)
             appendOperationTimelineEvent(
@@ -4838,6 +4846,9 @@ final class AppSessionModel {
             totpPeriod = period
             totpDigits = digits
             totpAlgorithm = draft.algorithm.rawValue
+            totpOtpType = draft.otpType.rawValue
+            totpCounter = draft.counter
+            totpIconName = ""
             totpImportURI = ""
             entryOperationState = .succeeded(String(localized: "已导入 \(draft.redactedSummary)"))
         } catch {
@@ -4865,6 +4876,9 @@ final class AppSessionModel {
             totpPeriod = period
             totpDigits = digits
             totpAlgorithm = draft.algorithm.rawValue
+            totpOtpType = draft.otpType.rawValue
+            totpCounter = draft.counter
+            totpIconName = ""
             totpImportURI = ""
             entryOperationState = .succeeded(String(localized: "已导入 \(draft.title)"))
         } catch {
@@ -4927,6 +4941,9 @@ final class AppSessionModel {
         editingTotpPeriod = entry.period
         editingTotpDigits = entry.digits
         editingTotpAlgorithm = entry.algorithm
+        editingTotpOtpType = OtpType(storageValue: entry.otpType).rawValue
+        editingTotpCounter = entry.counter
+        editingTotpIconName = entry.iconName
         editingTotpFavorite = entry.favorite
     }
 
@@ -4945,7 +4962,7 @@ final class AppSessionModel {
             let entry = try entryRepository.updateTotpEntry(
                 projectID: projectID,
                 entryID: entryID,
-                draft: LocalTotpEntryDraft(
+                draft: try advancedTotpDraft(
                     title: editingTotpTitle,
                     secret: editingTotpSecret,
                     issuer: editingTotpIssuer,
@@ -4953,8 +4970,9 @@ final class AppSessionModel {
                     period: editingTotpPeriod,
                     digits: editingTotpDigits,
                     algorithm: editingTotpAlgorithm,
-                    otpType: "TOTP",
-                    counter: 0
+                    otpType: OtpType(storageValue: editingTotpOtpType),
+                    counter: editingTotpCounter,
+                    iconName: editingTotpIconName
                 )
             )
             totpEntries = try entryRepository.listTotpEntries(projectID: projectID)
@@ -8183,16 +8201,29 @@ final class AppSessionModel {
     }
 
     func totpCode(for entry: LocalTotpEntry, at date: Date = Date()) throws -> String {
-        try TotpGenerator.generate(
-            secret: entry.secret,
-            algorithm: totpAlgorithm(from: entry.algorithm),
-            digits: Int(entry.digits),
-            period: Int(entry.period),
-            timestamp: date.timeIntervalSince1970
-        )
+        switch OtpType(storageValue: entry.otpType) {
+        case .totp:
+            return try TotpGenerator.generate(
+                secret: entry.secret,
+                algorithm: totpAlgorithm(from: entry.algorithm),
+                digits: Int(entry.digits),
+                period: Int(entry.period),
+                timestamp: date.timeIntervalSince1970
+            )
+        case .hotp:
+            return try HotpGenerator.generate(
+                secret: entry.secret,
+                algorithm: totpAlgorithm(from: entry.algorithm),
+                digits: Int(entry.digits),
+                counter: entry.counter
+            )
+        }
     }
 
     func totpTimeRemaining(for entry: LocalTotpEntry, at date: Date = Date()) -> Int {
+        guard OtpType(storageValue: entry.otpType) == .totp else {
+            return 0
+        }
         let period = max(Int(entry.period), 1)
         let elapsed = Int(date.timeIntervalSince1970) % period
         return elapsed == 0 ? period : period - elapsed
@@ -12224,7 +12255,7 @@ final class AppSessionModel {
         )
     }
 
-    private func totpAlgorithm(from value: String) -> TotpAlgorithm {
+    func totpAlgorithm(from value: String) -> TotpAlgorithm {
         TotpAlgorithm(rawValue: value.uppercased()) ?? .sha1
     }
 

@@ -297,10 +297,23 @@ public enum SecretGenerator {
     }
 }
 
-public enum TotpAlgorithm: String, Sendable, Equatable {
+public enum TotpAlgorithm: String, Sendable, Equatable, CaseIterable {
     case sha1 = "SHA1"
     case sha256 = "SHA256"
     case sha512 = "SHA512"
+}
+
+/// 一次性密码类型。rawValue 与存储层 `otpType` 字段一致，历史数据缺字段时按 TOTP 处理。
+public enum OtpType: String, Sendable, Equatable, CaseIterable {
+    case totp = "TOTP"
+    case hotp = "HOTP"
+
+    public init(storageValue: String) {
+        let normalized = storageValue
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+        self = normalized == OtpType.hotp.rawValue ? .hotp : .totp
+    }
 }
 
 public enum TotpError: Error, Sendable, Equatable {
@@ -319,6 +332,8 @@ public struct TotpImportDraft: Sendable, Equatable {
     public let period: Int
     public let digits: Int
     public let algorithm: TotpAlgorithm
+    public let otpType: OtpType
+    public let counter: UInt64
 
     public init(
         title: String,
@@ -327,7 +342,9 @@ public struct TotpImportDraft: Sendable, Equatable {
         accountName: String,
         period: Int,
         digits: Int,
-        algorithm: TotpAlgorithm
+        algorithm: TotpAlgorithm,
+        otpType: OtpType = .totp,
+        counter: UInt64 = 0
     ) {
         self.title = title
         self.secret = secret
@@ -336,6 +353,8 @@ public struct TotpImportDraft: Sendable, Equatable {
         self.period = period
         self.digits = digits
         self.algorithm = algorithm
+        self.otpType = otpType
+        self.counter = counter
     }
 
     public var redactedSummary: String {
@@ -351,9 +370,11 @@ public enum TotpURIParser {
     public static func parse(_ value: String) throws -> TotpImportDraft {
         guard let components = URLComponents(string: value),
               components.scheme?.lowercased() == "otpauth",
-              components.host?.lowercased() == "totp" else {
+              let host = components.host?.lowercased(),
+              host == "totp" || host == "hotp" else {
             throw TotpError.invalidURI
         }
+        let otpType: OtpType = host == "hotp" ? .hotp : .totp
 
         let query = queryItems(from: components)
         let secret = try normalizedSecret(query["secret"])
@@ -386,6 +407,7 @@ public enum TotpURIParser {
         }
 
         let algorithm = try normalizedAlgorithm(query["algorithm"])
+        let counter = try normalizedCounter(query["counter"])
 
         return TotpImportDraft(
             title: title,
@@ -394,7 +416,9 @@ public enum TotpURIParser {
             accountName: accountName,
             period: period,
             digits: digits,
-            algorithm: algorithm
+            algorithm: algorithm,
+            otpType: otpType,
+            counter: otpType == .hotp ? counter : 0
         )
     }
 
@@ -442,6 +466,16 @@ public enum TotpURIParser {
         }
         return algorithm
     }
+
+    private static func normalizedCounter(_ value: String?) throws -> UInt64 {
+        guard let value, !value.isEmpty else {
+            return 0
+        }
+        guard let counter = UInt64(value) else {
+            throw TotpError.invalidURI
+        }
+        return counter
+    }
 }
 
 public enum TotpGenerator {
@@ -461,15 +495,39 @@ public enum TotpGenerator {
 
         let secretData = try Base32.decode(secret)
         let counter = UInt64(timestamp / Double(period))
-        return hotp(
+        return OneTimePassword.code(
             secret: secretData,
             counter: counter,
             algorithm: algorithm,
             digits: digits
         )
     }
+}
 
-    private static func hotp(
+/// 计数器型一次性密码（RFC 4226）。服务端与客户端共享 `counter`，每次使用后由调用方持久化 +1。
+public enum HotpGenerator {
+    public static func generate(
+        secret: String,
+        algorithm: TotpAlgorithm = .sha1,
+        digits: Int = 6,
+        counter: UInt64
+    ) throws -> String {
+        guard (6...8).contains(digits) else {
+            throw TotpError.invalidDigits
+        }
+
+        let secretData = try Base32.decode(secret)
+        return OneTimePassword.code(
+            secret: secretData,
+            counter: counter,
+            algorithm: algorithm,
+            digits: digits
+        )
+    }
+}
+
+enum OneTimePassword {
+    static func code(
         secret: Data,
         counter: UInt64,
         algorithm: TotpAlgorithm,
@@ -497,6 +555,69 @@ public enum TotpGenerator {
         let divisor = UInt32(pow(10.0, Double(digits)))
         let otp = binaryCode % divisor
         return String(format: "%0*u", digits, otp)
+    }
+}
+
+/// 把条目导出为 Key URI Format（`otpauth://`），供二维码/分享使用。secret 只以 Base32 文本出现。
+public enum OtpAuthURIExporter {
+    private static let unreservedCharacters: CharacterSet = {
+        var set = CharacterSet()
+        set.insert(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+        return set
+    }()
+
+    public static func uri(
+        secret: String,
+        issuer: String,
+        accountName: String,
+        period: Int = 30,
+        digits: Int = 6,
+        algorithm: TotpAlgorithm = .sha1,
+        otpType: OtpType = .totp,
+        counter: UInt64 = 0
+    ) throws -> String {
+        let normalizedSecret = secret
+            .uppercased()
+            .filter { !$0.isWhitespace && $0 != "=" }
+        _ = try Base32.decode(normalizedSecret)
+        guard (6...8).contains(digits) else {
+            throw TotpError.invalidDigits
+        }
+        guard period > 0 else {
+            throw TotpError.invalidPeriod
+        }
+
+        let normalizedIssuer = issuer.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedAccount = accountName.trimmingCharacters(in: .whitespacesAndNewlines)
+        var label: String
+        if normalizedIssuer.isEmpty {
+            label = percentEncode(normalizedAccount)
+        } else if normalizedAccount.isEmpty {
+            label = percentEncode(normalizedIssuer)
+        } else {
+            label = "\(percentEncode(normalizedIssuer)):\(percentEncode(normalizedAccount))"
+        }
+        if label.isEmpty {
+            label = "Monica"
+        }
+
+        var items = ["secret=\(percentEncode(normalizedSecret))"]
+        if !normalizedIssuer.isEmpty {
+            items.append("issuer=\(percentEncode(normalizedIssuer))")
+        }
+        items.append("period=\(period)")
+        items.append("digits=\(digits)")
+        items.append("algorithm=\(algorithm.rawValue)")
+        if otpType == .hotp {
+            items.append("counter=\(counter)")
+        }
+
+        let host = otpType.rawValue.lowercased()
+        return "otpauth://\(host)/\(label)?\(items.joined(separator: "&"))"
+    }
+
+    private static func percentEncode(_ value: String) -> String {
+        value.addingPercentEncoding(withAllowedCharacters: unreservedCharacters) ?? value
     }
 }
 
