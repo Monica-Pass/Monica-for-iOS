@@ -11,7 +11,7 @@ struct AndroidParityVaultHomeView: View {
     @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
     /// 「减弱动态效果」时验证码进度条不做平滑动画（#155）。
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// 是否为密码 Tab 根页：为 true 时显示二级模块 Picker，列表随 `session.passwordModule` 切换。
+    @Environment(\.scenePhase) private var scenePhase    /// 是否为密码 Tab 根页：为 true 时显示二级模块 Picker，列表随 `session.passwordModule` 切换。
     let isPasswordRoot: Bool
     /// 非密码根页时固定的条目类型（验证器 / 银行卡）。
     let baseItemKind: UnifiedVaultItemKind?
@@ -243,6 +243,7 @@ struct AndroidParityVaultHomeView: View {
         .quickLookPreview(attachmentQuickLookPreviewBinding)
         .onReceive(timer) { value in
             now = value
+            tickTotpAutoCopy(at: value)
         }
         .task(id: session.isSearchAutoFocusPendingForPasswordPage) {
             // 只有密码页根视图负责消费，避免验证器 / 银行卡页误抢焦点。
@@ -253,6 +254,21 @@ struct AndroidParityVaultHomeView: View {
             session.isSearchAutoFocusPendingForPasswordPage = false
             isSearchFieldAutoFocusPending = true
         }
+    }
+
+    /// #148：验证器页每秒一次，检查是否需要把下一个验证码写进敏感剪贴板。
+    ///
+    /// 只在验证 Tab 前台可见（且没有隐私遮罩）、库已解锁时才轮询；后台/锁屏时
+    /// `scenePhase != .active`，控制器不会写剪贴板。
+    private func tickTotpAutoCopy(at date: Date) {
+        guard itemKind == .totp, session.selectedTab == .totp, !session.isPrivacyShieldVisible else {
+            return
+        }
+        _ = session.tickTotpAutoCopy(
+            now: date,
+            isSceneActive: scenePhase == .active,
+            isAuthenticatorPageVisible: true
+        )
     }
 
     @ViewBuilder

@@ -107,6 +107,8 @@ C3A0000000000000000000A3 /* VaultSnapshotViews.swift in Sources */ = {isa = PBXB
 		A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000011 /* SensitivePrivacyService.swift */; };
 		AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AF1600000000000000000011 /* AppLoginDetailSupport.swift */; };
 		A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000012 /* SensitivePrivacySettingsView.swift */; };
+		A14800000000000000000001 /* AppTotpAutoCopySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14800000000000000000011 /* AppTotpAutoCopySupport.swift */; };
+		A14800000000000000000002 /* AppTotpAutoCopySettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A14800000000000000000012 /* AppTotpAutoCopySettingsView.swift */; };
 		A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */; };
 		A20000000000000000000001 /* MonicaWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000000000000000000011 /* MonicaWidget.swift */; };
 		A80000000000000000000001 /* MonicaControlCenterIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A80000000000000000000011 /* MonicaControlCenterIntents.swift */; };
@@ -326,6 +328,8 @@ C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReferenc
 		A13000000000000000000011 /* SensitivePrivacyService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyService.swift; sourceTree = "<group>"; };
 		AF1600000000000000000011 /* AppLoginDetailSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLoginDetailSupport.swift; sourceTree = "<group>"; };
 		A13000000000000000000012 /* SensitivePrivacySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacySettingsView.swift; sourceTree = "<group>"; };
+		A14800000000000000000011 /* AppTotpAutoCopySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTotpAutoCopySupport.swift; sourceTree = "<group>"; };
+		A14800000000000000000012 /* AppTotpAutoCopySettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTotpAutoCopySettingsView.swift; sourceTree = "<group>"; };
 		A9B000000000000000000002 /* AppGlobalSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppGlobalSearchView.swift; sourceTree = "<group>"; };
 		A9C000000000000000000002 /* AppBarcodeItemSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppBarcodeItemSupport.swift; sourceTree = "<group>"; };
 		A40000000000000000000011 /* MonicaShortcutsAppIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MonicaShortcutsAppIntents.swift; sourceTree = "<group>"; };
@@ -549,6 +553,8 @@ C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReferenc
 				A13000000000000000000011 /* SensitivePrivacyService.swift */,
 				AF1600000000000000000011 /* AppLoginDetailSupport.swift */,
 				A13000000000000000000012 /* SensitivePrivacySettingsView.swift */,
+				A14800000000000000000011 /* AppTotpAutoCopySupport.swift */,
+				A14800000000000000000012 /* AppTotpAutoCopySettingsView.swift */,
 				A9B000000000000000000002 /* AppGlobalSearchView.swift */,
 				A9C000000000000000000002 /* AppBarcodeItemSupport.swift */,
 				AE1200000000000000000001 /* AppGPGKeySupport.swift */,
@@ -1041,6 +1047,8 @@ C3A0000000000000000000A4 /* VaultSnapshotViews.swift */ = {isa = PBXFileReferenc
 				A13000000000000000000001 /* SensitivePrivacyService.swift in Sources */,
 				AF1600000000000000000001 /* AppLoginDetailSupport.swift in Sources */,
 				A13000000000000000000002 /* SensitivePrivacySettingsView.swift in Sources */,
+				A14800000000000000000001 /* AppTotpAutoCopySupport.swift in Sources */,
+				A14800000000000000000002 /* AppTotpAutoCopySettingsView.swift in Sources */,
 				A9B000000000000000000001 /* AppGlobalSearchView.swift in Sources */,
 				A9C000000000000000000001 /* AppBarcodeItemSupport.swift in Sources */,
 				A40000000000000000000001 /* MonicaShortcutsAppIntents.swift in Sources */,
