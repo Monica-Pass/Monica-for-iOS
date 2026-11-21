@@ -595,6 +595,29 @@ struct SettingsRootView: View {
 
             AndroidParitySection(title: String(localized: "安全中心")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                    NavigationLink {
+                        AppSecurityCenterDashboardView(session: session)
+                    } label: {
+                        HStack(spacing: 12) {
+                            Label("安全分析仪表盘", systemImage: "chart.line.uptrend.xyaxis")
+                                .font(.subheadline.weight(.semibold))
+                            Spacer()
+                            Text("逐项查看与跳转")
+                                .font(.footnote)
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                            Image(systemName: "chevron.right")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundStyle(AndroidParityPalette.textSecondary)
+                        }
+                        .frame(minHeight: 32)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+                .task {
+                    await session.refreshSecurityInsightState()
+                }
+                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     ForEach(session.securityCenterRows) { row in
                         AndroidParitySecurityCenterRow(row: row)
                         if row.id != session.securityCenterRows.last?.id {
