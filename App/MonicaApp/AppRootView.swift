@@ -73,6 +73,7 @@ struct AppRootView: View {
                     }
                 }
                 .background(AndroidParityPalette.background.ignoresSafeArea())
+                .appLiquidGlassTabBar()
             }
 
             if session.isPrivacyShieldVisible {
@@ -292,8 +293,7 @@ struct AppRootView: View {
                 }
             }
         }
-        .toolbarBackground(AndroidParityPalette.surface, for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
+        .appNavigationBarMaterial(fallbackFill: AndroidParityPalette.surface)
     }
 
     private func vaultHomeView(isPasswordRoot: Bool, baseItemKind: UnifiedVaultItemKind?) -> some View {
