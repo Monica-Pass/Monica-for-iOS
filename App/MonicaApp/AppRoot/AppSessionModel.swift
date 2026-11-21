@@ -63,6 +63,10 @@ final class AppSessionModel {
     var vaultOperationState: VaultOperationState = .idle
     var vaultName = ""
     var vaultPassword = ""
+    // issue #144：打开/解锁失败后交给恢复页的上下文；打开成功会清空。
+    var vaultRecoveryContext: AppVaultRecoveryContext?
+    /// 最近一次成功打开时间的持久化记录（只存文件路径与时间，不存密钥）。
+    var vaultRecoveryHistory = AppVaultRecoveryHistory()
     var firstTimePasswordSetupStep: FirstTimePasswordSetupStep = .enterPassword
     var activeVaultName: String?
     var entryOperationState: EntryOperationState = .idle
@@ -2500,12 +2504,28 @@ final class AppSessionModel {
             recordUserActivity(at: now)
             publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
+            vaultRecoveryContext = nil
+            vaultRecoveryHistory.recordOpened(fileURL: fileURL, at: now)
         } catch {
             AppDiagnosticEmission.vaultFailure(error, stage: .open)
             clearVaultAccessAfterFailure()
+            vaultRecoveryContext = AppVaultRecoveryContext(
+                failure: AppVaultRecoveryFailure.classify(error, stage: .openVault),
+                stage: .openVault,
+                fileURL: fileURL,
+                displayName: fileURL.deletingPathExtension().lastPathComponent,
+                retryMode: .password
+            )
             vaultOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    /// issue #144：恢复页在覆盖真实库之前，先用候选主密码打开一份快照副本做校验。
+    /// 校验后立刻关闭副本，避免临时库的 `-wal` / `-shm` 侧车残留。
+    func verifyCandidateVaultForRecovery(at fileURL: URL, password: String, deviceID: String) throws {
+        let candidate = try vaultRepository.openVault(at: fileURL, password: password, deviceID: deviceID)
+        vaultRepository.closeVault(for: candidate)
     }
 
     func unlockRememberedVaultWithPassword(
@@ -2515,6 +2535,13 @@ final class AppSessionModel {
     ) throws {
         guard let rememberedVaultDescriptor else {
             vaultOperationState = .failed(AppVaultKeychainError.rememberedVaultUnavailable.localizedDescription)
+            vaultRecoveryContext = AppVaultRecoveryContext(
+                failure: .vaultNotRemembered,
+                stage: .passwordUnlock,
+                fileURL: nil,
+                displayName: nil,
+                retryMode: .password
+            )
             throw AppVaultKeychainError.rememberedVaultUnavailable
         }
 
@@ -6999,8 +7026,17 @@ final class AppSessionModel {
             vaultOperationState = .succeeded(session.descriptor.displayName)
             vaultKeychainState = .unlocked(session.handle.vaultID)
             publishWidgetSnapshots(now: now, reloadImmediately: true)
+            vaultRecoveryContext = nil
+            vaultRecoveryHistory.recordOpened(fileURL: session.descriptor.fileURL, at: now)
         } catch {
             clearVaultAccessAfterFailure()
+            vaultRecoveryContext = AppVaultRecoveryContext(
+                failure: AppVaultRecoveryFailure.classify(error, stage: .keychainUnlock),
+                stage: .keychainUnlock,
+                fileURL: rememberedVaultDescriptor?.fileURL,
+                displayName: rememberedVaultDescriptor?.displayName,
+                retryMode: .keychain
+            )
             vaultKeychainState = .failed(readableVaultKeychainErrorMessage(for: error))
             vaultOperationState = .failed(readableVaultKeychainErrorMessage(for: error))
             throw error

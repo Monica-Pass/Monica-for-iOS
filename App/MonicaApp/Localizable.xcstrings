@@ -35869,6 +35869,1798 @@
           }
         }
       }
+    },
+    "保险库恢复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault recovery"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库恢复"
+          }
+        }
+      }
+    },
+    "从快照恢复会覆盖当前保险库文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring from a snapshot replaces the current vault file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从快照恢复会覆盖当前保险库文件"
+          }
+        }
+      }
+    },
+    "恢复这份快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore this snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复这份快照"
+          }
+        }
+      }
+    },
+    "恢复前会先把当前库复制成回滚点（.preRestoreSafety）；恢复失败不会删除或覆盖原文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A rollback point (.preRestoreSafety) is copied from the current vault first; a failed restore never deletes or overwrites the original file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复前会先把当前库复制成回滚点（.preRestoreSafety）；恢复失败不会删除或覆盖原文件。"
+          }
+        }
+      }
+    },
+    "保险库打不开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault won't open"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库打不开"
+          }
+        }
+      }
+    },
+    "当前保持锁定状态：这里只显示文件与快照的元数据，不显示任何条目内容。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault stays locked: only file and snapshot metadata are shown here, never any entry content."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前保持锁定状态：这里只显示文件与快照的元数据，不显示任何条目内容。"
+          }
+        }
+      }
+    },
+    "保险库文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库文件"
+          }
+        }
+      }
+    },
+    "文件状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "File status"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件状态"
+          }
+        }
+      }
+    },
+    "没有可用的文件路径。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No file path is available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可用的文件路径。"
+          }
+        }
+      }
+    },
+    "最近一次成功打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last successful open"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近一次成功打开"
+          }
+        }
+      }
+    },
+    "无记录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No record"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无记录"
+          }
+        }
+      }
+    },
+    "用主密码重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry with master password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用主密码重试"
+          }
+        }
+      }
+    },
+    "用设备钥匙串重试": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry with device keychain"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用设备钥匙串重试"
+          }
+        }
+      }
+    },
+    "复制诊断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy diagnostics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制诊断"
+          }
+        }
+      }
+    },
+    "复制的内容只包含失败码、文件与快照的元数据，不包含条目内容、标题、主密码或密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The copied text contains only the failure code and file/snapshot metadata; it never includes entry content, titles, the master password, or keys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制的内容只包含失败码、文件与快照的元数据，不包含条目内容、标题、主密码或密钥。"
+          }
+        }
+      }
+    },
+    "快照救援": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot rescue"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照救援"
+          }
+        }
+      }
+    },
+    "没有可用快照": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No snapshots available"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可用快照"
+          }
+        }
+      }
+    },
+    "这个保险库还没有可用的快照，因此无法通过快照救援；可以改用主密码重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This vault has no usable snapshots yet, so snapshot rescue isn't possible; retry with the master password instead."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个保险库还没有可用的快照，因此无法通过快照救援；可以改用主密码重试。"
+          }
+        }
+      }
+    },
+    "最近快照：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照：%@"
+          }
+        }
+      }
+    },
+    "完整性：%@": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Integrity: %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整性：%@"
+          }
+        }
+      }
+    },
+    "恢复前会先创建 .preRestoreSafety 回滚点；恢复失败不会删除或覆盖原文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "A .preRestoreSafety rollback point is created before restoring; a failed restore never deletes or overwrites the original file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "恢复前会先创建 .preRestoreSafety 回滚点；恢复失败不会删除或覆盖原文件。"
+          }
+        }
+      }
+    },
+    "无法确定这个文件的保险库标识，暂时不能读取快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault identifier for this file could not be determined, so snapshots cannot be read yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法确定这个文件的保险库标识，暂时不能读取快照。"
+          }
+        }
+      }
+    },
+    "条目 %lld · 项目 %lld": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "%lld entries · %lld projects"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条目 %lld · 项目 %lld"
+          }
+        }
+      }
+    },
+    "退出只关闭恢复页并回到解锁页，不会删除或重建本地保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Exiting only closes the recovery screen and returns to unlock; it never deletes or rebuilds the local vault."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出只关闭恢复页并回到解锁页，不会删除或重建本地保险库。"
+          }
+        }
+      }
+    },
+    "使用主密码解锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock with master password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用主密码解锁"
+          }
+        }
+      }
+    },
+    "使用设备钥匙串解锁": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock with device keychain"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "使用设备钥匙串解锁"
+          }
+        }
+      }
+    },
+    "打开保险库文件": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open vault file"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开保险库文件"
+          }
+        }
+      }
+    },
+    "从快照恢复": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restore from snapshot"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "从快照恢复"
+          }
+        }
+      }
+    },
+    "主密码不正确": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Incorrect master password"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "主密码不正确"
+          }
+        }
+      }
+    },
+    "保险库文件不存在": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault file not found"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库文件不存在"
+          }
+        }
+      }
+    },
+    "保险库文件无法读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault file can't be read"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库文件无法读取"
+          }
+        }
+      }
+    },
+    "保险库文件已损坏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault file is damaged"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库文件已损坏"
+          }
+        }
+      }
+    },
+    "保险库标识不匹配": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault identifier mismatch"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库标识不匹配"
+          }
+        }
+      }
+    },
+    "没有记住的保险库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No remembered vault"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有记住的保险库"
+          }
+        }
+      }
+    },
+    "设备钥匙串不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Device keychain unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备钥匙串不可用"
+          }
+        }
+      }
+    },
+    "钥匙串中缺少该保险库的密钥": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault key missing from keychain"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钥匙串中缺少该保险库的密钥"
+          }
+        }
+      }
+    },
+    "本机不支持该存储引擎": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Storage engine not supported on this device"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本机不支持该存储引擎"
+          }
+        }
+      }
+    },
+    "保险库仍被占用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault is still busy"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库仍被占用"
+          }
+        }
+      }
+    },
+    "可用存储空间不足": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enough free space"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可用存储空间不足"
+          }
+        }
+      }
+    },
+    "快照已损坏": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot is damaged"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已损坏"
+          }
+        }
+      }
+    },
+    "快照密钥不可用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot key unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照密钥不可用"
+          }
+        }
+      }
+    },
+    "快照恢复失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot restore failed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照恢复失败"
+          }
+        }
+      }
+    },
+    "未知错误": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown error"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知错误"
+          }
+        }
+      }
+    },
+    "输入的主密码与这个保险库不匹配。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The master password doesn't match this vault."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入的主密码与这个保险库不匹配。"
+          }
+        }
+      }
+    },
+    "在这个位置找不到保险库文件，它可能已被移动或删除。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No vault file was found at this location; it may have been moved or deleted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这个位置找不到保险库文件，它可能已被移动或删除。"
+          }
+        }
+      }
+    },
+    "系统拒绝读取这个保险库文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system denied access to this vault file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统拒绝读取这个保险库文件。"
+          }
+        }
+      }
+    },
+    "文件内容无法解析为 Monica 保险库，可能在写入过程中被中断。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file isn't a readable Monica vault; a write may have been interrupted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件内容无法解析为 Monica 保险库，可能在写入过程中被中断。"
+          }
+        }
+      }
+    },
+    "文件内容与记录中的保险库标识不一致。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The file content doesn't match the recorded vault identifier."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "文件内容与记录中的保险库标识不一致。"
+          }
+        }
+      }
+    },
+    "这台设备没有记住任何保险库，因此无法自动解锁。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This device has no remembered vault, so it can't unlock automatically."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台设备没有记住任何保险库，因此无法自动解锁。"
+          }
+        }
+      }
+    },
+    "iOS 钥匙串当前不可用，无法取出快捷解锁密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The iOS keychain is unavailable, so the quick-unlock key can't be read."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 钥匙串当前不可用，无法取出快捷解锁密钥。"
+          }
+        }
+      }
+    },
+    "钥匙串里没有这个保险库的解锁密钥，可能已被系统清理。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The keychain has no unlock key for this vault; the system may have cleared it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钥匙串里没有这个保险库的解锁密钥，可能已被系统清理。"
+          }
+        }
+      }
+    },
+    "当前运行环境无法加载 MDBX 存储引擎。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The MDBX storage engine can't be loaded in this environment."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前运行环境无法加载 MDBX 存储引擎。"
+          }
+        }
+      }
+    },
+    "保险库旁边仍有未合并的写入日志，暂时不能安全地覆盖它。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unmerged write logs remain next to the vault, so it can't be safely overwritten yet."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库旁边仍有未合并的写入日志，暂时不能安全地覆盖它。"
+          }
+        }
+      }
+    },
+    "设备剩余空间不足以写入快照内容。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The device doesn't have enough free space to write the snapshot."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设备剩余空间不足以写入快照内容。"
+          }
+        }
+      }
+    },
+    "这个保险库没有可用的快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This vault has no usable snapshots."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这个保险库没有可用的快照。"
+          }
+        }
+      }
+    },
+    "快照内容无法通过完整性校验。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The snapshot failed its integrity check."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照内容无法通过完整性校验。"
+          }
+        }
+      }
+    },
+    "钥匙串中缺少快照密钥，无法解密快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The snapshot key is missing from the keychain, so the snapshot can't be decrypted."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "钥匙串中缺少快照密钥，无法解密快照。"
+          }
+        }
+      }
+    },
+    "快照内容无法写入保险库文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The snapshot couldn't be written to the vault file."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照内容无法写入保险库文件。"
+          }
+        }
+      }
+    },
+    "发生了未归类的错误。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An unclassified error occurred."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发生了未归类的错误。"
+          }
+        }
+      }
+    },
+    "确认键盘布局与大小写后重试，或改用设备钥匙串解锁。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check the keyboard layout and capitalization, then retry, or unlock with the device keychain."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认键盘布局与大小写后重试，或改用设备钥匙串解锁。"
+          }
+        }
+      }
+    },
+    "在解锁页选择“打开已有保险库”并重新指定文件位置。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose \"Open existing vault\" on the unlock screen and point to the file again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在解锁页选择“打开已有保险库”并重新指定文件位置。"
+          }
+        }
+      }
+    },
+    "检查文件权限，或把保险库复制到“我的 iPhone › Monica”后再试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Check file permissions, or copy the vault into \"On My iPhone › Monica\" and try again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查文件权限，或把保险库复制到“我的 iPhone › Monica”后再试。"
+          }
+        }
+      }
+    },
+    "如果有可用快照，请从快照恢复；恢复前会自动创建回滚点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If a snapshot is available, restore from it; a rollback point is created automatically."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果有可用快照，请从快照恢复；恢复前会自动创建回滚点。"
+          }
+        }
+      }
+    },
+    "确认选中了正确的文件，必要时用快照恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Make sure you selected the right file, and restore from a snapshot if needed."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认选中了正确的文件，必要时用快照恢复。"
+          }
+        }
+      }
+    },
+    "在解锁页选择“打开已有保险库”手动指定文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose \"Open existing vault\" on the unlock screen to pick the file manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在解锁页选择“打开已有保险库”手动指定文件。"
+          }
+        }
+      }
+    },
+    "重试一次；仍失败时改用主密码解锁。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry once; if it still fails, unlock with the master password."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重试一次；仍失败时改用主密码解锁。"
+          }
+        }
+      }
+    },
+    "改用主密码解锁。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock with the master password instead."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改用主密码解锁。"
+          }
+        }
+      }
+    },
+    "请在受支持的 iOS 设备上重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Retry on a supported iOS device."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请在受支持的 iOS 设备上重试。"
+          }
+        }
+      }
+    },
+    "完全退出 App 后重新打开，再重试一次。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Quit the app completely, reopen it, and retry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完全退出 App 后重新打开，再重试一次。"
+          }
+        }
+      }
+    },
+    "清理一些存储空间后再恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Free up some storage, then restore again."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清理一些存储空间后再恢复。"
+          }
+        }
+      }
+    },
+    "没有可用快照时无法通过快照恢复，请改用主密码重试。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot rescue needs an available snapshot; retry with the master password instead."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可用快照时无法通过快照恢复，请改用主密码重试。"
+          }
+        }
+      }
+    },
+    "尝试恢复更早的一份快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Try restoring an older snapshot."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尝试恢复更早的一份快照。"
+          }
+        }
+      }
+    },
+    "重新解锁一次保险库以刷新快照密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault once to refresh the snapshot key."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新解锁一次保险库以刷新快照密钥。"
+          }
+        }
+      }
+    },
+    "原保险库文件没有被删除或覆盖，可以重试或选择更早的快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The original vault file wasn't deleted or overwritten; retry or pick an older snapshot."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "原保险库文件没有被删除或覆盖，可以重试或选择更早的快照。"
+          }
+        }
+      }
+    },
+    "复制诊断信息后重试，或重启 App。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy the diagnostics, then retry or restart the app."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制诊断信息后重试，或重启 App。"
+          }
+        }
+      }
+    },
+    "未校验": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not checked"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未校验"
+          }
+        }
+      }
+    },
+    "通过": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通过"
+          }
+        }
+      }
+    },
+    "失败": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败"
+          }
+        }
+      }
+    },
+    "Monica 保险库恢复诊断": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica vault recovery diagnostics"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 保险库恢复诊断"
+          }
+        }
+      }
+    },
+    "生成时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generated"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成时间"
+          }
+        }
+      }
+    },
+    "系统版本": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System version"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统版本"
+          }
+        }
+      }
+    },
+    "失败码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failure code"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败码"
+          }
+        }
+      }
+    },
+    "失败标题": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failure"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败标题"
+          }
+        }
+      }
+    },
+    "失败阶段": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Stage"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "失败阶段"
+          }
+        }
+      }
+    },
+    "技术引用": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Technical reference"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "技术引用"
+          }
+        }
+      }
+    },
+    "名称": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Name"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "名称"
+          }
+        }
+      }
+    },
+    "时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "时间"
+          }
+        }
+      }
+    },
+    "快照数量": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot count"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照数量"
+          }
+        }
+      }
+    },
+    "快照状态": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot status"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照状态"
+          }
+        }
+      }
+    },
+    "最近快照时间": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot time"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照时间"
+          }
+        }
+      }
+    },
+    "最近快照原因": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot reason"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照原因"
+          }
+        }
+      }
+    },
+    "最近快照条目数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot entries"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照条目数"
+          }
+        }
+      }
+    },
+    "最近快照项目数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot projects"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照项目数"
+          }
+        }
+      }
+    },
+    "最近快照字节数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot bytes"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照字节数"
+          }
+        }
+      }
+    },
+    "最近快照完整性": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latest snapshot integrity"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近快照完整性"
+          }
+        }
+      }
+    },
+    "快照目录": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot directory"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照目录"
+          }
+        }
+      }
+    },
+    "本诊断只包含保险库文件与快照的元数据，不包含条目内容、标题、主密码或加密密钥。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This report contains only vault-file and snapshot metadata; it never includes entry content, titles, the master password, or encryption keys."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本诊断只包含保险库文件与快照的元数据，不包含条目内容、标题、主密码或加密密钥。"
+          }
+        }
+      }
+    },
+    "找不到要重试的保险库文件。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No vault file to retry."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "找不到要重试的保险库文件。"
+          }
+        }
+      }
+    },
+    "请先输入主密码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the master password first."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先输入主密码。"
+          }
+        }
+      }
+    },
+    "正在打开保险库…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opening the vault…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在打开保险库…"
+          }
+        }
+      }
+    },
+    "保险库已打开。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault is open."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库已打开。"
+          }
+        }
+      }
+    },
+    "仍然无法打开保险库，请查看下方的失败码。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault still won't open; check the failure code below."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍然无法打开保险库，请查看下方的失败码。"
+          }
+        }
+      }
+    },
+    "正在请求设备钥匙串…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Requesting the device keychain…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在请求设备钥匙串…"
+          }
+        }
+      }
+    },
+    "没有可用快照。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No snapshots available."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有可用快照。"
+          }
+        }
+      }
+    },
+    "这份快照属于其他保险库，已停止恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This snapshot belongs to another vault; restore stopped."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这份快照属于其他保险库，已停止恢复。"
+          }
+        }
+      }
+    },
+    "请先输入主密码再恢复。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter the master password before restoring."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先输入主密码再恢复。"
+          }
+        }
+      }
+    },
+    "正在校验主密码与快照…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Verifying the master password and snapshot…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在校验主密码与快照…"
+          }
+        }
+      }
+    },
+    "正在从快照恢复…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restoring from the snapshot…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在从快照恢复…"
+          }
+        }
+      }
+    },
+    "快照已恢复，正在打开保险库…": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Snapshot restored; opening the vault…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已恢复，正在打开保险库…"
+          }
+        }
+      }
+    },
+    "已从快照恢复并打开保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored from the snapshot and opened the vault."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已从快照恢复并打开保险库。"
+          }
+        }
+      }
+    },
+    "已从快照恢复并打开保险库，恢复前的回滚点已保留。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restored from the snapshot and opened the vault; the pre-restore rollback point was kept."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已从快照恢复并打开保险库，恢复前的回滚点已保留。"
+          }
+        }
+      }
+    },
+    "快照已恢复，但保险库仍无法打开。恢复前的原文件已保存为回滚点。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The snapshot was restored, but the vault still won't open. The original file was saved as a rollback point."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快照已恢复，但保险库仍无法打开。恢复前的原文件已保存为回滚点。"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
