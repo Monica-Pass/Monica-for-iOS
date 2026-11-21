@@ -8786,6 +8786,209 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
+    func testHotpEntryGeneratesCounterBasedCodeIndependentOfTimestamp() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        try unlockNewVault(model)
+
+        model.totpTitle = "Acme HOTP"
+        model.totpSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        model.totpIssuer = "Acme"
+        model.totpAccountName = "alice"
+        model.totpOtpType = "HOTP"
+        model.totpCounter = 0
+        model.totpDigits = 6
+        model.totpAlgorithm = "SHA1"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let entry = try XCTUnwrap(model.totpEntries.first)
+        XCTAssertEqual(entry.otpType, "HOTP")
+        XCTAssertEqual(engine.createdTotpEntries.first?.draft.counter, 0)
+        XCTAssertEqual(
+            try model.totpCode(for: entry, at: Date(timeIntervalSince1970: 0)),
+            "755224"
+        )
+        XCTAssertEqual(
+            try model.totpCode(for: entry, at: Date(timeIntervalSince1970: 3_600)),
+            "755224"
+        )
+        XCTAssertEqual(
+            model.totpTimeRemaining(for: entry, at: Date(timeIntervalSince1970: 12)),
+            0
+        )
+        XCTAssertEqual(model.totpAdvancedSummary(for: entry), "HOTP · SHA1 · 6 位 · #0")
+    }
+
+    func testConsumeHotpCodePersistsNextCounterBeforeReturningCode() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        try unlockNewVault(model)
+
+        model.totpTitle = "Acme HOTP"
+        model.totpSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        model.totpIssuer = "Acme"
+        model.totpAccountName = "alice"
+        model.totpOtpType = "HOTP"
+        model.totpCounter = 0
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let entry = try XCTUnwrap(model.totpEntries.first)
+        XCTAssertEqual(try model.consumeHotpCode(for: entry), "287082")
+        XCTAssertEqual(engine.updatedTotpEntries.count, 1)
+        XCTAssertEqual(engine.updatedTotpEntries.first?.draft.otpType, "HOTP")
+        XCTAssertEqual(engine.updatedTotpEntries.first?.draft.counter, 1)
+
+        let updated = try XCTUnwrap(model.totpEntries.first)
+        XCTAssertEqual(updated.counter, 1)
+        XCTAssertEqual(try model.totpCode(for: updated), "287082")
+        XCTAssertEqual(model.entryOperationState, .succeeded("Acme HOTP"))
+    }
+
+    func testConsumeHotpCodeKeepsCounterWhenPersistenceFails() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        try unlockNewVault(model)
+
+        model.totpTitle = "Acme HOTP"
+        model.totpSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        model.totpOtpType = "HOTP"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let entry = try XCTUnwrap(model.totpEntries.first)
+        engine.updateTotpError = LocalVaultRepositoryError.vaultUnavailable
+
+        XCTAssertThrowsError(try model.consumeHotpCode(for: entry))
+        XCTAssertEqual(model.totpEntries.first?.counter, 0)
+        XCTAssertEqual(try model.totpCode(for: entry), "755224")
+        XCTAssertTrue(engine.updatedTotpEntries.isEmpty)
+        guard case .failed = model.entryOperationState else {
+            return XCTFail("写库失败时绝不能返回新验证码")
+        }
+    }
+
+    func testUpdatingTotpEntryKeepsAdvancedConfigurationAndResetsCounterOnlyForTotp() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        try unlockNewVault(model)
+
+        model.totpTitle = "Acme HOTP"
+        model.totpSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        model.totpIssuer = "Acme"
+        model.totpAccountName = "alice"
+        model.totpOtpType = "HOTP"
+        model.totpCounter = 5
+        model.totpPeriod = 60
+        model.totpDigits = 8
+        model.totpAlgorithm = "SHA512"
+        model.totpIconName = "key.fill"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let entry = try XCTUnwrap(model.totpEntries.first)
+        model.selectTotpEntryForEditing(entry)
+        XCTAssertEqual(model.editingTotpOtpType, "HOTP")
+        XCTAssertEqual(model.editingTotpCounter, 5)
+        XCTAssertEqual(model.editingTotpIconName, "key.fill")
+
+        model.editingTotpTitle = "Acme HOTP v2"
+        try model.updateSelectedTotpEntry()
+
+        XCTAssertEqual(engine.updatedTotpEntries.last?.draft.otpType, "HOTP")
+        XCTAssertEqual(engine.updatedTotpEntries.last?.draft.counter, 5)
+        XCTAssertEqual(engine.updatedTotpEntries.last?.draft.iconName, "key.fill")
+        XCTAssertEqual(engine.updatedTotpEntries.last?.draft.period, 60)
+        XCTAssertEqual(engine.updatedTotpEntries.last?.draft.digits, 8)
+        XCTAssertEqual(engine.updatedTotpEntries.last?.draft.algorithm, "SHA512")
+        XCTAssertEqual(model.totpEntries.first?.title, "Acme HOTP v2")
+        XCTAssertEqual(model.totpEntries.first?.iconName, "key.fill")
+
+        model.editingTotpOtpType = "TOTP"
+        try model.updateSelectedTotpEntry()
+        XCTAssertEqual(model.totpEntries.first?.otpType, "TOTP")
+        XCTAssertEqual(model.totpEntries.first?.counter, 0)
+        XCTAssertEqual(model.totpEntries.first?.iconName, "key.fill")
+    }
+
+    func testOtpAuthURIExportsAdvancedHotpParametersAndRoundTrips() throws {
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(vaultRepository: LocalVaultRepository(engine: engine))
+        try unlockNewVault(model)
+
+        model.totpTitle = "Acme HOTP"
+        model.totpSecret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"
+        model.totpIssuer = "Acme 服务"
+        model.totpAccountName = "alice:dev"
+        model.totpOtpType = "HOTP"
+        model.totpCounter = 7
+        model.totpPeriod = 60
+        model.totpDigits = 8
+        model.totpAlgorithm = "SHA512"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let entry = try XCTUnwrap(model.totpEntries.first)
+        let uri = try model.otpAuthURI(for: entry)
+
+        XCTAssertTrue(uri.hasPrefix("otpauth://hotp/"))
+        XCTAssertTrue(uri.contains("counter=7"))
+        XCTAssertTrue(uri.contains("algorithm=SHA512"))
+        XCTAssertTrue(uri.contains("digits=8"))
+        XCTAssertTrue(uri.contains("period=60"))
+
+        let draft = try TotpURIParser.parse(uri)
+        XCTAssertEqual(draft.otpType, .hotp)
+        XCTAssertEqual(draft.counter, 7)
+        XCTAssertEqual(draft.period, 60)
+        XCTAssertEqual(draft.digits, 8)
+        XCTAssertEqual(draft.algorithm, .sha512)
+        XCTAssertEqual(draft.issuer, "Acme 服务")
+        XCTAssertEqual(draft.accountName, "alice:dev")
+    }
+
+    func testCopyOtpCodeRequiresUnlockedVault() {
+        let model = AppSessionModel()
+        let entry = LocalTotpEntry(
+            id: "totp-1",
+            projectID: "project-1",
+            title: "GitHub",
+            secret: "JBSWY3DPEHPK3PXP",
+            issuer: "GitHub",
+            accountName: "alice",
+            period: 30,
+            digits: 6,
+            algorithm: "SHA1",
+            otpType: "TOTP",
+            counter: 0
+        )
+
+        XCTAssertEqual(model.copyOtpCode(for: entry), .nothingToCopy)
+    }
+
+    func testCopyOtpCodeWritesRealCodeWhileScreenStaysMasked() throws {
+        let pasteboard = TotpRecordingPasteboard()
+        let engine = RecordingVaultEngine()
+        let model = AppSessionModel(
+            vaultRepository: LocalVaultRepository(engine: engine),
+            sensitivePasteboard: MonicaSensitivePasteboard(pasteboard: pasteboard)
+        )
+        try unlockNewVault(model)
+
+        model.totpTitle = "GitHub TOTP"
+        model.totpSecret = "JBSWY3DPEHPK3PXP"
+        try model.createTotpEntry(projectTitle: "Personal")
+
+        let entry = try XCTUnwrap(model.totpEntries.first)
+        let feedback = model.copyOtpCode(for: entry, at: Date(timeIntervalSince1970: 0))
+
+        XCTAssertEqual(feedback, .copiedWithAutoClear(seconds: 30))
+        XCTAssertEqual(pasteboard.content, "282760")
+        XCTAssertEqual(pasteboard.writeCount, 1)
+        XCTAssertEqual(
+            model.maskedSensitivePreview(
+                try model.totpCode(for: entry, at: Date(timeIntervalSince1970: 0))
+            ),
+            AppSessionModel.sensitivePreviewMaskPlaceholder
+        )
+    }
+
     func testBackgroundingLocksUnlockedVaultAndClearsSensitiveSessionState() throws {
         let engine = RecordingVaultEngine()
         let model = AppSessionModel(
@@ -12594,6 +12797,7 @@ private final class RecordingVaultEngine: LocalVaultEngine {
     var createVaultError: Error?
     var openVaultError: Error?
     var verifyMasterPasswordError: Error?
+    var updateTotpError: Error?
     var openVaultID = "opened-vault"
     var verifyMasterPasswordVaultID = "created-vault"
     var securityKeyOpenVaultID = "security-key-opened-vault"
@@ -13384,7 +13588,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             digits: draft.digits,
             algorithm: draft.algorithm,
             otpType: draft.otpType,
-            counter: draft.counter
+            counter: draft.counter,
+            iconName: draft.iconName
         )
         createdTotpEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, draft: draft)
@@ -13406,6 +13611,9 @@ private final class RecordingVaultEngine: LocalVaultEngine {
         entryID: String,
         draft: LocalTotpEntryDraft
     ) throws -> LocalTotpEntry {
+        if let updateTotpError {
+            throw updateTotpError
+        }
         let currentFavorite = totpEntries[projectID, default: []]
             .first(where: { $0.id == entryID })?
             .favorite ?? false
@@ -13421,7 +13629,8 @@ private final class RecordingVaultEngine: LocalVaultEngine {
             algorithm: draft.algorithm,
             otpType: draft.otpType,
             counter: draft.counter,
-            favorite: currentFavorite
+            favorite: currentFavorite,
+            iconName: draft.iconName
         )
         updatedTotpEntries.append(
             .init(vaultID: handle.vaultID, projectID: projectID, entryID: entryID, draft: draft)
@@ -15352,5 +15561,25 @@ private final class WidgetReloadCounter {
 
     func increment() {
         count += 1
+    }
+}
+
+@MainActor
+private final class TotpRecordingPasteboard: SensitivePasteboardWriting {
+    private(set) var changeCount = 0
+    private(set) var content: String?
+    private(set) var writeCount = 0
+
+    var string: String? { content }
+
+    func setString(_ value: String) {
+        content = value
+        changeCount += 1
+        writeCount += 1
+    }
+
+    func clear() {
+        content = nil
+        changeCount += 1
     }
 }

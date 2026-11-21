@@ -75,6 +75,7 @@ struct AndroidParityVaultHomeView: View {
     @State private var pendingCategoryTitle = ""
     @State private var now = Date()
     @State private var isGeneratorPresented = false
+    @State private var totpActionFeedback: String?
 
     private let vaultFileType = UTType(filenameExtension: "mdbx") ?? .data
     private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -328,10 +329,37 @@ struct AndroidParityVaultHomeView: View {
                         AndroidTotpListCard(
                             entry: entry,
                             code: session.maskedSensitivePreview(totpCode(for: entry)),
-                            remaining: session.totpTimeRemaining(for: entry, at: now)
+                            remaining: session.totpTimeRemaining(for: entry, at: now),
+                            iconSystemName: session.totpIconSystemName(for: entry)
                         )
                     }
                 }
+                .contextMenu {
+                    Button {
+                        totpActionFeedback = session.copyOtpCode(for: entry).message
+                    } label: {
+                        Label("复制验证码", systemImage: "doc.on.doc")
+                    }
+                    if session.otpType(for: entry) == .hotp {
+                        Button {
+                            do {
+                                _ = try session.consumeHotpCode(for: entry)
+                                totpActionFeedback = String(localized: "已使用当前验证码，并生成下一个")
+                            } catch {
+                                totpActionFeedback = error.localizedDescription
+                            }
+                        } label: {
+                            Label("已使用，生成下一个", systemImage: "arrow.clockwise")
+                        }
+                    }
+                }
+            }
+            if let totpActionFeedback {
+                Text(totpActionFeedback)
+                    .font(.caption2)
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 4)
             }
             if session.filteredTotpEntries.isEmpty {
                 emptyList(String(localized: "没有匹配的验证码"), icon: "shield.lefthalf.filled")
@@ -1425,34 +1453,45 @@ private struct AndroidTotpListCard: View {
     let entry: LocalTotpEntry
     let code: String
     let remaining: Int
+    let iconSystemName: String
+
+    private var isCounterBased: Bool {
+        OtpType(storageValue: entry.otpType) == .hotp
+    }
 
     var body: some View {
         AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.78), cornerRadius: 22) {
             HStack(alignment: .center, spacing: 18) {
-                AndroidParityIconTile(systemImage: "shield.lefthalf.filled", fill: AndroidParityPalette.primaryContainer)
+                AndroidParityIconTile(systemImage: iconSystemName, fill: AndroidParityPalette.primaryContainer)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(entry.title.isEmpty ? entry.issuer : entry.title)
                         .font(.subheadline.weight(.semibold))
                     Text([entry.issuer, entry.accountName].filter { !$0.isEmpty }.joined(separator: " / "))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.textSecondary)
-                    GeometryReader { proxy in
-                        Capsule()
-                            .fill(AndroidParityPalette.outline)
-                            .overlay(alignment: .leading) {
-                                Capsule()
-                                    .fill(AndroidParityPalette.primary)
-                                    .frame(width: max(0, proxy.size.width * CGFloat(remaining) / CGFloat(max(Int(entry.period), 1))))
-                            }
+                    if isCounterBased {
+                        Text(String(localized: "计数器 #\(entry.counter) · 确认使用后前进"))
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    } else {
+                        GeometryReader { proxy in
+                            Capsule()
+                                .fill(AndroidParityPalette.outline)
+                                .overlay(alignment: .leading) {
+                                    Capsule()
+                                        .fill(AndroidParityPalette.primary)
+                                        .frame(width: max(0, proxy.size.width * CGFloat(remaining) / CGFloat(max(Int(entry.period), 1))))
+                                }
+                        }
+                        .frame(height: 10)
                     }
-                    .frame(height: 10)
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 6) {
                     Text(code)
                         .font(AndroidParityTypography.prominentTitle(weight: .heavy))
                         .foregroundStyle(AndroidParityPalette.primary)
-                    Text("\(remaining)s")
+                    Text(isCounterBased ? String(localized: "按需生成") : "\(remaining)s")
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(AndroidParityPalette.primary)
                 }
@@ -2129,6 +2168,14 @@ struct AddEditVaultItemView: View {
             secureField(icon: "key.fill", title: String(localized: "密钥"), text: mode.isAdding ? $session.totpSecret : $session.editingTotpSecret)
             field(icon: "building.2.fill", title: String(localized: "签发方"), text: mode.isAdding ? $session.totpIssuer : $session.editingTotpIssuer)
             field(icon: "person.fill", title: String(localized: "账号"), text: mode.isAdding ? $session.totpAccountName : $session.editingTotpAccountName)
+            TotpAdvancedFieldsView(
+                otpType: mode.isAdding ? $session.totpOtpType : $session.editingTotpOtpType,
+                algorithm: mode.isAdding ? $session.totpAlgorithm : $session.editingTotpAlgorithm,
+                digits: mode.isAdding ? $session.totpDigits : $session.editingTotpDigits,
+                period: mode.isAdding ? $session.totpPeriod : $session.editingTotpPeriod,
+                counter: mode.isAdding ? $session.totpCounter : $session.editingTotpCounter,
+                iconName: mode.isAdding ? $session.totpIconName : $session.editingTotpIconName
+            )
             Button { isTotpScannerPresented = true } label: {
                 Label("扫描二维码", systemImage: "qrcode.viewfinder")
                     .frame(maxWidth: .infinity)
@@ -2459,6 +2506,14 @@ struct VaultItemDetailView: View {
                         .padding(.horizontal, 4)
                 }
             }
+
+            if route.kind == .totp {
+                TotpDetailActionsView(
+                    session: session,
+                    entryID: route.entryID,
+                    feedback: $copyFeedback
+                )
+            }
         }
         .onDisappear {
             session.setSensitivePreviewRevealed(false, entryID: route.entryID)
@@ -2485,7 +2540,21 @@ struct VaultItemDetailView: View {
             return [row("title", String(localized: "标题"), entry.title), row("body", String(localized: "正文"), sensitive(entry.body, .noteBody)), row("favorite", String(localized: "收藏"), entry.favorite ? String(localized: "是") : String(localized: "否"))]
         case .totp:
             guard let entry = session.totpEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
-            return [row("title", String(localized: "标题"), entry.title), row("issuer", String(localized: "签发方"), entry.issuer), row("account", String(localized: "账号"), entry.accountName), row("secret", String(localized: "密钥"), sensitive(entry.secret, .totp)), row("period", String(localized: "周期"), "\(entry.period)s")]
+            var totpRows = [
+                row("title", String(localized: "标题"), entry.title),
+                row("issuer", String(localized: "签发方"), entry.issuer),
+                row("account", String(localized: "账号"), entry.accountName),
+                row("secret", String(localized: "密钥"), sensitive(entry.secret, .totp)),
+                row("type", String(localized: "类型"), session.otpType(for: entry) == .hotp ? String(localized: "计数器验证码（HOTP）") : String(localized: "定时验证码（TOTP）")),
+                row("algorithm", String(localized: "算法"), session.totpAlgorithm(from: entry.algorithm).rawValue),
+                row("digits", String(localized: "位数"), String(entry.digits))
+            ]
+            if session.otpType(for: entry) == .hotp {
+                totpRows.append(row("counter", String(localized: "计数器"), String(entry.counter)))
+            } else {
+                totpRows.append(row("period", String(localized: "周期"), "\(entry.period)s"))
+            }
+            return totpRows
         case .card:
             guard let entry = session.cardEntries.first(where: { $0.id == route.entryID }) else { return missingRows }
             return [row("title", String(localized: "标题"), entry.title), row("holder", String(localized: "持卡人"), entry.cardholderName), row("number", String(localized: "卡号"), sensitive(entry.number, .cardNumber)), row("expiry", String(localized: "有效期"), "\(entry.expiryMonth)/\(entry.expiryYear)"), row("cvv", "CVV", sensitive(entry.cvv, .cvv)), row("issuer", String(localized: "银行"), entry.issuer)]
