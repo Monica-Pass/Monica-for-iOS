@@ -3539,7 +3539,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["Apple ID"])
 
         model.loginSearchQuery = "  "
-        XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["GitHub", "Apple ID"])
+        XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["Apple ID", "GitHub"])
 
         model.loginSearchQuery = "apple"
         model.lockLocalVault()
@@ -3961,7 +3961,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(rows.map(\.title), ["全部", "Personal", "收藏", "归档", "回收站"])
         XCTAssertEqual(rows.map(\.value), ["2 项", "2 项", "2 项", "0 项", "2 项"])
         XCTAssertEqual(rows.map(\.systemImage), ["tray.full", "folder", "star", "archivebox", "trash"])
-        XCTAssertEqual(rows.map(\.isSelected), [true, false, false, false])
+        XCTAssertEqual(rows.map(\.isSelected), [true, false, false, false, false])
 
         model.loginSearchQuery = "github"
         model.noteSearchQuery = "recovery"
