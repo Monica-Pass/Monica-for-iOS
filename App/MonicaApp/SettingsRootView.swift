@@ -581,32 +581,9 @@ struct SettingsRootView: View {
                     .disabled(session.vaultState != .unlocked || session.autoFillIndexState.isRunning)
                 }
 
-                AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
-                    NavigationLink {
-                        AppAutoFillCenterView(session: session)
-                    } label: {
-                        HStack(alignment: .top, spacing: 12) {
-                            Image(systemName: "lock.shield")
-                                .font(.headline.weight(.bold))
-                                .foregroundStyle(AndroidParityPalette.primary)
-                                .frame(width: 28, height: 28)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("默认密码管理器与自动填充诊断")
-                                    .font(.subheadline.weight(.heavy))
-                                    .foregroundStyle(AndroidParityPalette.textPrimary)
-                                Text("iOS 设置路径、发布状态与本地守护开关")
-                                    .font(.caption.weight(.semibold))
-                                    .foregroundStyle(AndroidParityPalette.textSecondary)
-                            }
-                            Spacer(minLength: 8)
-                            Image(systemName: "chevron.right")
-                                .font(.caption.weight(.bold))
-                                .foregroundStyle(AndroidParityPalette.textSecondary)
-                        }
-                    }
-                    .buttonStyle(.plain)
-                }
             }
+
+            AppAutoFillEnablementSection(session: session)
 
             AndroidParitySection(title: String(localized: "自动填充域名规则")) {
                 AutoFillDomainRulesSettingsView(controller: session.autoFillDomainRules)

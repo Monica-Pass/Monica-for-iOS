@@ -14,6 +14,7 @@ struct GeneratorRootView: View {
     @State private var generatorMode: GeneratorMode = .password
     @State private var usernameOptions = GeneratorUsernameOptions()
     @State private var historyController: GeneratorHistoryController?
+    @State private var isSaveLoginPresented = false
 
     var body: some View {
         AndroidParityScreen {
@@ -33,6 +34,7 @@ struct GeneratorRootView: View {
                     copy(value)
                 }
             }
+            autoFillGuidanceSection
             GeneratorDependencyStatusSection()
         }
         .navigationTitle("")
@@ -71,6 +73,11 @@ struct GeneratorRootView: View {
                     // 锁库：历史内容与密钥立刻从内存消失，界面不再展示旧值。
                     await historyController?.lock()
                 }
+            }
+        }
+        .sheet(isPresented: $isSaveLoginPresented) {
+            GeneratorSaveLoginSheet(session: session, password: generatedPassword) { entry in
+                generatorState = String(localized: "已保存到登录项：\(entry.title)")
             }
         }
     }
@@ -153,12 +160,39 @@ struct GeneratorRootView: View {
             }
             .foregroundStyle(AndroidParityPalette.primary)
 
-            Text(generatedPassword.isEmpty ? String(localized: "点击刷新生成密码") : generatedPassword)
-                .font(AndroidParityTypography.monospacedValue(weight: .medium))
-                .foregroundStyle(AndroidParityPalette.textPrimary)
-                .textSelection(.enabled)
-                .lineLimit(5)
-                .fixedSize(horizontal: false, vertical: true)
+            // 生成结果可直接编辑：改完仍按当前内容评分、复制或保存为登录项（#39）。
+            TextField(
+                String(localized: "点击刷新生成密码"),
+                text: $generatedPassword,
+                axis: .vertical
+            )
+            .font(AndroidParityTypography.monospacedValue(weight: .medium))
+            .foregroundStyle(AndroidParityPalette.textPrimary)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+            .lineLimit(2...5)
+            .textFieldStyle(.plain)
+            .accessibilityLabel("生成的\(generatorMode.resultTitle)")
+
+            if generatorMode != .username {
+                Button {
+                    isSaveLoginPresented = true
+                } label: {
+                    Label("保存为登录项", systemImage: "tray.and.arrow.down")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(AndroidParityButtonStyle(tone: .filled))
+                .disabled(generatedPassword.isEmpty || session.vaultState != .unlocked)
+                Text("可先直接修改上方结果，再保存到保险库。")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                Text("用户名结果不需要保存为登录项；可复制后用于注册或登录。")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
 
             HStack(alignment: .lastTextBaseline) {
                 VStack(alignment: .leading, spacing: 10) {
@@ -246,6 +280,33 @@ struct GeneratorRootView: View {
             .padding(.trailing, 2)
         }
         .padding(.top, 8)
+    }
+
+    private var autoFillGuidanceSection: some View {
+        AndroidParitySection(title: String(localized: "自动填充")) {
+            AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
+                Text("保存到保险库后，iOS 会在它识别的用户名 / 密码输入框里提供 Monica 建议。系统未识别的输入框不会显示建议，QuickType 何时出现也由 iOS 决定。")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.textPrimary)
+                    .fixedSize(horizontal: false, vertical: true)
+                NavigationLink {
+                    AppAutoFillDefaultManagerGuideView(title: String(localized: "系统自动填充说明"))
+                } label: {
+                    HStack(spacing: 12) {
+                        Label("系统自动填充说明", systemImage: "questionmark.circle")
+                            .font(.subheadline.weight(.heavy))
+                            .foregroundStyle(AndroidParityPalette.primary)
+                        Spacer(minLength: 8)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundStyle(AndroidParityPalette.textSecondary)
+                    }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 
     private var usernameUniqueness: UsernameUniquenessReport {

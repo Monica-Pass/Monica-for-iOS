@@ -24342,6 +24342,918 @@
           }
         }
       }
+    },
+    "App 内生成密码": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generate passwords in the app"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "App 内生成密码"
+          }
+        }
+      }
+    },
+    "Monica 不能在其它 App 的输入框旁注入内联建议面板，也不能替换系统键盘。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica cannot inject an inline suggestion panel beside fields in other apps, nor replace the system keyboard."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 不能在其它 App 的输入框旁注入内联建议面板，也不能替换系统键盘。"
+          }
+        }
+      }
+    },
+    "Monica 可以在 App 内生成密码、短语、PIN 与 API Token，并一键复制。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica can generate passwords, passphrases, PINs, and API tokens in the app and copy them with one tap."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 可以在 App 内生成密码、短语、PIN 与 API Token，并一键复制。"
+          }
+        }
+      }
+    },
+    "Monica 可以用系统公开的 openSettingsURLString 打开本 App 的设置页。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica can open this app's Settings page with the public openSettingsURLString."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 可以用系统公开的 openSettingsURLString 打开本 App 的设置页。"
+          }
+        }
+      }
+    },
+    "Monica 通过系统「密码自动填充」扩展提供候选；只有系统识别出的用户名 / 密码输入框会调用它。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica offers candidates through the system Password AutoFill extension; only fields iOS recognizes as username/password call it."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 通过系统「密码自动填充」扩展提供候选；只有系统识别出的用户名 / 密码输入框会调用它。"
+          }
+        }
+      }
+    },
+    "iOS 不允许第三方自动填充扩展监听其它 App 或网页里的输入框，Monica 不能扫描任意字段。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS does not allow third-party AutoFill extensions to observe fields in other apps or web pages, so Monica cannot scan arbitrary fields."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不允许第三方自动填充扩展监听其它 App 或网页里的输入框，Monica 不能扫描任意字段。"
+          }
+        }
+      }
+    },
+    "iOS 不提供读取「系统默认密码管理器是谁」的公开接口。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS provides no public API that reveals which app is the default password manager."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不提供读取「系统默认密码管理器是谁」的公开接口。"
+          }
+        }
+      }
+    },
+    "iOS 没有公开的「密码选项」深链，Monica 只能打开本 App 设置页，剩余路径需要手动进入。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS offers no public deep link to Password Options; Monica can only open its own Settings page and you must continue manually."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 没有公开的「密码选项」深链，Monica 只能打开本 App 设置页，剩余路径需要手动进入。"
+          }
+        }
+      }
+    },
+    "下表说明 Monica 在 iOS 公开 API 边界内能做什么。系统 QuickType 结果由 iOS 决定，无法强制出现在所有输入框。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The table below shows what Monica can do within the iOS public API boundary. Whether system QuickType appears is decided by iOS and cannot be forced into every field."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下表说明 Monica 在 iOS 公开 API 边界内能做什么。系统 QuickType 结果由 iOS 决定，无法强制出现在所有输入框。"
+          }
+        }
+      }
+    },
+    "保存生成结果为登录项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save generated results as login items"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存生成结果为登录项"
+          }
+        }
+      }
+    },
+    "公开 API 不支持": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not supported by public API"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公开 API 不支持"
+          }
+        }
+      }
+    },
+    "公开 API 支持": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Supported by public API"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公开 API 支持"
+          }
+        }
+      }
+    },
+    "内联建议面板": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inline suggestion panel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "内联建议面板"
+          }
+        }
+      }
+    },
+    "打开 Monica 系统设置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Monica Settings"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Monica 系统设置"
+          }
+        }
+      }
+    },
+    "生成结果可以编辑并保存进保险库，之后从登录项复制或交给系统自动填充。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Generated results can be edited and saved to the vault, then copied from the login item or handed to system AutoFill."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "生成结果可以编辑并保存进保险库，之后从登录项复制或交给系统自动填充。"
+          }
+        }
+      }
+    },
+    "由 iOS 决定": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Decided by iOS"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "由 iOS 决定"
+          }
+        }
+      }
+    },
+    "监听任意输入框": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Observe arbitrary fields"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "监听任意输入框"
+          }
+        }
+      }
+    },
+    "直达系统密码选项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open system Password Options directly"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "直达系统密码选项"
+          }
+        }
+      }
+    },
+    "系统 QuickType 建议": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System QuickType suggestions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统 QuickType 建议"
+          }
+        }
+      }
+    },
+    "系统强密码建议": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System strong password suggestions"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统强密码建议"
+          }
+        }
+      }
+    },
+    "系统键盘的强密码建议是 iOS 的界面，第三方扩展不能把自己的建议注入其中；可以在 Monica 内生成后复制或保存。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Strong password suggestions on the system keyboard are an iOS interface; third-party extensions cannot inject their own suggestions, so generate in Monica and copy or save instead."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统键盘的强密码建议是 iOS 的界面，第三方扩展不能把自己的建议注入其中；可以在 Monica 内生成后复制或保存。"
+          }
+        }
+      }
+    },
+    "能力矩阵": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Capability matrix"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能力矩阵"
+          }
+        }
+      }
+    },
+    "读取系统默认密码管理器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Read the system default password manager"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取系统默认密码管理器"
+          }
+        }
+      }
+    },
+    "选择系统默认密码管理器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose the system default password manager"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择系统默认密码管理器"
+          }
+        }
+      }
+    },
+    "键盘上方的建议是否出现、显示哪一条由 iOS 决定；Monica 无法强制它在所有输入框出现。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Whether suggestions appear above the keyboard and which one is shown are decided by iOS; Monica cannot force them into every field."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘上方的建议是否出现、显示哪一条由 iOS 决定；Monica 无法强制它在所有输入框出现。"
+          }
+        }
+      }
+    },
+    "默认来源只能由你在系统设置里选择，Monica 不能替你切换。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can only choose the default source in system Settings; Monica cannot switch it for you."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认来源只能由你在系统设置里选择，Monica 不能替你切换。"
+          }
+        }
+      }
+    },
+    "例如：GitHub": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "e.g. GitHub"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "例如：GitHub"
+          }
+        }
+      }
+    },
+    "保存为登录项": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save as login item"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存为登录项"
+          }
+        }
+      }
+    },
+    "保存位置": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Save location"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存位置"
+          }
+        }
+      }
+    },
+    "保存后可在保险库的登录项里复制密码，或由系统自动填充在它识别的登录框里使用。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After saving, you can copy the password from the login item in the vault, or system AutoFill can use it in recognized login forms."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存后可在保险库的登录项里复制密码，或由系统自动填充在它识别的登录框里使用。"
+          }
+        }
+      }
+    },
+    "保险库已锁定，请先返回解锁后再保存。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault is locked. Unlock it before saving."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库已锁定，请先返回解锁后再保存。"
+          }
+        }
+      }
+    },
+    "可选": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选"
+          }
+        }
+      }
+    },
+    "可选，例如：https://github.com": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Optional, e.g. https://github.com"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可选，例如：https://github.com"
+          }
+        }
+      }
+    },
+    "密码只会写入本机加密保险库，不经过网络；自动填充扩展是否可用仍由系统设置决定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The password is written only to the local encrypted vault and never sent over the network; whether the AutoFill extension is available is still decided by system Settings."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码只会写入本机加密保险库，不经过网络；自动填充扩展是否可用仍由系统设置决定。"
+          }
+        }
+      }
+    },
+    "未打开": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Off"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未打开"
+          }
+        }
+      }
+    },
+    "登录项信息": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Login item details"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录项信息"
+          }
+        }
+      }
+    },
+    "项目": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Project"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目"
+          }
+        }
+      }
+    },
+    "iOS 只允许你在系统设置里选择自动填充来源，Monica 不能替你打开这个开关。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS lets you choose the AutoFill source only in system Settings; Monica cannot turn that switch on for you."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 只允许你在系统设置里选择自动填充来源，Monica 不能替你打开这个开关。"
+          }
+        }
+      }
+    },
+    "发布状态、系统侧身份条目与本地守护开关": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish status, system-side identities, and local guard toggles"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布状态、系统侧身份条目与本地守护开关"
+          }
+        }
+      }
+    },
+    "启用 Monica 作为密码管理器": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enable Monica as a password manager"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "启用 Monica 作为密码管理器"
+          }
+        }
+      }
+    },
+    "回到 Monica 解锁保险库，身份条目会发布给系统。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to Monica and unlock the vault; identity items are published to the system."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回到 Monica 解锁保险库，身份条目会发布给系统。"
+          }
+        }
+      }
+    },
+    "在系统识别的用户名 / 密码输入框里选择 Monica 建议；未识别的输入框不会出现建议。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose Monica suggestions in fields iOS recognizes as username/password; unrecognized fields show no suggestions."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在系统识别的用户名 / 密码输入框里选择 Monica 建议；未识别的输入框不会出现建议。"
+          }
+        }
+      }
+    },
+    "已安装扩展不代表已在系统里启用；系统未识别的输入框不会显示 Monica 建议，QuickType 是否出现由 iOS 决定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "An installed extension is not necessarily enabled in the system; unrecognized fields never show Monica suggestions, and iOS decides whether QuickType appears."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已安装扩展不代表已在系统里启用；系统未识别的输入框不会显示 Monica 建议，QuickType 是否出现由 iOS 决定。"
+          }
+        }
+      }
+    },
+    "打开系统「设置」，进入密码相关入口（iOS 18 起密码独立成 App，也可能在「设置 › App › 密码」）。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open system Settings and go to the password entry (starting with iOS 18, Passwords is a separate app and may also appear under Settings › Apps › Passwords)."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统「设置」，进入密码相关入口（iOS 18 起密码独立成 App，也可能在「设置 › App › 密码」）。"
+          }
+        }
+      }
+    },
+    "无法读取": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unavailable"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法读取"
+          }
+        }
+      }
+    },
+    "系统未提供计数": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Count not provided by system"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统未提供计数"
+          }
+        }
+      }
+    },
+    "系统自动填充说明": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System AutoFill guide"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统自动填充说明"
+          }
+        }
+      }
+    },
+    "设置路径、测试步骤、能力矩阵与 iOS 限制": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings path, test steps, capability matrix, and iOS limitations"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置路径、测试步骤、能力矩阵与 iOS 限制"
+          }
+        }
+      }
+    },
+    "读取系统状态失败；模拟器或未配置 App Group 时通常读不到凭证身份库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Failed to read system status; the credential identity store is usually unavailable on the simulator or without an App Group."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "读取系统状态失败；模拟器或未配置 App Group 时通常读不到凭证身份库。"
+          }
+        }
+      }
+    },
+    "这里只会打开本 App 的设置页；系统的「密码选项 › 自动填充密码」需要你自己进入。Monica 不能读取或设置系统默认密码管理器是谁。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "This only opens this app's Settings page; you must enter Password Options › AutoFill Passwords yourself. Monica cannot read or set which app is the system default password manager."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里只会打开本 App 的设置页；系统的「密码选项 › 自动填充密码」需要你自己进入。Monica 不能读取或设置系统默认密码管理器是谁。"
+          }
+        }
+      }
+    },
+    "密码不能为空。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Password cannot be empty."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码不能为空。"
+          }
+        }
+      }
+    },
+    "请先解锁保险库再保存登录项。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault before saving a login item."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请先解锁保险库再保存登录项。"
+          }
+        }
+      }
+    },
+    "请填写登录项标题。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enter a title for the login item."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请填写登录项标题。"
+          }
+        }
+      }
+    },
+    "保存到保险库后，iOS 会在它识别的用户名 / 密码输入框里提供 Monica 建议。系统未识别的输入框不会显示建议，QuickType 何时出现也由 iOS 决定。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After saving to the vault, iOS offers Monica suggestions in fields it recognizes as username/password. Unrecognized fields show no suggestions, and iOS decides when QuickType appears."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存到保险库后，iOS 会在它识别的用户名 / 密码输入框里提供 Monica 建议。系统未识别的输入框不会显示建议，QuickType 何时出现也由 iOS 决定。"
+          }
+        }
+      }
+    },
+    "可先直接修改上方结果，再保存到保险库。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You can edit the result above before saving it to the vault."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "可先直接修改上方结果，再保存到保险库。"
+          }
+        }
+      }
+    },
+    "用户名结果不需要保存为登录项；可复制后用于注册或登录。": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Usernames do not need to be saved as login items; copy the result for sign-up or sign-in."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "用户名结果不需要保存为登录项；可复制后用于注册或登录。"
+          }
+        }
+      }
+    },
+    "自动填充说明": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AutoFill guide"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充说明"
+          }
+        }
+      }
     }
   },
   "version": "1.0"
