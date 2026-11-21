@@ -52,6 +52,10 @@
 		A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = A100000000000000000000FB /* AppCloudVaultSync.swift */; };
 		B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B760000000000000000000A2 /* AppCloudKitSync.swift */; };
 		AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD0000000000000000000011 /* AppAutoFillDomainRules.swift */; };
+		B42010000000000000000000 /* AppAutoFillGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42110000000000000000000 /* AppAutoFillGuard.swift */; };
+		B42020000000000000000000 /* AppAutoFillDiagnostics.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42120000000000000000000 /* AppAutoFillDiagnostics.swift */; };
+		B42030000000000000000000 /* AppAutoFillCenterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42130000000000000000000 /* AppAutoFillCenterView.swift */; };
+		B42040000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */; };
 		AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */; };
 		A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B002 /* GeneratorAdvancedSections.swift */; };
 		A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9240000000000000000B004 /* GeneratorHistoryController.swift */; };
@@ -217,6 +221,10 @@
 		A100000000000000000000FB /* AppCloudVaultSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudVaultSync.swift; sourceTree = "<group>"; };
 		B760000000000000000000A2 /* AppCloudKitSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppCloudKitSync.swift; sourceTree = "<group>"; };
 		AD0000000000000000000011 /* AppAutoFillDomainRules.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDomainRules.swift; sourceTree = "<group>"; };
+		B42110000000000000000000 /* AppAutoFillGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillGuard.swift; sourceTree = "<group>"; };
+		B42120000000000000000000 /* AppAutoFillDiagnostics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDiagnostics.swift; sourceTree = "<group>"; };
+		B42130000000000000000000 /* AppAutoFillCenterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillCenterView.swift; sourceTree = "<group>"; };
+		B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAutoFillDefaultManagerGuideView.swift; sourceTree = "<group>"; };
 		AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoFillDomainRuleControllerTests.swift; sourceTree = "<group>"; };
 		A9240000000000000000B002 /* GeneratorAdvancedSections.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorAdvancedSections.swift; sourceTree = "<group>"; };
 		A9240000000000000000B004 /* GeneratorHistoryController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorHistoryController.swift; sourceTree = "<group>"; };
@@ -407,6 +415,10 @@
 				A100000000000000000000FB /* AppCloudVaultSync.swift */,
 				B760000000000000000000A2 /* AppCloudKitSync.swift */,
 				AD0000000000000000000011 /* AppAutoFillDomainRules.swift */,
+				B42110000000000000000000 /* AppAutoFillGuard.swift */,
+				B42120000000000000000000 /* AppAutoFillDiagnostics.swift */,
+				B42130000000000000000000 /* AppAutoFillCenterView.swift */,
+				B42140000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift */,
 				A9240000000000000000B002 /* GeneratorAdvancedSections.swift */,
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
@@ -847,6 +859,10 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A100000000000000000000F9 /* AppCloudVaultSync.swift in Sources */,
 				B760000000000000000000A1 /* AppCloudKitSync.swift in Sources */,
 				AD0000000000000000000001 /* AppAutoFillDomainRules.swift in Sources */,
+				B42010000000000000000000 /* AppAutoFillGuard.swift in Sources */,
+				B42020000000000000000000 /* AppAutoFillDiagnostics.swift in Sources */,
+				B42030000000000000000000 /* AppAutoFillCenterView.swift in Sources */,
+				B42040000000000000000000 /* AppAutoFillDefaultManagerGuideView.swift in Sources */,
 				A9240000000000000000B001 /* GeneratorAdvancedSections.swift in Sources */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,

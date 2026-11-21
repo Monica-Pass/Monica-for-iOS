@@ -21059,7 +21059,7 @@
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "The %lld items in “%@” move to Trash and can be restored."
+            "value": "“%@” has %lld items that move to Trash and can be restored."
           }
         },
         "zh-Hans": {
@@ -22995,6 +22995,1350 @@
           "stringUnit": {
             "state": "translated",
             "value": "只保存 Steam Guard 的离线 shared_secret，用于本地生成验证码；不会读取登录 cookie、identity_secret，也不会发起任何 Steam 网络请求。"
+          }
+        }
+      }
+    },
+    "系统未返回错误原因。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统未返回错误原因。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system did not return an error reason."
+          }
+        }
+      }
+    },
+    "保险库未解锁": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库未解锁"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vault is locked"
+          }
+        }
+      }
+    },
+    "等待生物识别解锁": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "等待生物识别解锁"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waiting for biometric unlock"
+          }
+        }
+      }
+    },
+    "保险库未解锁，未发布身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保险库未解锁，未发布身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The vault is locked, so no identities were published."
+          }
+        }
+      }
+    },
+    "尚未通过生物识别解锁，未发布身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未通过生物识别解锁，未发布身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Biometric unlock has not completed, so no identities were published."
+          }
+        }
+      }
+    },
+    "系统拒绝了身份发布。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统拒绝了身份发布。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system rejected the identity publish."
+          }
+        }
+      }
+    },
+    "未发布身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未发布身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No identities were published."
+          }
+        }
+      }
+    },
+    "默认密码管理器": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认密码管理器"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default password manager"
+          }
+        }
+      }
+    },
+    "Monica 自动填充": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 自动填充"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica AutoFill"
+          }
+        }
+      }
+    },
+    "系统侧身份条目": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统侧身份条目"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "System identity entries"
+          }
+        }
+      }
+    },
+    "iOS 不允许 App 读取或设置「系统默认密码管理器」是谁，也不允许 App 监听其它 App 里出现的密码输入框。Monica 只能把自己注册为自动填充来源，是否启用由你在系统设置里决定。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不允许 App 读取或设置「系统默认密码管理器」是谁，也不允许 App 监听其它 App 里出现的密码输入框。Monica 只能把自己注册为自动填充来源，是否启用由你在系统设置里决定。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS does not let an app read or set who the default password manager is, and does not let an app observe password fields in other apps. Monica can only register itself as an AutoFill source; whether it is enabled is up to you in iOS Settings."
+          }
+        }
+      }
+    },
+    "设为自动填充来源": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设为自动填充来源"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set as AutoFill source"
+          }
+        }
+      }
+    },
+    "查看系统设置路径、测试步骤与 iOS 限制": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "查看系统设置路径、测试步骤与 iOS 限制"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "See the settings path, test steps, and iOS limits"
+          }
+        }
+      }
+    },
+    "自动填充守护": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充守护"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AutoFill guard"
+          }
+        }
+      }
+    },
+    "仅在保险库解锁时发布": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在保险库解锁时发布"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish only while the vault is unlocked"
+          }
+        }
+      }
+    },
+    "始终开启": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "始终开启"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Always on"
+          }
+        }
+      }
+    },
+    "身份条目由解密后的条目生成，锁定状态下无法发布。这一项由架构保证，不能关闭。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "身份条目由解密后的条目生成，锁定状态下无法发布。这一项由架构保证，不能关闭。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Identity entries are built from decrypted items, so nothing can be published while the vault is locked. The architecture enforces this and it cannot be turned off."
+          }
+        }
+      }
+    },
+    "仅生物识别解锁后发布身份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅生物识别解锁后发布身份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish identities only after biometric unlock"
+          }
+        }
+      }
+    },
+    "开启后，用主密码解锁的会话不会把身份写入系统凭据列表，避免别人知道主密码后立刻拿到自动填充建议。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后，用主密码解锁的会话不会把身份写入系统凭据列表，避免别人知道主密码后立刻拿到自动填充建议。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, a session unlocked with the master password does not write identities to the system credential list, so knowing the master password alone does not immediately produce AutoFill suggestions."
+          }
+        }
+      }
+    },
+    "锁定后清空已发布身份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "锁定后清空已发布身份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Clear published identities after locking"
+          }
+        }
+      }
+    },
+    "开启后，锁定或解锁失败时会清空 Monica 已发布到系统的身份条目；下次解锁并载入条目后会自动补发一次。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "开启后，锁定或解锁失败时会清空 Monica 已发布到系统的身份条目；下次解锁并载入条目后会自动补发一次。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "When on, locking the vault or a failed unlock clears the Monica identities published to the system; they are published again once the vault is unlocked and items are loaded."
+          }
+        }
+      }
+    },
+    "最近一次未发布": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近一次未发布"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last skipped publish"
+          }
+        }
+      }
+    },
+    "域名规则": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "域名规则"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Domain rules"
+          }
+        }
+      }
+    },
+    "指定哪些站点可以或不可以被自动填充": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "指定哪些站点可以或不可以被自动填充"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Choose which sites may or may not be filled"
+          }
+        }
+      }
+    },
+    "自动填充诊断": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充诊断"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AutoFill diagnostics"
+          }
+        }
+      }
+    },
+    "以上都是系统公开状态与发布记录，只包含时间、条数、错误原因；不读取、不缓存、不打印任何凭据内容。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以上都是系统公开状态与发布记录，只包含时间、条数、错误原因；不读取、不缓存、不打印任何凭据内容。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Everything above comes from public system state and the publish log: timestamps, counts, and error reasons only. No credential content is read, cached, or printed."
+          }
+        }
+      }
+    },
+    "重新发布身份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新发布身份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Republish identities"
+          }
+        }
+      }
+    },
+    "刷新状态": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刷新状态"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Refresh status"
+          }
+        }
+      }
+    },
+    "未知（点击刷新）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未知（点击刷新）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unknown (tap Refresh)"
+          }
+        }
+      }
+    },
+    "已在系统设置中启用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在系统设置中启用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enabled in iOS Settings"
+          }
+        }
+      }
+    },
+    "系统设置中未启用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统设置中未启用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not enabled in iOS Settings"
+          }
+        }
+      }
+    },
+    "当前 iOS 版本无法读取": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "当前 iOS 版本无法读取"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not readable on this iOS version"
+          }
+        }
+      }
+    },
+    "条身份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "条身份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "entries"
+          }
+        }
+      }
+    },
+    "扩展启用": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展启用"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension enabled"
+          }
+        }
+      }
+    },
+    "扩展版本": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "扩展版本"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension version"
+          }
+        }
+      }
+    },
+    "未找到扩展": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未找到扩展"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Extension not found"
+          }
+        }
+      }
+    },
+    "状态读取": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "状态读取"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "State read"
+          }
+        }
+      }
+    },
+    "系统未返回状态": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统未返回状态"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The system returned no state"
+          }
+        }
+      }
+    },
+    "上次成功发布": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次成功发布"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last successful publish"
+          }
+        }
+      }
+    },
+    "暂无记录": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No record yet"
+          }
+        }
+      }
+    },
+    "上次失败原因": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次失败原因"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last failure reason"
+          }
+        }
+      }
+    },
+    "未记录原因": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未记录原因"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No reason recorded"
+          }
+        }
+      }
+    },
+    "暂无失败记录": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂无失败记录"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No failures recorded"
+          }
+        }
+      }
+    },
+    "上次跳过发布": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次跳过发布"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last skipped publish"
+          }
+        }
+      }
+    },
+    "上次清空身份": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上次清空身份"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Last identity clear"
+          }
+        }
+      }
+    },
+    "需要解锁保险库后才能发布身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "需要解锁保险库后才能发布身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Unlock the vault before publishing identities."
+          }
+        }
+      }
+    },
+    "正在发布身份……": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "正在发布身份……"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publishing identities…"
+          }
+        }
+      }
+    },
+    "已提交发布，系统侧条数以上方诊断为准。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已提交发布，系统侧条数以上方诊断为准。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish submitted; the identity count above reflects the system side."
+          }
+        }
+      }
+    },
+    "发布失败：": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发布失败："
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Publish failed: "
+          }
+        }
+      }
+    },
+    "已跳过：": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已跳过："
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Skipped: "
+          }
+        }
+      }
+    },
+    "系统设置路径": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统设置路径"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS Settings path"
+          }
+        }
+      }
+    },
+    "不同 iOS 版本的入口名称可能略有差异：iOS 17 在「设置 › 密码 › 密码选项」，iOS 18 起密码独立成 App，也可能出现在「设置 › App › 密码」。Monica 不会构造私有设置链接，只能打开本 App 自己的设置页。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不同 iOS 版本的入口名称可能略有差异：iOS 17 在「设置 › 密码 › 密码选项」，iOS 18 起密码独立成 App，也可能出现在「设置 › App › 密码」。Monica 不会构造私有设置链接，只能打开本 App 自己的设置页。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entry names differ slightly between iOS versions: on iOS 17 the path is Settings › Passwords › Password Options; from iOS 18 the Passwords app is standalone and the entry may also appear under Settings › Apps › Passwords. Monica does not build private settings links and can only open its own settings page."
+          }
+        }
+      }
+    },
+    "打开 Monica 的系统设置": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 Monica 的系统设置"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Monica in Settings"
+          }
+        }
+      }
+    },
+    "已复制引导文字": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已复制引导文字"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guide text copied"
+          }
+        }
+      }
+    },
+    "复制引导文字": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制引导文字"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copy guide text"
+          }
+        }
+      }
+    },
+    "复制内容是上方的设置步骤，不包含任何账号、密码或密钥。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制内容是上方的设置步骤，不包含任何账号、密码或密钥。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The copied text is the setup steps above; it contains no accounts, passwords, or keys."
+          }
+        }
+      }
+    },
+    "测试自动填充": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "测试自动填充"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Test AutoFill"
+          }
+        }
+      }
+    },
+    "如果 Safari 里没有出现 Monica 的建议：先确认扩展已启用，再到自动填充诊断里看「系统侧身份条目」是否为 0，点「重新发布身份」后重试。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "如果 Safari 里没有出现 Monica 的建议：先确认扩展已启用，再到自动填充诊断里看「系统侧身份条目」是否为 0，点「重新发布身份」后重试。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "If Monica does not appear in Safari: first confirm the extension is enabled, then check whether the system identity entry count is 0 in AutoFill diagnostics, tap Republish identities, and try again."
+          }
+        }
+      }
+    },
+    "快速输入说明": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "快速输入说明"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "QuickType notes"
+          }
+        }
+      }
+    },
+    "键盘上方的快速输入条（QuickType）由系统决定是否展示、展示哪一条建议。App 和扩展都不能控制它的出现时机，也不能强制弹出密码建议。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "键盘上方的快速输入条（QuickType）由系统决定是否展示、展示哪一条建议。App 和扩展都不能控制它的出现时机，也不能强制弹出密码建议。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS decides whether the QuickType bar above the keyboard appears and which suggestion it shows. Neither the app nor the extension can control when it appears or force a password suggestion."
+          }
+        }
+      }
+    },
+    "Monica 能做的是把身份条目发布给系统；剩余部分由 iOS 的自动填充逻辑处理。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 能做的是把身份条目发布给系统；剩余部分由 iOS 的自动填充逻辑处理。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "All Monica can do is publish identity entries to the system; the rest is handled by iOS AutoFill."
+          }
+        }
+      }
+    },
+    "iOS 的限制": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 的限制"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS limitations"
+          }
+        }
+      }
+    },
+    "设置 › 密码 › 密码选项 › 自动填充密码": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置 › 密码 › 密码选项 › 自动填充密码"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings › Passwords › Password Options › AutoFill Passwords"
+          }
+        }
+      }
+    },
+    "设置 › 密码 › 密码选项 › 自动填充密码（iOS 17）": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置 › 密码 › 密码选项 › 自动填充密码（iOS 17）"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Settings › Passwords › Password Options › AutoFill Passwords (iOS 17)"
+          }
+        }
+      }
+    },
+    "打开系统「设置」，找到密码相关入口（iOS 18 起也可能在「设置 › App › 密码」）。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统「设置」，找到密码相关入口（iOS 18 起也可能在「设置 › App › 密码」）。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open the system Settings app and find the password entry (from iOS 18 it may also be under Settings › Apps › Passwords)."
+          }
+        }
+      }
+    },
+    "进入「密码选项 › 自动填充密码」，在来源列表里把 Monica 打开。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "进入「密码选项 › 自动填充密码」，在来源列表里把 Monica 打开。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open Password Options › AutoFill Passwords and turn Monica on in the source list."
+          }
+        }
+      }
+    },
+    "回到 Monica 解锁保险库，条目载入后身份会自动发布；也可以在自动填充诊断里点「重新发布身份」。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "回到 Monica 解锁保险库，条目载入后身份会自动发布；也可以在自动填充诊断里点「重新发布身份」。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Return to Monica and unlock the vault; identities publish as soon as items load. You can also tap Republish identities in AutoFill diagnostics."
+          }
+        }
+      }
+    },
+    "再次回到系统设置，确认 Monica 仍在自动填充来源列表里处于启用状态。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "再次回到系统设置，确认 Monica 仍在自动填充来源列表里处于启用状态。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Go back to iOS Settings and confirm Monica is still enabled in the AutoFill source list."
+          }
+        }
+      }
+    },
+    "在 Safari 打开一个需要登录的网站（或任意有账号密码输入框的页面）。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在 Safari 打开一个需要登录的网站（或任意有账号密码输入框的页面）。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open a site that requires sign-in in Safari (or any page with account and password fields)."
+          }
+        }
+      }
+    },
+    "点账号输入框，键盘上方应出现 Monica 提供的账号建议。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "点账号输入框，键盘上方应出现 Monica 提供的账号建议。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tap the account field; Monica's account suggestion should appear above the keyboard."
+          }
+        }
+      }
+    },
+    "选择建议后，Monica 自动填充扩展会要求先解锁保险库，然后填入该条目。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择建议后，Monica 自动填充扩展会要求先解锁保险库，然后填入该条目。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "After you pick a suggestion, the Monica AutoFill extension asks you to unlock the vault before filling the item."
+          }
+        }
+      }
+    },
+    "若要保存新密码，同样由系统弹出来源选择，Monica 只能在被选中后处理保存请求。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "若要保存新密码，同样由系统弹出来源选择，Monica 只能在被选中后处理保存请求。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Saving a new password also starts with the system source picker; Monica handles the request only after being selected."
+          }
+        }
+      }
+    },
+    "iOS 不提供无障碍服务：Monica 读不到其它 App 的界面，也无法监听密码输入框。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不提供无障碍服务：Monica 读不到其它 App 的界面，也无法监听密码输入框。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS has no accessibility service: Monica cannot read other apps' UI or observe password fields."
+          }
+        }
+      }
+    },
+    "iOS 不允许 App 读取或设置「系统默认密码管理器」是谁，只能由你在系统设置里选择。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不允许 App 读取或设置「系统默认密码管理器」是谁，只能由你在系统设置里选择。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS does not let an app read or set who the default password manager is; only you can choose it in iOS Settings."
+          }
+        }
+      }
+    },
+    "Monica 无法自动打开系统的「密码选项」页面，只能打开本 App 的设置页。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica 无法自动打开系统的「密码选项」页面，只能打开本 App 的设置页。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Monica cannot open the system Password Options page; it can only open its own settings page."
+          }
+        }
+      }
+    },
+    "项目里声明了自动填充扩展，不代表你已经在系统里启用它；是否启用只能由系统记录，App 只能读取状态。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "项目里声明了自动填充扩展，不代表你已经在系统里启用它；是否启用只能由系统记录，App 只能读取状态。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Declaring the AutoFill extension in the project does not mean you enabled it; only the system records that, and the app can only read the state."
+          }
+        }
+      }
+    },
+    "不支持开机自启、后台常驻守护或强制打开无障碍等 Android 侧做法。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "不支持开机自启、后台常驻守护或强制打开无障碍等 Android 侧做法。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Android-style options such as boot autostart, an always-on background daemon, or forcing accessibility are not supported."
+          }
+        }
+      }
+    },
+    "把 Monica 设为 iOS 自动填充来源：": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "把 Monica 设为 iOS 自动填充来源："
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Set Monica as the iOS AutoFill source:"
+          }
+        }
+      }
+    },
+    "iOS 不允许 App 读取或设置系统默认密码管理器是谁；是否启用只能由你在系统设置里决定。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 不允许 App 读取或设置系统默认密码管理器是谁；是否启用只能由你在系统设置里决定。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS does not let an app read or set who the default password manager is; only you can enable it in iOS Settings."
+          }
+        }
+      }
+    },
+    "自动填充扩展未启用，未发布身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充扩展未启用，未发布身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The AutoFill extension is not enabled, so no identities were published."
+          }
+        }
+      }
+    },
+    "自动填充扩展未启用，无法清空已发布身份。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "自动填充扩展未启用，无法清空已发布身份。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "The AutoFill extension is not enabled, so published identities cannot be cleared."
+          }
+        }
+      }
+    },
+    "默认密码管理器与自动填充诊断": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "默认密码管理器与自动填充诊断"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Default password manager and AutoFill diagnostics"
+          }
+        }
+      }
+    },
+    "iOS 设置路径、发布状态与本地守护开关": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS 设置路径、发布状态与本地守护开关"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "iOS settings path, publish status, and local guard switches"
+          }
+        }
+      }
+    },
+    "尚未手动重新发布。": {
+      "localizations": {
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未手动重新发布。"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Not republished manually yet."
           }
         }
       }

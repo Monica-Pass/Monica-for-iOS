@@ -386,6 +386,16 @@ final class AppSessionModel {
     var notificationPermissionState: AppPermissionStatusRow.State = .checkable
     var systemAutoFillProviderState: AppPermissionStatusRow.State = .checkable
     var autoFillPolicy: AppAutoFillPolicy
+    /// 自动填充守护策略：只作用于 Monica 自己的候选与身份发布行为，不影响系统或其它 App。
+    var autoFillGuardPolicy: AutoFillGuardPolicy
+    /// 当前解锁会话是否通过了设备所有者认证（Face ID / Touch ID / 设备密码）。
+    private(set) var unlockedWithDeviceOwnerAuthentication = false
+    /// 最近一次被守护策略拦下的发布原因；发布成功后清空。
+    private(set) var autoFillGuardBlockedReason: AutoFillGuardPublishBlockReason?
+    /// 锁定后清空过系统身份，等解锁后条目重新载入时补一次发布。
+    private var autoFillGuardNeedsIdentityRepublish = false
+    /// 自动填充诊断面板：只读系统状态与发布记录，不读取凭据内容。
+    let autoFillDiagnostics: AppAutoFillDiagnosticsModel
     var vaultKeychainState: VaultKeychainState = .idle
     private var plusEntitlementSnapshot = AppPlusEntitlementSnapshot()
     var plusActivationState: PlusActivationState = .idle
@@ -526,6 +536,8 @@ final class AppSessionModel {
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
     private let autoFillPolicyStore: any AppAutoFillPolicyStore
+    private let autoFillGuardPolicyStore: any AppAutoFillGuardPolicyStore
+    private let autoFillPublishLogStore: any AppAutoFillPublishLogStore
     private let autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)?
     private let autoFillIndexCodec: AutoFillEncryptedIndexCodec
     private let autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec
@@ -609,6 +621,8 @@ final class AppSessionModel {
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
         autoFillPolicyStore: any AppAutoFillPolicyStore = MemoryAppAutoFillPolicyStore(),
+        autoFillGuardPolicyStore: any AppAutoFillGuardPolicyStore = MemoryAppAutoFillGuardPolicyStore(),
+        autoFillPublishLogStore: any AppAutoFillPublishLogStore = MemoryAppAutoFillPublishLogStore(),
         autoFillIndexKeyMaterialProvider: ((String) throws -> AutoFillIndexKeyMaterial)? = nil,
         autoFillIndexCodec: AutoFillEncryptedIndexCodec = AutoFillEncryptedIndexCodec(),
         autoFillCredentialSecretCodec: AutoFillCredentialSecretCodec = AutoFillCredentialSecretCodec(),
@@ -679,6 +693,13 @@ final class AppSessionModel {
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
         self.autoFillPolicyStore = autoFillPolicyStore
+        self.autoFillGuardPolicyStore = autoFillGuardPolicyStore
+        self.autoFillPublishLogStore = autoFillPublishLogStore
+        self.autoFillGuardPolicy = autoFillGuardPolicyStore.loadPolicy()
+        self.autoFillDiagnostics = AppAutoFillDiagnosticsModel(
+            identityStore: autoFillCredentialIdentityStore,
+            publishLogStore: autoFillPublishLogStore
+        )
         self.autoFillIndexKeyMaterialProvider = autoFillIndexKeyMaterialProvider
         self.autoFillIndexCodec = autoFillIndexCodec
         self.autoFillCredentialSecretCodec = autoFillCredentialSecretCodec
@@ -3715,6 +3736,7 @@ final class AppSessionModel {
             vaultPassword = ""
             isPrivacyShieldVisible = false
             vaultState = .unlocked
+            unlockedWithDeviceOwnerAuthentication = false
             activeVaultName = session.descriptor.displayName
             activeVaultSession = session
             let entryRepository = vaultRepository.entryRepository(for: session)
@@ -3767,6 +3789,7 @@ final class AppSessionModel {
             vaultPassword = ""
             isPrivacyShieldVisible = false
             vaultState = .unlocked
+            unlockedWithDeviceOwnerAuthentication = false
             activeVaultName = session.descriptor.displayName
             activeVaultSession = session
             let entryRepository = vaultRepository.entryRepository(for: session)
@@ -8909,6 +8932,7 @@ final class AppSessionModel {
             vaultPassword = ""
             isPrivacyShieldVisible = false
             vaultState = .unlocked
+            unlockedWithDeviceOwnerAuthentication = true
             activeVaultName = session.descriptor.displayName
             activeVaultSession = session
             let entryRepository = vaultRepository.entryRepository(for: session)
@@ -9016,16 +9040,32 @@ final class AppSessionModel {
             }
 
             if let autoFillCredentialIdentityStore {
-                let identities = loginEntries.flatMap { entry in
-                    autoFillCredentialIdentities(for: entry)
-                }
-                let passkeyIdentities = passkeyEntries.compactMap { entry in
-                    autoFillPasskeyCredentialIdentity(for: entry)
-                }
-                autoFillCredentialIdentityStore.replaceCredentialIdentities(
-                    identities,
-                    passkeyIdentities: passkeyIdentities
+                // 守护策略只决定 Monica 自己要不要发布身份；这里永远不可能在锁定时走到
+                // （上面已经要求 vaultState == .unlocked 且有 activeVaultSession）。
+                let publishDecision = autoFillGuardPolicy.publishDecision(
+                    vaultIsUnlocked: vaultState == .unlocked,
+                    unlockedWithBiometrics: unlockedWithDeviceOwnerAuthentication
                 )
+                switch publishDecision {
+                case .allowed:
+                    let identities = loginEntries.flatMap { entry in
+                        autoFillCredentialIdentities(for: entry)
+                    }
+                    let passkeyIdentities = passkeyEntries.compactMap { entry in
+                        autoFillPasskeyCredentialIdentity(for: entry)
+                    }
+                    autoFillCredentialIdentityStore.replaceCredentialIdentities(
+                        identities,
+                        passkeyIdentities: passkeyIdentities
+                    )
+                    autoFillGuardBlockedReason = nil
+                case .blocked(let reason):
+                    autoFillGuardBlockedReason = reason
+                    autoFillPublishLogStore.recordSkip(
+                        reason: reason.skipReasonText,
+                        at: updatedAt
+                    )
+                }
             }
             autoFillIndexState = .succeeded(loginEntries.count)
         } catch {
@@ -11714,8 +11754,50 @@ final class AppSessionModel {
         ).localizedDescription
     }
 
+    /// 保险库锁定或解锁失败时的守护动作：按策略清空已发布到系统的身份条目。
+    ///
+    /// 只影响 Monica 自己的身份条目，不会改变系统自动填充来源，也读不到系统默认密码管理器是谁。
+    private func autoFillGuardDidLock() {
+        guard autoFillGuardPolicy.clearsPublishedIdentitiesWhenVaultLocks,
+              let autoFillCredentialIdentityStore else {
+            return
+        }
+        autoFillGuardNeedsIdentityRepublish = true
+        let diagnostics = autoFillDiagnostics
+        Task {
+            await autoFillCredentialIdentityStore.removeAllPublishedIdentities()
+            await diagnostics.refresh()
+        }
+    }
+
+    /// 切换「仅在生物识别解锁后发布身份」。
+    func setAutoFillGuardPublishesOnlyAfterBiometricUnlock(_ isEnabled: Bool) {
+        guard autoFillGuardPolicy.publishesOnlyAfterBiometricUnlock != isEnabled else { return }
+        autoFillGuardPolicy.publishesOnlyAfterBiometricUnlock = isEnabled
+        autoFillGuardPolicyStore.savePolicy(autoFillGuardPolicy)
+        autoFillGuardBlockedReason = nil
+        // 关闭限制后立刻补一次发布，让系统凭据列表与当前解锁状态保持一致。
+        if isEnabled == false, vaultState == .unlocked {
+            try? refreshAutoFillEncryptedIndexIfConfigured()
+        }
+    }
+
+    /// 切换「保险库锁定后清空已发布身份」。
+    func setAutoFillGuardClearsIdentitiesOnLock(_ isEnabled: Bool) {
+        guard autoFillGuardPolicy.clearsPublishedIdentitiesWhenVaultLocks != isEnabled else { return }
+        autoFillGuardPolicy.clearsPublishedIdentitiesWhenVaultLocks = isEnabled
+        autoFillGuardPolicyStore.savePolicy(autoFillGuardPolicy)
+        // 开启时如果当前已锁定，残留的身份条目应立即清空（解锁后条目载入时会自动补发）。
+        if isEnabled, vaultState == .locked {
+            autoFillGuardDidLock()
+        }
+    }
+
     private func clearUnlockedVaultSession() {
         autoFillDomainRules.detach()
+        unlockedWithDeviceOwnerAuthentication = false
+        autoFillGuardBlockedReason = nil
+        autoFillGuardDidLock()
         clearNoteImageCache()
         vaultPassword = ""
         clearMasterPasswordChangeInput()
@@ -11778,6 +11860,9 @@ final class AppSessionModel {
             return
         }
 
+        unlockedWithDeviceOwnerAuthentication = false
+        autoFillGuardBlockedReason = nil
+        autoFillGuardDidLock()
         vaultState = .locked
         activeVaultName = nil
         activeEntryRepository = nil
@@ -12270,6 +12355,11 @@ final class AppSessionModel {
         deletedAttachmentEntries = try entryRepository.listDeletedAttachmentMetadata(projectID: projectID)
         publishWidgetSnapshots()
         refreshVaultSearchIndex(entryRepository: entryRepository)
+        // 锁定清空过系统身份时，条目重新载入后就补一次发布，避免解锁后自动填充一直为空。
+        if autoFillGuardNeedsIdentityRepublish, vaultState == .unlocked {
+            autoFillGuardNeedsIdentityRepublish = false
+            try? refreshAutoFillEncryptedIndexIfConfigured()
+        }
     }
 
     // MARK: - 全局搜索（解锁会话内存索引）
