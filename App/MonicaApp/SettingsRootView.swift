@@ -185,6 +185,13 @@ struct SettingsRootView: View {
             }
             AppThemeSettingsView(session: session)
 
+            AndroidParitySection(title: String(localized: "本地保险库")) {
+                VaultRegistrySettingsCard(
+                    session: session,
+                    deviceID: environment.localDeviceIdentifier
+                )
+            }
+
             AndroidParitySection(title: String(localized: "应用")) {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "系统要求"), value: environment.minimumIOSVersion)
@@ -1084,6 +1091,10 @@ struct SettingsRootView: View {
                 }
             }
 
+            AndroidParitySection(title: String(localized: "格式导入导出")) {
+                VaultFormatImportExportCard(session: session)
+            }
+
             AndroidParitySection(title: "OneDrive") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.55)) {
                     AndroidParityInfoRow(title: String(localized: "账号"), value: session.oneDriveAuthenticationState.label)
@@ -1303,6 +1314,9 @@ struct SettingsRootView: View {
                         AndroidParityInfoRow(title: "Premium", value: preview.premiumSummary)
                         AndroidParityInfoRow(title: String(localized: "类型"), value: preview.kindSummary)
                         AndroidParityInfoRow(title: String(localized: "附件"), value: preview.attachmentSummary)
+                        if let summary = preview.mergeSummary {
+                            BitwardenSyncMergeSummaryView(summary: summary)
+                        }
                     }
                     if !session.bitwardenPendingMutationBatches.isEmpty {
                         AndroidParityDivider()
@@ -1720,6 +1734,8 @@ struct SettingsRootView: View {
                 }
             }
 
+            AppCloudKitSyncSection(session: session)
+
             AndroidParitySection(title: "云端保险库") {
                 AndroidParityCard(fill: AndroidParityPalette.surfaceVariant.opacity(0.6)) {
                     NavigationLink {
@@ -1734,7 +1750,7 @@ struct SettingsRootView: View {
                                 Text("加密保险库上传与还原")
                                     .font(.subheadline.weight(.heavy))
                                     .foregroundStyle(AndroidParityPalette.textPrimary)
-                                Text("WebDAV / OneDrive · 手动 Push/Pull · 版本冲突三选一")
+                                Text("WebDAV / OneDrive / iCloud · 手动 Push/Pull · 版本冲突三选一")
                                     .font(.caption.weight(.semibold))
                                     .foregroundStyle(AndroidParityPalette.textSecondary)
                             }

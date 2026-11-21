@@ -21,12 +21,14 @@ struct PrivacyShieldView: View {
 
 struct MonicaLockScreen: View {
     @Bindable var session: AppSessionModel
+    let deviceID: String
     let submitPassword: () -> Void
     let unlockWithKeychain: () -> Void
     let createVault: () -> Void
     let openVault: (URL) -> Void
     let forgotPassword: () -> Void
     @State private var isVaultImporterPresented = false
+    @State private var isVaultSelectorPresented = false
     @State private var isPasswordVisible = false
     @Environment(\.screenPrivacyMonitor) private var screenPrivacyMonitor
 
@@ -54,6 +56,9 @@ struct MonicaLockScreen: View {
             }
             openVault(fileURL)
         }
+        .sheet(isPresented: $isVaultSelectorPresented) {
+            VaultRegistrySheet(session: session, deviceID: deviceID)
+        }
     }
 
     /// 录制/共享期间即使之前手动打开了「显示密码」，也强制回到 SecureField。
@@ -75,6 +80,27 @@ struct MonicaLockScreen: View {
 
     private var lockScreenControls: some View {
         VStack(spacing: 18) {
+            if session.hasRegisteredVaults {
+                Button {
+                    isVaultSelectorPresented = true
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: "lock.square.stack")
+                        Text(session.selectedVaultDisplayName)
+                            .lineLimit(1)
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.bold))
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(AndroidParityPalette.primary)
+                    .padding(.horizontal, 18)
+                    .frame(minHeight: 44)
+                    .background(AndroidParityPalette.surface, in: Capsule(style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .disabled(session.vaultOperationState.isRunning)
+            }
+
             HStack(spacing: 10) {
                 Group {
                     if showsPlaintextPassword {
@@ -149,7 +175,7 @@ struct MonicaLockScreen: View {
                 .disabled(!session.canUnlockRememberedVaultWithKeychain)
             }
 
-            if !session.isFirstTimeVaultSetup {
+            if !session.isVaultPasswordSetupFlow {
                 Button(action: forgotPassword) {
                     Text("忘记密码？")
                         .font(.subheadline.weight(.semibold))
@@ -178,11 +204,22 @@ struct MonicaLockScreen: View {
                 .foregroundStyle(AndroidParityPalette.textSecondary.opacity(0.82))
                 .padding(.top, shouldShowOperationState ? 0 : 4)
             }
+
+            if session.isPendingVaultCreation {
+                Button {
+                    session.cancelVaultCreation()
+                } label: {
+                    Text("取消新建")
+                        .font(.footnote.weight(.semibold))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(AndroidParityPalette.textSecondary)
+            }
         }
     }
 
     private var lockScreenPrompt: String {
-        if session.isFirstTimeVaultSetup {
+        if session.isVaultPasswordSetupFlow {
             switch session.firstTimePasswordSetupStep {
             case .enterPassword:
                 return String(localized: "设置您的主密码")
@@ -194,7 +231,7 @@ struct MonicaLockScreen: View {
     }
 
     private var primaryButtonTitle: String {
-        if session.isFirstTimeVaultSetup {
+        if session.isVaultPasswordSetupFlow {
             switch session.firstTimePasswordSetupStep {
             case .enterPassword:
                 return String(localized: "设置密码")

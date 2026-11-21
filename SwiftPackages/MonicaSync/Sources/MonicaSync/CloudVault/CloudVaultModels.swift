@@ -27,11 +27,14 @@ public enum CloudVaultProtocolSpec {
 public enum CloudVaultRemoteKind: String, Codable, Sendable, Equatable, CaseIterable {
     case webDAV
     case oneDrive
+    /// CloudKit private database, see `CloudKitVaultModels.swift` (issue #76).
+    case iCloud
 
     public var displayName: String {
         switch self {
         case .webDAV: return "WebDAV"
         case .oneDrive: return "OneDrive"
+        case .iCloud: return "iCloud"
         }
     }
 
@@ -544,6 +547,11 @@ public enum CloudVaultError: Error, Sendable, Equatable, LocalizedError {
     case integrityMismatch(expectedSHA256: String, actualSHA256: String)
     case vaultIDMismatch(expectedVaultID: String, actualVaultID: String)
     case conflictRequiresResolution(CloudVaultConflict)
+    /// The cloud account itself is unusable: signed out, restricted by device
+    /// management, or temporarily locked (iCloud today).
+    case cloudAccountUnavailable(CloudVaultRemoteKind)
+    /// The cloud account is out of storage; the local vault is untouched.
+    case cloudQuotaExceeded(CloudVaultRemoteKind)
     case network(String)
     case server(statusCode: Int, message: String)
     case stateCorrupted(reason: String)
@@ -576,6 +584,10 @@ public enum CloudVaultError: Error, Sendable, Equatable, LocalizedError {
             return "云端文件属于另一个保险库，已停止覆盖本机"
         case .conflictRequiresResolution:
             return "本机与云端都有修改，请选择保留版本或生成冲突副本"
+        case .cloudAccountUnavailable(let kind):
+            return "\(kind.displayName) 账号当前不可用，请先在系统设置中登录 iCloud 后再同步"
+        case .cloudQuotaExceeded(let kind):
+            return "\(kind.displayName) 存储空间已满，请清理空间后再上传（本机保险库未受影响）"
         case .network(let message):
             return "网络错误：\(message)（请检查连接后重试）"
         case .server(let statusCode, let message):

@@ -95,6 +95,10 @@ final class AppSessionModel {
     var operationTimelineFilterKind: UnifiedVaultItemKind?
     var operationTimelineFilterAction: AppOperationTimelineAction?
     private var ignoredDuplicateLoginKeys: Set<DuplicateLoginEntryKey> = []
+    /// 加密格式文件：保留原始数据，用户重新输入密码时再解析一次。
+    private var pendingFormatImportData: Data?
+    private var pendingFormatImportFileName: String?
+    private var pendingFormatImportContentType: String?
     private var lastDuplicateLoginMergeUndo: AppDuplicateLoginMergeUndo?
     private var nextOperationTimelineEventSequence = 0
     var editingLoginEntryID: String?
@@ -350,6 +354,14 @@ final class AppSessionModel {
     var attachmentSearchQuery = ""
     var attachmentQuickLookPreviewURL: URL?
     var vaultProjects: [LocalVaultProject] = []
+    /// #27：文件夹森林（父/子目录 + 面包屑）。主键是 projectID，绝不用显示路径。
+    var vaultFolderTree: VaultFolderTree = .empty
+    /// #27：总览统计（每类条目数、收藏、回收站、最近使用）。
+    var vaultFolderOverview: VaultFolderOverview = .builder(documents: [], tree: .empty)
+    /// #27：是否正在展示保险箱总览页。
+    var isVaultOverviewPresented = false
+    /// #27：保存文件夹索引锚点的本地存储（只存一个 UUID，不含用户内容）。
+    var vaultFolderAnchorStore: any VaultFolderAnchorStore = appDefaultVaultFolderAnchorStore()
     var selectedVaultQuickFilterID = "all"
     var selectedVaultBatchItemIDs: Set<String> = []
     private var vaultBatchSelectionKind: UnifiedVaultItemKind?
@@ -406,6 +418,9 @@ final class AppSessionModel {
     var bitwardenSyncPreview: AppBitwardenSyncPreview?
     var bitwardenPendingMutationBatches: [AppBitwardenPendingMutationBatch] = []
     var csvImportPreview: CSVImportPreview?
+    /// issue #37：CSV / JSON / Bitwarden / Aegis / Stratum 的格式导入预览（确认前不写库）。
+    var formatImportPreview: FormatImportPreview?
+    var formatImportPassword = ""
     var credentialExchange = AppCredentialExchangeState()
     var androidBackupImportPreview: AndroidBackupImportPreview?
     var keePassImportPreview: KeePassImportPreview?
@@ -473,6 +488,7 @@ final class AppSessionModel {
     private let vaultKeychainService: (any AppVaultKeychainService)?
     private let vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)?
     private let rememberedVaultStore: any RememberedVaultStore
+    let vaultRegistryStore: any AppVaultRegistryStore
     private let biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore
     private let vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
@@ -501,6 +517,7 @@ final class AppSessionModel {
     private let bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore
     private let bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore
     private let bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore
+    private let bitwardenSyncCheckpointStore: any AppBitwardenSyncCheckpointStore
     private let autoFillIndexStore: (any AutoFillEncryptedIndexStore)?
     private let autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)?
     private let autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)?
@@ -530,6 +547,11 @@ final class AppSessionModel {
     var activeProject: LocalVaultProject?
     private var rememberedVaultDescriptor: LocalVaultDescriptor?
     private var rememberedVaultID: String?
+    /// 本地多库注册表：只存名称/路径/时间/默认标记，绝不存主密码或密钥。
+    var vaultRegistry: LocalVaultRegistry
+    var vaultRegistryOperationState: VaultOperationState = .idle
+    /// 从多库列表里新建库时，锁屏需要先让用户设置主密码；这个字段只记录待创建的库名。
+    var pendingVaultCreationName: String?
     private var lastUserActivityAt: Date?
     private var pendingAndroidEncryptedBackupData: Data?
     private var keePassLastSuccessfulUnlockCredentials: KeePassUnlockCredentials?
@@ -549,6 +571,7 @@ final class AppSessionModel {
         vaultKeychainService: (any AppVaultKeychainService)? = nil,
         vaultWrappedKeyProvider: ((LocalVaultSession) throws -> WrappedVaultKey)? = nil,
         rememberedVaultStore: any RememberedVaultStore = MemoryRememberedVaultStore(),
+        vaultRegistryStore: any AppVaultRegistryStore = MemoryAppVaultRegistryStore(),
         biometricUnlockPreferenceStore: any BiometricUnlockPreferenceStore = MemoryBiometricUnlockPreferenceStore(),
         vaultDisplayPreferenceStore: any VaultDisplayPreferenceStore = MemoryVaultDisplayPreferenceStore(),
         appearancePreferenceStore: any AppAppearancePreferenceStore = MemoryAppAppearancePreferenceStore(),
@@ -577,6 +600,7 @@ final class AppSessionModel {
         bitwardenFolderSyncStateStore: any AppBitwardenFolderSyncStateStore = MemoryAppBitwardenFolderSyncStateStore(),
         bitwardenItemSyncStateStore: any AppBitwardenItemSyncStateStore = MemoryAppBitwardenItemSyncStateStore(),
         bitwardenPendingMutationQueueStore: any AppBitwardenPendingMutationQueueStore = MemoryAppBitwardenPendingMutationQueueStore(),
+        bitwardenSyncCheckpointStore: any AppBitwardenSyncCheckpointStore = MemoryAppBitwardenSyncCheckpointStore(),
         autoFillIndexStore: (any AutoFillEncryptedIndexStore)? = nil,
         autoFillCredentialSecretStore: (any AutoFillCredentialSecretStore)? = nil,
         autoFillCredentialIdentityStore: (any AppAutoFillCredentialIdentityStore)? = nil,
@@ -616,6 +640,8 @@ final class AppSessionModel {
         self.vaultKeychainService = vaultKeychainService
         self.vaultWrappedKeyProvider = vaultWrappedKeyProvider
         self.rememberedVaultStore = rememberedVaultStore
+        self.vaultRegistryStore = vaultRegistryStore
+        self.vaultRegistry = (try? vaultRegistryStore.load()) ?? LocalVaultRegistry()
         self.biometricUnlockPreferenceStore = biometricUnlockPreferenceStore
         self.vaultDisplayPreferenceStore = vaultDisplayPreferenceStore
         self.appearancePreferenceStore = appearancePreferenceStore
@@ -644,6 +670,7 @@ final class AppSessionModel {
         self.bitwardenFolderSyncStateStore = bitwardenFolderSyncStateStore
         self.bitwardenItemSyncStateStore = bitwardenItemSyncStateStore
         self.bitwardenPendingMutationQueueStore = bitwardenPendingMutationQueueStore
+        self.bitwardenSyncCheckpointStore = bitwardenSyncCheckpointStore
         self.autoFillIndexStore = autoFillIndexStore
         self.autoFillCredentialSecretStore = autoFillCredentialSecretStore
         self.autoFillCredentialIdentityStore = autoFillCredentialIdentityStore
@@ -694,6 +721,7 @@ final class AppSessionModel {
             )
             self.rememberedVaultID = remembered.vaultID
         }
+        bootstrapVaultRegistry()
     }
 
     var filteredLoginEntries: [LocalLoginEntry] {
@@ -1926,8 +1954,12 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            let project = try entryRepository.createProject(title: title)
-            vaultProjects.append(project)
+            let node = try createVaultFolder(
+                title: title,
+                parentID: activeVaultFolder?.id,
+                entryRepository: entryRepository
+            )
+            let project = LocalVaultProject(id: node.id, title: node.title)
             try activateVaultCategory(project, entryRepository: entryRepository)
             entryOperationState = .succeeded(project.title)
             return project
@@ -1964,7 +1996,12 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            let renamed = try entryRepository.renameProject(projectID: projectID, title: title)
+            let node = try renameVaultFolder(
+                folderID: projectID,
+                title: title,
+                entryRepository: entryRepository
+            )
+            let renamed = LocalVaultProject(id: node.id, title: node.title)
             vaultProjects = vaultProjects.map { $0.id == projectID ? renamed : $0 }
             if activeProject?.id == projectID {
                 activeProject = renamed
@@ -1986,7 +2023,16 @@ final class AppSessionModel {
             guard let entryRepository = activeEntryRepository else {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
-            try entryRepository.deleteProject(projectID: projectID)
+            guard let folderRepository = vaultFolderRepository(entryRepository: entryRepository) else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            // 保留旧行为：非空分类仍然拒绝删除，需要走新的文件夹删除流程显式选择处置方式。
+            let plan = try folderRepository.deletionPlan(folderID: projectID)
+            guard plan.isEffectivelyEmpty else {
+                throw VaultFolderError.folderNotEmpty
+            }
+            _ = try folderRepository.deleteFolder(folderID: projectID, strategy: .reparent)
+            refreshVaultFolders(entryRepository: entryRepository)
             vaultProjects.removeAll { $0.id == projectID }
             if activeProject?.id == projectID {
                 if let next = vaultProjects.first {
@@ -2004,6 +2050,177 @@ final class AppSessionModel {
             entryOperationState = .failed(error.localizedDescription)
             throw error
         }
+    }
+
+    // MARK: - #27 文件夹层级与保险箱总览
+
+    private func vaultFolderRepository(
+        entryRepository: LocalVaultEntryRepository
+    ) -> VaultFolderRepository? {
+        guard let session = activeVaultSession else { return nil }
+        return VaultFolderRepository(
+            entryRepository: entryRepository,
+            session: session,
+            anchorStore: vaultFolderAnchorStore
+        )
+    }
+
+    /// 解锁或结构变更后重读文件夹森林，并把 `vaultProjects` 同步成文件夹列表。
+    func refreshVaultFolders(entryRepository: LocalVaultEntryRepository) {
+        guard let repository = vaultFolderRepository(entryRepository: entryRepository) else {
+            vaultFolderTree = .empty
+            vaultProjects = []
+            return
+        }
+        if let tree = try? repository.tree() {
+            vaultFolderTree = tree
+            vaultProjects = tree.folders.map { LocalVaultProject(id: $0.id, title: $0.title) }
+        }
+        // 读取失败时保留上一次的树，避免瞬时错误把界面清空成「没有文件夹」。
+        if let activeProject, let node = vaultFolderTree.folder(id: activeProject.id) {
+            self.activeProject = LocalVaultProject(id: node.id, title: node.title)
+        }
+        refreshVaultSearchIndex(entryRepository: entryRepository)
+    }
+
+    /// 当前所在的文件夹；`nil` 表示停在「全部条目」这一层。
+    var activeVaultFolder: VaultFolderNode? {
+        guard let activeProject else { return nil }
+        return vaultFolderTree.folder(id: activeProject.id)
+    }
+
+    /// 面包屑：从根到当前文件夹。
+    var activeVaultFolderBreadcrumb: [VaultFolderNode] {
+        activeVaultFolder.map { vaultFolderTree.path(to: $0.id) } ?? []
+    }
+
+    /// 当前层级下可直接进入的子文件夹。
+    var activeVaultChildFolders: [VaultFolderNode] {
+        vaultFolderTree.children(of: activeVaultFolder?.id)
+    }
+
+    /// 当前层级是否还能再建子文件夹（受最大层级约束）。
+    var canCreateVaultFolder: Bool {
+        let depth = activeVaultFolder.map { vaultFolderTree.depth(of: $0.id) } ?? 0
+        return depth < VaultFolderNameRules.maxDepth
+    }
+
+    @discardableResult
+    func createVaultFolder(
+        title: String,
+        parentID: String?,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> VaultFolderNode {
+        guard let repository = vaultFolderRepository(entryRepository: entryRepository) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let node = try repository.createFolder(title: title, parentID: parentID)
+        refreshVaultFolders(entryRepository: entryRepository)
+        return node
+    }
+
+    /// 在指定父目录下新建文件夹；不传父目录时建在当前文件夹里。
+    @discardableResult
+    func createVaultFolder(title: String, parentID: String? = nil) throws -> VaultFolderNode {
+        guard let entryRepository = activeEntryRepository else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let resolvedParentID = parentID ?? activeVaultFolder?.id
+        return try createVaultFolder(
+            title: title,
+            parentID: resolvedParentID,
+            entryRepository: entryRepository
+        )
+    }
+
+    @discardableResult
+    func renameVaultFolder(
+        folderID: String,
+        title: String,
+        entryRepository: LocalVaultEntryRepository
+    ) throws -> VaultFolderNode {
+        guard let repository = vaultFolderRepository(entryRepository: entryRepository) else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let node = try repository.renameFolder(id: folderID, title: title)
+        refreshVaultFolders(entryRepository: entryRepository)
+        return node
+    }
+
+    @discardableResult
+    func renameVaultFolder(folderID: String, title: String) throws -> VaultFolderNode {
+        guard let entryRepository = activeEntryRepository else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        return try renameVaultFolder(folderID: folderID, title: title, entryRepository: entryRepository)
+    }
+
+    /// 移动文件夹（含整棵子树）。禁止移入自身/后代，由仓储层拦截。
+    @discardableResult
+    func moveVaultFolder(folderID: String, parentID: String?) throws -> VaultFolderNode {
+        guard let entryRepository = activeEntryRepository,
+              let repository = vaultFolderRepository(entryRepository: entryRepository)
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let node = try repository.moveFolder(id: folderID, newParentID: parentID)
+        refreshVaultFolders(entryRepository: entryRepository)
+        publishWidgetSnapshots()
+        return node
+    }
+
+    func vaultFolderDeletionPlan(folderID: String) throws -> VaultFolderDeletionPlan {
+        guard let entryRepository = activeEntryRepository,
+              let repository = vaultFolderRepository(entryRepository: entryRepository)
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        return try repository.deletionPlan(folderID: folderID)
+    }
+
+    /// 按显式策略删除文件夹：内容上移或递归进回收站，绝不静默永久删除条目。
+    @discardableResult
+    func deleteVaultFolder(
+        folderID: String,
+        strategy: VaultFolderDeleteStrategy
+    ) throws -> VaultFolderDeletionResult {
+        guard let entryRepository = activeEntryRepository,
+              let repository = vaultFolderRepository(entryRepository: entryRepository)
+        else {
+            throw LocalVaultRepositoryError.vaultUnavailable
+        }
+        let removedIDs = Set(vaultFolderTree.subtree(rootedAt: folderID).map(\.id))
+        let wasActive = activeProject.map { removedIDs.contains($0.id) } ?? false
+        let result = try repository.deleteFolder(folderID: folderID, strategy: strategy)
+        refreshVaultFolders(entryRepository: entryRepository)
+        // 正停在被删子树里就退回「全部条目」，不要把人留在已经不存在的层级。
+        if wasActive, activeProject.map({ vaultFolderTree.folder(id: $0.id) == nil }) ?? false {
+            activeProject = nil
+            clearAllEntryLists()
+            resetVaultQuickFilters()
+        }
+        publishWidgetSnapshots()
+        return result
+    }
+
+    /// 进入某个文件夹（`nil` 回到「全部条目」），面包屑据此渲染。
+    func openVaultFolder(_ folderID: String?) throws {
+        guard let folderID else {
+            activeProject = nil
+            clearAllEntryLists()
+            resetVaultQuickFilters()
+            return
+        }
+        try switchVaultCategory(projectID: folderID)
+    }
+
+    func presentVaultOverview() {
+        isVaultOverviewPresented = true
+        recordUserActivity()
+    }
+
+    func dismissVaultOverview() {
+        isVaultOverviewPresented = false
     }
 
     func clearVaultBatchSelection() {
@@ -3536,7 +3753,7 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            vaultProjects = try entryRepository.listProjects()
+            refreshVaultFolders(entryRepository: entryRepository)
             rememberVault(session)
             bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
                 vaultID: session.handle.vaultID
@@ -3588,7 +3805,7 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            vaultProjects = try entryRepository.listProjects()
+            refreshVaultFolders(entryRepository: entryRepository)
             rememberVault(session)
             bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
                 vaultID: session.handle.vaultID
@@ -7036,6 +7253,192 @@ final class AppSessionModel {
         }
     }
 
+    // MARK: - 通用导入导出（CSV / JSON / Bitwarden / Aegis / Stratum）
+
+    /// 只解析、不写库：format sniffing 与逐条错误都来自 Storage 层。
+    func previewTransferImport(
+        data: Data,
+        fileName: String?,
+        contentType: String?,
+        password: String? = nil
+    ) -> VaultImportResult {
+        VaultImportEngine.preview(
+            data: data,
+            fileName: fileName,
+            contentType: contentType,
+            options: VaultImportOptions(
+                password: password,
+                existingLoginEntries: loginEntries,
+                existingTotpEntries: totpEntries
+            )
+        )
+    }
+
+    /// 用户确认后逐条写入；自定义字段跟随条目写入侧表。
+    func importTransferItems(_ items: [VaultTransferItem], projectTitle: String) throws -> Int {
+        recordUserActivity()
+        entryOperationState = .running
+
+        do {
+            guard let entryRepository = activeEntryRepository else {
+                throw LocalVaultRepositoryError.vaultUnavailable
+            }
+            let project = try ensureActiveProject(projectTitle: projectTitle, entryRepository: entryRepository)
+
+            var importedCount = 0
+            for item in items {
+                guard let itemID = try createCSVImportedItem(
+                    item.draft,
+                    projectID: project.id,
+                    entryRepository: entryRepository
+                ) else {
+                    continue
+                }
+                if !item.customFields.isEmpty {
+                    _ = try entryRepository.saveItemExtras(
+                        projectID: project.id,
+                        extras: VaultItemExtras(
+                            itemID: itemID,
+                            itemKind: item.draft.kind,
+                            customFields: item.customFields
+                        )
+                    )
+                }
+                importedCount += 1
+            }
+
+            try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
+            try refreshAutoFillEncryptedIndexIfConfigured()
+            entryOperationState = .succeeded(String(localized: "已导入 \(importedCount) 项"))
+            return importedCount
+        } catch {
+            entryOperationState = .failed(error.localizedDescription)
+            throw error
+        }
+    }
+
+    /// 导出用的统一模型：条目 + 自定义字段；`sourceID` 只会写进导出的 JSON，不写日志。
+    func transferItems(includeCustomFields: Bool) -> [VaultTransferItem] {
+        let rows = csvExportRows()
+        var extrasByItemID: [String: VaultItemExtras] = [:]
+        if includeCustomFields,
+           let entryRepository = activeEntryRepository,
+           let project = activeProject {
+            extrasByItemID = (try? entryRepository.listItemExtras(projectID: project.id)) ?? [:]
+        }
+        return rows.enumerated().map { index, row in
+            VaultTransferItem(
+                draft: row.draft,
+                customFields: includeCustomFields ? (extrasByItemID[row.itemID]?.customFields ?? []) : [],
+                sourceIndex: index,
+                sourceID: row.itemID
+            )
+        }
+    }
+
+    // MARK: - 格式导入（issue #37）
+
+    /// 从文件选择器拿到的 URL 读取数据；只预览，不写库。
+    @discardableResult
+    func beginFormatImport(from fileURL: URL) throws -> FormatImportPreview {
+        let didStartAccessing = fileURL.startAccessingSecurityScopedResource()
+        defer {
+            if didStartAccessing {
+                fileURL.stopAccessingSecurityScopedResource()
+            }
+        }
+        let data = try Data(contentsOf: fileURL)
+        let contentType = UTType(filenameExtension: fileURL.pathExtension)?.preferredMIMEType
+        return beginFormatImport(
+            data: data,
+            fileName: fileURL.lastPathComponent,
+            contentType: contentType
+        )
+    }
+
+    /// 解析并缓存预览；密码只留在内存里，不写日志。
+    @discardableResult
+    func beginFormatImport(
+        data: Data,
+        fileName: String?,
+        contentType: String?,
+        password: String? = nil
+    ) -> FormatImportPreview {
+        recordUserActivity()
+        let result = previewTransferImport(
+            data: data,
+            fileName: fileName,
+            contentType: contentType,
+            password: password
+        )
+        let preview = FormatImportPreview(result: result, fileName: fileName)
+        formatImportPreview = preview
+        csvImportPreview = nil
+        androidBackupImportPreview = nil
+        clearKeePassImportState()
+        pendingFormatImportData = data
+        pendingFormatImportFileName = fileName
+        pendingFormatImportContentType = contentType
+        entryOperationState = .succeeded(
+            String(localized: "格式预览：可导入 \(preview.itemCount) 项，\(preview.issues.count) 个问题")
+        )
+        return preview
+    }
+
+    /// 加密文件：用界面上输入的密码重试一次，输入后立即清空密码。
+    @discardableResult
+    func previewEncryptedFormatImport() -> FormatImportPreview? {
+        guard let data = pendingFormatImportData else {
+            return nil
+        }
+        let password = formatImportPassword
+        formatImportPassword = ""
+        return beginFormatImport(
+            data: data,
+            fileName: pendingFormatImportFileName,
+            contentType: pendingFormatImportContentType,
+            password: password
+        )
+    }
+
+    func cancelFormatImport() {
+        formatImportPreview = nil
+        formatImportPassword = ""
+        pendingFormatImportData = nil
+        pendingFormatImportFileName = nil
+        pendingFormatImportContentType = nil
+    }
+
+    /// 用户确认后逐条写入；自定义字段跟随条目写入侧表。
+    @discardableResult
+    func confirmFormatImport(projectTitle: String) throws -> Int {
+        guard let preview = formatImportPreview, preview.canImport else {
+            throw LocalVaultRepositoryError.invalidEntryPayload
+        }
+        let importedCount = try importTransferItems(preview.result.items, projectTitle: projectTitle)
+        cancelFormatImport()
+        entryOperationState = .succeeded(String(localized: "已导入 \(importedCount) 项"))
+        return importedCount
+    }
+
+    /// 导出：CSV / JSON，可选自定义字段与加密密码；明文确认由界面负责。
+    func exportTransferArtifact(
+        format: VaultExportFormat,
+        includeCustomFields: Bool,
+        encryptionPassword: String?
+    ) throws -> VaultExportArtifact {
+        recordUserActivity()
+        let items = transferItems(includeCustomFields: includeCustomFields)
+        return try VaultExportEngine.export(
+            items: items,
+            options: VaultExportOptions(
+                format: format,
+                includeCustomFields: includeCustomFields,
+                encryptionPassword: encryptionPassword
+            )
+        )
+    }
+
     // MARK: - 凭据交换（CXF，iOS 26+）
 
     /// 系统完成导入握手后通过 NSUserActivity 调用；令牌只保留在内存里。
@@ -8550,7 +8953,7 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            vaultProjects = try entryRepository.listProjects()
+            refreshVaultFolders(entryRepository: entryRepository)
             rememberVault(session)
             loginEntries = []
             deletedLoginEntries = []
@@ -9690,10 +10093,14 @@ final class AppSessionModel {
         bitwardenSyncState = .running
 
         do {
-            _ = try requireActiveVaultSession()
+            let session = try requireActiveVaultSession()
             let provider = try requireBitwardenSyncProvider()
             let snapshot = try await provider.pullSnapshot()
-            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            var preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            preview.mergeSummary = bitwardenSyncMergeSummary(
+                snapshot: snapshot,
+                vaultID: session.handle.vaultID
+            )
             bitwardenSyncPreview = preview
             bitwardenSyncState = .previewReady(
                 itemCount: preview.remoteItemCount,
@@ -9716,10 +10123,34 @@ final class AppSessionModel {
                 throw LocalVaultRepositoryError.vaultUnavailable
             }
             let provider = try requireBitwardenSyncProvider()
-            let snapshot = try await provider.pullSnapshot()
-            let preview = AppBitwardenSyncPreview(snapshot: snapshot)
+            let priorCheckpoint = try? bitwardenSyncCheckpointStore.loadCheckpoint(vaultID: session.handle.vaultID)
+            let pullOutcome = try await provider.pullSnapshot(ifChangedSince: priorCheckpoint?.revision)
+            let snapshot: BitwardenSyncSnapshot
+            var pulledRevision: BitwardenSyncRevision?
+            switch pullOutcome {
+            case let .unchanged(revision):
+                pulledRevision = revision
+                if let cachedPreview = bitwardenSyncPreview {
+                    // 远端修订号未变：直接复用上次预览，避免整库重复导入产生重复条目。
+                    saveBitwardenSyncCheckpoint(revision: revision, vaultID: session.handle.vaultID)
+                    bitwardenSyncState = .synced(
+                        itemCount: cachedPreview.remoteItemCount,
+                        sendCount: cachedPreview.remoteSendCount
+                    )
+                    return cachedPreview
+                }
+                snapshot = try await provider.pullSnapshot()
+            case let .changed(pulledSnapshot, revision):
+                snapshot = pulledSnapshot
+                pulledRevision = revision
+            }
+            var preview = AppBitwardenSyncPreview(snapshot: snapshot)
             let previousItemStates = try bitwardenItemSyncStateStore.loadStates(vaultID: session.handle.vaultID)
             let previousSendStates = try bitwardenSendSyncStateStore.loadStates(vaultID: session.handle.vaultID)
+            preview.mergeSummary = bitwardenSyncMergeSummary(
+                snapshot: snapshot,
+                vaultID: session.handle.vaultID
+            )
             try validateBitwardenRemoteSnapshotIsSafe(
                 snapshot,
                 previousItemStates: previousItemStates,
@@ -9737,6 +10168,10 @@ final class AppSessionModel {
             )
             try refreshAllEntryLists(projectID: project.id, entryRepository: entryRepository)
             try refreshAutoFillEncryptedIndexIfConfigured()
+            if pulledRevision == nil {
+                pulledRevision = try? await provider.latestRevision()
+            }
+            saveBitwardenSyncCheckpoint(revision: pulledRevision, vaultID: session.handle.vaultID)
             bitwardenSyncPreview = preview
             bitwardenSyncState = .synced(
                 itemCount: preview.remoteItemCount,
@@ -10987,6 +11422,20 @@ final class AppSessionModel {
         previousStates: [BitwardenItemSyncState],
         folderStates: [BitwardenFolderSyncState] = []
     ) -> BitwardenItemSyncPlan {
+        let localSync = makeBitwardenLocalSyncItems(folderStates: folderStates)
+        return BitwardenItemSyncPlanner().plan(
+            localItems: localSync.localItems,
+            deletedLocalItems: localSync.deletedLocalItems,
+            remoteItems: remoteItems,
+            previousStates: previousStates
+        )
+    }
+
+    /// 把当前保险库里的各类条目转换成 Bitwarden 侧的合并输入。
+    /// 预览计数与推送计划共用这一份映射，避免两处字段顺序漂移。
+    private func makeBitwardenLocalSyncItems(
+        folderStates: [BitwardenFolderSyncState] = []
+    ) -> (localItems: [BitwardenLocalItemSyncItem], deletedLocalItems: [BitwardenLocalItemSyncItem]) {
         let folderStateByProjectID = Dictionary(uniqueKeysWithValues: folderStates.map { ($0.localID, $0) })
         let localLoginItems: [BitwardenLocalItemSyncItem] = loginEntries.map {
             bitwardenLocalItem(from: $0, folderID: folderStateByProjectID[$0.projectID]?.remoteID, folderName: folderStateByProjectID[$0.projectID]?.name)
@@ -11032,12 +11481,31 @@ final class AppSessionModel {
         }
         let localItems = localLoginItems + localTotpItems + localNoteItems + localCardItems + localIdentityItems + localPasskeyItems + localSshKeyItems
         let deletedLocalItems = deletedLoginItems + deletedTotpItems + deletedNoteItems + deletedCardItems + deletedIdentityItems + deletedPasskeyItems + deletedSshKeyItems
+        return (localItems, deletedLocalItems)
+    }
 
-        return BitwardenItemSyncPlanner().plan(
-            localItems: localItems,
-            deletedLocalItems: deletedLocalItems,
-            remoteItems: remoteItems,
-            previousStates: previousStates
+    /// 预览用的字段级合并计数：新增/更新/冲突/删除数量与集合清单。
+    private func bitwardenSyncMergeSummary(
+        snapshot: BitwardenSyncSnapshot,
+        vaultID: String
+    ) -> BitwardenSyncPreviewSummary {
+        let previousItemStates = (try? bitwardenItemSyncStateStore.loadStates(vaultID: vaultID)) ?? []
+        let folderStates = (try? bitwardenFolderSyncStateStore.loadStates(vaultID: vaultID)) ?? []
+        let localSync = makeBitwardenLocalSyncItems(folderStates: folderStates)
+        return BitwardenSyncPreviewBuilder().summary(
+            remote: snapshot,
+            localItems: localSync.localItems,
+            deletedLocalItems: localSync.deletedLocalItems,
+            previousStates: previousItemStates
+        )
+    }
+
+    /// 只存修订号与时间，不含任何 token 或条目内容。
+    private func saveBitwardenSyncCheckpoint(revision: BitwardenSyncRevision?, vaultID: String) {
+        guard let revision else { return }
+        try? bitwardenSyncCheckpointStore.saveCheckpoint(
+            AppBitwardenSyncCheckpoint(revision: revision, vaultID: vaultID, syncedAt: Date()),
+            vaultID: vaultID
         )
     }
 
@@ -11165,15 +11633,59 @@ final class AppSessionModel {
     }
 
     private func rememberVault(_ session: LocalVaultSession) {
-        rememberedVaultDescriptor = session.descriptor
+        let entry = registerVaultInRegistry(session)
+        let displayName = entry?.displayName ?? session.descriptor.displayName
+        let descriptor = LocalVaultDescriptor(
+            fileURL: session.descriptor.fileURL,
+            displayName: displayName
+        )
+        rememberedVaultDescriptor = descriptor
         rememberedVaultID = session.handle.vaultID
+        activeVaultName = displayName
+        activeVaultSession = LocalVaultSession(
+            descriptor: descriptor,
+            handle: session.handle,
+            state: session.state
+        )
+        pendingVaultCreationName = nil
         try? rememberedVaultStore.save(
             RememberedVaultRecord(
-                fileURL: session.descriptor.fileURL,
-                displayName: session.descriptor.displayName,
+                fileURL: descriptor.fileURL,
+                displayName: displayName,
                 vaultID: session.handle.vaultID
             )
         )
+    }
+
+    /// 当前记住的库身份（路径 + 显示名 + MDBX 库 ID），供多库逻辑读写。
+    var rememberedVaultIdentity: (fileURL: URL, displayName: String, vaultID: String)? {
+        guard let descriptor = rememberedVaultDescriptor, let rememberedVaultID else {
+            return nil
+        }
+        return (descriptor.fileURL, descriptor.displayName, rememberedVaultID)
+    }
+
+    var rememberedVaultFileURL: URL? {
+        rememberedVaultDescriptor?.fileURL
+    }
+
+    /// 只改写「上次打开库」指针，不碰任何密钥材料。
+    func storeRememberedVault(fileURL: URL, displayName: String, vaultID: String) {
+        rememberedVaultDescriptor = LocalVaultDescriptor(fileURL: fileURL, displayName: displayName)
+        rememberedVaultID = vaultID
+        try? rememberedVaultStore.save(
+            RememberedVaultRecord(
+                fileURL: fileURL,
+                displayName: displayName,
+                vaultID: vaultID
+            )
+        )
+    }
+
+    func discardRememberedVault() {
+        rememberedVaultDescriptor = nil
+        rememberedVaultID = nil
+        try? rememberedVaultStore.delete()
     }
 
     private func resolvedRememberedVaultDescriptor(
@@ -11252,6 +11764,9 @@ final class AppSessionModel {
         activeEntryRepository = nil
         activeProject = nil
         vaultProjects = []
+        vaultFolderTree = .empty
+        vaultFolderOverview = .builder(documents: [], tree: .empty)
+        isVaultOverviewPresented = false
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -11307,6 +11822,9 @@ final class AppSessionModel {
         activeEntryRepository = nil
         activeProject = nil
         vaultProjects = []
+        vaultFolderTree = .empty
+        vaultFolderOverview = .builder(documents: [], tree: .empty)
+        isVaultOverviewPresented = false
         lastUserActivityAt = nil
         resetVaultQuickFilters()
         loginEntries = []
@@ -11846,9 +12364,9 @@ final class AppSessionModel {
             snapshot.deletedPaymentAccountEntries += (try? entryRepository.listDeletedPaymentAccountEntries(projectID: projectID)) ?? []
         }
 
-        vaultSearch.replaceDocuments(
-            VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
-        )
+        let documents = VaultSearchDocumentBuilder.documents(from: snapshot, usage: vaultSearchUsage())
+        vaultSearch.replaceDocuments(documents)
+        vaultFolderOverview = VaultFolderOverview.builder(documents: documents, tree: vaultFolderTree)
         vaultSearchRevision += 1
     }
 
@@ -11886,6 +12404,7 @@ final class AppSessionModel {
         vaultSearch.lock()
         vaultSearchRevision += 1
         isGlobalSearchPresented = false
+        vaultFolderOverview = .builder(documents: [], tree: .empty)
     }
 
     private func clearAllEntryLists() {
@@ -11909,20 +12428,27 @@ final class AppSessionModel {
     }
 
     private func csvExportDrafts() -> [VaultCSVItemDraft] {
-        var drafts: [VaultCSVItemDraft] = []
-        drafts += loginEntries.map {
-            .login(LocalLoginEntryDraft(
+        csvExportRows().map(\.draft)
+    }
+
+    /// 导出用的条目行：保留本地条目 ID，便于把自定义字段侧表一起带走。
+    private func csvExportRows() -> [(itemID: String, draft: VaultCSVItemDraft)] {
+        var rows: [(itemID: String, draft: VaultCSVItemDraft)] = []
+        rows += loginEntries.map {
+            (itemID: $0.id, draft: .login(LocalLoginEntryDraft(
                 title: $0.title,
                 username: $0.username,
                 password: $0.password,
-                url: $0.url
-            ))
+                url: $0.url,
+                notes: $0.notes,
+                urls: $0.effectiveURLs
+            )))
         }
-        drafts += noteEntries.map {
-            .note(LocalNoteEntryDraft(title: $0.title, body: $0.body))
+        rows += noteEntries.map {
+            (itemID: $0.id, draft: .note(LocalNoteEntryDraft(title: $0.title, body: $0.body)))
         }
-        drafts += totpEntries.map {
-            .totp(LocalTotpEntryDraft(
+        rows += totpEntries.map {
+            (itemID: $0.id, draft: .totp(LocalTotpEntryDraft(
                 title: $0.title,
                 secret: $0.secret,
                 issuer: $0.issuer,
@@ -11932,10 +12458,10 @@ final class AppSessionModel {
                 algorithm: $0.algorithm,
                 otpType: $0.otpType,
                 counter: $0.counter
-            ))
+            )))
         }
-        drafts += cardEntries.map {
-            .card(LocalCardEntryDraft(
+        rows += cardEntries.map {
+            (itemID: $0.id, draft: .card(LocalCardEntryDraft(
                 title: $0.title,
                 cardholderName: $0.cardholderName,
                 number: $0.number,
@@ -11945,10 +12471,10 @@ final class AppSessionModel {
                 issuer: $0.issuer,
                 network: $0.network,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += identityEntries.map {
-            .identity(LocalIdentityEntryDraft(
+        rows += identityEntries.map {
+            (itemID: $0.id, draft: .identity(LocalIdentityEntryDraft(
                 title: $0.title,
                 documentType: $0.documentType,
                 fullName: $0.fullName,
@@ -11958,10 +12484,10 @@ final class AppSessionModel {
                 issueDate: $0.issueDate,
                 expiryDate: $0.expiryDate,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += passkeyEntries.map {
-            .passkey(LocalPasskeyEntryDraft(
+        rows += passkeyEntries.map {
+            (itemID: $0.id, draft: .passkey(LocalPasskeyEntryDraft(
                 title: $0.title,
                 relyingPartyID: $0.relyingPartyID,
                 username: $0.username,
@@ -11970,10 +12496,10 @@ final class AppSessionModel {
                 publicKeyCOSE: $0.publicKeyCOSE,
                 privateKeyReference: $0.privateKeyReference,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += sshKeyEntries.map {
-            .sshKey(LocalSshKeyEntryDraft(
+        rows += sshKeyEntries.map {
+            (itemID: $0.id, draft: .sshKey(LocalSshKeyEntryDraft(
                 title: $0.title,
                 username: $0.username,
                 host: $0.host,
@@ -11981,10 +12507,10 @@ final class AppSessionModel {
                 privateKeyReference: $0.privateKeyReference,
                 passphraseHint: $0.passphraseHint,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += apiTokenEntries.map {
-            .apiToken(LocalApiTokenEntryDraft(
+        rows += apiTokenEntries.map {
+            (itemID: $0.id, draft: .apiToken(LocalApiTokenEntryDraft(
                 title: $0.title,
                 issuer: $0.issuer,
                 accountName: $0.accountName,
@@ -11992,20 +12518,20 @@ final class AppSessionModel {
                 scopes: $0.scopes,
                 expiresAt: $0.expiresAt,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += wifiEntries.map {
-            .wifi(LocalWifiEntryDraft(
+        rows += wifiEntries.map {
+            (itemID: $0.id, draft: .wifi(LocalWifiEntryDraft(
                 title: $0.title,
                 ssid: $0.ssid,
                 securityType: $0.securityType,
                 password: $0.password,
                 hidden: $0.hidden,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += ssoEntries.map {
-            .sso(LocalSSOEntryDraft(
+        rows += ssoEntries.map {
+            (itemID: $0.id, draft: .sso(LocalSSOEntryDraft(
                 title: $0.title,
                 provider: $0.provider,
                 providerName: $0.providerName,
@@ -12015,19 +12541,19 @@ final class AppSessionModel {
                 linkedLoginEntryID: $0.linkedLoginEntryID,
                 notes: $0.notes,
                 secret: $0.secret
-            ))
+            )))
         }
-        drafts += sendEntries.map {
-            .send(LocalSendEntryDraft(
+        rows += sendEntries.map {
+            (itemID: $0.id, draft: .send(LocalSendEntryDraft(
                 title: $0.title,
                 body: $0.body,
                 expiresAt: $0.expiresAt,
                 maxViews: $0.maxViews,
                 notes: $0.notes
-            ))
+            )))
         }
-        drafts += billingAddressEntries.map {
-            .billingAddress(LocalBillingAddressEntryDraft(
+        rows += billingAddressEntries.map {
+            (itemID: $0.id, draft: .billingAddress(LocalBillingAddressEntryDraft(
                 title: $0.title,
                 fullName: $0.fullName,
                 streetAddress: $0.streetAddress,
@@ -12039,10 +12565,10 @@ final class AppSessionModel {
                 phone: $0.phone,
                 notes: $0.notes,
                 linkedCardIDs: $0.linkedCardIDs
-            ))
+            )))
         }
-        drafts += paymentAccountEntries.map {
-            .paymentAccount(LocalPaymentAccountEntryDraft(
+        rows += paymentAccountEntries.map {
+            (itemID: $0.id, draft: .paymentAccount(LocalPaymentAccountEntryDraft(
                 title: $0.title,
                 kind: $0.kind,
                 provider: $0.provider,
@@ -12056,9 +12582,9 @@ final class AppSessionModel {
                 notes: $0.notes,
                 linkedCardID: $0.linkedCardID,
                 billingAddressID: $0.billingAddressID
-            ))
+            )))
         }
-        return drafts
+        return rows
     }
 
     func makeWebDAVEndpoint() throws -> WebDAVEndpoint {
@@ -12558,4 +13084,22 @@ final class AppSessionModel {
             }
         }
     }
+}
+
+// MARK: - #27 文件夹锚点存储
+
+/// 文件夹索引锚点落在 App 支持目录下的独立命名空间文件里。
+///
+/// 文件内容只有一个随机 UUID（锚点 project 的 id），不含任何用户内容；
+/// 文件夹名与层级仍然只存在于 MDBX 的加密侧表里。
+private func appDefaultVaultFolderAnchorStore() -> any VaultFolderAnchorStore {
+    guard let supportURL = try? FileManager.default.url(
+        for: .applicationSupportDirectory,
+        in: .userDomainMask,
+        appropriateFor: nil,
+        create: true
+    ) else {
+        return InMemoryVaultFolderAnchorStore()
+    }
+    return FileVaultFolderAnchorStore(directoryURL: supportURL)
 }
