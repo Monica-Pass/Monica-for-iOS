@@ -10,6 +10,7 @@
 		B5F000000000000000000005 /* AppSessionModel+CredentialExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F000000000000000000006 /* AppSessionModel+CredentialExchange.swift */; };
 		B5F000000000000000000003 /* AppSessionModel+ImportExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F000000000000000000004 /* AppSessionModel+ImportExport.swift */; };
 		B5F000000000000000000001 /* AppSessionModel+EntryCRUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F000000000000000000002 /* AppSessionModel+EntryCRUD.swift */; };
+		B600000000000000000001 /* AppSimulatorAcceptanceHarness.swift in Sources */ = {isa = PBXBuildFile; fileRef = B600000000000000000011 /* AppSimulatorAcceptanceHarness.swift */; };
 		B5E000000000000000000001 /* VaultSessionTestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000005 /* VaultSessionTestDoubles.swift */; };
 		B5E000000000000000000002 /* GeneratorSaveLoginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */; };
 		B5E000000000000000000003 /* VaultLayoutPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */; };
@@ -268,6 +269,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 		B5F000000000000000000006 /* AppSessionModel+CredentialExchange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CredentialExchange.swift"; sourceTree = "<group>"; };
 		B5F000000000000000000004 /* AppSessionModel+ImportExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+ImportExport.swift"; sourceTree = "<group>"; };
 		B5F000000000000000000002 /* AppSessionModel+EntryCRUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+EntryCRUD.swift"; sourceTree = "<group>"; };
+		B600000000000000000011 /* AppSimulatorAcceptanceHarness.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSimulatorAcceptanceHarness.swift; sourceTree = "<group>"; };
 		B5E000000000000000000005 /* VaultSessionTestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSessionTestDoubles.swift; sourceTree = "<group>"; };
 		B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorSaveLoginTests.swift; sourceTree = "<group>"; };
 		B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultLayoutPreferencesTests.swift; sourceTree = "<group>"; };
@@ -634,6 +636,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				B9C200000000000000000002 /* AppKeePassCloudSupport.swift */,
 				B9C200000000000000000003 /* AppKeePassCloudBrowserView.swift */,
 				A4C0000000000000000000F2 /* AppDataClearView.swift */,
+				B600000000000000000011 /* AppSimulatorAcceptanceHarness.swift */,
 				AB0000000000000000000001 /* AppRoot */,
 			);
 			path = MonicaApp;
@@ -1121,6 +1124,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				B5F000000000000000000005 /* AppSessionModel+CredentialExchange.swift in Sources */,
 				B5F000000000000000000003 /* AppSessionModel+ImportExport.swift in Sources */,
 				B5F000000000000000000001 /* AppSessionModel+EntryCRUD.swift in Sources */,
+				B600000000000000000001 /* AppSimulatorAcceptanceHarness.swift in Sources */,
 				B5D000000000000000000005 /* AppSessionModel+CloudBackup.swift in Sources */,
 				B5D000000000000000000003 /* AppSessionModel+BitwardenSync.swift in Sources */,
 				B5D000000000000000000001 /* AppSessionModel+KeePassReadOnly.swift in Sources */,
