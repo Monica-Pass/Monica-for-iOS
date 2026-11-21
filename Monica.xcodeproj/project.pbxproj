@@ -132,7 +132,7 @@
 		A97000000000000000000002 /* AppSSOSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = A97000000000000000000001 /* AppSSOSupport.swift */; };
 		B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000011 /* AppImportExportFormatsView.swift */; };
 		B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B37000000000000000000001 /* AppImportExportFormatsSupport.swift */; };
-/* End PBXBuildFile section */
+		B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */; };
 
 /* Begin PBXContainerItemProxy section */
 		A10000000000000000000041 /* PBXContainerItemProxy */ = {
@@ -300,7 +300,7 @@
 		A97000000000000000000001 /* AppSSOSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSSOSupport.swift; sourceTree = "<group>"; };
 		B37000000000000000000011 /* AppImportExportFormatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppImportExportFormatsView.swift; sourceTree = "<group>"; };
 		B37000000000000000000001 /* AppImportExportFormatsSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppImportExportFormatsSupport.swift"; sourceTree = "<group>"; };
-/* End PBXFileReference section */
+		B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BitwardenSyncMergeSummaryView.swift; sourceTree = "<group>"; };
 
 /* Begin PBXFrameworksBuildPhase section */
 		A10000000000000000000052 /* Frameworks */ = {
@@ -409,6 +409,7 @@
 				A9240000000000000000B004 /* GeneratorHistoryController.swift */,
 				A90000000000000000000011 /* AppVaultLayoutPreferences.swift */,
 				A91000000000000000000011 /* AppUpdateCheckView.swift */,
+				B34000000000000000000002 /* BitwardenSyncMergeSummaryView.swift */,
 				B37000000000000000000011 /* AppImportExportFormatsView.swift */,
 				B37000000000000000000001 /* AppImportExportFormatsSupport.swift */,
 				A92000000000000000000011 /* AppAuthenticatorLiveActivity.swift */,
@@ -847,6 +848,7 @@ A97000000000000000000001 /* AppSSOSupport.swift */,
 				A9240000000000000000B003 /* GeneratorHistoryController.swift in Sources */,
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				B34000000000000000000001 /* BitwardenSyncMergeSummaryView.swift in Sources */,
 				B37000000000000000000012 /* AppImportExportFormatsView.swift in Sources */,
 				B37000000000000000000002 /* AppImportExportFormatsSupport.swift in Sources */,
 				A92000000000000000000001 /* AppAuthenticatorLiveActivity.swift in Sources */,
