@@ -8198,6 +8198,22 @@
         }
       }
     },
+    "打开保险库": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Open vault"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开保险库"
+          }
+        }
+      }
+    },
     "更换泄露密码": {
       "localizations": {
         "en": {
