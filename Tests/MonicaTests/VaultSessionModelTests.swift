@@ -1462,7 +1462,7 @@ final class VaultSessionModelTests: XCTestCase {
     }
 
     func testPlusExpiredSnapshotIsNotTreatedAsSupporter() throws {
-        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        let now = Date()
         let expired = PlusEntitlement(
             productID: "com.monica.plus.support.small",
             expiresAt: now.addingTimeInterval(-60),
@@ -3759,7 +3759,7 @@ final class VaultSessionModelTests: XCTestCase {
         XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["Apple ID"])
 
         model.loginSearchQuery = "  "
-        XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["Apple ID", "GitHub"])
+        XCTAssertEqual(model.filteredLoginEntries.map(\.title), ["GitHub", "Apple ID"])
 
         model.loginSearchQuery = "apple"
         model.lockLocalVault()

@@ -4215,12 +4215,6 @@ final class AppSessionModel {
             let entryRepository = vaultRepository.entryRepository(for: session)
             activeEntryRepository = entryRepository
             activeProject = nil
-            refreshVaultFolders(entryRepository: entryRepository)
-            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
-            rememberVault(session)
-            bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
-                vaultID: session.handle.vaultID
-            )) ?? []
             loginEntries = []
             deletedLoginEntries = []
             noteEntries = []
@@ -4236,6 +4230,12 @@ final class AppSessionModel {
             deletedPasskeyEntries = []
             clearExtendedParityEntries()
             clearOperationTimelineEvents()
+            refreshVaultFolders(entryRepository: entryRepository)
+            activateInitialVaultCategoryIfNeeded(entryRepository: entryRepository)
+            rememberVault(session)
+            bitwardenPendingMutationBatches = (try? bitwardenPendingMutationQueueStore.loadBatches(
+                vaultID: session.handle.vaultID
+            )) ?? []
             recordUserActivity(at: now)
             publishWidgetSnapshots(now: now, reloadImmediately: true)
             vaultOperationState = .succeeded(session.descriptor.displayName)
@@ -13039,12 +13039,13 @@ final class AppSessionModel {
     /// 同级同名文件夹存在时直接复用，避免导入流程产生重复分类。
     func createOrReuseVaultProject(
         title: String,
+        parentID explicitParentID: String? = nil,
         entryRepository: LocalVaultEntryRepository
     ) throws -> LocalVaultProject {
         guard let folderRepository = vaultFolderRepository(entryRepository: entryRepository) else {
             return try entryRepository.createProject(title: title)
         }
-        let parentID = activeVaultFolder?.id
+        let parentID = explicitParentID ?? activeVaultFolder?.id
         let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         if let tree = try? folderRepository.tree(),
            let existing = tree.folders.first(where: {
@@ -13106,26 +13107,35 @@ final class AppSessionModel {
         groupPath: String,
         entryRepository: LocalVaultEntryRepository
     ) throws -> LocalVaultProject {
-        let title = keePassImportProjectTitle(baseTitle: baseTitle, groupPath: groupPath)
-        if let project = vaultProjects.first(where: { $0.title == title }) {
-            return project
+        // 组路径逐级建文件夹：既保留 KeePass 的树形结构，也避免生成含 "/" 的非法文件夹名。
+        var project: LocalVaultProject?
+        var parentID: String?
+        for title in keePassImportProjectComponentTitles(baseTitle: baseTitle, groupPath: groupPath) {
+            let component = try createOrReuseVaultProject(
+                title: title,
+                parentID: parentID,
+                entryRepository: entryRepository
+            )
+            project = component
+            parentID = component.id
         }
-        let project = try createOrReuseVaultProject(title: title, entryRepository: entryRepository)
-        vaultProjects.append(project)
+        guard let project else {
+            throw LocalVaultRepositoryError.projectNotFound
+        }
+        if !vaultProjects.contains(where: { $0.id == project.id }) {
+            vaultProjects.append(project)
+        }
         return project
     }
 
-    private func keePassImportProjectTitle(baseTitle: String, groupPath: String) -> String {
+    private func keePassImportProjectComponentTitles(baseTitle: String, groupPath: String) -> [String] {
         let trimmedBase = baseTitle.trimmingCharacters(in: .whitespacesAndNewlines)
         let base = trimmedBase.isEmpty ? "KeePass" : trimmedBase
         let components = groupPath
             .split(separator: "/")
             .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        guard !components.isEmpty else {
-            return base
-        }
-        return ([base] + components).joined(separator: " / ")
+        return [base] + components
     }
 
     private func keePassTotpDraft(
