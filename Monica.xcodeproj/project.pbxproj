@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B5D000000000000000000003 /* AppSessionModel+BitwardenSync.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D000000000000000000004 /* AppSessionModel+BitwardenSync.swift */; };
 		B5D000000000000000000001 /* AppSessionModel+KeePassReadOnly.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5D000000000000000000002 /* AppSessionModel+KeePassReadOnly.swift */; };
 		C3B0000000000000000000A1 /* AppVaultRecoveryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B0000000000000000000A2 /* AppVaultRecoveryView.swift */; };
 		C3B0000000000000000000A3 /* AppVaultRecoverySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B0000000000000000000A4 /* AppVaultRecoverySupport.swift */; };
@@ -256,6 +257,7 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B5D000000000000000000004 /* AppSessionModel+BitwardenSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+BitwardenSync.swift"; sourceTree = "<group>"; };
 		B5D000000000000000000002 /* AppSessionModel+KeePassReadOnly.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+KeePassReadOnly.swift"; sourceTree = "<group>"; };
 		C3B0000000000000000000A2 /* AppVaultRecoveryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppVaultRecoveryView.swift"; sourceTree = "<group>"; };
 		C3B0000000000000000000A4 /* AppVaultRecoverySupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppVaultRecoverySupport.swift"; sourceTree = "<group>"; };
@@ -640,6 +642,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
+				B5D000000000000000000004 /* AppSessionModel+BitwardenSync.swift */,
 				B5D000000000000000000002 /* AppSessionModel+KeePassReadOnly.swift */,
 				B5B000000000000000000002 /* AppSessionModel+Attachments.swift */,
 				B5B000000000000000000004 /* AppSessionModel+VaultFolders.swift */,
@@ -1091,6 +1094,7 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 		A149A0000000000000000001 /* AppItemIconPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				B5D000000000000000000003 /* AppSessionModel+BitwardenSync.swift in Sources */,
 				B5D000000000000000000001 /* AppSessionModel+KeePassReadOnly.swift in Sources */,
 				C3B0000000000000000000A3 /* AppVaultRecoverySupport.swift in Sources */,
 				C3B0000000000000000000A1 /* AppVaultRecoveryView.swift in Sources */,
