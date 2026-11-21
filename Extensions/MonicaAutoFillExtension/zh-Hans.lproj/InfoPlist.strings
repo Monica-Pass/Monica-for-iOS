@@ -1,2 +1,2 @@
 "CFBundleDisplayName" = "Monica 自动填充";
-"NSFaceIDUsageDescription" = "验证设备所有者后才能创建或使用 Monica 通行密钥。";
+"NSFaceIDUsageDescription" = "验证设备所有者后才能使用 Monica 通行密钥或自动填充密码。";

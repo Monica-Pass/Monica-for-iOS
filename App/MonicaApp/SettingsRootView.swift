@@ -542,6 +542,8 @@ struct SettingsRootView: View {
 
             AppAutoFillEnablementSection(session: session)
 
+            AppAutoFillDeviceVerificationSection()
+
             AndroidParitySection(title: String(localized: "自动填充域名规则")) {
                 AutoFillDomainRulesSettingsView(controller: session.autoFillDomainRules)
             }
