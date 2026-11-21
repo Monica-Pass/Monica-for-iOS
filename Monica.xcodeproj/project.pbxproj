@@ -95,6 +95,9 @@
 		A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A13000000000000000000013 /* SensitivePrivacyTests.swift */; };
 		AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000001 /* WifiQRCodeRenderer.swift */; };
 		AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000003 /* AppAttachmentSupport.swift */; };
+		A9E000000000000000000002 /* AppMarkdownNotes.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000001 /* AppMarkdownNotes.swift */; };
+		A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9E000000000000000000003 /* AppMarkdownNotesView.swift */; };
+		A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A9F000000000000000000001 /* MarkdownNoteTests.swift */; };
 		AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000005 /* AppSecurityCenterSupport.swift */; };
 		AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000007 /* AppAutoFillSupport.swift */; };
 		AA000000000000000000000A /* AppPlusSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA0000000000000000000009 /* AppPlusSupport.swift */; };
@@ -241,6 +244,9 @@
 		A13000000000000000000013 /* SensitivePrivacyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensitivePrivacyTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000001 /* WifiQRCodeRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "WifiQRCodeRenderer.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000003 /* AppAttachmentSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAttachmentSupport.swift"; sourceTree = "<group>"; };
+		A9E000000000000000000001 /* AppMarkdownNotes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotes.swift; sourceTree = "<group>"; };
+		A9E000000000000000000003 /* AppMarkdownNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppMarkdownNotesView.swift; sourceTree = "<group>"; };
+		A9F000000000000000000001 /* MarkdownNoteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MarkdownNoteTests.swift; sourceTree = "<group>"; };
 		AA0000000000000000000005 /* AppSecurityCenterSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSecurityCenterSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000007 /* AppAutoFillSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppAutoFillSupport.swift"; sourceTree = "<group>"; };
 		AA0000000000000000000009 /* AppPlusSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppPlusSupport.swift"; sourceTree = "<group>"; };
@@ -337,6 +343,8 @@
 				A10000000000000000000011 /* MonicaApp.swift */,
 				BA0000000000000000000001 /* PrivacyInfo.xcprivacy */,
 				A10000000000000000000012 /* AppRootView.swift */,
+				A9E000000000000000000001 /* AppMarkdownNotes.swift */,
+				A9E000000000000000000003 /* AppMarkdownNotesView.swift */,
 				B71000000000000000000005 /* AppWidgetSnapshotSupport.swift */,
 				AC0000000000000000000002 /* AppCredentialExchange.swift */,
 				A50000000000000000000011 /* OneDriveMSALAuthenticationService.swift */,
@@ -457,6 +465,7 @@
 				B71000000000000000000007 /* WidgetSnapshotReloadTests.swift */,
 				A13000000000000000000013 /* SensitivePrivacyTests.swift */,
 				AD1000000000000000000011 /* AutoFillDomainRuleControllerTests.swift */,
+				A9F000000000000000000001 /* MarkdownNoteTests.swift */,
 			);
 			path = MonicaTests;
 			sourceTree = "<group>";
@@ -794,6 +803,8 @@
 				B71000000000000000000004 /* AppWidgetSnapshotSupport.swift in Sources */,
 				AA0000000000000000000002 /* WifiQRCodeRenderer.swift in Sources */,
 				AA0000000000000000000004 /* AppAttachmentSupport.swift in Sources */,
+				A9E000000000000000000002 /* AppMarkdownNotes.swift in Sources */,
+				A9E000000000000000000004 /* AppMarkdownNotesView.swift in Sources */,
 				AA0000000000000000000006 /* AppSecurityCenterSupport.swift in Sources */,
 				AA0000000000000000000008 /* AppAutoFillSupport.swift in Sources */,
 				AA000000000000000000000A /* AppPlusSupport.swift in Sources */,
@@ -833,6 +844,7 @@
 				B71000000000000000000006 /* WidgetSnapshotReloadTests.swift in Sources */,
 				A13000000000000000000003 /* SensitivePrivacyTests.swift in Sources */,
 				AD1000000000000000000001 /* AutoFillDomainRuleControllerTests.swift in Sources */,
+				A9F000000000000000000002 /* MarkdownNoteTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
