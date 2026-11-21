@@ -1016,20 +1016,18 @@ final class AppSessionModel {
             return []
         }
         let query = gpgKeySearchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
-        return filteredFavoriteEntries(
-            gpgKeyEntries,
-            query: query,
-            favoritesOnly: showFavoriteGPGKeyEntriesOnly,
-            isFavorite: { $0.favorite }
-        ) { entry, query in
-            entry.title.localizedCaseInsensitiveContains(query)
-                || entry.ownerName.localizedCaseInsensitiveContains(query)
-                || entry.ownerEmail.localizedCaseInsensitiveContains(query)
-                || entry.fingerprint.localizedCaseInsensitiveContains(query.replacingOccurrences(of: " ", with: ""))
-                || entry.keyID.localizedCaseInsensitiveContains(query)
-                || entry.algorithm.localizedCaseInsensitiveContains(query)
-                || entry.notes.localizedCaseInsensitiveContains(query)
+        let filtered = gpgKeyEntries.enumerated().filter { _, entry in
+            (!showFavoriteGPGKeyEntriesOnly || entry.favorite)
+                && (query.isEmpty
+                    || entry.title.localizedCaseInsensitiveContains(query)
+                    || entry.ownerName.localizedCaseInsensitiveContains(query)
+                    || entry.ownerEmail.localizedCaseInsensitiveContains(query)
+                    || entry.fingerprint.localizedCaseInsensitiveContains(query.replacingOccurrences(of: " ", with: ""))
+                    || entry.keyID.localizedCaseInsensitiveContains(query)
+                    || entry.algorithm.localizedCaseInsensitiveContains(query)
+                    || entry.notes.localizedCaseInsensitiveContains(query))
         }
+        return filtered.map(\.element)
     }
 
     var filteredApiTokenEntries: [LocalApiTokenEntry] {
@@ -1443,10 +1441,10 @@ final class AppSessionModel {
         summaries += ssoEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
         summaries += sendEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
         summaries += steamEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
-        summaries += gpgKeyEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += gpgKeyEntries.map(shortcutSummary(for:))
         summaries += barcodeEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
-        summaries += billingAddressEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
-        summaries += paymentAccountEntries.filter { !$0.isArchived }.map(shortcutSummary(for:))
+        summaries += billingAddressEntries.map(shortcutSummary(for:))
+        summaries += paymentAccountEntries.map(shortcutSummary(for:))
         return summaries
     }
 
