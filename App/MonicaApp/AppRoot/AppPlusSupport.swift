@@ -2,10 +2,15 @@
 //  AppPlusSupport.swift
 //  Monica
 //
-//  Monica+ 权益行模型、权益快照、解锁服务与权益存储。
+//  Monica Plus 是「支持作者」型非消耗型赞助商品：购买只产生支持者徽章与感谢，
+//  不解锁、也不锁定任何既有功能。所有功能永久免费。
+//
+//  权益判定收敛在 MonicaCore 的 `PlusEntitlementEvaluator`（只接受已验证事务）；
+//  这里只负责 App 侧的状态、持久化快照与展示文案。
 //
 
 import Foundation
+import MonicaCore
 
 struct AppPlusEntitlementStatusRow: Sendable, Equatable, Identifiable {
     let id: String
@@ -15,147 +20,171 @@ struct AppPlusEntitlementStatusRow: Sendable, Equatable, Identifiable {
     let systemImage: String
 }
 
+/// 免费功能行：`value` 恒为「永久免费」，Monica Plus 不会改变任何功能可用性。
 struct AppPlusFeatureRow: Sendable, Equatable, Identifiable {
     let id: String
     let title: String
     let detail: String
     let systemImage: String
-    let isUnlocked: Bool
 
     var value: String {
-        isUnlocked ? String(localized: "已解锁") : String(localized: "需要 Plus")
+        String(localized: "永久免费")
     }
 }
 
-enum AppPlusEntitlementSource: Sendable, Equatable {
-    case none
-    case resourceUnlock
-}
-
-struct AppPlusEntitlementSnapshot: Sendable, Equatable {
-    var source: AppPlusEntitlementSource = .none
-    var expiresAt: Date?
-
-    var isActive: Bool {
-        source != .none
-    }
-}
-
-protocol AppPlusResourceUnlockService: Sendable {
-    func unlockPlus() async throws -> Bool
-}
-
-struct DefaultAppPlusResourceUnlockService: AppPlusResourceUnlockService {
-    func unlockPlus() async throws -> Bool {
-        true
-    }
-}
-
+/// 权益快照存储。
+///
+/// 只允许保存 `PlusEntitlement`（productID / expiresAt / verifiedAt）。
+/// 不收据原文、不保存「永久解锁」布尔值：真实权益始终以 StoreKit 的已验证事务为准。
 protocol AppPlusEntitlementStore: Sendable {
-    func loadIsResourceUnlocked() -> Bool
-    func saveIsResourceUnlocked(_ isUnlocked: Bool)
+    func loadEntitlement() -> PlusEntitlement?
+    func saveEntitlement(_ entitlement: PlusEntitlement)
+    func clearEntitlement()
 }
 
+/// UserDefaults 里的快照形态：只有三个字段，故意不含任何收据/交易原文。
 private struct AppPlusPersistedEntitlement: Codable, Equatable {
-    let source: String?
+    let productID: String?
+    let expiresAt: Date?
+    let verifiedAt: Date
 
-    static let inactive = AppPlusPersistedEntitlement(source: nil)
-    static let resourceUnlock = AppPlusPersistedEntitlement(source: "resourceUnlock")
+    init(_ entitlement: PlusEntitlement) {
+        self.productID = entitlement.productID
+        self.expiresAt = entitlement.expiresAt
+        self.verifiedAt = entitlement.verifiedAt
+    }
 
-    var isResourceUnlocked: Bool {
-        source == Self.resourceUnlock.source
+    var entitlement: PlusEntitlement {
+        PlusEntitlement(productID: productID, expiresAt: expiresAt, verifiedAt: verifiedAt)
     }
 }
 
 final class UserDefaultsAppPlusEntitlementStore: AppPlusEntitlementStore, @unchecked Sendable {
+    /// v1：替代旧的 `monica.plusEntitlement` 假解锁布尔值；旧键不再读取。
+    static let storageKey = "monica.plus.entitlementSnapshot.v1"
+
     private let userDefaults: UserDefaults
-    private let key = "monica.plusEntitlement"
 
     init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
     }
 
-    func loadIsResourceUnlocked() -> Bool {
-        guard let data = userDefaults.data(forKey: key),
-              let entitlement = try? JSONDecoder().decode(AppPlusPersistedEntitlement.self, from: data)
+    func loadEntitlement() -> PlusEntitlement? {
+        guard let data = userDefaults.data(forKey: Self.storageKey),
+              let persisted = try? JSONDecoder().decode(AppPlusPersistedEntitlement.self, from: data)
         else {
-            return false
+            return nil
         }
-        return entitlement.isResourceUnlocked
+        return persisted.entitlement
     }
 
-    func saveIsResourceUnlocked(_ isUnlocked: Bool) {
-        let entitlement: AppPlusPersistedEntitlement = isUnlocked ? .resourceUnlock : .inactive
-        guard let data = try? JSONEncoder().encode(entitlement) else {
+    func saveEntitlement(_ entitlement: PlusEntitlement) {
+        guard entitlement.isActive else {
+            clearEntitlement()
             return
         }
-        userDefaults.set(data, forKey: key)
+        guard let data = try? JSONEncoder().encode(AppPlusPersistedEntitlement(entitlement)) else {
+            return
+        }
+        userDefaults.set(data, forKey: Self.storageKey)
+    }
+
+    func clearEntitlement() {
+        userDefaults.removeObject(forKey: Self.storageKey)
     }
 }
 
 final class MemoryAppPlusEntitlementStore: AppPlusEntitlementStore, @unchecked Sendable {
-    private var entitlement: AppPlusPersistedEntitlement
+    private var entitlement: PlusEntitlement?
 
-    init(isResourceUnlocked: Bool = false) {
-        self.entitlement = isResourceUnlocked ? .resourceUnlock : .inactive
+    init(entitlement: PlusEntitlement? = nil) {
+        self.entitlement = entitlement
     }
 
+    /// 测试与诊断用：只包含快照字段，可直接断言没有收据原文。
     var persistedDebugText: String {
-        guard let data = try? JSONEncoder().encode(entitlement) else {
+        guard let entitlement,
+              let data = try? JSONEncoder().encode(AppPlusPersistedEntitlement(entitlement))
+        else {
             return ""
         }
         return String(decoding: data, as: UTF8.self)
     }
 
-    func loadIsResourceUnlocked() -> Bool {
-        entitlement.isResourceUnlocked
+    func loadEntitlement() -> PlusEntitlement? {
+        entitlement
     }
 
-    func saveIsResourceUnlocked(_ isUnlocked: Bool) {
-        entitlement = isUnlocked ? .resourceUnlock : .inactive
+    func saveEntitlement(_ entitlement: PlusEntitlement) {
+        self.entitlement = entitlement.isActive ? entitlement : nil
+    }
+
+    func clearEntitlement() {
+        entitlement = nil
     }
 }
 
-enum PlusActivationState: Sendable, Equatable {
+/// 购买 / 恢复的状态机。失败与取消只影响提示，不影响任何功能可用性。
+enum AppPlusPurchaseState: Sendable, Equatable {
     case idle
-    case running
-    case activated
-    case deactivated
+    case purchasing(productID: String)
+    case restoring
+    case succeeded
+    case userCancelled
+    case pending
+    case nothingToRestore
     case failed(String)
+
+    var isRunning: Bool {
+        switch self {
+        case .purchasing, .restoring:
+            return true
+        case .idle, .succeeded, .userCancelled, .pending, .nothingToRestore, .failed:
+            return false
+        }
+    }
 
     var label: String {
         switch self {
         case .idle:
             return String(localized: "就绪")
-        case .running:
-            return String(localized: "处理中")
-        case .activated:
-            return String(localized: "Plus 已激活")
-        case .deactivated:
-            return String(localized: "Plus 已关闭")
+        case .purchasing:
+            return String(localized: "正在购买")
+        case .restoring:
+            return String(localized: "正在恢复购买")
+        case .succeeded:
+            return String(localized: "感谢支持")
+        case .userCancelled:
+            return String(localized: "已取消")
+        case .pending:
+            return String(localized: "等待批准")
+        case .nothingToRestore:
+            return String(localized: "没有可恢复的购买")
         case .failed(let message):
             return message
         }
     }
+}
 
-    var isRunning: Bool {
-        if case .running = self {
+/// 商品列表状态：未配置（`MonicaPlusProductIDs` 为空）与加载失败都落到「暂不可用」，
+/// 但免费功能不受任何影响。
+enum AppPlusProductLoadState: Sendable, Equatable {
+    case idle
+    case loading
+    case loaded
+    case unavailable(String)
+
+    var isLoading: Bool {
+        if case .loading = self {
             return true
         }
         return false
     }
-}
 
-enum AppPlusResourceUnlockError: Error, Sendable, Equatable, LocalizedError {
-    case serviceUnavailable
-    case activationRejected
-
-    var errorDescription: String? {
-        switch self {
-        case .serviceUnavailable:
-            return String(localized: "Plus 解锁服务不可用。")
-        case .activationRejected:
-            return String(localized: "Plus 解锁未通过。")
+    var unavailableMessage: String? {
+        if case .unavailable(let message) = self {
+            return message
         }
+        return nil
     }
 }

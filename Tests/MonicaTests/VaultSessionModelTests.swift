@@ -1264,119 +1264,317 @@ final class VaultSessionModelTests: XCTestCase {
         )
     }
 
-    func testPlusResourceButtonActivatesAndroidCompatiblePlusWithoutPurchase() async throws {
-        let service = RecordingAppPlusResourceUnlockService()
-        let model = AppSessionModel(plusResourceUnlockService: service)
+    func testPlusPurchaseFromStoreKitShowsSupporterBadgeWithoutGatingFeatures() async throws {
+        let service = RecordingAppPlusPurchaseService()
         let now = Date(timeIntervalSince1970: 1_803_100_000)
-
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
-        XCTAssertFalse(model.isPlusActive)
-        XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
-
-        try await model.activatePlusFromResource(now: now)
-
-        XCTAssertEqual(service.unlockCallCount, 1)
-        XCTAssertEqual(model.plusActivationState, .activated)
-        XCTAssertTrue(model.isPlusActive)
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
-        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "已通过本地授权资源解锁 Monica Plus。")
-        XCTAssertEqual(
-            model.plusFeatureRows.map(\.id),
-            ["premium_themes", "validator_vibration", "copy_next_code", "bitwarden_sync"]
+        service.products = [
+            AppPlusProductInfo(
+                id: "com.monica.plus.support.small",
+                displayName: "小小支持",
+                displayPrice: "¥6.00",
+                description: "请作者喝一杯水"
+            ),
+            AppPlusProductInfo(
+                id: "com.monica.plus.support.large",
+                displayName: "大力支持",
+                displayPrice: "¥45.00",
+                description: "请作者吃一顿饭"
+            )
+        ]
+        service.currentEntitlementValue = PlusEntitlement(
+            productID: "com.monica.plus.support.small",
+            expiresAt: nil,
+            verifiedAt: now
         )
-        XCTAssertTrue(model.plusFeatureRows.allSatisfy(\.isUnlocked))
-        let visibleText = ([model.plusActivationState.label, model.plusEntitlementStatusRow.detail] + model.plusFeatureRows.map { $0.detail })
-            .joined(separator: " ")
+        service.purchaseResult = .purchased(productID: "com.monica.plus.support.small")
+        let model = AppSessionModel(plusPurchaseService: service)
+
+        XCTAssertEqual(model.plusProductLoadState, .idle)
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "免费使用")
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+
+        await model.loadPlusProducts()
+
+        XCTAssertEqual(service.loadProductsCallCount, 1)
+        XCTAssertEqual(model.plusProductLoadState, .loaded)
+        XCTAssertEqual(
+            model.plusProducts.map(\.id),
+            ["com.monica.plus.support.small", "com.monica.plus.support.large"]
+        )
+        XCTAssertEqual(model.plusProducts.first?.displayPrice, "¥6.00")
+        XCTAssertEqual(model.plusProducts.first?.displayName, "小小支持")
+
+        await model.purchasePlus(productID: "com.monica.plus.support.small", now: now)
+
+        XCTAssertEqual(service.purchasedProductIDs, ["com.monica.plus.support.small"])
+        XCTAssertEqual(model.plusPurchaseState, .succeeded)
+        XCTAssertTrue(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "支持者")
+        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "感谢支持！你的支持者身份永久有效。")
+        XCTAssertEqual(model.plusFeatureRows.map(\.id), ["vault", "autofill", "totp", "sync"])
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+
+        let visibleText = (
+            [model.plusPurchaseState.label, model.plusEntitlementStatusRow.detail]
+                + model.plusFeatureRows.map(\.detail)
+        ).joined(separator: " ")
         XCTAssertFalse(visibleText.localizedCaseInsensitiveContains("storekit"))
         XCTAssertFalse(visibleText.localizedCaseInsensitiveContains("transaction"))
-        XCTAssertFalse(visibleText.contains("resource-secret-token"))
+        XCTAssertFalse(visibleText.localizedCaseInsensitiveContains("receipt"))
     }
 
-    func testPlusResourceButtonFailureDoesNotUnlockOrLeakSecret() async throws {
-        let service = RecordingAppPlusResourceUnlockService()
-        service.unlockResult = false
-        let model = AppSessionModel(plusResourceUnlockService: service)
+    func testPlusPurchaseCancellationAndPendingKeepEveryFeatureFree() async throws {
+        let service = RecordingAppPlusPurchaseService()
+        service.products = [
+            AppPlusProductInfo(
+                id: "com.monica.plus.support.small",
+                displayName: "小小支持",
+                displayPrice: "¥6.00",
+                description: "请作者喝一杯水"
+            )
+        ]
+        let model = AppSessionModel(plusPurchaseService: service)
+        await model.loadPlusProducts()
+
+        service.purchaseResult = .userCancelled
+        await model.purchasePlus(productID: "com.monica.plus.support.small")
+        XCTAssertEqual(model.plusPurchaseState, .userCancelled)
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "免费使用")
+
+        service.purchaseResult = .pending
+        await model.purchasePlus(productID: "com.monica.plus.support.small")
+        XCTAssertEqual(model.plusPurchaseState, .pending)
+        XCTAssertFalse(model.isPlusSupporter)
+
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+    }
+
+    func testPlusUnverifiedOrFailedPurchaseNeverCreatesEntitlement() async throws {
+        let service = RecordingAppPlusPurchaseService()
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        service.products = [
+            AppPlusProductInfo(
+                id: "com.monica.plus.support.small",
+                displayName: "小小支持",
+                displayPrice: "¥6.00",
+                description: "请作者喝一杯水"
+            )
+        ]
+        service.currentEntitlementValue = .inactive(verifiedAt: now)
+        let model = AppSessionModel(plusPurchaseService: service)
+        await model.loadPlusProducts()
+
+        service.purchaseResult = .unverified
+        await model.purchasePlus(productID: "com.monica.plus.support.small", now: now)
+        XCTAssertEqual(model.plusPurchaseState, .failed("购买凭据未通过验证，未取得支持者身份。"))
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "免费使用")
+
+        service.purchaseError = AppPlusPurchaseError.purchaseFailed
+        await model.purchasePlus(productID: "com.monica.plus.support.small", now: now)
+        XCTAssertEqual(model.plusPurchaseState, .failed("购买失败，请稍后重试。"))
+        XCTAssertFalse(model.isPlusSupporter)
+
+        service.purchaseError = AppPlusPurchaseError.networkUnavailable
+        await model.purchasePlus(productID: "com.monica.plus.support.small", now: now)
+        XCTAssertEqual(model.plusPurchaseState, .failed("网络连接不可用，请稍后重试。"))
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+    }
+
+    func testPlusRestoreRecoversPurchaseAndHandlesNothingToRestore() async throws {
+        let service = RecordingAppPlusPurchaseService()
+        let store = MemoryAppPlusEntitlementStore()
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        service.restoreEntitlement = PlusEntitlement(
+            productID: "com.monica.plus.support.large",
+            expiresAt: nil,
+            verifiedAt: now
+        )
+        let model = AppSessionModel(plusPurchaseService: service, plusEntitlementStore: store)
+
+        await model.restorePlusPurchases(now: now)
+
+        XCTAssertEqual(service.restoreCallCount, 1)
+        XCTAssertEqual(model.plusPurchaseState, .succeeded)
+        XCTAssertTrue(model.isPlusSupporter)
+        XCTAssertEqual(store.loadEntitlement()?.productID, "com.monica.plus.support.large")
+
+        service.restoreEntitlement = .inactive(verifiedAt: now.addingTimeInterval(60))
+        await model.restorePlusPurchases(now: now.addingTimeInterval(60))
+        XCTAssertEqual(model.plusPurchaseState, .nothingToRestore)
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertNil(store.loadEntitlement())
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+    }
+
+    func testPlusRefundOrRevocationClearsSupporterBadgeAndSnapshot() async throws {
+        let service = RecordingAppPlusPurchaseService()
+        let store = MemoryAppPlusEntitlementStore()
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        service.currentEntitlementValue = PlusEntitlement(
+            productID: "com.monica.plus.support.small",
+            expiresAt: nil,
+            verifiedAt: now
+        )
+        let model = AppSessionModel(plusPurchaseService: service, plusEntitlementStore: store)
+
+        await model.refreshPlusEntitlement(now: now)
+        XCTAssertTrue(model.isPlusSupporter)
+        XCTAssertEqual(store.loadEntitlement()?.productID, "com.monica.plus.support.small")
+
+        // 退款或撤销后，StoreKit 的 currentEntitlements 不再包含该事务。
+        service.currentEntitlementValue = .inactive(verifiedAt: now.addingTimeInterval(60))
+        await model.refreshPlusEntitlement(now: now.addingTimeInterval(60))
+
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "免费使用")
+        XCTAssertNil(store.loadEntitlement())
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+    }
+
+    func testPlusVerifiedSnapshotSurvivesOfflineLaunchWithoutPurchaseArtifacts() throws {
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        let store = MemoryAppPlusEntitlementStore()
+        store.saveEntitlement(
+            PlusEntitlement(
+                productID: "com.monica.plus.support.small",
+                expiresAt: nil,
+                verifiedAt: now
+            )
+        )
+
+        let service = RecordingAppPlusPurchaseService()
+        service.currentEntitlementValue = .inactive(verifiedAt: now)
+        let model = AppSessionModel(plusPurchaseService: service, plusEntitlementStore: store)
+
+        // 离线启动先展示上次已验证快照，联网后由 refreshPlusEntitlement 校准。
+        XCTAssertTrue(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "支持者")
+
+        let debugText = store.persistedDebugText
+        XCTAssertTrue(debugText.contains("com.monica.plus.support.small"))
+        XCTAssertFalse(debugText.localizedCaseInsensitiveContains("receipt"))
+        XCTAssertFalse(debugText.localizedCaseInsensitiveContains("transaction"))
+        XCTAssertFalse(debugText.localizedCaseInsensitiveContains("secret"))
+    }
+
+    func testPlusExpiredSnapshotIsNotTreatedAsSupporter() throws {
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        let expired = PlusEntitlement(
+            productID: "com.monica.plus.support.small",
+            expiresAt: now.addingTimeInterval(-60),
+            verifiedAt: now.addingTimeInterval(-3_600)
+        )
+        let store = MemoryAppPlusEntitlementStore(entitlement: expired)
+        let model = AppSessionModel(plusPurchaseService: nil, plusEntitlementStore: store)
+
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "免费使用")
+    }
+
+    func testPlusTransactionUpdatesApplyApprovalAndRevocation() async throws {
+        let service = RecordingAppPlusPurchaseService()
+        let store = MemoryAppPlusEntitlementStore()
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        let model = AppSessionModel(plusPurchaseService: service, plusEntitlementStore: store)
+
+        model.startObservingPlusPurchases()
+
+        service.send(
+            PlusEntitlement(
+                productID: "com.monica.plus.support.small",
+                expiresAt: nil,
+                verifiedAt: now
+            )
+        )
+        await waitForPlusSupporter(model, expected: true)
+        XCTAssertTrue(model.isPlusSupporter)
+        XCTAssertNotNil(store.loadEntitlement())
+
+        service.send(.inactive(verifiedAt: now.addingTimeInterval(30)))
+        await waitForPlusSupporter(model, expected: false)
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertNil(store.loadEntitlement())
+    }
+
+    func testPlusUnconfiguredProductsAndMissingServiceKeepEverythingFree() async throws {
+        let model = AppSessionModel(plusPurchaseService: nil)
+
+        await model.loadPlusProducts()
+        XCTAssertEqual(model.plusProductLoadState, .unavailable("Monica Plus 尚未在此版本开放。"))
+        XCTAssertTrue(model.plusProducts.isEmpty)
+
+        await model.purchasePlus(productID: "com.monica.plus.support.small")
+        XCTAssertEqual(model.plusPurchaseState, .failed("Monica Plus 尚未在此版本开放。"))
+        XCTAssertFalse(model.isPlusSupporter)
+
+        await model.restorePlusPurchases()
+        XCTAssertEqual(model.plusPurchaseState, .failed("Monica Plus 尚未在此版本开放。"))
+        XCTAssertFalse(model.isPlusSupporter)
+
+        await model.refreshPlusEntitlement()
+        XCTAssertFalse(model.isPlusSupporter)
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+    }
+
+    func testPlusStoreKitServiceWithoutConfiguredProductsRefusesPurchase() async throws {
+        let service = StoreKitAppPlusPurchaseService(infoDictionary: [:])
+
+        let products = try await service.loadProducts()
+        XCTAssertTrue(products.isEmpty)
 
         do {
-            try await model.activatePlusFromResource()
-            XCTFail("Plus resource unlock should fail when the resource grant is rejected.")
+            _ = try await service.purchase(productID: "com.monica.plus.support.small")
+            XCTFail("未配置的商品 ID 不应发起 StoreKit 购买。")
         } catch {
-            XCTAssertEqual(model.plusActivationState, .failed("Plus 解锁未通过。"))
+            XCTAssertEqual(error as? AppPlusPurchaseError, .notConfigured)
         }
-
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
-        XCTAssertFalse(model.isPlusActive)
-        XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
-        XCTAssertFalse(model.plusActivationState.label.contains("resource-secret-token"))
     }
 
-    func testPlusResourceButtonCanDeactivatePlusLocally() async throws {
-        let service = RecordingAppPlusResourceUnlockService()
-        let model = AppSessionModel(plusResourceUnlockService: service)
-
-        try await model.activatePlusFromResource()
-        model.deactivatePlus()
-
-        XCTAssertEqual(model.plusActivationState, .deactivated)
-        XCTAssertFalse(model.isPlusActive)
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "未激活")
-        XCTAssertTrue(model.plusFeatureRows.allSatisfy { !$0.isUnlocked })
-    }
-
-    func testPlusResourceUnlockPersistsAcrossSessionsWithoutPurchaseArtifacts() async throws {
-        let service = RecordingAppPlusResourceUnlockService()
-        let store = MemoryAppPlusEntitlementStore()
-        let model = AppSessionModel(
-            plusResourceUnlockService: service,
-            plusEntitlementStore: store
-        )
-
-        try await model.activatePlusFromResource()
-
-        let reloadedModel = AppSessionModel(
-            plusResourceUnlockService: service,
-            plusEntitlementStore: store
-        )
-        XCTAssertTrue(reloadedModel.isPlusActive)
-        XCTAssertEqual(reloadedModel.plusEntitlementStatusRow.detail, "已通过本地授权资源解锁 Monica Plus。")
-        XCTAssertTrue(reloadedModel.plusFeatureRows.allSatisfy(\.isUnlocked))
-
-        let persistedDebugText = store.persistedDebugText
-        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("storekit"))
-        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("transaction"))
-        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("receipt"))
-        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("license"))
-        XCTAssertFalse(persistedDebugText.localizedCaseInsensitiveContains("iap"))
-
-        reloadedModel.deactivatePlus()
-
-        let deactivatedModel = AppSessionModel(
-            plusResourceUnlockService: service,
-            plusEntitlementStore: store
-        )
-        XCTAssertFalse(deactivatedModel.isPlusActive)
-        XCTAssertEqual(deactivatedModel.plusEntitlementStatusRow.value, "未激活")
-        XCTAssertTrue(deactivatedModel.plusFeatureRows.allSatisfy { !$0.isUnlocked })
-    }
-
-    func testProductionPlusEntitlementUsesPersistedResourceUnlockWithoutIAP() throws {
+    func testProductionPlusEntitlementUsesPersistedVerifiedSnapshotWithoutPurchaseService() throws {
         let suiteName = "monica.plus.production-test.\(UUID().uuidString)"
         let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { userDefaults.removePersistentDomain(forName: suiteName) }
         let store = UserDefaultsAppPlusEntitlementStore(userDefaults: userDefaults)
-        store.saveIsResourceUnlocked(true)
+        let now = Date(timeIntervalSince1970: 1_803_100_000)
+        store.saveEntitlement(
+            PlusEntitlement(
+                productID: "com.monica.plus.support.small",
+                expiresAt: nil,
+                verifiedAt: now
+            )
+        )
 
         let model = AppSessionModel.production(
             environment: MonicaAppEnvironment(
+                plusPurchaseService: nil,
                 plusEntitlementStore: store
             )
         )
 
-        XCTAssertTrue(model.isPlusActive)
-        XCTAssertEqual(model.plusEntitlementStatusRow.value, "已激活")
-        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.isUnlocked })
-        XCTAssertFalse(model.plusEntitlementStatusRow.detail.localizedCaseInsensitiveContains("iap"))
-        XCTAssertFalse(model.plusEntitlementStatusRow.detail.localizedCaseInsensitiveContains("storekit"))
+        XCTAssertTrue(model.isPlusSupporter)
+        XCTAssertEqual(model.plusEntitlementStatusRow.value, "支持者")
+        XCTAssertEqual(model.plusEntitlementStatusRow.detail, "感谢支持！你的支持者身份永久有效。")
+        XCTAssertTrue(model.plusFeatureRows.allSatisfy { $0.value == "永久免费" })
+        XCTAssertEqual(AppPlusFeatureRow(id: "vault", title: "", detail: "", systemImage: "").value, "永久免费")
+    }
+
+    private func waitForPlusSupporter(
+        _ model: AppSessionModel,
+        expected: Bool,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) async {
+        for _ in 0..<200 {
+            if model.isPlusSupporter == expected {
+                return
+            }
+            try? await Task.sleep(nanoseconds: 5_000_000)
+        }
+        XCTAssertEqual(model.isPlusSupporter, expected, file: file, line: line)
     }
 
     func testSavingPresentedAddPasswordEditorUsesExistingCreateFlow() throws {
@@ -12873,13 +13071,60 @@ private final class RecordingAppBitwardenPasswordAuthenticationService: AppBitwa
     }
 }
 
-private final class RecordingAppPlusResourceUnlockService: AppPlusResourceUnlockService, @unchecked Sendable {
-    var unlockResult = true
-    private(set) var unlockCallCount = 0
+private final class RecordingAppPlusPurchaseService: AppPlusPurchaseService, @unchecked Sendable {
+    var products: [AppPlusProductInfo] = []
+    var productsError: Error?
+    var purchaseResult: PlusPurchaseResult = .purchased(productID: "com.monica.test.plus.support")
+    var purchaseError: Error?
+    var restoreEntitlement: PlusEntitlement = .inactive(verifiedAt: Date(timeIntervalSince1970: 0))
+    var restoreError: Error?
+    var currentEntitlementValue: PlusEntitlement = .inactive(verifiedAt: Date(timeIntervalSince1970: 0))
 
-    func unlockPlus() async throws -> Bool {
-        unlockCallCount += 1
-        return unlockResult
+    private(set) var loadProductsCallCount = 0
+    private(set) var purchasedProductIDs: [String] = []
+    private(set) var restoreCallCount = 0
+    private(set) var currentEntitlementCallCount = 0
+
+    private let continuation: AsyncStream<PlusEntitlement>.Continuation
+    let updatesStream: AsyncStream<PlusEntitlement>
+
+    init() {
+        var captured: AsyncStream<PlusEntitlement>.Continuation!
+        updatesStream = AsyncStream { captured = $0 }
+        continuation = captured
+    }
+
+    func send(_ entitlement: PlusEntitlement) {
+        continuation.yield(entitlement)
+    }
+
+    func loadProducts() async throws -> [AppPlusProductInfo] {
+        loadProductsCallCount += 1
+        if let productsError {
+            throw productsError
+        }
+        return products
+    }
+
+    func purchase(productID: String) async throws -> PlusPurchaseResult {
+        purchasedProductIDs.append(productID)
+        if let purchaseError {
+            throw purchaseError
+        }
+        return purchaseResult
+    }
+
+    func restore() async throws -> PlusEntitlement {
+        restoreCallCount += 1
+        if let restoreError {
+            throw restoreError
+        }
+        return restoreEntitlement
+    }
+
+    func currentEntitlement() async -> PlusEntitlement {
+        currentEntitlementCallCount += 1
+        return currentEntitlementValue
     }
 }
 
