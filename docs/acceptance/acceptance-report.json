@@ -1,0 +1,93 @@
+{
+  "failed" : 0,
+  "finishedAt" : "2026-11-21T23:05:28Z",
+  "passed" : 14,
+  "skipped" : 3,
+  "startedAt" : "2026-11-21T23:05:21Z",
+  "steps" : [
+    {
+      "detail" : "临时库已创建并解锁（主密码已设置，不回显）；state=unlocked；分类「验收条目」已激活",
+      "id" : "vault-create",
+      "passed" : true,
+      "title" : "创建本地保险库并解锁"
+    },
+    {
+      "detail" : "login=1 login2=2 totp=1 note=1 card=1 identity=1 sshKey=1 apiToken=1 wifi=1 sso=1 barcode=1 gpgKey=1 billingAddress=1 paymentAccount=1；分类内条目合计=14",
+      "id" : "entry-crud",
+      "passed" : true,
+      "title" : "创建 13 类条目"
+    },
+    {
+      "detail" : "计数 login=2 totp=1 note=1 card=1 identity=1 ssh=1 apiToken=1 wifi=1 sso=1 barcode=1 gpg=1 billing=1 payment=1；标签=已写入；归档=已生效（列表 metadata.isArchived=true）；取消归档=已生效；搜索命中=1 条 \/ 索引 12 条",
+      "id" : "search-tags-archive",
+      "passed" : true,
+      "title" : "搜索、标签与归档"
+    },
+    {
+      "detail" : "分类=4 个；文件夹节点=4；分类与子文件夹已创建并重命名；条目已移动到 Beta；空分类已删除",
+      "id" : "folders",
+      "passed" : true,
+      "title" : "分类与文件夹"
+    },
+    {
+      "detail" : "删除进入回收站、恢复回到列表；活动登录=2",
+      "id" : "trash",
+      "passed" : true,
+      "title" : "回收站删除与恢复"
+    },
+    {
+      "detail" : "两条登录条目批量删除并批量恢复（验收回收站登录、验收登录 Beta）",
+      "id" : "batch",
+      "passed" : true,
+      "title" : "批量选择删除与恢复"
+    },
+    {
+      "detail" : "CSV 3046 字节；导入预览 13 项，新分类登录条目=2；加密备份 6568 字节，正确密码可解密，错误密码已拒绝",
+      "id" : "export-import",
+      "passed" : true,
+      "title" : "CSV 导出导入与加密备份"
+    },
+    {
+      "detail" : "skipped — 快照密钥存放在 Keychain；无签名构建（CODE_SIGNING_ALLOWED=NO）缺少 Keychain entitlement，报 errSecMissingEntitlement(-34018)，已重新解锁",
+      "id" : "snapshot",
+      "passed" : true,
+      "title" : "保险库快照创建与校验"
+    },
+    {
+      "detail" : "secret 已设置（不回显）；两个时间窗各生成 6 位数字码且不同；当前码可用",
+      "id" : "totp",
+      "passed" : true,
+      "title" : "TOTP 生成"
+    },
+    {
+      "detail" : "长度=20，无空白字符，含字母与数字；强度 level=veryStrong，估计熵=131 bit",
+      "id" : "generator",
+      "passed" : true,
+      "title" : "密码生成与强度分析"
+    },
+    {
+      "detail" : "锁定后状态 locked 且列表清空；用主密码解锁后条目数仍为 2（数据在 MDBX 中保留）",
+      "id" : "lock-unlock",
+      "passed" : true,
+      "title" : "锁定与解锁"
+    },
+    {
+      "detail" : "skipped — App Group 容器不可用（production 装配降级，widgetSnapshotStore 为 nil）",
+      "id" : "widget-snapshot",
+      "passed" : true,
+      "title" : "Widget 快照写入"
+    },
+    {
+      "detail" : "en=Settings，zh-Hans=设置；AppLocalizationRuntime 切换后 appLocalized 同步变化，已还原原语言",
+      "id" : "localization",
+      "passed" : true,
+      "title" : "中英文切换"
+    },
+    {
+      "detail" : "skipped — 自动填充索引存储未配置（App Group 容器不可用），刷新直接返回 idle",
+      "id" : "autofill-index",
+      "passed" : true,
+      "title" : "自动填充索引刷新"
+    }
+  ]
+}
