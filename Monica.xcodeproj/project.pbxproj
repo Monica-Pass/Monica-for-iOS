@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		B5F000000000000000000005 /* AppSessionModel+CredentialExchange.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F000000000000000000006 /* AppSessionModel+CredentialExchange.swift */; };
+		B5F000000000000000000003 /* AppSessionModel+ImportExport.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F000000000000000000004 /* AppSessionModel+ImportExport.swift */; };
+		B5F000000000000000000001 /* AppSessionModel+EntryCRUD.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F000000000000000000002 /* AppSessionModel+EntryCRUD.swift */; };
 		B5E000000000000000000001 /* VaultSessionTestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000005 /* VaultSessionTestDoubles.swift */; };
 		B5E000000000000000000002 /* GeneratorSaveLoginTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */; };
 		B5E000000000000000000003 /* VaultLayoutPreferencesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */; };
@@ -262,6 +265,9 @@ AA2A00000000000000000001 /* AppLanguagePreferences.swift in Sources */ = {isa = 
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		B5F000000000000000000006 /* AppSessionModel+CredentialExchange.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+CredentialExchange.swift"; sourceTree = "<group>"; };
+		B5F000000000000000000004 /* AppSessionModel+ImportExport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+ImportExport.swift"; sourceTree = "<group>"; };
+		B5F000000000000000000002 /* AppSessionModel+EntryCRUD.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppSessionModel+EntryCRUD.swift"; sourceTree = "<group>"; };
 		B5E000000000000000000005 /* VaultSessionTestDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultSessionTestDoubles.swift; sourceTree = "<group>"; };
 		B5E000000000000000000006 /* GeneratorSaveLoginTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GeneratorSaveLoginTests.swift; sourceTree = "<group>"; };
 		B5E000000000000000000007 /* VaultLayoutPreferencesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VaultLayoutPreferencesTests.swift; sourceTree = "<group>"; };
@@ -652,6 +658,9 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				AA0000000000000000000019 /* AppBitwardenSyncSupport.swift */,
 				AA000000000000000000001B /* AppImportExportSupport.swift */,
 				AA000000000000000000001D /* AppSessionModel.swift */,
+				B5F000000000000000000006 /* AppSessionModel+CredentialExchange.swift */,
+				B5F000000000000000000004 /* AppSessionModel+ImportExport.swift */,
+				B5F000000000000000000002 /* AppSessionModel+EntryCRUD.swift */,
 				B5D000000000000000000006 /* AppSessionModel+CloudBackup.swift */,
 				B5D000000000000000000004 /* AppSessionModel+BitwardenSync.swift */,
 				B5D000000000000000000002 /* AppSessionModel+KeePassReadOnly.swift */,
@@ -1109,6 +1118,9 @@ AA2B00000000000000000001 /* AppLanguagePreferences.swift */ = {isa = PBXFileRefe
 				A90000000000000000000001 /* AppVaultLayoutPreferences.swift in Sources */,
 		A149A0000000000000000001 /* AppItemIconPreferences.swift in Sources */,
 				A91000000000000000000001 /* AppUpdateCheckView.swift in Sources */,
+				B5F000000000000000000005 /* AppSessionModel+CredentialExchange.swift in Sources */,
+				B5F000000000000000000003 /* AppSessionModel+ImportExport.swift in Sources */,
+				B5F000000000000000000001 /* AppSessionModel+EntryCRUD.swift in Sources */,
 				B5D000000000000000000005 /* AppSessionModel+CloudBackup.swift in Sources */,
 				B5D000000000000000000003 /* AppSessionModel+BitwardenSync.swift in Sources */,
 				B5D000000000000000000001 /* AppSessionModel+KeePassReadOnly.swift in Sources */,
