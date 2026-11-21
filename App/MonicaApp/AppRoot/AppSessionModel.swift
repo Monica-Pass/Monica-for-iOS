@@ -625,9 +625,10 @@ final class AppSessionModel {
     private let appearancePreferenceStore: any AppAppearancePreferenceStore
     private let vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore
     let searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore
-    private let totpCardPreferenceStore: any TotpProgressPreferenceStore    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
+    private let totpCardPreferenceStore: any TotpProgressPreferenceStore
+    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore
     private let itemIconPreferenceStore: any AppItemIconPreferenceStore
-    private let sensitivePreviewPreferenceStore: any SensitivePreviewPreferenceStore    private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
+    private let sensitiveClipboardPreferenceStore: any SensitiveClipboardPreferenceStore
     private let sensitivePasteboard: MonicaSensitivePasteboard
     private let totpAutoCopyPreferenceStore: any TotpAutoCopyPreferenceStore
     /// #148：自动续写下一码的控制器；写入同样经过 #58 的敏感剪贴板与 TTL。
@@ -724,8 +725,9 @@ final class AppSessionModel {
         vaultLayoutPreferenceStore: any VaultLayoutPreferenceStore = MemoryVaultLayoutPreferenceStore(),
         searchAutoFocusPreferenceStore: any AppSearchAutoFocusPreferenceStore = MemoryAppSearchAutoFocusPreferenceStore(),
         totpCardPreferenceStore: any TotpProgressPreferenceStore = MemoryTotpProgressPreferenceStore(),
-biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
-        itemIconPreferenceStore: any AppItemIconPreferenceStore = MemoryAppItemIconPreferenceStore(),        deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
+        biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlockAuthorizer(),
+        itemIconPreferenceStore: any AppItemIconPreferenceStore = MemoryAppItemIconPreferenceStore(),
+        deviceOwnerAuthenticator: any BiometricUnlockAuthorizer = DeviceOwnerLocalAuthenticator(),
         passkeyExchangeService: PasskeyExchangeService = PasskeyExchangeService(
             privateKeyStore: KeychainPasskeyPrivateKeyStore()
         ),
@@ -804,9 +806,10 @@ biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlock
         self.appearancePreferenceStore = appearancePreferenceStore
         self.vaultLayoutPreferenceStore = vaultLayoutPreferenceStore
         self.searchAutoFocusPreferenceStore = searchAutoFocusPreferenceStore
-        self.totpCardPreferenceStore = totpCardPreferenceStore        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
+        self.totpCardPreferenceStore = totpCardPreferenceStore
+        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer
         self.itemIconPreferenceStore = itemIconPreferenceStore
-        self.biometricUnlockAuthorizer = biometricUnlockAuthorizer        self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
+        self.deviceOwnerAuthenticator = deviceOwnerAuthenticator
         self.passkeyExchangeService = passkeyExchangeService
         self.biometricCapabilityProvider = biometricCapabilityProvider
         self.securityQuestionStore = securityQuestionStore
@@ -875,9 +878,10 @@ biometricUnlockAuthorizer: any BiometricUnlockAuthorizer = DeviceBiometricUnlock
         self.appearancePreferences = appearancePreferenceStore.loadPreferences()
         self.vaultLayoutPreferences = vaultLayoutPreferenceStore.loadPreferences()
         self.isSearchAutoFocusOnLaunchEnabled = searchAutoFocusPreferenceStore.loadIsSearchAutoFocusEnabled()
-        self.totpCardPreferences = totpCardPreferenceStore.loadPreferences()        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
+        self.totpCardPreferences = totpCardPreferenceStore.loadPreferences()
+        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore
         self.itemIconPreferences = itemIconPreferenceStore.loadPreferences()
-        self.sensitivePreviewPreferenceStore = sensitivePreviewPreferenceStore        self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
+        self.sensitivePreviewPreferences = sensitivePreviewPreferenceStore.loadPreferences()
         self.sensitiveClipboardPreferenceStore = sensitiveClipboardPreferenceStore
         self.sensitiveClipboardTTL = sensitiveClipboardPreferenceStore.loadTTL()
         self.sensitivePasteboard = sensitivePasteboard
