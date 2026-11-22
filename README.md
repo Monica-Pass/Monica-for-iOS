@@ -116,6 +116,19 @@ Scripts/bootstrap.sh            # MDBX 原生产物
 Scripts/update-msal.sh --update # MSAL（OneDrive 登录），约 30MB
 ```
 
+#### 跑测试
+
+```bash
+Scripts/run-ios-tests.sh                 # 构建并在模拟器上跑全量 MonicaTests
+Scripts/run-ios-tests.sh --only MonicaTests/MDBXRoundTripTests
+Scripts/run-ios-tests.sh --skip-build    # 复用 /tmp/dd-ios-tests
+```
+
+脚本默认使用 `/Applications/Xcode.app`（27.2）。本机 `xcode-select` 指向的
+Xcode-beta 27.0 在 macOS 27.3 上执行 XCTest 会报
+`DTServiceHubClient failed to bless service hub for simulator ...`，
+换用 27.2 即可正常运行；需要指定其它 Xcode 时加 `--xcode /Applications/Xcode-beta.app`。
+
 `bootstrap.sh` 会自动检查前置条件、补齐缺失的 Rust target、安装与上游版本匹配的 UniFFI CLI，
 并生成 xcframework。产物已存在时直接跳过（此时不需要任何 Rust 工具链）；
 强制重生成用 `Scripts/bootstrap.sh --force`。

@@ -1,15 +1,40 @@
-# 模拟器端到端验收（不依赖 XCTest）
+# 模拟器验收（XCTest + 内置端到端 harness）
 
-## 为什么需要它
+## 两种验收方式
 
-本仓库的常用开发机装的是精简版 Xcode（`/Applications/Xcode-beta.app` 只有 3.5 GB，没有 `Simulator.app`，`DevToolsSecurity -status` 为 `Developer mode is currently disabled`，且没有免密 sudo），因此 `xcodebuild test` 一律失败于：
+| 方式 | 命令 | 覆盖 |
+| --- | --- | --- |
+| XCTest（推荐） | `Scripts/run-ios-tests.sh` | App target + `MonicaTests`，472 个用例，约 25 秒跑完 |
+| 内置端到端 harness | `Scripts/run-simulator-acceptance.sh` | 真实建库/13 类条目/导入导出/锁定解锁等 14 步，不依赖签名与 XCTest |
+
+### 关于 Xcode 版本
+
+本机同时装了两套 Xcode：`xcode-select` 指向 Xcode-beta **27.0**，另有 `/Applications/Xcode.app` **27.2**。
+27.0 在 macOS 27.3 上执行 XCTest 会失败于：
 
 ```
 DTServiceHubClient failed to bless service hub for simulator ...
 localDeviceConnectionWithError: failed but didn't provide an error.
 ```
 
-`xcrun simctl` 本身完全正常（install / launch / screenshot / deep link），所以验收改为**在 App 内跑一遍真实流程**：用启动参数 `--monica-simulator-acceptance` 触发 `App/MonicaApp/AppSimulatorAcceptanceHarness.swift`，以真实 App 代码、真实 MDBX、真实 Keychain 执行，输出结构化报告并退出。逻辑层仍由 GitHub CI 的 XCTest（`App build and tests`）覆盖。
+换用 27.2 即正常（`Scripts/run-ios-tests.sh` 默认就用它）。因此本机现在可以完整跑模拟器 XCTest：
+
+```
+Executed 472 tests, with 1 test skipped and 0 failures (0 unexpected)
+** TEST EXECUTE SUCCEEDED **
+```
+
+如果希望永久切换，执行一次（需要管理员密码）：
+
+```bash
+sudo xcode-select -s /Applications/Xcode.app
+```
+
+### 内置 harness 仍然有用的场景
+
+- 没有开发者证书 / CI 环境：harness 用 `CODE_SIGNING_ALLOWED=NO` 也能跑，XCTest 也能跑但部分 entitlement 相关断言会跳过；
+- 一次跑完整业务闭环并产出可归档的 JSON 报告与截图（便于人工复核与回归对比）；
+- 在没有完整 Xcode（无 `Simulator.app`、无法跑 XCTest）的机器上作为兜底。
 
 ## 一键运行
 
@@ -32,7 +57,14 @@ xcrun simctl launch --console-pty --terminate-running-process <UDID> \
 
 ## 本次运行
 
-- 机器：macOS 27.3（26C5035r），Xcode 27.0（27A5194q），精简安装（无 Simulator.app）
+### XCTest
+
+- 命令：`Scripts/run-ios-tests.sh --skip-build`（Xcode 27.2，iPhone 17 / iOS 27.0）
+- 结果：**472 个用例，1 skipped，0 failures**，`** TEST EXECUTE SUCCEEDED **`
+
+### 内置 harness
+
+- 机器：macOS 27.3（26C5035r），Xcode 27.2（27B52）
 - 模拟器：iPhone 17 / iOS 27.0（`0DFFE3BA-8344-4285-8323-986C22CB0C9F`）
 - 构建：`CODE_SIGNING_ALLOWED=NO`（无签名）
 - 结果：**14 步，0 失败，3 跳过**（跳过均因无签名构建缺少 entitlement，详见下表）
